@@ -81,6 +81,8 @@ jobs:
             done
             echo '=== DXVK WSI symbols ==='
             llvm-nm -C "$LIB" | grep -E 'wsi::init|Sdl2WsiDriver::Sdl2WsiDriver' || true
+            echo '=== Compiled SDL/WSI names ==='
+            llvm-strings "$LIB" | grep -E 'libSDL|SDL2 WSI|SDL_Vulkan|SDL_GetWindowWMInfo|Failed to initialize WSI' || true
             echo '=== DXVK needed libraries ==='
             llvm-readelf -d "$LIB" | grep NEEDED || true
             echo '=== WSI init disassembly ==='
