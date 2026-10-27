@@ -245,10 +245,13 @@ jobs:
           DXVK_SRC="/tmp/deps-src/dxvk"
           # Ensure DXVK path exists for Makefile (it looks for include/native/directx etc)
           ls -la $DXVK_SRC/include/native 2>&1 | head -n 20 || true
-          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC -j$(nproc)
+          echo "NDK at $ANDROID_NDK_HOME / $ANDROID_NDK_LATEST_HOME"
+          ls -ld "$ANDROID_NDK_HOME" "$ANDROID_NDK_LATEST_HOME" 2>&1 | head
+          ls "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" 2>&1 | head
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc)
           ls -lh build/android/arm64-v8a/libmain.so
           # Also build v80 variant for older cores
-          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC -j$(nproc) || true
+          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) || true
           ls -lh build/android/arm64-v8a*/libmain*.so || true
 
           # Keep unstripped for artifact (debug symbols + -rdynamic)
