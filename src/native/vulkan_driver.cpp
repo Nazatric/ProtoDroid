@@ -43,9 +43,16 @@ namespace {
 // letting DXVK fail later with "no adapters found".
 // The system driver's GPU and Vulkan version (0 when it has no device); logged.
 uint32_t SystemDriverApi(std::string& device) {
-    void* lib = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+    // Keep the system loader and its dependencies visible to subsequent
+    // Vulkan users (including DXVK). The handle is intentionally retained.
+    void* lib = dlopen("libvulkan.so", RTLD_NOW | RTLD_GLOBAL);
     auto gipa = lib ? reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(lib, "vkGetInstanceProcAddr")) : nullptr;
-    if (!gipa) return 0;
+    if (!gipa) {
+        const char* error = dlerror();
+        Log("vulkan: system loader unavailable: %s", error ? error : "vkGetInstanceProcAddr not exported");
+        return 0;
+    }
+    Log("vulkan: system vkGetInstanceProcAddr resolved (RTLD_GLOBAL)");
     std::string report;
     uint32_t api = 0;
     device = ProbeDevice(gipa, "system driver", report, &api);
@@ -56,10 +63,14 @@ uint32_t SystemDriverApi(std::string& device) {
 // Logs the device extensions of the system driver: for drivers below Vulkan 1.3, which DXVK could only use through
 // the extensions that became core in 1.2/1.3 (dynamic rendering, synchronization2, timeline semaphores, ...).
 void LogSystemExtensions() {
-    void* lib = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+    void* lib = dlopen("libvulkan.so", RTLD_NOW | RTLD_GLOBAL);
     auto gipa = lib ? reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(lib, "vkGetInstanceProcAddr")) : nullptr;
     auto create = gipa ? reinterpret_cast<PFN_vkCreateInstance>(gipa(nullptr, "vkCreateInstance")) : nullptr;
-    if (!create) return;
+    if (!create) {
+        const char* error = dlerror();
+        Log("vulkan: cannot query system extensions: %s", error ? error : "vkCreateInstance not exported");
+        return;
+    }
     VkApplicationInfo app{};
     app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app.apiVersion = VK_API_VERSION_1_1;

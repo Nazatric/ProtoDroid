@@ -74,6 +74,12 @@ system = 'android'
 cpu_family = '$CPU_FAMILY'
 cpu = '$CPU'
 endian = 'little'
+
+[built-in options]
+# Meson must not silently turn this into a desktop Unix build. DXVK uses
+# __ANDROID__ to select libSDL2.so, libvulkan.so and Android surface WSI.
+c_args = ['-D__ANDROID__=1']
+cpp_args = ['-D__ANDROID__=1']
 EOF
 rm -rf "$SRC/build/dxvk-$ABI"
 meson setup "$SRC/build/dxvk-$ABI" "$SRC/dxvk" --cross-file "$CROSS" --buildtype release --prefix "$PREFIX" \
@@ -81,6 +87,27 @@ meson setup "$SRC/build/dxvk-$ABI" "$SRC/dxvk" --cross-file "$CROSS" --buildtype
       -Ddxvk_native_wsi=sdl2
 ninja -C "$SRC/build/dxvk-$ABI" -j "$JOBS"
 ninja -C "$SRC/build/dxvk-$ABI" install
+
+# Fail the build rather than shipping a desktop-WSI DXVK by accident. This
+# checks the installed library, not just the compiler or a successful link.
+DXVK_LIB="$PREFIX/lib/libdxvk_d3d9.so"
+if [ ! -f "$DXVK_LIB" ]; then
+    echo "missing installed DXVK library: $DXVK_LIB" >&2
+    exit 1
+fi
+DXVK_STRINGS=$($TC/llvm-strings "$DXVK_LIB")
+printf '%s\n' "$DXVK_STRINGS" | grep -Fx 'libSDL2.so' >/dev/null || {
+    echo "DXVK was not compiled with the Android SDL2 soname" >&2
+    exit 1
+}
+if printf '%s\n' "$DXVK_STRINGS" | grep -Fx 'libSDL2-2.0.so.0' >/dev/null; then
+    echo "DXVK contains the desktop SDL2 soname" >&2
+    exit 1
+fi
+printf '%s\n' "$DXVK_STRINGS" | grep -F 'vkCreateAndroidSurfaceKHR' >/dev/null || {
+    echo "DXVK was not compiled with Android surface support" >&2
+    exit 1
+}
 
 echo "installed to $PREFIX:"
 find "$PREFIX" -name "*.so" | sort

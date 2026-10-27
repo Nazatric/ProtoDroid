@@ -13,86 +13,9 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
-    inputs:
-      symbolize_run_id:
-        description: Only symbolize the debug-symbols artifact from this earlier build run
-        required: false
-        default: ''
 
 jobs:
-  symbolize:
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.symbolize_run_id != '') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[symbolize]')) }}
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Download matching debug symbols
-        uses: actions/download-artifact@v4
-        with:
-          name: debug-symbols
-          repository: ${{ github.repository }}
-          run-id: ${{ inputs.symbolize_run_id || '40531497695' }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: /tmp/protodroid-symbols
-      - name: Download matching APK for stripped-library audit
-        uses: actions/download-artifact@v4
-        with:
-          name: prototype-apk
-          repository: ${{ github.repository }}
-          run-id: ${{ inputs.symbolize_run_id || '40531497695' }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: /tmp/protodroid-apk
-      - name: Symbolize new and original DXVK offsets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          export PATH="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
-          command -v llvm-addr2line
-          LIB=$(find /tmp/protodroid-symbols -type f -name 'libdxvk_d3d9.so*' | head -n 1)
-          test -n "$LIB"
-          echo "library=$LIB"
-          ls -lh "$LIB"
-          sha256sum "$LIB"
-          {
-            echo '=== NEW CRASH: Direct3DCreate9 abort ==='
-            llvm-addr2line -a -i -f -C -e "$LIB" \
-              0x10d85c 0x10ddcc 0x10edac 0x1ec7b0 0x1ec9a0 0x28368c \
-              0x30afd8 0x30affc 0x30876c 0x3088dc 0x308fb0
-            echo '=== ORIGINAL OFFSETS (same binary; original binary may differ) ==='
-            llvm-addr2line -a -f -C -e "$LIB" \
-              0x24793c 0x2472a8 0x153cc8 0x1e9988 0x1e9dc0
-          } | tee /tmp/dxvk-symbolization.txt
-          gh api repos/${{ github.repository }}/issues/1/comments \
-            --raw-field body="DXVK symbolization for run ${{ inputs.symbolize_run_id }}:\n\`\`\`\n$(cat /tmp/dxvk-symbolization.txt)\n\`\`\`"
-          SDL=$(find /tmp/protodroid-symbols -type f -name 'libSDL2.so*' | head -n 1)
-          APK=$(find /tmp/protodroid-apk -type f -name 'prototype.apk' | head -n 1)
-          rm -rf /tmp/protodroid-apk-libs
-          mkdir -p /tmp/protodroid-apk-libs
-          unzip -q "$APK" 'lib/arm64-v8a/libSDL2.so' -d /tmp/protodroid-apk-libs
-          STRIPPED_SDL=/tmp/protodroid-apk-libs/lib/arm64-v8a/libSDL2.so
-          {
-            echo '=== SDL2 WSI symbol audit ==='
-            echo "SDL=$SDL"
-            echo "stripped SDL=$STRIPPED_SDL"
-            for sym in SDL_GetWindowWMInfo SDL_Vulkan_LoadLibrary SDL_Vulkan_GetInstanceExtensions SDL_Vulkan_CreateSurface SDL_GetError; do
-              printf '%s: ' "$sym"
-              llvm-nm -D "$SDL" | grep -E " [A-Za-z] ${sym}$" || echo MISSING
-              printf 'stripped %s: ' "$sym"
-              llvm-nm -D "$STRIPPED_SDL" | grep -E " [A-Za-z] ${sym}$" || echo MISSING
-            done
-            echo '=== DXVK WSI symbols ==='
-            llvm-nm -C "$LIB" | grep -E 'wsi::init|Sdl2WsiDriver::Sdl2WsiDriver' || true
-            echo '=== Compiled SDL/WSI names ==='
-            llvm-strings "$LIB" | grep -E 'libSDL|SDL2 WSI|SDL_Vulkan|SDL_GetWindowWMInfo|Failed to initialize WSI' || true
-            echo '=== DXVK needed libraries ==='
-            llvm-readelf -d "$LIB" | grep NEEDED || true
-            echo '=== WSI init disassembly ==='
-            llvm-objdump -d --demangle --no-show-raw-insn --start-address=0x283500 --stop-address=0x283c00 "$LIB" || true
-          } | tee /tmp/dxvk-wsi-audit.txt
-          gh api repos/${{ github.repository }}/issues/1/comments \
-            --raw-field body="DXVK WSI audit:\n\`\`\`\n$(cat /tmp/dxvk-wsi-audit.txt)\n\`\`\`"
-
   build-deps:
-    if: ${{ (github.event_name != 'workflow_dispatch' || inputs.symbolize_run_id == '') && !contains(github.event.head_commit.message, '[symbolize]') }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -135,7 +58,6 @@ jobs:
           retention-days: 14
 
   build-apk:
-    if: ${{ (github.event_name != 'workflow_dispatch' || inputs.symbolize_run_id == '') && !contains(github.event.head_commit.message, '[symbolize]') }}
     runs-on: ubuntu-24.04
     needs: build-deps
     steps:
@@ -542,13 +464,30 @@ jobs:
           cp build/android/arm64-v8a/libmain.so build/apk/symbols/libmain.so.stripped_for_apk || true
           ls -lh build/apk/ build/apk/symbols/ || true
 
-      - name: Verify APK
+      - name: Verify APK and embedded Android DXVK
         if: always()
         run: |
-          ls -lh build/apk/prototype.apk || echo "APK missing"
-          unzip -l build/apk/prototype.apk 2>&1 | head -n 100 || true
-          unzip -l build/apk/prototype.apk 2>&1 | grep -E "libSDL2|libFAudio|libdxvk|libmain" || true
-          aapt2 dump badging build/apk/prototype.apk 2>&1 | head -n 50 || $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging build/apk/prototype.apk 2>&1 | head -n 50 || true
+          set -euo pipefail
+          APK=build/apk/prototype.apk
+          test -s "$APK"
+          ls -lh "$APK"
+          unzip -l "$APK" | grep -E 'libSDL2|libFAudio|libdxvk|libmain'
+          TOOLS="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          rm -rf /tmp/protodroid-apk-check
+          mkdir -p /tmp/protodroid-apk-check
+          unzip -q "$APK" 'lib/arm64-v8a/libdxvk_d3d9.so' 'lib/arm64-v8a/libSDL2.so' 'lib/arm64-v8a/libmain.so' -d /tmp/protodroid-apk-check
+          DXVK=/tmp/protodroid-apk-check/lib/arm64-v8a/libdxvk_d3d9.so
+          SDL=/tmp/protodroid-apk-check/lib/arm64-v8a/libSDL2.so
+          MAIN=/tmp/protodroid-apk-check/lib/arm64-v8a/libmain.so
+          test "$(stat -c%s "$MAIN")" -gt 100000
+          STRINGS=$($TOOLS/llvm-strings "$DXVK")
+          printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2.so'
+          ! printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2-2.0.so.0'
+          printf '%s\n' "$STRINGS" | grep -F 'vkCreateAndroidSurfaceKHR'
+          for sym in SDL_GetWindowWMInfo SDL_Vulkan_LoadLibrary SDL_Vulkan_GetInstanceExtensions SDL_Vulkan_CreateSurface SDL_GetError; do
+            $TOOLS/llvm-nm -D "$SDL" | grep -E " [A-Za-z] ${sym}$"
+          done
+          $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging "$APK" | head -n 20
 
       - name: Upload APK artifact
         if: always()

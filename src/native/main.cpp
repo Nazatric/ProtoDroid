@@ -140,8 +140,9 @@ void OnCrash(int sig, siginfo_t* info, void* context) {
     CrashWrite(line);
     DescribeAddress(line, sizeof(line), "lr", mc.regs[30]);
     CrashWrite(line);
-    // Also dump registers for Mali diagnosis
-    snprintf(line, sizeof(line), "crash: fault addr %p, pc offset 0xb0 indicates NULL handle dereference (Mali driver)", info->si_addr);
+    // Keep the report factual: the signal, fault address and register-backed
+    // PCs above are the only information available at this point.
+    snprintf(line, sizeof(line), "crash: fault addr %p", info->si_addr);
     CrashWrite(line);
 #elif defined(__x86_64__)
     DescribeAddress(line, sizeof(line), "pc", static_cast<ucontext_t*>(context)->uc_mcontext.gregs[REG_RIP]);
@@ -431,8 +432,15 @@ int main(int argc, char** argv) {
     }
     if (chdir(base) != 0) return 1;
     g_data_dir = base;
-    setenv("DXVK_STATE_CACHE_PATH", base, 0);
-    setenv("DXVK_LOG_PATH", base, 0);
+    // DXVK opens its log lazily, after this setup. Do not point it at a
+    // path until the directory has actually been created and checked.
+    if (!native::EnsureDir(base)) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Prototype",
+                                 "The app log directory is not writable.", nullptr);
+        return 1;
+    }
+    setenv("DXVK_STATE_CACHE_PATH", base, 1);
+    setenv("DXVK_LOG_PATH", base, 1);
     // Attempt to find game dir across multiple locations (Issue 4)
     if (!g_game_dir || access((std::string(g_game_dir) + "/prototypeenginef.dll").c_str(), R_OK) != 0) {
         std::string found = FindGameDir(base, g_game_dir);
@@ -499,7 +507,7 @@ int main(int argc, char** argv) {
     InitGuestMemory();
     AttachThread(8u << 20);
     InitD3D9Bridge();
-    setenv("DXVK_WSI_DRIVER", "SDL2", 0);  // DXVK native: the HWNDs we pass are SDL windows
+    setenv("DXVK_WSI_DRIVER", "SDL2", 1);  // DXVK native: the HWNDs we pass are SDL windows
     SelectVulkanDriver();  // Adreno: the bundled Turnip driver
     // audio_driver = aaudio | openslES: SDL's audio backend (FAudio opens SDL audio later); AAudio by default.
     if (std::string ad = Setting("audio_driver", ""); !ad.empty()) setenv("SDL_AUDIODRIVER", ad.c_str(), 1);
