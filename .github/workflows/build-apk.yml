@@ -257,21 +257,36 @@ jobs:
           ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/include" 2>&1 | head -n 20
           ls -lh "$DXVK_SRC/include/native/directx" 2>&1 | head -n 20
           echo "::group::Make libmain.so"
-          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make.log; MAKE_EXIT=${PIPESTATUS[0]}
+          set +e
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make.log
+          MAKE_EXIT=${PIPESTATUS[0]}
+          set -e
           echo "make exit $MAKE_EXIT"
           cat /tmp/make.log | tail -n 200
           if [ "$MAKE_EXIT" != "0" ]; then
             echo "::error::MAKE FAILED with $MAKE_EXIT"
-            CONTENT=$(base64 -w0 /tmp/make.log | tr -d '\n')
-            gh api --method PUT repos/Nazatric/ProtoDroid/contents/ci-make.log --field message="ci make log $MAKE_EXIT" --field content="$CONTENT" --field branch=ci-log 2>&1 | head -n 20 || true
+            if [ -f /tmp/make.log ]; then
+              CONTENT=$(base64 -w0 /tmp/make.log | tr -d '\n')
+              echo "Uploading log to ci-log branch via API"
+              gh api --method PUT repos/Nazatric/ProtoDroid/contents/ci-make.log --field message="ci make log $MAKE_EXIT" --field content="$CONTENT" --field branch=ci-log 2>&1 | head -n 20 || echo "API upload failed"
+              # also try via git push
+              git config user.name "ci-bot" || true
+              git config user.email "ci@github.com" || true
+              cp /tmp/make.log ci-make.log || true
+              git add -f ci-make.log || true
+              git commit -m "ci: make log $MAKE_EXIT" || true
+              git push origin HEAD:ci-log --force || echo "git push failed"
+            fi
             exit 1
           fi
           echo "::endgroup::"
           ls -lh build/android/arm64-v8a/libmain.so
           # Also build v80 variant for older cores
           echo "::group::Make v80 variant"
-          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make_v80.log || true
+          set +e
+          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make_v80.log
           cat /tmp/make_v80.log | tail -n 50 || true
+          set -e
           echo "::endgroup::"
           ls -lh build/android/arm64-v8a*/libmain*.so || true
 
