@@ -180,6 +180,12 @@ jobs:
         run: |
           set -euo pipefail
           export PATH=$HOME/.local/bin:$PATH
+          if [ -f build/recomp/native/table.c ]; then
+            echo "recomp output already present (committed), skipping generation"
+            ls -lh build/recomp/native | head -n 20
+            echo "files $(ls build/recomp/native/*.c | wc -l) bytes $(du -sh build/recomp/native | cut -f1)"
+            exit 0
+          fi
           echo "Building recompiled sources from $DLL_PATH"
           mkdir -p build/recomp/native
           ls -lh re/functions.csv re/extra_functions.txt || true

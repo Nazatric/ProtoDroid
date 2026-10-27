@@ -8,4 +8,6 @@ extracted/
 __pycache__/
 ghidra/
 build/
+!build/recomp/
+!build/recomp/**
 re/decomp/
