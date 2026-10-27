@@ -15,7 +15,50 @@ on:
   workflow_dispatch:
 
 jobs:
+  symbolize:
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[symbolize]') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download matching DXVK symbols
+        uses: actions/download-artifact@v4
+        with:
+          name: debug-symbols
+          repository: ${{ github.repository }}
+          run-id: 40551071064
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: /tmp/protodroid-symbols
+      - name: Symbolize the frame-512 Mali shader-compiler fault
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          LIB=$(find /tmp/protodroid-symbols -type f -name 'libdxvk_d3d9.so.unstripped' | head -n 1)
+          test -n "$LIB"
+          sha256sum "$LIB"
+          llvm-addr2line -f -C -i -e "$LIB" \
+            0x1ed564 0x1eb35c 0x1eaf9c 0x1ea5e8 0x1c4b30 \
+            0x1c7dac 0x1b79f4 0x130654 0x1d8d5c 0x1d9154 | tee /tmp/dxvk-512-symbols.txt
+          llvm-objdump -d -C --start-address=0x1ecf00 --stop-address=0x1ed700 "$LIB" | tee /tmp/dxvk-512-disassembly-a.txt
+          llvm-objdump -d -C --start-address=0x1eaf00 --stop-address=0x1eb500 "$LIB" | tee /tmp/dxvk-512-disassembly-b.txt
+          post_file() {
+            label="$1"
+            file="$2"
+            split -C 45000 -d -a 2 "$file" /tmp/dxvk-post-
+            n=0
+            for part in /tmp/dxvk-post-*; do
+              gh api repos/${{ github.repository }}/issues/1/comments \
+                --raw-field body="$label (part $n):\n\`\`\`\n$(cat "$part")\n\`\`\`" >/dev/null
+              n=$((n+1))
+              rm -f "$part"
+            done
+          }
+          post_file 'Frame-512 DXVK symbolization (run 40551071064)' /tmp/dxvk-512-symbols.txt
+          post_file 'Frame-512 DXVK disassembly 0x1ecf00-0x1ed700' /tmp/dxvk-512-disassembly-a.txt
+          post_file 'Frame-512 DXVK disassembly 0x1eaf00-0x1eb500' /tmp/dxvk-512-disassembly-b.txt
+
   build-deps:
+    if: ${{ !contains(github.event.head_commit.message, '[symbolize]') }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -68,6 +111,7 @@ jobs:
           retention-days: 14
 
   build-apk:
+    if: ${{ !contains(github.event.head_commit.message, '[symbolize]') }}
     runs-on: ubuntu-24.04
     needs: build-deps
     steps:
