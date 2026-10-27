@@ -44,10 +44,20 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_LATEST_HOME }}
         run: |
+          set -euo pipefail
           export PATH=$HOME/.local/bin:$PATH
           echo "NDK: $ANDROID_NDK_HOME"
           ls -la android/patches/
-          android/build-deps.sh ${{ matrix.abi }} /tmp/deps-src deps-out/${{ matrix.abi }}
+          android/build-deps.sh ${{ matrix.abi }} /tmp/deps-src deps-out/${{ matrix.abi }} 2>&1 | tee /tmp/build-deps.log
+
+      - name: Report dependency build failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tail -n 180 /tmp/build-deps.log || true
+          gh api repos/${{ github.repository }}/issues/1/comments \
+            --raw-field body="Dependency build failed for ${{ github.sha }}:\n\`\`\`\n$(tail -n 180 /tmp/build-deps.log 2>/dev/null || echo 'no dependency log')\n\`\`\`" || true
 
       - uses: actions/upload-artifact@v4
         with:
