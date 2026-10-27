@@ -21,7 +21,7 @@ on:
 
 jobs:
   symbolize:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.symbolize_run_id != '' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.symbolize_run_id != '') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[symbolize]')) }}
     runs-on: ubuntu-24.04
     steps:
       - name: Download matching debug symbols
@@ -29,7 +29,7 @@ jobs:
         with:
           name: debug-symbols
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.symbolize_run_id }}
+          run-id: ${{ inputs.symbolize_run_id || '40531497695' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: /tmp/protodroid-symbols
       - name: Symbolize new and original DXVK offsets
@@ -57,7 +57,7 @@ jobs:
             --raw-field body="DXVK symbolization for run ${{ inputs.symbolize_run_id }}:\n\`\`\`\n$(cat /tmp/dxvk-symbolization.txt)\n\`\`\`"
 
   build-deps:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.symbolize_run_id == '' }}
+    if: ${{ (github.event_name != 'workflow_dispatch' || inputs.symbolize_run_id == '') && !contains(github.event.head_commit.message, '[symbolize]') }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -100,7 +100,7 @@ jobs:
           retention-days: 14
 
   build-apk:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.symbolize_run_id == '' }}
+    if: ${{ (github.event_name != 'workflow_dispatch' || inputs.symbolize_run_id == '') && !contains(github.event.head_commit.message, '[symbolize]') }}
     runs-on: ubuntu-24.04
     needs: build-deps
     steps:
