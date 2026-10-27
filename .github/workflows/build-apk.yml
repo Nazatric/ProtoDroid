@@ -3,6 +3,7 @@ name: build-apk
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 on:
   push:
@@ -281,12 +282,38 @@ jobs:
           cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
           ls -lh build/symbols/
 
+      - name: Post make log via github-script
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const log = fs.readFileSync('/tmp/make.log', 'utf8');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: 1,
+                body: "🔍 **Build libmain.so log (tail 200)**\n```\n" + log.slice(-7000) + "\n```"
+              });
+            } catch(e) {
+              console.log("No make.log yet: " + e);
+              try {
+                const alt = require('child_process').execSync('cat /tmp/make.log 2>&1 | tail -n 100').toString();
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: 1,
+                  body: "⚠️ Make log via shell:\n```\n" + alt.slice(0,6000) + "\n```"
+                });
+              } catch(e2) { console.log(e2); }
+            }
+
       - name: Fallback dummy libmain.so if build failed
         if: always() && env.HAS_DLL == '1' && hashFiles('build/android/arm64-v8a/libmain.so') == ''
         run: |
           echo "Build failed or libmain.so missing - creating fallback for CI artifact"
           mkdir -p build/android/arm64-v8a build/symbols
-          # Create a minimal ELF dummy (use NDK clang to make a tiny shared lib if available, else dummy)
           if [ -x "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang" ]; then
             echo "int dummy=0;" | $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang -shared -o build/android/arm64-v8a/libmain.so -x c - -fPIC || echo "dummy" > build/android/arm64-v8a/libmain.so
           else
