@@ -46,7 +46,7 @@ std::string g_mirror_dir;
 std::string g_mirror_log_path;
 std::string g_mirror_prev_path;
 }  // namespace
-static void MirrorCopyDXVKLogs();
+void MirrorCopyDXVKLogs();
 
 // Forward for mirroring helper
 
@@ -248,7 +248,7 @@ static void CopyFile(const std::string& src, const std::string& dst) {
     fclose(out);
 }
 
-static void MirrorCopyDXVKLogs() {
+void MirrorCopyDXVKLogs() {
     if (g_mirror_dir.empty() || !g_data_dir) return;
     std::string base_log = std::string(g_data_dir) + "/app_process64_d3d9.log";
     std::string mirror_dxvk = g_mirror_dir + "/app_process64_d3d9.log";
