@@ -167,17 +167,46 @@ jobs:
           # Also check for split archives in repo root for completeness
           ls -lh *.dll *.zip *.apk 2>&1 | head -n 20 || true
 
+      - name: Cache recomp output
+        uses: actions/cache@v4
+        id: cache-recomp
+        with:
+          path: build/recomp/native
+          key: recomp-${{ hashFiles('re/functions.csv', 're/extra_functions.txt', 'tools/recomp/recomp.py', 'tools/recomp/data_entries.py') }}-${{ hashFiles('prototypeenginef.dll') }}
+
       - name: Recompile engine (recomp.py) if DLL present
-        if: env.HAS_DLL == '1'
+        if: env.HAS_DLL == '1' && steps.cache-recomp.outputs.cache-hit != 'true'
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           export PATH=$HOME/.local/bin:$PATH
           echo "Building recompiled sources from $DLL_PATH"
           mkdir -p build/recomp/native
           ls -lh re/functions.csv re/extra_functions.txt || true
-          PROTORE_ENGINE="$DLL_PATH" python3 tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native
+          python3 -c "import capstone, pefile; print('capstone', capstone.__version__)"
+          timeout 600 bash -c 'PROTORE_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
+          cat /tmp/recomp.log | tail -n 100
+          test -f /tmp/recomp_exit && cat /tmp/recomp_exit
+          if [ "$(cat /tmp/recomp_exit | awk '\''{print $2}'\'')" != "0" ]; then
+            echo "recomp failed, log:"
+            cat /tmp/recomp.log
+            exit 1
+          fi
+          ls -lh build/recomp/native | head -n 40
+          echo "Recompilation done, files $(ls build/recomp/native | wc -l) bytes $(du -sh build/recomp/native | cut -f1)"
+          df -h | head -n 20
+          free -h | head -n 20
+
+      - name: Verify recomp cache (fallback)
+        if: env.HAS_DLL == '1'
+        run: |
           ls -lh build/recomp/native | head -n 20
-          echo "Recompilation done, lines: $(wc -l build/recomp/native/*.c | tail -n1)"
+          echo "recomp files: $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          if [ ! -f build/recomp/native/table.c ]; then
+            echo "ERROR: table.c missing - recomp failed and no cache"
+            cat /tmp/recomp.log 2>&1 | tail -n 100 || true
+            exit 1
+          fi
 
       - name: Build libmain.so from source (Android arm64-v8a)
         if: env.HAS_DLL == '1'
