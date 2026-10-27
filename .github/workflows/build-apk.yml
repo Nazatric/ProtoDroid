@@ -238,6 +238,7 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
           DEPS: ${{ env.HOME }}/proto-re-data/android-deps/arm64-v8a
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           export PATH=$HOME/.local/bin:$PATH
@@ -263,7 +264,7 @@ jobs:
           echo "::group::Make libmain.so (single job for memory)"
           # Do not use pipefail for this block - capture exit code manually
           set +e
-          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 > /tmp/make.log 2>&1
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 V=1 > /tmp/make.log 2>&1
           MAKE_EXIT=$?
           set -e
           echo "make exit $MAKE_EXIT"
