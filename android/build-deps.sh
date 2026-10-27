@@ -114,6 +114,20 @@ printf '%s\n' "$DXVK_STRINGS" | grep -F 'vkCreateAndroidSurfaceKHR' >/dev/null |
     echo "DXVK was not compiled with Android surface support" >&2
     exit 1
 }
+# Prove that the final Mali diagnostics patch was applied to this exact
+# dependency build. A cache hit has a patch-dependent key; a local rebuild
+# must not be able to silently package an older DXVK either.
+for marker in \
+    '/storage/emulated/0/Prototype/logs/pipeline_trace.log' \
+    'last_vs.spv' \
+    'last_fs.spv' \
+    'Disabling maintenance5, EDS3' \
+    'Unmapped descriptor binding'; do
+    printf '%s\n' "$DXVK_STRINGS" | grep -F "$marker" >/dev/null || {
+        echo "DXVK is missing required Mali diagnostic marker: $marker" >&2
+        exit 1
+    }
+done
 
 echo "installed to $PREFIX:"
 find "$PREFIX" -name "*.so" | sort

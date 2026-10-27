@@ -15,50 +15,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  symbolize:
-    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[symbolize]') }}
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Download matching c16785d DXVK symbols
-        uses: actions/download-artifact@v4
-        with:
-          name: debug-symbols
-          repository: ${{ github.repository }}
-          run-id: 40558539051
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: /tmp/protodroid-symbols
-      - name: Symbolize the deterministic Mali compiler fault
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          export PATH="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
-          LIB=$(find /tmp/protodroid-symbols -type f -name 'libdxvk_d3d9.so.unstripped' | head -n 1)
-          test -n "$LIB"
-          sha256sum "$LIB"
-          llvm-addr2line -f -C -i -e "$LIB" \
-            0x187c38 0x1ed8ec 0x1eb6e4 0x1eb324 0x1ea970 \
-            0x1c4eb8 0x1c8134 0x1b7d7c 0x130794 | tee /tmp/dxvk-deterministic-symbols.txt
-          llvm-objdump -d -C --start-address=0x187b80 --stop-address=0x187d00 "$LIB" | tee /tmp/dxvk-deterministic-wrapper.txt
-          llvm-objdump -d -C --start-address=0x1ed600 --stop-address=0x1eda00 "$LIB" | tee /tmp/dxvk-deterministic-disassembly.txt
-          post_file() {
-            label="$1"
-            file="$2"
-            split -C 45000 -d -a 2 "$file" /tmp/dxvk-post-
-            n=0
-            for part in /tmp/dxvk-post-*; do
-              gh api repos/${{ github.repository }}/issues/1/comments \
-                --raw-field body="$label (part $n):\n\`\`\`\n$(cat "$part")\n\`\`\`" >/dev/null
-              n=$((n+1))
-              rm -f "$part"
-            done
-          }
-          post_file 'Deterministic Mali DXVK symbolization (run 40558539051)' /tmp/dxvk-deterministic-symbols.txt
-          post_file 'Deterministic Mali wrapper disassembly' /tmp/dxvk-deterministic-wrapper.txt
-          post_file 'Deterministic Mali pipeline disassembly' /tmp/dxvk-deterministic-disassembly.txt
-
   build-deps:
-    if: ${{ !contains(github.event.head_commit.message, '[symbolize]') }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -71,7 +28,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/deps-out/${{ matrix.abi }}
-          key: android-deps-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/patches/**') }}
+          key: android-deps-mali-trace-v1-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/patches/**') }}
 
       - name: Install build tools
         if: steps.cache-deps.outputs.cache-hit != 'true'
@@ -111,7 +68,6 @@ jobs:
           retention-days: 14
 
   build-apk:
-    if: ${{ !contains(github.event.head_commit.message, '[symbolize]') }}
     runs-on: ubuntu-24.04
     needs: build-deps
     steps:
@@ -554,6 +510,14 @@ jobs:
           printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2.so'
           ! printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2-2.0.so.0'
           printf '%s\n' "$STRINGS" | grep -F 'vkCreateAndroidSurfaceKHR'
+          for marker in \
+            '/storage/emulated/0/Prototype/logs/pipeline_trace.log' \
+            'last_vs.spv' \
+            'last_fs.spv' \
+            'Disabling maintenance5, EDS3' \
+            'Unmapped descriptor binding'; do
+            printf '%s\n' "$STRINGS" | grep -F "$marker"
+          done
           for sym in SDL_GetWindowWMInfo SDL_Vulkan_LoadLibrary SDL_Vulkan_GetInstanceExtensions SDL_Vulkan_CreateSurface SDL_GetError; do
             $TOOLS/llvm-nm -D "$SDL" | grep -E " [A-Za-z] ${sym}$"
           done

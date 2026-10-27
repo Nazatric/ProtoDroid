@@ -1,0 +1,799 @@
+diff --git a/src/d3d9/d3d9_device.cpp b/src/d3d9/d3d9_device.cpp
+index b208612..6853126 100644
+--- a/src/d3d9/d3d9_device.cpp
++++ b/src/d3d9/d3d9_device.cpp
+@@ -34,6 +34,7 @@
+ namespace dxvk {
+ 
+   extern bool g_dxsoNoClipDistance;  // dxso_compiler.cpp
++  extern bool g_dxsoUseOpKill;
+ 
+   D3D9DeviceEx::D3D9DeviceEx(
+           D3D9InterfaceEx*       pParent,
+@@ -73,6 +74,10 @@ namespace dxvk {
+       Logger::info("D3D9DeviceEx: Using extended constant set for software vertex processing.");
+ 
+     g_dxsoNoClipDistance = !m_dxvkDevice->features().core.features.shaderClipDistance;
++    g_dxsoUseOpKill = false;
++#ifdef __ANDROID__
++    g_dxsoUseOpKill = m_dxvkDevice->properties().core.properties.vendorID == 0x13B5;
++#endif
+ 
+     if (m_dxvkDevice->isDebugEnabled())
+       m_annotation = new D3D9UserDefinedAnnotation(this);
+@@ -4483,6 +4488,10 @@ namespace dxvk {
+   DxvkDeviceFeatures D3D9DeviceEx::GetDeviceFeatures(const Rc<DxvkAdapter>& adapter) {
+     DxvkDeviceFeatures supported = adapter->features();
+     DxvkDeviceFeatures enabled = {};
++    bool disableMaliShaderPaths = false;
++#ifdef __ANDROID__
++    disableMaliShaderPaths = adapter->deviceProperties().vendorID == 0x13B5;
++#endif
+ 
+     // Geometry shaders are used for some meta ops
+     enabled.core.features.geometryShader = VK_TRUE;
+@@ -4490,7 +4499,7 @@ namespace dxvk {
+ 
+     enabled.vk12.samplerMirrorClampToEdge = VK_TRUE;
+ 
+-    enabled.vk13.shaderDemoteToHelperInvocation = VK_TRUE;
++    enabled.vk13.shaderDemoteToHelperInvocation = disableMaliShaderPaths ? VK_FALSE : VK_TRUE;
+ 
+     enabled.extMemoryPriority.memoryPriority = supported.extMemoryPriority.memoryPriority;
+ 
+@@ -4511,8 +4520,8 @@ namespace dxvk {
+     enabled.core.features.pipelineStatisticsQuery = supported.core.features.pipelineStatisticsQuery;
+     enabled.core.features.sampleRateShading = VK_TRUE;
+     enabled.core.features.samplerAnisotropy = supported.core.features.samplerAnisotropy;
+-    enabled.core.features.shaderClipDistance = VK_TRUE;
+-    enabled.core.features.shaderCullDistance = VK_TRUE;
++    enabled.core.features.shaderClipDistance = disableMaliShaderPaths ? VK_FALSE : VK_TRUE;
++    enabled.core.features.shaderCullDistance = disableMaliShaderPaths ? VK_FALSE : VK_TRUE;
+ 
+     // Ensure we support real BC formats and unofficial vendor ones.
+     // Android port: optional, GPUs without BC (Mali) get DXT decoded by the application.
+diff --git a/src/d3d9/d3d9_fixed_function.cpp b/src/d3d9/d3d9_fixed_function.cpp
+index 2d2f927..8ceef81 100644
+--- a/src/d3d9/d3d9_fixed_function.cpp
++++ b/src/d3d9/d3d9_fixed_function.cpp
+@@ -13,6 +13,7 @@
+ namespace dxvk {
+ 
+   extern bool g_dxsoNoClipDistance;  // dxso_compiler.cpp
++  extern bool g_dxsoUseOpKill;
+ 
+   D3D9FixedFunctionOptions::D3D9FixedFunctionOptions(const D3D9Options* options) {
+     invariantPosition = options->invariantPosition;
+@@ -327,8 +328,12 @@ namespace dxvk {
+     spvModule.opBranchConditional(atestDiscard, atestDiscardLabel, atestKeepLabel);
+ 
+     spvModule.opLabel(atestDiscardLabel);
+-    spvModule.opDemoteToHelperInvocation();
+-    spvModule.opBranch(atestKeepLabel);
++    if (g_dxsoUseOpKill) {
++      spvModule.opKill();
++    } else {
++      spvModule.opDemoteToHelperInvocation();
++      spvModule.opBranch(atestKeepLabel);
++    }
+ 
+     // end if (do_discard)
+     spvModule.opLabel(atestKeepLabel);
+@@ -2203,8 +2208,10 @@ namespace dxvk {
+     m_specUbo = SetupSpecUBO(m_module, m_bindings);
+ 
+     // PS Caps
+-    m_module.enableExtension("SPV_EXT_demote_to_helper_invocation");
+-    m_module.enableCapability(spv::CapabilityDemoteToHelperInvocationEXT);
++    if (!g_dxsoUseOpKill) {
++      m_module.enableExtension("SPV_EXT_demote_to_helper_invocation");
++      m_module.enableCapability(spv::CapabilityDemoteToHelperInvocationEXT);
++    }
+     m_module.enableCapability(spv::CapabilityDerivativeControl);
+ 
+     m_module.setExecutionMode(m_entryPointId,
+diff --git a/src/dxso/dxso_compiler.cpp b/src/dxso/dxso_compiler.cpp
+index 29299ee..cb5eb9d 100644
+--- a/src/dxso/dxso_compiler.cpp
++++ b/src/dxso/dxso_compiler.cpp
+@@ -453,6 +453,7 @@ namespace dxvk {
+   // Android port: GPUs without shaderClipDistance (Mali) crash compiling ClipDistance outputs; user clip planes are
+   // then ignored. Set by D3D9DeviceEx from the device features.
+   bool g_dxsoNoClipDistance = false;
++  bool g_dxsoUseOpKill = false;
+ 
+   void DxsoCompiler::emitVsInit() {
+     if (!g_dxsoNoClipDistance)
+@@ -499,8 +500,10 @@ namespace dxvk {
+ 
+ 
+   void DxsoCompiler::emitPsInit() {
+-    m_module.enableExtension("SPV_EXT_demote_to_helper_invocation");
+-    m_module.enableCapability(spv::CapabilityDemoteToHelperInvocationEXT);
++    if (!g_dxsoUseOpKill) {
++      m_module.enableExtension("SPV_EXT_demote_to_helper_invocation");
++      m_module.enableCapability(spv::CapabilityDemoteToHelperInvocationEXT);
++    }
+     m_module.enableCapability(spv::CapabilityDerivativeControl);
+ 
+     m_module.setExecutionMode(m_entryPointId,
+@@ -3101,8 +3104,12 @@ void DxsoCompiler::emitControlFlowGenericLoop(
+     m_module.opBranchConditional(result, labelIf, labelEnd);
+ 
+     m_module.opLabel(labelIf);
+-    m_module.opDemoteToHelperInvocation();
+-    m_module.opBranch(labelEnd);
++    if (g_dxsoUseOpKill) {
++      m_module.opKill();
++    } else {
++      m_module.opDemoteToHelperInvocation();
++      m_module.opBranch(labelEnd);
++    }
+ 
+     m_module.opLabel(labelEnd);
+   }
+diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
+index d3340bb..1f36dd7 100644
+--- a/src/dxvk/dxvk_adapter.cpp
++++ b/src/dxvk/dxvk_adapter.cpp
+@@ -2,6 +2,21 @@
+ #include <mutex>
+ #include <unordered_set>
+ 
++#ifdef __ANDROID__
++#include <algorithm>
++#include <atomic>
++#include <cerrno>
++#include <fcntl.h>
++#include <map>
++#include <sstream>
++#include <string>
++#include <sys/stat.h>
++#include <unistd.h>
++#include <vector>
++
++#include "../spirv/spirv_include.h"
++#endif
++
+ #include "dxvk_adapter.h"
+ #include "dxvk_device.h"
+ #include "dxvk_instance.h"
+@@ -9,14 +24,431 @@
+ namespace dxvk {
+ 
+ #ifdef __ANDROID__
+-  // ARM's proprietary shader compiler is not thread-safe on affected Mali
+-  // drivers. DXVK normally compiles on both the CS thread and pipeline
+-  // workers, so serialize at the device-function-table boundary to cover
+-  // every graphics and compute pipeline creation path.
++  // Keep pipeline calls serialized at the device-function-table boundary.
++  // Serialization alone did not fix the deterministic Mali fault; the lock
++  // now also keeps each durable trace and shader dump paired with its call.
+   static std::mutex                      g_pipelineCompileMutex;
+   static PFN_vkCreateGraphicsPipelines   g_createGraphicsPipelines = nullptr;
+   static PFN_vkCreateComputePipelines    g_createComputePipelines = nullptr;
+ 
++  static constexpr const char* g_maliTraceDirectory = "/storage/emulated/0/Prototype/logs";
++  static constexpr const char* g_maliTraceFile = "/storage/emulated/0/Prototype/logs/pipeline_trace.log";
++  static std::atomic<uint64_t> g_maliTraceSequence = { 0 };
++
++  struct MaliDescriptorDecorations {
++    uint32_t set = ~0u;
++    uint32_t binding = ~0u;
++  };
++
++  struct MaliSpirvInfo {
++    const uint32_t* code = nullptr;
++    size_t size = 0;
++    uint64_t hash = 0;
++    bool structurallyValid = false;
++    bool clipDistance = false;
++    bool cullDistance = false;
++    bool demote = false;
++    bool kill = false;
++    uint32_t descriptorDuplicates = 0;
++    uint32_t descriptorIncomplete = 0;
++    std::map<uint32_t, MaliDescriptorDecorations> descriptors;
++  };
++
++  static uint64_t maliHandleValue(uint64_t handle) {
++    return handle;
++  }
++
++  template<typename T>
++  static uint64_t maliHandleValue(T* handle) {
++    return reinterpret_cast<uintptr_t>(handle);
++  }
++
++  static void maliEnsureTraceDirectory() {
++    // The Java side normally creates this tree. Keep the native diagnostic
++    // path self-contained as well, and never throw from a driver wrapper.
++    mkdir("/storage/emulated/0/Prototype", 0777);
++    mkdir(g_maliTraceDirectory, 0777);
++  }
++
++  static bool maliWriteSynced(
++    const char* path,
++    const void* data,
++          size_t size,
++          bool append) {
++    int flags = O_WRONLY | O_CREAT | O_CLOEXEC | (append ? O_APPEND : O_TRUNC);
++    int fd = open(path, flags, 0666);
++
++    if (fd < 0)
++      return false;
++
++    const char* bytes = static_cast<const char*>(data);
++    size_t written = 0;
++    bool ok = true;
++
++    while (written < size) {
++      ssize_t result = write(fd, bytes + written, size - written);
++
++      if (result < 0 && errno == EINTR)
++        continue;
++
++      if (result <= 0) {
++        ok = false;
++        break;
++      }
++
++      written += size_t(result);
++    }
++
++    if (fsync(fd) != 0)
++      ok = false;
++    if (close(fd) != 0)
++      ok = false;
++
++    return ok;
++  }
++
++  static void maliSyncTraceDirectory() {
++    int fd = open(g_maliTraceDirectory, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
++    if (fd >= 0) {
++      fsync(fd);
++      close(fd);
++    }
++  }
++
++  static const VkShaderModuleCreateInfo* maliFindModuleInfo(
++    const VkPipelineShaderStageCreateInfo& stage) {
++    auto* base = static_cast<const VkBaseInStructure*>(stage.pNext);
++
++    for (uint32_t depth = 0; base && depth < 16; depth++) {
++      if (base->sType == VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO)
++        return reinterpret_cast<const VkShaderModuleCreateInfo*>(base);
++      base = base->pNext;
++    }
++
++    return nullptr;
++  }
++
++  static MaliSpirvInfo maliAnalyzeSpirv(const VkShaderModuleCreateInfo* moduleInfo) {
++    MaliSpirvInfo result;
++
++    if (!moduleInfo || !moduleInfo->pCode || !moduleInfo->codeSize)
++      return result;
++
++    result.code = moduleInfo->pCode;
++    result.size = moduleInfo->codeSize;
++
++    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(result.code);
++    result.hash = 14695981039346656037ull;
++    for (size_t i = 0; i < result.size; i++)
++      result.hash = (result.hash ^ bytes[i]) * 1099511628211ull;
++
++    if (result.size < 5 * sizeof(uint32_t) || (result.size & 3)
++     || result.code[0] != 0x07230203)
++      return result;
++
++    result.structurallyValid = true;
++    size_t wordCount = result.size / sizeof(uint32_t);
++    std::map<std::pair<uint32_t, uint32_t>, uint32_t> descriptorOwners;
++
++    for (size_t offset = 5; offset < wordCount; ) {
++      uint32_t firstWord = result.code[offset];
++      uint32_t instructionSize = firstWord >> 16;
++      uint32_t opCode = firstWord & 0xffff;
++
++      if (!instructionSize || instructionSize > wordCount - offset) {
++        result.structurallyValid = false;
++        break;
++      }
++
++      const uint32_t* args = result.code + offset + 1;
++      uint32_t argCount = instructionSize - 1;
++
++      if (opCode == spv::OpCapability && argCount >= 1) {
++        result.clipDistance |= args[0] == spv::CapabilityClipDistance;
++        result.cullDistance |= args[0] == spv::CapabilityCullDistance;
++      } else if (opCode == spv::OpDecorate && argCount >= 3) {
++        uint32_t id = args[0];
++
++        if (args[1] == spv::DecorationDescriptorSet)
++          result.descriptors[id].set = args[2];
++        else if (args[1] == spv::DecorationBinding)
++          result.descriptors[id].binding = args[2];
++        else if (args[1] == spv::DecorationBuiltIn) {
++          result.clipDistance |= args[2] == spv::BuiltInClipDistance;
++          result.cullDistance |= args[2] == spv::BuiltInCullDistance;
++        }
++      } else if (opCode == spv::OpMemberDecorate && argCount >= 4) {
++        if (args[2] == spv::DecorationBuiltIn) {
++          result.clipDistance |= args[3] == spv::BuiltInClipDistance;
++          result.cullDistance |= args[3] == spv::BuiltInCullDistance;
++        }
++      } else if (opCode == spv::OpDemoteToHelperInvocation) {
++        result.demote = true;
++      } else if (opCode == spv::OpKill) {
++        result.kill = true;
++      }
++
++      offset += instructionSize;
++    }
++
++    for (const auto& entry : result.descriptors) {
++      uint32_t set = entry.second.set;
++      uint32_t binding = entry.second.binding;
++
++      if (set == ~0u || binding == ~0u) {
++        result.descriptorIncomplete++;
++        continue;
++      }
++
++      auto key = std::make_pair(set, binding);
++      auto owner = descriptorOwners.find(key);
++      if (owner != descriptorOwners.end() && owner->second != entry.first)
++        result.descriptorDuplicates++;
++      else
++        descriptorOwners.insert({ key, entry.first });
++    }
++
++    return result;
++  }
++
++  static void maliAppendPNext(std::ostringstream& out, const char* name, const void* chain) {
++    out << " " << name << "=[";
++    auto* base = static_cast<const VkBaseInStructure*>(chain);
++    uint32_t count = 0;
++
++    while (base && count++ < 16) {
++      if (count > 1)
++        out << ",";
++      out << uint32_t(base->sType);
++      base = base->pNext;
++    }
++
++    if (base)
++      out << ",truncated";
++    out << "]";
++  }
++
++  template<typename T>
++  static void maliAppendHandle(std::ostringstream& out, const char* name, T handle) {
++    out << " " << name << "=0x" << std::hex << maliHandleValue(handle) << std::dec;
++  }
++
++  static bool maliDumpSpirv(const char* fileName, const MaliSpirvInfo& spirv) {
++    std::string path = g_maliTraceDirectory;
++    path += "/";
++    path += fileName;
++    return maliWriteSynced(path.c_str(), spirv.code, spirv.size, false);
++  }
++
++  static void maliTraceGraphicsPipeline(
++    const VkGraphicsPipelineCreateInfo& info,
++          uint64_t sequence,
++          bool dumpShaders) {
++    maliEnsureTraceDirectory();
++
++    std::ostringstream out;
++    out << "MALI_PIPELINE_BEGIN seq=" << sequence
++        << " call=vkCreateGraphicsPipelines";
++    maliAppendHandle(out, "layout", info.layout);
++    maliAppendHandle(out, "basePipeline", info.basePipelineHandle);
++    out << " flags=0x" << std::hex << info.flags << std::dec
++        << " basePipelineIndex=" << info.basePipelineIndex
++        << " stageCount=" << info.stageCount;
++    maliAppendPNext(out, "pNext", info.pNext);
++    out << "\n";
++
++    const VkPipelineRenderingCreateInfo* rendering = nullptr;
++    auto* next = static_cast<const VkBaseInStructure*>(info.pNext);
++    for (uint32_t depth = 0; next && depth < 16; depth++) {
++      if (next->sType == VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO) {
++        rendering = reinterpret_cast<const VkPipelineRenderingCreateInfo*>(next);
++        break;
++      }
++      next = next->pNext;
++    }
++
++    if (rendering) {
++      out << "  rendering viewMask=" << rendering->viewMask
++          << " colorAttachmentCount=" << rendering->colorAttachmentCount
++          << " depthFormat=" << rendering->depthAttachmentFormat
++          << " stencilFormat=" << rendering->stencilAttachmentFormat
++          << " colorFormats=[";
++
++      for (uint32_t i = 0; i < rendering->colorAttachmentCount; i++) {
++        if (i) out << ",";
++        out << (rendering->pColorAttachmentFormats
++          ? rendering->pColorAttachmentFormats[i] : VK_FORMAT_UNDEFINED);
++      }
++
++      if (rendering->colorAttachmentCount && !rendering->pColorAttachmentFormats)
++        out << ";NULL_ARRAY";
++      out << "]";
++      maliAppendPNext(out, "pNext", rendering->pNext);
++      out << "\n";
++    } else {
++      out << "  rendering=absent\n";
++    }
++
++    bool hasVs = false;
++    bool hasFs = false;
++    bool vsDumpOk = false;
++    bool fsDumpOk = false;
++
++    for (uint32_t i = 0; i < info.stageCount && info.pStages; i++) {
++      const auto& stage = info.pStages[i];
++      MaliSpirvInfo spirv = maliAnalyzeSpirv(maliFindModuleInfo(stage));
++
++      if (dumpShaders && stage.stage == VK_SHADER_STAGE_VERTEX_BIT) {
++        hasVs = true;
++        vsDumpOk = maliDumpSpirv("last_vs.spv", spirv);
++      } else if (dumpShaders && stage.stage == VK_SHADER_STAGE_FRAGMENT_BIT) {
++        hasFs = true;
++        fsDumpOk = maliDumpSpirv("last_fs.spv", spirv);
++      }
++
++      out << "  stage[" << i << "] stage=0x" << std::hex << stage.stage
++          << " flags=" << stage.flags << std::dec;
++      maliAppendHandle(out, "module", stage.module);
++      out << " entry=" << (stage.pName ? stage.pName : "null")
++          << " specialization=" << (stage.pSpecializationInfo ? "present" : "null")
++          << " spirvBytes=" << spirv.size
++          << " spirvHash=0x" << std::hex << spirv.hash << std::dec
++          << " structurallyValid=" << spirv.structurallyValid
++          << " clipDistance=" << spirv.clipDistance
++          << " cullDistance=" << spirv.cullDistance
++          << " demote=" << spirv.demote
++          << " kill=" << spirv.kill
++          << " descriptors=" << spirv.descriptors.size()
++          << " descriptorDuplicates=" << spirv.descriptorDuplicates
++          << " descriptorIncomplete=" << spirv.descriptorIncomplete;
++      maliAppendPNext(out, "pNext", stage.pNext);
++      out << "\n";
++
++      for (const auto& entry : spirv.descriptors) {
++        out << "    descriptor id=" << entry.first
++            << " set=" << entry.second.set
++            << " binding=" << entry.second.binding << "\n";
++      }
++    }
++
++    if (dumpShaders && !hasVs) {
++      MaliSpirvInfo empty = { };
++      vsDumpOk = maliDumpSpirv("last_vs.spv", empty);
++    }
++    if (dumpShaders && !hasFs) {
++      MaliSpirvInfo empty = { };
++      fsDumpOk = maliDumpSpirv("last_fs.spv", empty);
++    }
++
++    if (info.pVertexInputState) {
++      const auto& state = *info.pVertexInputState;
++      out << "  vertexInput bindings=" << state.vertexBindingDescriptionCount
++          << " attributes=" << state.vertexAttributeDescriptionCount;
++      maliAppendPNext(out, "pNext", state.pNext);
++      out << "\n";
++      for (uint32_t i = 0; i < state.vertexBindingDescriptionCount && state.pVertexBindingDescriptions; i++) {
++        const auto& binding = state.pVertexBindingDescriptions[i];
++        out << "    binding[" << i << "] binding=" << binding.binding
++            << " stride=" << binding.stride << " inputRate=" << binding.inputRate << "\n";
++      }
++      for (uint32_t i = 0; i < state.vertexAttributeDescriptionCount && state.pVertexAttributeDescriptions; i++) {
++        const auto& attribute = state.pVertexAttributeDescriptions[i];
++        out << "    attribute[" << i << "] location=" << attribute.location
++            << " binding=" << attribute.binding << " format=" << attribute.format
++            << " offset=" << attribute.offset << "\n";
++      }
++    }
++
++    if (info.pInputAssemblyState) {
++      const auto& state = *info.pInputAssemblyState;
++      out << "  inputAssembly topology=" << state.topology
++          << " primitiveRestart=" << state.primitiveRestartEnable;
++      maliAppendPNext(out, "pNext", state.pNext);
++      out << "\n";
++    }
++
++    if (info.pViewportState) {
++      const auto& state = *info.pViewportState;
++      out << "  viewport viewports=" << state.viewportCount
++          << " scissors=" << state.scissorCount;
++      maliAppendPNext(out, "pNext", state.pNext);
++      out << "\n";
++    }
++
++    if (info.pRasterizationState) {
++      const auto& state = *info.pRasterizationState;
++      out << "  rasterizer depthClamp=" << state.depthClampEnable
++          << " discard=" << state.rasterizerDiscardEnable
++          << " polygonMode=" << state.polygonMode
++          << " cullMode=0x" << std::hex << state.cullMode
++          << " frontFace=" << state.frontFace << std::dec
++          << " depthBias=" << state.depthBiasEnable
++          << " lineWidth=" << state.lineWidth;
++      maliAppendPNext(out, "pNext", state.pNext);
++      out << "\n";
++    }
++
++    if (info.pMultisampleState) {
++      const auto& state = *info.pMultisampleState;
++      out << "  multisample samples=" << state.rasterizationSamples
++          << " sampleShading=" << state.sampleShadingEnable
++          << " minSampleShading=" << state.minSampleShading
++          << " sampleMask=" << (state.pSampleMask ? "present" : "null")
++          << " alphaToCoverage=" << state.alphaToCoverageEnable
++          << " alphaToOne=" << state.alphaToOneEnable;
++      maliAppendPNext(out, "pNext", state.pNext);
++      out << "\n";
++    }
++
++    if (info.pDepthStencilState) {
++      const auto& state = *info.pDepthStencilState;
++      out << "  depthStencil depthTest=" << state.depthTestEnable
++          << " depthWrite=" << state.depthWriteEnable
++          << " compareOp=" << state.depthCompareOp
++          << " bounds=" << state.depthBoundsTestEnable
++          << " stencil=" << state.stencilTestEnable;
++      maliAppendPNext(out, "pNext", state.pNext);
++      out << "\n";
++    }
++
++    if (info.pColorBlendState) {
++      const auto& state = *info.pColorBlendState;
++      out << "  colorBlend attachments=" << state.attachmentCount
++          << " logicOp=" << state.logicOpEnable
++          << " attachmentArray=" << (state.pAttachments ? "present" : "null");
++      maliAppendPNext(out, "pNext", state.pNext);
++      out << "\n";
++      for (uint32_t i = 0; i < state.attachmentCount && state.pAttachments; i++) {
++        out << "    blend[" << i << "] enable=" << state.pAttachments[i].blendEnable
++            << " writeMask=0x" << std::hex << state.pAttachments[i].colorWriteMask
++            << std::dec << "\n";
++      }
++    }
++
++    if (info.pDynamicState) {
++      const auto& state = *info.pDynamicState;
++      out << "  dynamic states=[";
++      for (uint32_t i = 0; i < state.dynamicStateCount; i++) {
++        if (i) out << ",";
++        out << (state.pDynamicStates ? state.pDynamicStates[i] : VK_DYNAMIC_STATE_MAX_ENUM);
++      }
++      if (state.dynamicStateCount && !state.pDynamicStates)
++        out << ";NULL_ARRAY";
++      out << "]";
++      maliAppendPNext(out, "pNext", state.pNext);
++      out << "\n";
++    }
++
++    out << "  dumps=" << (dumpShaders ? "enabled" : "batch-disabled")
++        << " vsWrite=" << vsDumpOk << " fsWrite=" << fsDumpOk << "\n";
++    out << "MALI_PIPELINE_DRIVER_CALL seq=" << sequence << "\n";
++
++    std::string trace = out.str();
++    if (!maliWriteSynced(g_maliTraceFile, trace.data(), trace.size(), sequence != 0))
++      Logger::err("DXVK: Failed to write /storage/emulated/0/Prototype/logs/pipeline_trace.log");
++    maliSyncTraceDirectory();
++  }
++
+   static VKAPI_ATTR VkResult VKAPI_CALL serializedCreateGraphicsPipelines(
+           VkDevice                        device,
+           VkPipelineCache                 pipelineCache,
+@@ -25,6 +457,16 @@ namespace dxvk {
+     const VkAllocationCallbacks*          pAllocator,
+           VkPipeline*                     pPipelines) {
+     std::lock_guard<std::mutex> lock(g_pipelineCompileMutex);
++
++    // Keep the trace and raw shader dumps inside the same lock as the real
++    // driver call. On the crashing path createInfoCount is one, so the last
++    // fsynced entry and last_vs/last_fs exactly describe the call that faults.
++    if (pCreateInfos && createInfoCount) {
++      uint64_t sequence = g_maliTraceSequence.fetch_add(createInfoCount);
++      for (uint32_t i = 0; i < createInfoCount; i++)
++        maliTraceGraphicsPipeline(pCreateInfos[i], sequence + i, createInfoCount == 1);
++    }
++
+     return g_createGraphicsPipelines(device, pipelineCache,
+       createInfoCount, pCreateInfos, pAllocator, pPipelines);
+   }
+@@ -376,6 +818,22 @@ namespace dxvk {
+     if (!enableExtendedDynamicState3)
+       devExtensions.extExtendedDynamicState3.setMode(DxvkExtMode::Disabled);
+ 
++    bool disableMaliOptionalExtensions = false;
++#ifdef __ANDROID__
++    disableMaliOptionalExtensions = m_deviceInfo.core.properties.vendorID == 0x13B5;
++#endif
++
++    if (disableMaliOptionalExtensions) {
++      // Controlled Mali compiler isolation test. These extensions are all
++      // optional for D3D9; omit both their names and feature pNext structs.
++      devExtensions.khrMaintenance5.setMode(DxvkExtMode::Disabled);
++      devExtensions.extExtendedDynamicState3.setMode(DxvkExtMode::Disabled);
++      devExtensions.extLineRasterization.setMode(DxvkExtMode::Disabled);
++      devExtensions.extConservativeRasterization.setMode(DxvkExtMode::Disabled);
++      devExtensions.extDepthClipEnable.setMode(DxvkExtMode::Disabled);
++      devExtensions.extCustomBorderColor.setMode(DxvkExtMode::Disabled);
++    }
++
+     if (!m_deviceFeatures.extVertexAttributeDivisor.vertexAttributeInstanceRateDivisor &&
+         !m_deviceFeatures.extVertexAttributeDivisor.vertexAttributeInstanceRateZeroDivisor)
+       devExtensions.extVertexAttributeDivisor.setMode(DxvkExtMode::Disabled);
+@@ -398,6 +856,16 @@ namespace dxvk {
+     if (!enableExtendedDynamicState3)
+       extensionsEnabled.disableExtension(devExtensions.extExtendedDynamicState3);
+ 
++    if (disableMaliOptionalExtensions) {
++      // An extension provider must not re-add anything disabled above.
++      extensionsEnabled.disableExtension(devExtensions.khrMaintenance5);
++      extensionsEnabled.disableExtension(devExtensions.extExtendedDynamicState3);
++      extensionsEnabled.disableExtension(devExtensions.extLineRasterization);
++      extensionsEnabled.disableExtension(devExtensions.extConservativeRasterization);
++      extensionsEnabled.disableExtension(devExtensions.extDepthClipEnable);
++      extensionsEnabled.disableExtension(devExtensions.extCustomBorderColor);
++    }
++
+     DxvkNameList extensionNameList = extensionsEnabled.toNameList();
+ 
+     // Always enable robust buffer access
+@@ -532,6 +1000,19 @@ namespace dxvk {
+     enabledFeatures.nvRawAccessChains.shaderRawAccessChains =
+       m_deviceFeatures.nvRawAccessChains.shaderRawAccessChains;
+ 
++    if (disableMaliOptionalExtensions) {
++      // Generic optional-feature selection above runs from physical support.
++      // Clear it again here so no disabled feature can leak back into the
++      // logical device or into DXVK's runtime feature checks.
++      enabledFeatures.khrMaintenance5 = { };
++      enabledFeatures.extExtendedDynamicState3 = { };
++      enabledFeatures.extLineRasterization = { };
++      enabledFeatures.extConservativeRasterization = VK_FALSE;
++      enabledFeatures.extDepthClipEnable = { };
++      enabledFeatures.extCustomBorderColor = { };
++      Logger::info("DXVK: Disabling maintenance5, EDS3, line/conservative rasterization, depth-clip and custom-border-color on ARM");
++    }
++
+     // Create pNext chain for additional device features
+     initFeatureChain(enabledFeatures, devExtensions, instance->extensions());
+ 
+@@ -626,15 +1107,15 @@ namespace dxvk {
+     Rc<vk::DeviceFn> vkd = new vk::DeviceFn(m_vki, true, device);
+ 
+ #ifdef __ANDROID__
+-    // Match the ARM vendor rather than a device-name string. This includes
+-    // Mali-G720 r49p1, where concurrent pipeline compilation has been observed
+-    // to fault in cmpbe_v2_compile_multiple_shaders.
++    // Match the ARM vendor rather than a device-name string. The lock and
++    // diagnostics cover Mali-G720 without assuming a device-name substring.
+     if (m_deviceInfo.core.properties.vendorID == 0x13B5) {
+       g_createGraphicsPipelines = vkd->vkCreateGraphicsPipelines;
+       g_createComputePipelines  = vkd->vkCreateComputePipelines;
+       vkd->vkCreateGraphicsPipelines = &serializedCreateGraphicsPipelines;
+       vkd->vkCreateComputePipelines  = &serializedCreateComputePipelines;
+       Logger::info("DXVK: Serializing Vulkan pipeline compilation on ARM");
++      Logger::info("DXVK: ARM pipeline trace: /storage/emulated/0/Prototype/logs/pipeline_trace.log");
+     }
+ #endif
+ 
+diff --git a/src/dxvk/dxvk_graphics.cpp b/src/dxvk/dxvk_graphics.cpp
+index 3e12e30..cad03a5 100644
+--- a/src/dxvk/dxvk_graphics.cpp
++++ b/src/dxvk/dxvk_graphics.cpp
+@@ -1,5 +1,7 @@
+ #include <iomanip>
+ 
++#include <dxvk_dummy_frag.h>
++
+ #include "../util/util_time.h"
+ 
+ #include "dxvk_device.h"
+@@ -1326,8 +1328,15 @@ namespace dxvk {
+       stageInfo.addStage(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, getShaderCode(m_shaders.tes, key.shState.tesInfo), &key.scState.scInfo);
+     if (m_shaders.gs != nullptr)
+       stageInfo.addStage(VK_SHADER_STAGE_GEOMETRY_BIT, getShaderCode(m_shaders.gs, key.shState.gsInfo), &key.scState.scInfo);
+-    if (m_shaders.fs != nullptr)
++    if (m_shaders.fs != nullptr) {
+       stageInfo.addStage(VK_SHADER_STAGE_FRAGMENT_BIT, getShaderCode(m_shaders.fs, key.shState.fsInfo), &key.scState.scInfo);
++    } else if (key.foState.rtInfo.colorAttachmentCount) {
++      // Do not pass a color-rendering pipeline without a fragment stage to
++      // affected mobile compilers. DXVK already uses this no-output shader
++      // for the equivalent pipeline-library case; color write masks are
++      // already zero when the application has no fragment shader.
++      stageInfo.addStage(VK_SHADER_STAGE_FRAGMENT_BIT, SpirvCodeBuffer(dxvk_dummy_frag), nullptr);
++    }
+ 
+     VkGraphicsPipelineCreateInfo info = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO, &key.foState.rtInfo };
+     info.stageCount               = stageInfo.getStageCount();
+@@ -1343,6 +1352,11 @@ namespace dxvk {
+     info.pDynamicState            = &key.dyState.dyInfo;
+     info.layout                   = m_bindings->getPipelineLayout(false);
+     info.basePipelineIndex        = -1;
++
++    if (info.layout == VK_NULL_HANDLE) {
++      Logger::err("DxvkGraphicsPipeline: Refusing to compile with a null pipeline layout");
++      return VK_NULL_HANDLE;
++    }
+     
+     if (!key.prState.tsInfo.patchControlPoints)
+       info.pTessellationState = nullptr;
+diff --git a/src/dxvk/dxvk_shader.cpp b/src/dxvk/dxvk_shader.cpp
+index bdd3756..1a4fc19 100644
+--- a/src/dxvk/dxvk_shader.cpp
++++ b/src/dxvk/dxvk_shader.cpp
+@@ -205,6 +205,15 @@ namespace dxvk {
+ 
+         if (info.setOffset)
+           code[info.setOffset] = mappedBinding->set;
++      } else {
++        // This indicates that the binding layout and the actual SPIR-V
++        // decorations disagree. Never hide that mismatch during Android
++        // compiler diagnostics; the final decorations are also dumped at
++        // the graphics-pipeline driver boundary.
++#ifdef __ANDROID__
++        Logger::err(str::format("DxvkShader: Unmapped descriptor binding ",
++          info.bindingId, " in stage ", m_info.stage));
++#endif
+       }
+     }
+ 
+@@ -858,7 +867,15 @@ namespace dxvk {
+     moduleInfo.pCode = codeBuffer.data();
+ 
+     VkShaderModule shaderModule = VK_NULL_HANDLE;
+-    if (!m_device->features().extGraphicsPipelineLibrary.graphicsPipelineLibrary) {
++    bool needsShaderModule = !m_device->features().extGraphicsPipelineLibrary.graphicsPipelineLibrary;
++
++#ifdef __ANDROID__
++    // Do not rely on inline shader modules on ARM. maintenance5 does not
++    // control this path in DXVK 2.5.3; graphics pipeline libraries do.
++    needsShaderModule |= m_device->properties().core.properties.vendorID == 0x13B5;
++#endif
++
++    if (needsShaderModule) {
+       auto vk = m_device->vkd();
+ 
+       if (vk->vkCreateShaderModule(vk->device(), &moduleInfo, nullptr, &shaderModule))
+diff --git a/src/spirv/spirv_module.cpp b/src/spirv/spirv_module.cpp
+index 9d1c74c..811a896 100644
+--- a/src/spirv/spirv_module.cpp
++++ b/src/spirv/spirv_module.cpp
+@@ -3728,6 +3728,11 @@ namespace dxvk {
+   void SpirvModule::opDemoteToHelperInvocation() {
+     m_code.putIns (spv::OpDemoteToHelperInvocation, 1);
+   }
++
++  void SpirvModule::opKill() {
++    m_code.putIns (spv::OpKill, 1);
++    m_blockId = 0;
++  }
+   
+   
+   void SpirvModule::opEmitVertex(
+diff --git a/src/spirv/spirv_module.h b/src/spirv/spirv_module.h
+index 4bfbd11..ae37786 100644
+--- a/src/spirv/spirv_module.h
++++ b/src/spirv/spirv_module.h
+@@ -1266,6 +1266,8 @@ namespace dxvk {
+     void opReturn();
+     
+     void opDemoteToHelperInvocation();
++
++    void opKill();
+     
+     void opEmitVertex(
+             uint32_t                streamId);
