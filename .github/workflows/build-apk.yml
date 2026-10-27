@@ -167,12 +167,26 @@ jobs:
           # Also check for split archives in repo root for completeness
           ls -lh *.dll *.zip *.apk 2>&1 | head -n 20 || true
 
+      - name: List recomp before cache
+        run: |
+          echo "=== before cache ==="
+          ls -lh build/recomp/native 2>&1 | head -n 40
+          echo "count $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          test -f build/recomp/native/table.c && echo "table.c exists" || echo "table.c MISSING"
+
       - name: Cache recomp output
         uses: actions/cache@v4
         id: cache-recomp
         with:
           path: build/recomp/native
           key: recomp-${{ hashFiles('re/functions.csv', 're/extra_functions.txt', 'tools/recomp/recomp.py', 'tools/recomp/data_entries.py') }}-${{ hashFiles('prototypeenginef.dll') }}
+
+      - name: List recomp after cache
+        run: |
+          echo "=== after cache ==="
+          ls -lh build/recomp/native 2>&1 | head -n 40
+          echo "count $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          test -f build/recomp/native/table.c && echo "table.c exists" || echo "table.c MISSING - will generate"
 
       - name: Recompile engine (recomp.py) if DLL present
         if: env.HAS_DLL == '1' && steps.cache-recomp.outputs.cache-hit != 'true'
