@@ -247,20 +247,20 @@ jobs:
           fi
           DXVK_SRC="/tmp/deps-src/dxvk"
           echo "=== DXVK headers ==="
-          ls -la $DXVK_SRC/include/native/directx/d3d9.h 2>&1 | head
+          ls -la $DXVK_SRC/include/native/directx/d3d9.h 2>&1 | head || true
           echo "=== NDK ==="
-          ls -ld "$ANDROID_NDK_HOME" 2>&1 | head
-          ls "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" 2>&1 | head
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++ --version 2>&1 | head
+          ls -ld "$ANDROID_NDK_HOME" 2>&1 | head || true
+          ls "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" 2>&1 | head || true
+          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++ --version 2>&1 | head || true
           echo "=== DEPS ==="
-          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/lib/" 2>&1 | head -n 20
-          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/include/SDL2/SDL.h" 2>&1 | head
+          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/lib/" 2>&1 | head -n 20 || true
+          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/include/SDL2/SDL.h" 2>&1 | head || true
           echo "=== RECOMP ==="
-          ls -lh build/recomp/native/table.c 2>&1 | head
+          ls -lh build/recomp/native/table.c 2>&1 | head || true
           echo "recomp files: $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
-          du -sh build/recomp/native | head
-          free -h | head
-          df -h | head -n 10
+          du -sh build/recomp/native 2>&1 | head || true
+          free -h 2>&1 | head || true
+          df -h 2>&1 | head -n 10 || true
           echo "::group::Make libmain.so (single job for memory)"
           # Do not use pipefail for this block - capture exit code manually
           set +e
@@ -275,8 +275,14 @@ jobs:
           ls -lh ./make.log 2>&1 || true
           if [ "$MAKE_EXIT" != "0" ]; then
             echo "::error::MAKE FAILED with $MAKE_EXIT - posting to issue 1"
-            # Keep file for upload artifact
-            gh api repos/Nazatric/ProtoDroid/issues/1/comments -f body="🔍 **MAKE FAILED $MAKE_EXIT**\n\`\`\`$(tail -n 150 /tmp/make.log 2>&1 | head -c 8000)\n\`\`\`" 2>&1 || echo "gh post failed"
+            echo "GH_TOKEN len ${#GH_TOKEN}"
+            which gh 2>&1 | head || true
+            # Post via curl (more reliable than gh in this shell)
+            TAIL=$(tail -n 150 /tmp/make.log 2>&1 | head -c 7500 | sed 's/"/\\"/g' | tr -d '\r')
+            curl -s -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/Nazatric/ProtoDroid/issues/1/comments \
+              -d "{\"body\":\"🔍 **MAKE FAILED $MAKE_EXIT**\\n\\\`\\\`\\\`\\n$TAIL\\n\\\`\\\`\\\`\"}" 2>&1 | head || true
+            gh api repos/Nazatric/ProtoDroid/issues/1/comments -f body="🔍 MAKE FAILED $MAKE_EXIT tail 150:\n\`\`\`$(tail -n 150 /tmp/make.log 2>&1 | head -c 7000)\n\`\`\`" 2>&1 | head || true
             exit $MAKE_EXIT
           fi
           echo "::endgroup::"
