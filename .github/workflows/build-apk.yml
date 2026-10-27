@@ -55,6 +55,21 @@ jobs:
           } | tee /tmp/dxvk-symbolization.txt
           gh api repos/${{ github.repository }}/issues/1/comments \
             --raw-field body="DXVK symbolization for run ${{ inputs.symbolize_run_id }}:\n\`\`\`\n$(cat /tmp/dxvk-symbolization.txt)\n\`\`\`"
+          SDL=$(find /tmp/protodroid-symbols -type f -name 'libSDL2.so*' | head -n 1)
+          {
+            echo '=== SDL2 WSI symbol audit ==='
+            echo "SDL=$SDL"
+            for sym in SDL_GetWindowWMInfo SDL_Vulkan_LoadLibrary SDL_Vulkan_GetInstanceExtensions SDL_Vulkan_CreateSurface SDL_GetError; do
+              printf '%s: ' "$sym"
+              llvm-nm -D "$SDL" | grep -E " [A-Za-z] ${sym}$" || echo MISSING
+            done
+            echo '=== DXVK WSI symbols ==='
+            llvm-nm -C "$LIB" | grep -E 'wsi::init|Sdl2WsiDriver::Sdl2WsiDriver' || true
+            echo '=== DXVK needed libraries ==='
+            llvm-readelf -d "$LIB" | grep NEEDED || true
+          } | tee /tmp/dxvk-wsi-audit.txt
+          gh api repos/${{ github.repository }}/issues/1/comments \
+            --raw-field body="DXVK WSI audit:\n\`\`\`\n$(cat /tmp/dxvk-wsi-audit.txt)\n\`\`\`"
 
   build-deps:
     if: ${{ (github.event_name != 'workflow_dispatch' || inputs.symbolize_run_id == '') && !contains(github.event.head_commit.message, '[symbolize]') }}
