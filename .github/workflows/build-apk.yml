@@ -257,22 +257,28 @@ jobs:
           echo "=== RECOMP ==="
           ls -lh build/recomp/native/table.c 2>&1 | head
           echo "recomp files: $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          du -sh build/recomp/native | head
+          free -h | head
+          df -h | head -n 10
           echo "::group::Make libmain.so (single job for memory)"
-          # Use single job to avoid OOM on 4-core runner compiling 193 large files
+          set +e
           make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 2>&1 | tee /tmp/make.log
           MAKE_EXIT=${PIPESTATUS[0]}
+          set -e
           echo "make exit $MAKE_EXIT"
           cat /tmp/make.log | tail -n 100
           if [ "$MAKE_EXIT" != "0" ]; then
             echo "::error::MAKE FAILED with $MAKE_EXIT"
-            cat /tmp/make.log | tail -n 200 | while IFS= read -r line; do echo "::error::$line"; done
             exit $MAKE_EXIT
           fi
           echo "::endgroup::"
           ls -lh build/android/arm64-v8a/libmain.so
           du -sh build/android/arm64-v8a/
           echo "::group::Make v80 variant"
-          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 2>&1 | tee /tmp/make_v80.log
+          set +e
+          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 2>&1 | tee /tmp/make_v80.log; V80_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo "v80 make exit $V80_EXIT"
           cat /tmp/make_v80.log | tail -n 20 || true
           echo "::endgroup::"
           ls -lh build/android/arm64-v8a*/libmain*.so || true
@@ -284,6 +290,17 @@ jobs:
           cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
           ls -lh build/symbols/
           du -sh build/symbols/
+
+      - name: Upload make logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: make-logs
+          path: |
+            /tmp/make.log
+            /tmp/make_v80.log
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Post make log via github-script
         if: failure()
@@ -297,7 +314,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: 1,
-                body: "🔍 **Build libmain.so FAILED – tail 300**\n```\n" + log.slice(-8000) + "\n```"
+                body: "🔍 **Build libmain.so FAILED – tail 500**\n```\n" + log.slice(-9000) + "\n```"
               });
             } catch(e) {
               console.log("No make.log: " + e);
