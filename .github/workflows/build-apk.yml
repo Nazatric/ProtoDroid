@@ -15,41 +15,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  symbolize:
-    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[symbolize]') }}
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Download DXVK symbols from run 40542968668
-        uses: actions/download-artifact@v4
-        with:
-          name: debug-symbols
-          repository: ${{ github.repository }}
-          run-id: 40542968668
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: /tmp/protodroid-symbols
-      - name: Symbolize the new Mali fault and disassemble its caller
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          export PATH="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
-          LIB=$(find /tmp/protodroid-symbols -type f -name 'libdxvk_d3d9.so.unstripped' | head -n 1)
-          test -n "$LIB"
-          echo "Using $LIB"
-          sha256sum "$LIB"
-          llvm-addr2line -f -C -i -e "$LIB" \
-            0x237268 0x236bd4 0x143ac8 0x1d8bd4 0x1d8fcc | tee /tmp/dxvk-new-symbols.txt
-          llvm-objdump -d -C --start-address=0x236b00 --stop-address=0x237300 "$LIB" | tee /tmp/dxvk-new-disassembly.txt
-          llvm-nm -D -C "$LIB" | grep -E 'vk(Create|Cmd|Update|Queue|Destroy|Get)' | tee /tmp/dxvk-new-vulkan-symbols.txt || true
-          gh api repos/${{ github.repository }}/issues/1/comments \
-            --raw-field body="New Mali fault symbolization (run 40542968668):\n\`\`\`\n$(cat /tmp/dxvk-new-symbols.txt)\n\`\`\`"
-          gh api repos/${{ github.repository }}/issues/1/comments \
-            --raw-field body="New Mali fault disassembly (0x236b00-0x237300):\n\`\`\`\n$(cat /tmp/dxvk-new-disassembly.txt)\n\`\`\`"
-          gh api repos/${{ github.repository }}/issues/1/comments \
-            --raw-field body="New Mali DXVK dynamic Vulkan symbols:\n\`\`\`\n$(cat /tmp/dxvk-new-vulkan-symbols.txt)\n\`\`\`"
-
   build-deps:
-    if: ${{ !contains(github.event.head_commit.message, '[symbolize]') }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -102,7 +68,6 @@ jobs:
           retention-days: 14
 
   build-apk:
-    if: ${{ !contains(github.event.head_commit.message, '[symbolize]') }}
     runs-on: ubuntu-24.04
     needs: build-deps
     steps:
@@ -402,6 +367,8 @@ jobs:
             /tmp/make_v80.log
             ./make.log
             ./make_v80.log
+            /tmp/dxvk-addr2line.txt
+            /tmp/dxvk-nm.txt
           retention-days: 7
           if-no-files-found: warn
 
@@ -463,6 +430,20 @@ jobs:
           # Now rebuild libmain.so with patched DXVK? Actually we will still need to rebuild libdxvk_d3d9.so with patch
           # But we already have deps built with patched DXVK (via build-deps)
           echo "Using prebuilt libmain.so, but deps are rebuilt with Mali fix"
+
+      - name: DXVK symbolization diagnostics
+        run: |
+          set -euo pipefail
+          TOOLS="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          LIB=build/symbols/libdxvk_d3d9.so.unstripped
+          test -s "$LIB"
+          echo "Symbolizing $LIB"
+          sha256sum "$LIB"
+          # Keep the offsets from the physical Mali report with the matching
+          # unstripped library in CI logs for post-mortem comparisons.
+          "$TOOLS/llvm-addr2line" -f -C -i -e "$LIB" \
+            0x237268 0x236bd4 0x143ac8 0x1d8bd4 0x1d8fcc | tee /tmp/dxvk-addr2line.txt
+          "$TOOLS/llvm-nm" -D "$LIB" | tee /tmp/dxvk-nm.txt
 
       - name: Setup Android keystore (debug)
         if: always()
