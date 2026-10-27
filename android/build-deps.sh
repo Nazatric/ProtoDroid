@@ -91,6 +91,10 @@ ninja -C "$SRC/build/dxvk-$ABI" install
 echo "=== DXVK Android compiler inspection ==="
 echo | "$TC/$TRIPLE$API-clang++" -dM -E -x c++ - | grep -E '__ANDROID__|__ANDROID_API__' || true
 ninja -C "$SRC/build/dxvk-$ABI" -t commands | grep 'wsi_platform_sdl2.cpp' || true
+sed -n '10,28p' "$SRC/dxvk/src/wsi/sdl2/wsi_platform_sdl2.cpp"
+WSI_CMD=$(ninja -C "$SRC/build/dxvk-$ABI" -t commands | grep 'wsi_platform_sdl2.cpp' | head -n 1 | sed -E 's/ -c / -E /; s#-o [^ ]+#-o /tmp/protodroid-wsi.ii#')
+eval "$WSI_CMD"
+grep -A 12 -B 2 'libsdl =' /tmp/protodroid-wsi.ii | head -n 25 || true
 
 # Fail the build rather than shipping a desktop-WSI DXVK by accident. This
 # checks the installed library, not just the compiler or a successful link.
