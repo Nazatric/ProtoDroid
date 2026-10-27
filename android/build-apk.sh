@@ -33,27 +33,63 @@ javac --release 11 -nowarn -cp "$PLATFORM_JAR" -d "$OUT/classes" \
     -R "$OUT/res.zip" --auto-add-overlay --min-sdk-version 26 --target-sdk-version 35
 
 cp "$OUT/dex/classes.dex" "$OUT/pkg/"
+echo "=== classes.dex size ==="
+ls -lh "$OUT/dex/classes.dex" "$OUT/pkg/classes.dex"
 for abi in "${ABIS[@]}"; do
     mkdir -p "$OUT/pkg/lib/$abi"
-    cp "$ROOT/build/android/$abi/libmain.so" "$DEPS_ROOT/$abi"/lib/lib{SDL2,FAudio,dxvk_d3d9}.so "$OUT/pkg/lib/$abi/"
-    # arm64: libmain.so targets ARMv8.2 + RCpc; the ARMv8.0 build for older cores (make ... ARM_ARCH=armv8-a
-    # OUT=../../build/android/arm64-v8a-v80) ships next to it, ProtoActivity picks one at run time.
-    # The Turnip probe program (an executable, named like a library so the installer extracts it with the rest).
+    echo "=== Bundling libs for $abi ==="
+    echo "DEPS_ROOT=$DEPS_ROOT ABI=$abi ROOT=$ROOT"
+    ls -lh "$ROOT/build/android/$abi/libmain.so" 2>&1 || echo "MISSING libmain.so at $ROOT/build/android/$abi/libmain.so"
+    ls -lh "$DEPS_ROOT/$abi/lib/libSDL2.so" "$DEPS_ROOT/$abi/lib/libFAudio.so" "$DEPS_ROOT/$abi/lib/libdxvk_d3d9.so" 2>&1 || echo "MISSING deps for $abi in $DEPS_ROOT/$abi/lib/"
+    # Explicitly copy each lib with verification
+    for lib in libmain.so libSDL2.so libFAudio.so libdxvk_d3d9.so; do
+        SRC=""
+        if [ "$lib" = "libmain.so" ]; then SRC="$ROOT/build/android/$abi/libmain.so"; else SRC="$DEPS_ROOT/$abi/lib/$lib"; fi
+        if [ ! -f "$SRC" ]; then echo "ERROR: missing $SRC"; ls -l "$SRC" 2>&1; echo "DEPS lib dir:"; ls -lh "$DEPS_ROOT/$abi/lib/" 2>&1 | head -n 20; exit 1; fi
+        echo "Copying $SRC -> $OUT/pkg/lib/$abi/"
+        cp -v "$SRC" "$OUT/pkg/lib/$abi/"
+        ls -lh "$OUT/pkg/lib/$abi/$lib"
+    done
     if [ -e "$ROOT/build/android/$abi/libturnipprobe.so" ]; then
-        cp "$ROOT/build/android/$abi/libturnipprobe.so" "$OUT/pkg/lib/$abi/"
+        echo "Copying libturnipprobe.so"
+        cp -v "$ROOT/build/android/$abi/libturnipprobe.so" "$OUT/pkg/lib/$abi/"
     fi
     if [ -e "$ROOT/build/android/$abi-v80/libmain.so" ]; then
-        cp "$ROOT/build/android/$abi-v80/libmain.so" "$OUT/pkg/lib/$abi/libmain_v80.so"
+        echo "Copying libmain_v80.so"
+        cp -v "$ROOT/build/android/$abi-v80/libmain.so" "$OUT/pkg/lib/$abi/libmain_v80.so"
+        ls -lh "$OUT/pkg/lib/$abi/libmain_v80.so"
     fi
-    # Adreno: Turnip and the adrenotools hooks (android/build-turnip.sh), when built
     if [ "$abi" = arm64-v8a ] && [ -e "$TURNIP_ROOT/lib/libvulkan_freedreno.so" ]; then
-        cp "$TURNIP_ROOT"/lib/*.so "$OUT/pkg/lib/$abi/"
+        echo "Copying Turnip libs"
+        cp -v "$TURNIP_ROOT"/lib/*.so "$OUT/pkg/lib/$abi/"
     fi
-    "$SDK"/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded "$OUT/pkg/lib/$abi"/*.so
+    echo "=== Before strip ==="
+    ls -lh "$OUT/pkg/lib/$abi/"
+    du -sh "$OUT/pkg/lib/$abi/"
+    "$SDK"/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded "$OUT/pkg/lib/$abi"/*.so || echo "strip failed or no files"
+    echo "=== After strip ==="
+    ls -lh "$OUT/pkg/lib/$abi/"
+    du -sh "$OUT/pkg/lib/$abi/"
 done
-(cd "$OUT/pkg" && zip -q -r "$OUT/base.apk" classes.dex lib)
+echo "=== Packaging base.apk ==="
+du -sh "$OUT/pkg"/lib/*/* 2>&1 | head -n 20
+(cd "$OUT/pkg" && zip -q -r "$OUT/base.apk" classes.dex lib && echo "zip done" && ls -lh "$OUT/base.apk" && unzip -l "$OUT/base.apk" | head -n 100)
 
 "$BUILD_TOOLS/zipalign" -P 16 -f 4 "$OUT/base.apk" "$OUT/aligned.apk"
 "$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-pass pass:android --key-pass pass:android \
     --out "$OUT/prototype.apk" "$OUT/aligned.apk"
-ls -la "$OUT/prototype.apk"
+echo "=== Final APK ==="
+ls -lh "$OUT/prototype.apk"
+stat -c%s "$OUT/prototype.apk" | awk '{printf "APK size bytes: %d (MB %.2f)\n", $1, $1/1024/1024}'
+# Verify size is at least 20MB (real APK should be 35-50MB, dummy is 2MB)
+APK_SIZE=$(stat -c%s "$OUT/prototype.apk")
+if [ "$APK_SIZE" -lt 20000000 ]; then
+    echo "ERROR: APK too small ($APK_SIZE bytes) - expected 35-50MB, missing libs!"
+    echo "Contents:"
+    unzip -l "$OUT/prototype.apk" | head -n 100
+    echo "lib dir:"
+    unzip -l "$OUT/prototype.apk" | grep "lib/"
+    exit 1
+fi
+echo "APK OK: $APK_SIZE bytes"
+unzip -l "$OUT/prototype.apk" | grep -E "libSDL2|libFAudio|libdxvk|libmain|classes.dex"
