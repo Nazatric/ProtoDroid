@@ -88,6 +88,10 @@ meson setup "$SRC/build/dxvk-$ABI" "$SRC/dxvk" --cross-file "$CROSS" --buildtype
 ninja -C "$SRC/build/dxvk-$ABI" -j "$JOBS"
 ninja -C "$SRC/build/dxvk-$ABI" install
 
+echo "=== DXVK Android compiler inspection ==="
+echo | "$TC/$TRIPLE$API-clang++" -dM -E -x c++ - | grep -E '__ANDROID__|__ANDROID_API__' || true
+ninja -C "$SRC/build/dxvk-$ABI" -t commands | grep 'wsi_platform_sdl2.cpp' || true
+
 # Fail the build rather than shipping a desktop-WSI DXVK by accident. This
 # checks the installed library, not just the compiler or a successful link.
 DXVK_LIB="$PREFIX/lib/libdxvk_d3d9.so"
@@ -96,6 +100,7 @@ if [ ! -f "$DXVK_LIB" ]; then
     exit 1
 fi
 DXVK_STRINGS=$($TC/llvm-strings "$DXVK_LIB")
+printf '%s\n' "$DXVK_STRINGS" | grep -E 'libSDL|vkCreateAndroidSurface|SDL2 WSI' || true
 printf '%s\n' "$DXVK_STRINGS" | grep -Fx 'libSDL2.so' >/dev/null || {
     echo "DXVK was not compiled with the Android SDL2 soname" >&2
     exit 1
