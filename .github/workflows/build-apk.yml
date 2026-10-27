@@ -249,9 +249,19 @@ jobs:
           echo "=== DXVK headers ==="
           ls -la $DXVK_SRC/include/native/directx/d3d9.h 2>&1 | head || true
           echo "=== NDK ==="
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "ANDROID_NDK_LATEST_HOME=$ANDROID_NDK_LATEST_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          env | grep -i ndk || true
           ls -ld "$ANDROID_NDK_HOME" 2>&1 | head || true
+          ls -ld "$ANDROID_NDK_LATEST_HOME" 2>&1 | head || true
+          ls -ld "$ANDROID_HOME/ndk" 2>&1 | head || true
+          ls -ld "$HOME/Android" 2>&1 | head || true
           ls "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" 2>&1 | head || true
+          ls "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" 2>&1 | head || true
           $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++ --version 2>&1 | head || true
+          $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++ --version 2>&1 | head || true
+          echo "Effective NDK for make: ${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
           echo "=== DEPS ==="
           ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/lib/" 2>&1 | head -n 20 || true
           ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/include/SDL2/SDL.h" 2>&1 | head || true
@@ -261,10 +271,14 @@ jobs:
           du -sh build/recomp/native 2>&1 | head || true
           free -h 2>&1 | head || true
           df -h 2>&1 | head -n 10 || true
+          EFFECTIVE_NDK="${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
+          if [ -z "$EFFECTIVE_NDK" ]; then EFFECTIVE_NDK="$ANDROID_HOME/ndk/28.2.13676358"; fi
+          echo "Using NDK=$EFFECTIVE_NDK for make"
+          ls -ld "$EFFECTIVE_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" 2>&1 | head || true
           echo "::group::Make libmain.so (single job for memory)"
           # Do not use pipefail for this block - capture exit code manually
           set +e
-          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 V=1 > /tmp/make.log 2>&1
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 V=1 > /tmp/make.log 2>&1
           MAKE_EXIT=$?
           set -e
           echo "make exit $MAKE_EXIT"
@@ -290,7 +304,7 @@ jobs:
           du -sh build/android/arm64-v8a/
           echo "::group::Make v80 variant"
           set +e
-          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 > /tmp/make_v80.log 2>&1
+          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 > /tmp/make_v80.log 2>&1
           V80_EXIT=$?
           set -e
           echo "v80 make exit $V80_EXIT"
