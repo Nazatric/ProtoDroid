@@ -309,7 +309,7 @@ std::atomic<int> g_fps_limit{0};  // 0 = no limit (the swap interval still appli
 static long ResidentMiB() {
     long pages = 0, resident = 0;
     if (FILE* f = fopen("/proc/self/statm", "r")) {
-        if (fscanf(f, "%ld %ld\", &pages, &resident) != 2) resident = 0;
+        if (fscanf(f, "%ld %ld", &pages, &resident) != 2) resident = 0;
         fclose(f);
     }
     return resident * (sysconf(_SC_PAGESIZE) / 1024) / 1024;
@@ -361,7 +361,7 @@ static void PinToBigCores() {
     }
     if (big == 0 || big == n) return;  // not big.LITTLE
     int r = sched_setaffinity(0, sizeof(set), &set);
-    native::Log("main thread pinned to %d of %d cores%s\", big, n, r == 0 ? "" : " (failed)");
+    native::Log("main thread pinned to %d of %d cores%s", big, n, r == 0 ? "" : " (failed)");
 #endif
 }
 
@@ -455,7 +455,7 @@ int main(int argc, char** argv) {
     rename("proto-native.log", "proto-native.prev.log");
     // Also rotate mirror logs if exists
     // MirrorInit will handle mirror rotation
-    MirrorInit(base);
+    native::MirrorInit(base);
     if (!g_mirror_dir.empty()) {
         // If mirror dir exists, rotate its previous log
         std::string shared_prev = g_mirror_dir + "/proto-native.prev.log";
@@ -653,7 +653,7 @@ int main(int argc, char** argv) {
             if (frame) {
                 Log("perf: %.1f fps, %.1f ms, %ld MiB resident; arena %s; io: %s", g_fps.load(), g_frame_ms.load(),
                     ResidentMiB(), ArenaUsage().c_str(), TakeIoStats().c_str());
-                MirrorCopyDXVKLogs();
+                native::MirrorCopyDXVKLogs();
             }
             next_log = now + std::chrono::seconds(30);
         }
@@ -673,7 +673,7 @@ int main(int argc, char** argv) {
                 // at its checkpoints, so there is nothing to lose by ending the process here.
                 Log("quit");
                 VulkanDriverAbandon();
-                MirrorCopyDXVKLogs();
+                native::MirrorCopyDXVKLogs();
                 _exit(0);
 #endif
                 quit = true;
@@ -690,6 +690,6 @@ int main(int argc, char** argv) {
     }
     GuestCall(terminate, {});
     Log("EngineTerminate done");
-    MirrorCopyDXVKLogs();
+    native::MirrorCopyDXVKLogs();
     return 0;
 }
