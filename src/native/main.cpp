@@ -46,6 +46,7 @@ std::string g_mirror_dir;
 std::string g_mirror_log_path;
 std::string g_mirror_prev_path;
 }  // namespace
+static void MirrorCopyDXVKLogs();
 
 // Forward for mirroring helper
 
