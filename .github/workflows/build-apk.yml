@@ -13,9 +13,51 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      symbolize_run_id:
+        description: Only symbolize the debug-symbols artifact from this earlier build run
+        required: false
+        default: ''
 
 jobs:
+  symbolize:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.symbolize_run_id != '' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download matching debug symbols
+        uses: actions/download-artifact@v4
+        with:
+          name: debug-symbols
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.symbolize_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: /tmp/protodroid-symbols
+      - name: Symbolize new and original DXVK offsets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          command -v llvm-addr2line
+          LIB=$(find /tmp/protodroid-symbols -type f -name 'libdxvk_d3d9.so*' | head -n 1)
+          test -n "$LIB"
+          echo "library=$LIB"
+          ls -lh "$LIB"
+          sha256sum "$LIB"
+          {
+            echo '=== NEW CRASH: Direct3DCreate9 abort ==='
+            llvm-addr2line -a -f -C -e "$LIB" \
+              0x10d85c 0x10ddcc 0x10edac 0x1ec7b0 0x1ec9a0 0x28368c \
+              0x30afd8 0x30affc 0x30876c 0x3088dc 0x308fb0
+            echo '=== ORIGINAL OFFSETS (same binary; original binary may differ) ==='
+            llvm-addr2line -a -f -C -e "$LIB" \
+              0x24793c 0x2472a8 0x153cc8 0x1e9988 0x1e9dc0
+          } | tee /tmp/dxvk-symbolization.txt
+          gh api repos/${{ github.repository }}/issues/1/comments \
+            --raw-field body="DXVK symbolization for run ${{ inputs.symbolize_run_id }}:\n\`\`\`\n$(cat /tmp/dxvk-symbolization.txt)\n\`\`\`"
+
   build-deps:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.symbolize_run_id == '' }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -58,6 +100,7 @@ jobs:
           retention-days: 14
 
   build-apk:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.symbolize_run_id == '' }}
     runs-on: ubuntu-24.04
     needs: build-deps
     steps:
