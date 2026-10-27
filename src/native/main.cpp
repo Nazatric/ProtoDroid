@@ -48,8 +48,6 @@ std::string g_mirror_prev_path;
 }  // namespace
 
 // Forward for mirroring helper
-static void MirrorInit(const char* base);
-static void MirrorCopyDXVKLogs();
 
 void Log(const char* fmt, ...) {
     std::lock_guard<std::mutex> lock(g_log_mutex);
