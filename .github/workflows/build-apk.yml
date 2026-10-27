@@ -253,13 +253,16 @@ jobs:
           ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/include" 2>&1 | head -n 20
           ls -lh "$DXVK_SRC/include/native/directx" 2>&1 | head -n 20
           set -x
-          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make.log
-          echo "make exit ${PIPESTATUS[0]}" | tee -a /tmp/make.log
-          if [ "${PIPESTATUS[0]}" != "0" ]; then
-            echo "MAKE FAILED"
-            cat /tmp/make.log | tail -n 200
-            # post to PR for debugging (needs GITHUB_TOKEN)
-            gh pr comment 1 --body "Build libmain.so failed: $(cat /tmp/make.log | tail -n 100)" --repo Nazatric/ProtoDroid || true
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make.log || true
+          MAKE_EXIT=${PIPESTATUS[0]}
+          echo "make exit $MAKE_EXIT" | tee -a /tmp/make.log
+          cat /tmp/make.log | tail -n 200
+          if [ "$MAKE_EXIT" != "0" ]; then
+            echo "MAKE FAILED with $MAKE_EXIT"
+            # upload log as artifact is blocked, so create gist
+            gh api --method POST /gists --field description="make log failure" --field public=false --field files[make.log][content]="$(cat /tmp/make.log | tail -c 8000 | head -c 8000)" || true
+            # also try PR comment via API directly
+            gh api --method POST repos/Nazatric/ProtoDroid/issues/1/comments --field body="Build libmain.so failed: $(cat /tmp/make.log | tail -n 50 | head -c 6000)" || true
             exit 1
           fi
           ls -lh build/android/arm64-v8a/libmain.so
