@@ -271,6 +271,11 @@ jobs:
           du -sh build/recomp/native 2>&1 | head || true
           free -h 2>&1 | head || true
           df -h 2>&1 | head -n 10 || true
+          echo "=== main.cpp check ==="
+          git log --oneline -1 2>&1 | head || true
+          grep -n 'fscanf.*pages\|main thread pinned\|MirrorInit(base)' src/native/main.cpp 2>&1 | head -n 20 || true
+          echo "=== main.cpp hex check for 312 ==="
+          sed -n '312p' src/native/main.cpp 2>&1 | od -An -tx1 | head || true
           EFFECTIVE_NDK="${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
           if [ -z "$EFFECTIVE_NDK" ]; then EFFECTIVE_NDK="$ANDROID_HOME/ndk/28.2.13676358"; fi
           echo "Using NDK=$EFFECTIVE_NDK for make"
