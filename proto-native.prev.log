@@ -1,0 +1,79 @@
+proto-re build Oct 27 2026 17:33:48
+logs mirrored to /storage/emulated/0/Prototype/logs
+proto-re build Oct 27 2026 17:33:48
+DXVK logs mirrored to /storage/emulated/0/Prototype/logs
+game dir: /storage/emulated/0/Prototype
+data dir: /storage/emulated/0/Android/data/com.protore.game/files
+memory: guest window at 1000000000, arena 2000 MiB
+render size 1600x720 (window 2712x1220)
+loader: rebased to 7c000000 (418563 fixups)
+loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
+DllMain(PROCESS_ATTACH)
+DllMain returned 1
+EngineInitialize
+SetThreadPriority(0) -> nice 0 on tid 30898
+SetThreadPriority(2) -> nice -4 on tid 30906
+SetThreadPriority(0) -> nice 0 on tid 30907
+SetThreadPriority(0) -> nice 0 on tid 30908
+SetThreadPriority(0) -> nice 0 on tid 30909
+SetThreadPriority(15) -> nice -10 on tid 30910
+SetThreadPriority(1) -> nice -2 on tid 30911
+SetThreadPriority(1) -> nice -2 on tid 30912
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+Direct3DCreate9(32) -> 0xb400006f9d5d9a50
+GPU BC (DXT) textures: not supported, decoding on (DXT1 as 16-bit)
+CreateDevice 1600x720 fmt 22 windowed 1 msaa 0/0 interval 2147483648 -> 00000000
+textures: skip 1 mip level(s) of textures >= 512, decode DXT on
+SetThreadPriority(0) -> nice 0 on tid 30920
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Keyboard)
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Mouse)
+xaudio2: Initialize(flags 0) -> 0
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 30927
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 30932
+SetThreadPriority(15) -> nice -10 on tid 30933
+SetThreadPriority(1) -> nice -2 on tid 30934
+SetThreadPriority(1) -> nice -2 on tid 30935
+EngineInitialize returned 1
+perf hint: unavailable (target 16.7 ms, 7 threads)
+frame 0
+Reset 1600x720 msaa 0/0 interval 1 -> 00000000
+frame 1
+frame 2
+frame 4
+frame 8
+frame 16
+frame 32
+frame 64
+frame 128
+frame 256
+crash: signal 11 (Segmentation fault) code 1 addr 0x50 on tid 30917
+crash: pc 0x6e2d4f124c = libGLES_mali.so+0x1f6c24c (?)
+crash: lr 0x6e2d4e88f0 = libGLES_mali.so+0x1f638f0 (?)
+crash: fault addr 0x50
+crash: #00 0x6d332c44b8 = libmain.so+0xf334b8 (?)
+crash: #01 0x710e8cd094 = libsigchain.so+0x7094 (_ZN3art11SignalChain7HandlerEiP7siginfoPv+0x484)
+crash: #02 0x714b667848 = [vdso]+0x848 (__kernel_rt_sigreturn+0)
+crash: #03 0x6e2d4f124c = libGLES_mali.so+0x1f6c24c (?)
+crash: #04 0x6e2d4e88f0 = libGLES_mali.so+0x1f638f0 (?)
+crash: #05 0x6e2d4e56e8 = libGLES_mali.so+0x1f606e8 (?)
+crash: #06 0x6e2d3648dc = libGLES_mali.so+0x1ddf8dc (cmpbe_v2_compile_multiple_shaders+0xb2c)
+crash: #07 0x6e2d1987e8 = libGLES_mali.so+0x1c137e8 (?)
+crash: #08 0x6e2bed62d0 = libGLES_mali.so+0x9512d0 (?)
+crash: #09 0x6d39614564 = libdxvk_d3d9.so+0x1ed564 (?)
+crash: #10 0x6d3961235c = libdxvk_d3d9.so+0x1eb35c (?)
+crash: #11 0x6d39611f9c = libdxvk_d3d9.so+0x1eaf9c (?)
+crash: #12 0x6d396115e8 = libdxvk_d3d9.so+0x1ea5e8 (?)
+crash: #13 0x6d395ebb30 = libdxvk_d3d9.so+0x1c4b30 (?)
+crash: #14 0x6d395eedac = libdxvk_d3d9.so+0x1c7dac (?)
+crash: #15 0x6d395de9f4 = libdxvk_d3d9.so+0x1b79f4 (?)
+crash: #16 0x6d39557654 = libdxvk_d3d9.so+0x130654 (?)
+crash: #17 0x6d395ffd5c = libdxvk_d3d9.so+0x1d8d5c (?)
+crash: #18 0x6d39600154 = libdxvk_d3d9.so+0x1d9154 (?)
+crash: #19 0x7118128390 = libc.so+0x84390 (?)
+crash: #20 0x711811a8b4 = libc.so+0x768b4 (?)
