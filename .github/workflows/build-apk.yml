@@ -242,8 +242,13 @@ jobs:
         run: |
           set -euo pipefail
           export PATH=$HOME/.local/bin:$PATH
-          if [ ! -d "/tmp/deps-src/dxvk" ]; then
-            git clone --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/deps-src/dxvk || true
+          if [ ! -d "/tmp/deps-src/dxvk/include/native/directx/d3d9.h" ]; then
+            echo "Cloning DXVK v2.5.3..."
+            rm -rf /tmp/deps-src/dxvk
+            mkdir -p /tmp/deps-src
+            git clone -q --depth 1 --branch v2.5.3 --recurse-submodules --shallow-submodules https://github.com/doitsujin/dxvk.git /tmp/deps-src/dxvk
+            echo "DXVK clone done"
+            ls -lh /tmp/deps-src/dxvk/include/native/directx/d3d9.h || (echo "DXVK headers still missing!" && exit 1)
           fi
           DXVK_SRC="/tmp/deps-src/dxvk"
           echo "=== DXVK headers ==="
