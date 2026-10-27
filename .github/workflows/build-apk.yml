@@ -32,6 +32,14 @@ jobs:
           run-id: ${{ inputs.symbolize_run_id || '40531497695' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: /tmp/protodroid-symbols
+      - name: Download matching APK for stripped-library audit
+        uses: actions/download-artifact@v4
+        with:
+          name: prototype-apk
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.symbolize_run_id || '40531497695' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: /tmp/protodroid-apk
       - name: Symbolize new and original DXVK offsets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -46,7 +54,7 @@ jobs:
           sha256sum "$LIB"
           {
             echo '=== NEW CRASH: Direct3DCreate9 abort ==='
-            llvm-addr2line -a -f -C -e "$LIB" \
+            llvm-addr2line -a -i -f -C -e "$LIB" \
               0x10d85c 0x10ddcc 0x10edac 0x1ec7b0 0x1ec9a0 0x28368c \
               0x30afd8 0x30affc 0x30876c 0x3088dc 0x308fb0
             echo '=== ORIGINAL OFFSETS (same binary; original binary may differ) ==='
@@ -56,17 +64,27 @@ jobs:
           gh api repos/${{ github.repository }}/issues/1/comments \
             --raw-field body="DXVK symbolization for run ${{ inputs.symbolize_run_id }}:\n\`\`\`\n$(cat /tmp/dxvk-symbolization.txt)\n\`\`\`"
           SDL=$(find /tmp/protodroid-symbols -type f -name 'libSDL2.so*' | head -n 1)
+          APK=$(find /tmp/protodroid-apk -type f -name 'prototype.apk' | head -n 1)
+          rm -rf /tmp/protodroid-apk-libs
+          mkdir -p /tmp/protodroid-apk-libs
+          unzip -q "$APK" 'lib/arm64-v8a/libSDL2.so' -d /tmp/protodroid-apk-libs
+          STRIPPED_SDL=/tmp/protodroid-apk-libs/lib/arm64-v8a/libSDL2.so
           {
             echo '=== SDL2 WSI symbol audit ==='
             echo "SDL=$SDL"
+            echo "stripped SDL=$STRIPPED_SDL"
             for sym in SDL_GetWindowWMInfo SDL_Vulkan_LoadLibrary SDL_Vulkan_GetInstanceExtensions SDL_Vulkan_CreateSurface SDL_GetError; do
               printf '%s: ' "$sym"
               llvm-nm -D "$SDL" | grep -E " [A-Za-z] ${sym}$" || echo MISSING
+              printf 'stripped %s: ' "$sym"
+              llvm-nm -D "$STRIPPED_SDL" | grep -E " [A-Za-z] ${sym}$" || echo MISSING
             done
             echo '=== DXVK WSI symbols ==='
             llvm-nm -C "$LIB" | grep -E 'wsi::init|Sdl2WsiDriver::Sdl2WsiDriver' || true
             echo '=== DXVK needed libraries ==='
             llvm-readelf -d "$LIB" | grep NEEDED || true
+            echo '=== WSI init disassembly ==='
+            llvm-objdump -d --demangle --no-show-raw-insn --start-address=0x283500 --stop-address=0x283c00 "$LIB" || true
           } | tee /tmp/dxvk-wsi-audit.txt
           gh api repos/${{ github.repository }}/issues/1/comments \
             --raw-field body="DXVK WSI audit:\n\`\`\`\n$(cat /tmp/dxvk-wsi-audit.txt)\n\`\`\`"
