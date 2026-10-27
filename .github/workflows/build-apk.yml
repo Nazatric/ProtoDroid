@@ -267,13 +267,15 @@ jobs:
           MAKE_EXIT=$?
           set -e
           echo "make exit $MAKE_EXIT"
-          cat /tmp/make.log | tail -n 200
-          echo "=== Full make.log size $(wc -l /tmp/make.log) ==="
-          ls -lh /tmp/make.log
-          # Also save to workspace for artifact
-          cp /tmp/make.log ./make.log || true
+          cat /tmp/make.log | tail -n 200 || true
+          echo "=== Full make.log size $(wc -l /tmp/make.log 2>&1) ===" || true
+          ls -lh /tmp/make.log 2>&1 || true
+          cp /tmp/make.log ./make.log 2>&1 || true
+          ls -lh ./make.log 2>&1 || true
           if [ "$MAKE_EXIT" != "0" ]; then
-            echo "::error::MAKE FAILED with $MAKE_EXIT"
+            echo "::error::MAKE FAILED with $MAKE_EXIT - posting to issue 1"
+            # Keep file for upload artifact
+            gh api repos/Nazatric/ProtoDroid/issues/1/comments -f body="🔍 **MAKE FAILED $MAKE_EXIT**\n\`\`\`$(tail -n 150 /tmp/make.log 2>&1 | head -c 8000)\n\`\`\`" 2>&1 || echo "gh post failed"
             exit $MAKE_EXIT
           fi
           echo "::endgroup::"
