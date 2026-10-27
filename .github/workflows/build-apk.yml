@@ -302,6 +302,11 @@ jobs:
               https://api.github.com/repos/Nazatric/ProtoDroid/issues/1/comments \
               -d "{\"body\":\"🔍 **MAKE FAILED $MAKE_EXIT**\\n\\\`\\\`\\\`\\n$TAIL\\n\\\`\\\`\\\`\"}" 2>&1 | head || true
             gh api repos/Nazatric/ProtoDroid/issues/1/comments -f body="🔍 MAKE FAILED $MAKE_EXIT tail 150:\n\`\`\`$(tail -n 150 /tmp/make.log 2>&1 | head -c 7000)\n\`\`\`" 2>&1 | head || true
+            echo "=== grep error ==="
+            grep -n "error:\|fatal error\|No such file" /tmp/make.log 2>&1 | head -n 100 || true
+            # post grep too
+            GREP=$(grep -n "error:" /tmp/make.log 2>&1 | head -n 50 | head -c 6000 | sed 's/"/\\"/g' | tr -d '\r')
+            curl -s -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/Nazatric/ProtoDroid/issues/1/comments -d "{\"body\":\"🔍 **GREP error**\n\`\`\`\n$GREP\n\`\`\`\"}" 2>&1 | head || true
             exit $MAKE_EXIT
           fi
           echo "::endgroup::"
