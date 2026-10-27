@@ -248,10 +248,24 @@ jobs:
           echo "NDK at $ANDROID_NDK_HOME / $ANDROID_NDK_LATEST_HOME"
           ls -ld "$ANDROID_NDK_HOME" "$ANDROID_NDK_LATEST_HOME" 2>&1 | head
           ls "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" 2>&1 | head
-          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc)
+          echo "DEPS at $HOME/proto-re-data/android-deps/arm64-v8a"
+          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/lib" 2>&1 | head -n 20
+          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/include" 2>&1 | head -n 20
+          ls -lh "$DXVK_SRC/include/native/directx" 2>&1 | head -n 20
+          set -x
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make.log
+          echo "make exit ${PIPESTATUS[0]}" | tee -a /tmp/make.log
+          if [ "${PIPESTATUS[0]}" != "0" ]; then
+            echo "MAKE FAILED"
+            cat /tmp/make.log | tail -n 200
+            # post to PR for debugging (needs GITHUB_TOKEN)
+            gh pr comment 1 --body "Build libmain.so failed: $(cat /tmp/make.log | tail -n 100)" --repo Nazatric/ProtoDroid || true
+            exit 1
+          fi
           ls -lh build/android/arm64-v8a/libmain.so
           # Also build v80 variant for older cores
-          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) || true
+          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make_v80.log || true
+          cat /tmp/make_v80.log | tail -n 50 || true
           ls -lh build/android/arm64-v8a*/libmain*.so || true
 
           # Keep unstripped for artifact (debug symbols + -rdynamic)
