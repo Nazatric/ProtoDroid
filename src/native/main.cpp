@@ -166,7 +166,7 @@ void OnCrash(int sig, siginfo_t* info, void* context) {
         },
         &walk);
     // Mirror DXVK logs on crash for post-mortem
-    MirrorCopyDXVKLogs();
+    ::native::MirrorCopyDXVKLogs();
     if (g_log) fflush(g_log);
     if (g_log_mirror) fflush(g_log_mirror);
     sigaction(sig, &g_old_actions[sig], nullptr);
