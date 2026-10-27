@@ -248,19 +248,20 @@ static void CopyFile(const std::string& src, const std::string& dst) {
     fclose(out);
 }
 
+}  // namespace
+
+// Defined in native (not the anonymous namespace) so the forward declaration and all callers refer to the same
+// symbol. CopyFile and the mirror state remain implementation details of the anonymous namespace above.
 void MirrorCopyDXVKLogs() {
     if (g_mirror_dir.empty() || !g_data_dir) return;
     std::string base_log = std::string(g_data_dir) + "/app_process64_d3d9.log";
     std::string mirror_dxvk = g_mirror_dir + "/app_process64_d3d9.log";
     CopyFile(base_log, mirror_dxvk);
-    // Also copy state cache if exists
+    // Also copy state cache if it exists.
     std::string base_cache = std::string(g_data_dir) + "/prototypeenginef.dll.dxvk-cache";
     std::string mirror_cache = g_mirror_dir + "/prototypeenginef.dll.dxvk-cache";
-    // Only copy if cache newer
     CopyFile(base_cache, mirror_cache);
 }
-
-}  // namespace
 
 std::string TakeIoStats();   // kernel32.cpp
 std::string ArenaUsage();    // memory.cpp
