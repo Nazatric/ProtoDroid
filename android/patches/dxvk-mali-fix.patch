@@ -1,0 +1,67 @@
+diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
+index 15e8e3a..75dbe1f 100644
+--- a/src/dxvk/dxvk_adapter.cpp
++++ b/src/dxvk/dxvk_adapter.cpp
+@@ -320,6 +320,13 @@ namespace dxvk {
+     if (!m_deviceExtensions.supports(devExtensions.extPageableDeviceLocalMemory.name()))
+       devExtensions.amdMemoryOverallocationBehaviour.setMode(DxvkExtMode::Optional);
+ 
++    // Android Mali-G720 MC7: disable extensions whose required features are not supported
++    if (!m_deviceFeatures.extTransformFeedback.transformFeedback)
++      devExtensions.extTransformFeedback.setMode(DxvkExtMode::Disabled);
++    if (!m_deviceFeatures.extVertexAttributeDivisor.vertexAttributeInstanceRateDivisor &&
++        !m_deviceFeatures.extVertexAttributeDivisor.vertexAttributeInstanceRateZeroDivisor)
++      devExtensions.extVertexAttributeDivisor.setMode(DxvkExtMode::Disabled);
++
+     DxvkNameSet extensionsEnabled;
+ 
+     if (!m_deviceExtensions.enableExtensions(
+diff --git a/src/dxvk/dxvk_context.cpp b/src/dxvk/dxvk_context.cpp
+index 356a792..24044fa 100644
+--- a/src/dxvk/dxvk_context.cpp
++++ b/src/dxvk/dxvk_context.cpp
+@@ -5374,8 +5374,8 @@ namespace dxvk {
+               m_cmd->track(res.sampler);
+             } else {
+               descriptorInfo.image.sampler = m_common->dummyResources().samplerHandle();
+-              descriptorInfo.image.imageView = VK_NULL_HANDLE;
+-              descriptorInfo.image.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
++              descriptorInfo.image.imageView = nullImageView(binding.viewType);
++              descriptorInfo.image.imageLayout = nullImageLayout();
+             }
+           } break;
+ 
+diff --git a/src/dxvk/dxvk_graphics.cpp b/src/dxvk/dxvk_graphics.cpp
+index ec6b214..f5548ab 100644
+--- a/src/dxvk/dxvk_graphics.cpp
++++ b/src/dxvk/dxvk_graphics.cpp
+@@ -59,6 +59,7 @@ namespace dxvk {
+     if (bindingCount) {
+       bool supportsDivisor = device->features().extVertexAttributeDivisor.vertexAttributeInstanceRateDivisor;
+ 
++      // Mali-G720: divisor not supported -> don't emit divisor state
+       viInfo.vertexBindingDescriptionCount = bindingCount;
+       viInfo.pVertexBindingDescriptions = viBindings.data();
+ 
+diff --git a/src/dxvk/dxvk_presenter.cpp b/src/dxvk/dxvk_presenter.cpp
+index 922f178..8b42f69 100644
+--- a/src/dxvk/dxvk_presenter.cpp
++++ b/src/dxvk/dxvk_presenter.cpp
+@@ -1,3 +1,4 @@
++#include <cstdlib>
+ #include <chrono>
+ #include <atomic>
+ #include <algorithm>
+diff --git a/src/dxvk/dxvk_unbound.cpp b/src/dxvk/dxvk_unbound.cpp
+index 25e17b8..e1a9f8f 100644
+--- a/src/dxvk/dxvk_unbound.cpp
++++ b/src/dxvk/dxvk_unbound.cpp
+@@ -162,7 +162,7 @@ namespace dxvk {
+                     | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT
+                     | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+ 
+-    // Android port: not on drivers without transform feedback (Mali), where the usage bit is invalid
++    // Mali-G720: don't set TRANSFORM_FEEDBACK usage if not supported
+     if (m_device->features().extTransformFeedback.transformFeedback)
+       info.usage |= VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_BUFFER_BIT_EXT;
+     info.stages     = VK_PIPELINE_STAGE_TRANSFER_BIT

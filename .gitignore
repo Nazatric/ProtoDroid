@@ -1,0 +1,13 @@
+# никогда не коммитим ассеты игры
+*.rcf
+*.p3d
+*.bik
+*.gfx
+*.dds
+extracted/
+__pycache__/
+ghidra/
+build/
+!build/recomp/
+!build/recomp/**
+re/decomp/

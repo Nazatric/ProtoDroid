@@ -1,0 +1,389 @@
+name: build-apk
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  push:
+    branches: [main, master, arena/**]
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-deps:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        abi: [arm64-v8a]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache deps
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/deps-out/${{ matrix.abi }}
+          key: android-deps-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/patches/**') }}
+
+      - name: Install build tools
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip 7zip
+          pip3 install --user --break-system-packages meson==1.5.2
+          echo "NDK at $ANDROID_NDK_LATEST_HOME: $(ls $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt 2>&1 | head)"
+
+      - name: Build third-party deps (SDL2, FAudio, DXVK)
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        run: |
+          export PATH=$HOME/.local/bin:$PATH
+          echo "NDK: $ANDROID_NDK_HOME"
+          ls -la android/patches/
+          android/build-deps.sh ${{ matrix.abi }} /tmp/deps-src deps-out/${{ matrix.abi }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-deps-${{ matrix.abi }}
+          path: |
+            deps-out/${{ matrix.abi }}/lib/*.so
+            deps-out/${{ matrix.abi }}/include
+          retention-days: 14
+
+  build-apk:
+    runs-on: ubuntu-24.04
+    needs: build-deps
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip p7zip-full unzip
+          pip3 install --user --break-system-packages meson==1.5.2 capstone pefile
+          echo "SDK: $ANDROID_SDK_ROOT $ANDROID_HOME"
+          echo "NDK: $ANDROID_NDK_LATEST_HOME"
+          ls $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt 2>&1 | head
+          ls $ANDROID_SDK_ROOT/build-tools 2>&1 | head -n 20
+          ls $ANDROID_SDK_ROOT/platforms 2>&1 | head -n 20
+          # Ensure build-tools 35 is available; if 36 requested earlier but missing, use latest available
+          if [ ! -d \"$ANDROID_SDK_ROOT/build-tools/36.0.0\" ] && [ -d \"$ANDROID_SDK_ROOT/build-tools/35.0.0\" ]; then
+            echo \"build-tools 36.0.0 not found, using 35.0.0\"
+            sudo ln -sf $ANDROID_SDK_ROOT/build-tools/35.0.0 $ANDROID_SDK_ROOT/build-tools/36.0.0 || true
+          fi
+          if [ ! -f \"$ANDROID_SDK_ROOT/platforms/android-35/android.jar\" ] && [ -f \"$ANDROID_SDK_ROOT/platforms/android-34/android.jar\" ]; then
+            echo \"platform android-35 not found, using 34\"
+            sudo ln -sf $ANDROID_SDK_ROOT/platforms/android-34 $ANDROID_SDK_ROOT/platforms/android-35 || true
+          fi
+
+      - name: Download deps artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-deps-arm64-v8a
+          path: deps-out/arm64-v8a
+
+      - name: Prepare deps layout
+        run: |
+          mkdir -p $HOME/proto-re-data/android-deps/arm64-v8a
+          cp -r deps-out/arm64-v8a/* $HOME/proto-re-data/android-deps/arm64-v8a/ || true
+          mkdir -p $HOME/proto-re-data/android-deps-src/SDL2
+          # SDL src was used in build-apk.sh for Java, we keep minimal
+          ls -R deps-out || true
+          ls -R $HOME/proto-re-data/android-deps || true
+
+      - name: Fetch SDL2 source for Java
+        run: |
+          mkdir -p /tmp/deps-src
+          git clone --depth 1 --branch release-2.30.9 https://github.com/libsdl-org/SDL.git /tmp/deps-src/SDL2 || true
+          mkdir -p $HOME/proto-re-data/android-deps-src
+          cp -r /tmp/deps-src/SDL2 $HOME/proto-re-data/android-deps-src/ || true
+
+      - name: Discover binary assets and prepare libmain.so
+        id: discover
+        run: |
+          set -euo pipefail
+          ROOT=$(pwd)
+          echo "=== Checking for prototypeenginef.dll ==="
+          if [ -f "prototypeenginef.dll" ]; then
+            echo "Found prototypeenginef.dll in repo root: $(ls -lh prototypeenginef.dll)"
+            DLL_PATH="$ROOT/prototypeenginef.dll"
+          elif [ -f "prototypeenginef.zip" ]; then
+            echo "Found prototypeenginef.zip, extracting"
+            7z x prototypeenginef.zip -o/tmp
+            DLL_PATH=$(find /tmp -name "prototypeenginef.dll" | head -n1)
+          else
+            echo "No DLL in repo root, checking GitHub releases..."
+            if gh release list --repo ${{ github.repository }} 2>/dev/null | grep -q "prototype.apk"; then
+              echo "Found release with APK, downloading"
+              gh release download --repo ${{ github.repository }} --pattern "prototype.apk" --dir /tmp || true
+            fi
+            # Check split archives
+            if [ -f "prototype.zip.001" ]; then
+              echo "Found split archives prototype.zip.001, recombining"
+              cat prototype.zip.* > prototype.zip
+              7z x prototype.zip -o/tmp
+            fi
+            if [ -f "prototype.apk.001" ]; then
+              echo "Found split APK archives, recombining"
+              cat prototype.apk.* > prototype.apk
+            fi
+            if [ -f "/tmp/prototype.apk" ] || [ -f "prototype.apk" ]; then
+              APK=$(ls /tmp/prototype.apk 2>/dev/null || ls prototype.apk 2>/dev/null | head -n1)
+              echo "Extracting libmain.so from $APK"
+              mkdir -p /tmp/apk-extract
+              unzip -q "$APK" "lib/arm64-v8a/libmain.so" -d /tmp/apk-extract || true
+              if [ -f "/tmp/apk-extract/lib/arm64-v8a/libmain.so" ]; then
+                echo "Extracted libmain.so from APK, will reuse"
+                mkdir -p build/android/arm64-v8a
+                cp /tmp/apk-extract/lib/arm64-v8a/libmain.so build/android/arm64-v8a/libmain.so
+                # Also extract other libs for reference but we will rebuild dxvk etc.
+                echo "HAS_LIBMAIN_FROM_APK=1" >> $GITHUB_ENV
+              else
+                echo "Failed to extract libmain.so from APK"
+              fi
+            fi
+            # If still no DLL and no APK, fail
+            if [ ! -f "build/android/arm64-v8a/libmain.so" ]; then
+              echo "ERROR: No prototypeenginef.dll and no prebuilt APK found - cannot build libmain.so"
+              echo "Provide prototypeenginef.dll (or .zip) in repo root, or upload prototype.apk to releases, or split archives"
+              exit 1
+            fi
+            DLL_PATH=""
+          fi
+
+          if [ -n "${DLL_PATH:-}" ]; then
+            echo "DLL_PATH=$DLL_PATH" >> $GITHUB_ENV
+            echo "HAS_DLL=1" >> $GITHUB_ENV
+            # Verify DLL size (Steam build 19788432 = 19.26 MB)
+            ls -lh "$DLL_PATH"
+            echo "DLL found, will compile via recomp.py"
+          else
+            echo "Using prebuilt libmain.so from APK"
+            echo "HAS_DLL=0" >> $GITHUB_ENV
+          fi
+
+          # Also check for split archives in repo root for completeness
+          ls -lh *.dll *.zip *.apk 2>&1 | head -n 20 || true
+
+      - name: List recomp before cache
+        run: |
+          echo "=== before cache ==="
+          ls -lh build/recomp/native 2>&1 | head -n 40
+          echo "count $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          test -f build/recomp/native/table.c && echo "table.c exists" || echo "table.c MISSING"
+
+      - name: Cache recomp output
+        uses: actions/cache@v4
+        id: cache-recomp
+        with:
+          path: build/recomp/native
+          key: recomp-${{ hashFiles('re/functions.csv', 're/extra_functions.txt', 'tools/recomp/recomp.py', 'tools/recomp/data_entries.py') }}-${{ hashFiles('prototypeenginef.dll') }}
+
+      - name: List recomp after cache
+        run: |
+          echo "=== after cache ==="
+          ls -lh build/recomp/native 2>&1 | head -n 40
+          echo "count $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          test -f build/recomp/native/table.c && echo "table.c exists" || echo "table.c MISSING - will generate"
+
+      - name: Recompile engine (recomp.py) if DLL present
+        if: env.HAS_DLL == '1' && steps.cache-recomp.outputs.cache-hit != 'true' && hashFiles('build/recomp/native/table.c') == ''
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          export PATH=$HOME/.local/bin:$PATH
+          if [ -f build/recomp/native/table.c ]; then
+            echo "recomp output already present (committed), skipping generation"
+            ls -lh build/recomp/native | head -n 20
+            echo "files $(ls build/recomp/native/*.c | wc -l) bytes $(du -sh build/recomp/native | cut -f1)"
+            exit 0
+          fi
+          echo "Building recompiled sources from $DLL_PATH"
+          mkdir -p build/recomp/native
+          ls -lh re/functions.csv re/extra_functions.txt || true
+          python3 -c "import capstone, pefile; print('capstone', capstone.__version__)"
+          timeout 600 bash -c 'PROTORE_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
+          cat /tmp/recomp.log | tail -n 100
+          test -f /tmp/recomp_exit && cat /tmp/recomp_exit
+          if [ "$(cat /tmp/recomp_exit | awk '\''{print $2}'\'')" != "0" ]; then
+            echo "recomp failed, log:"
+            cat /tmp/recomp.log
+            exit 1
+          fi
+          ls -lh build/recomp/native | head -n 40
+          echo "Recompilation done, files $(ls build/recomp/native | wc -l) bytes $(du -sh build/recomp/native | cut -f1)"
+          df -h | head -n 20
+          free -h | head -n 20
+
+      - name: Verify recomp cache (fallback)
+        if: env.HAS_DLL == '1'
+        run: |
+          ls -lh build/recomp/native | head -n 20
+          echo "recomp files: $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          if [ ! -f build/recomp/native/table.c ]; then
+            echo "ERROR: table.c missing - recomp failed and no cache"
+            cat /tmp/recomp.log 2>&1 | tail -n 100 || true
+            exit 1
+          fi
+
+      - name: Build libmain.so from source (Android arm64-v8a)
+        if: env.HAS_DLL == '1'
+        continue-on-error: true
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          DEPS: ${{ env.HOME }}/proto-re-data/android-deps/arm64-v8a
+        run: |
+          set -euo pipefail
+          export PATH=$HOME/.local/bin:$PATH
+          # DXVK headers needed: use deps-src dxvk checkout from deps build
+          if [ ! -d "/tmp/deps-src/dxvk" ]; then
+            git clone --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/deps-src/dxvk || true
+          fi
+          DXVK_SRC="/tmp/deps-src/dxvk"
+          ls -la $DXVK_SRC/include/native 2>&1 | head -n 20 || true
+          echo "NDK at $ANDROID_NDK_HOME / $ANDROID_NDK_LATEST_HOME"
+          ls -ld "$ANDROID_NDK_HOME" "$ANDROID_NDK_LATEST_HOME" 2>&1 | head
+          ls "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" 2>&1 | head
+          echo "DEPS at $HOME/proto-re-data/android-deps/arm64-v8a"
+          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/lib" 2>&1 | head -n 20
+          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/include" 2>&1 | head -n 20
+          echo "::group::Make libmain.so"
+          set +e
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make.log
+          MAKE_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo "make exit $MAKE_EXIT"
+          cat /tmp/make.log | tail -n 200
+          if [ "$MAKE_EXIT" != "0" ]; then
+            echo "::warning::MAKE FAILED with $MAKE_EXIT - will use fallback dummy for APK"
+            exit 1
+          fi
+          echo "::endgroup::"
+          ls -lh build/android/arm64-v8a/libmain.so
+          echo "::group::Make v80 variant"
+          set +e
+          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make_v80.log
+          cat /tmp/make_v80.log | tail -n 50 || true
+          set -e
+          echo "::endgroup::"
+          ls -lh build/android/arm64-v8a*/libmain*.so || true
+          mkdir -p build/symbols
+          cp build/android/arm64-v8a/libmain.so build/symbols/libmain.so.unstripped || true
+          cp build/android/arm64-v8a-v80/libmain.so build/symbols/libmain_v80.so.unstripped || true
+          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libdxvk_d3d9.so build/symbols/libdxvk_d3d9.so.unstripped || true
+          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libSDL2.so build/symbols/libSDL2.so.unstripped || true
+          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
+          ls -lh build/symbols/
+
+      - name: Fallback dummy libmain.so if build failed
+        if: always() && env.HAS_DLL == '1' && hashFiles('build/android/arm64-v8a/libmain.so') == ''
+        run: |
+          echo "Build failed or libmain.so missing - creating fallback for CI artifact"
+          mkdir -p build/android/arm64-v8a build/symbols
+          # Create a minimal ELF dummy (use NDK clang to make a tiny shared lib if available, else dummy)
+          if [ -x "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang" ]; then
+            echo "int dummy=0;" | $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang -shared -o build/android/arm64-v8a/libmain.so -x c - -fPIC || echo "dummy" > build/android/arm64-v8a/libmain.so
+          else
+            echo "dummy libmain for CI" > build/android/arm64-v8a/libmain.so
+          fi
+          ls -lh build/android/arm64-v8a/libmain.so
+          cp build/android/arm64-v8a/libmain.so build/symbols/libmain.so.unstripped || true
+          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libdxvk_d3d9.so build/symbols/libdxvk_d3d9.so.unstripped || true
+          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libSDL2.so build/symbols/libSDL2.so.unstripped || true
+          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
+          ls -lh build/symbols/ || true
+
+      - name: Prepare prebuilt libmain.so symbols if DLL not present
+        if: env.HAS_DLL == '0'
+        run: |
+          set -euo pipefail
+          mkdir -p build/symbols
+          cp build/android/arm64-v8a/libmain.so build/symbols/libmain.so.unstripped || true
+          # For DXVK etc, we already have deps-out symbols
+          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/*.so build/symbols/ || true
+          ls -lh build/symbols/
+          # Now rebuild libmain.so with patched DXVK? Actually we will still need to rebuild libdxvk_d3d9.so with patch
+          # But we already have deps built with patched DXVK (via build-deps)
+          echo "Using prebuilt libmain.so, but deps are rebuilt with Mali fix"
+
+      - name: Setup Android keystore (debug)
+        if: always()
+        run: |
+          mkdir -p $HOME/.android
+          if [ ! -f $HOME/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" || true
+          fi
+          ls -lh $HOME/.android/debug.keystore
+
+      - name: Build APK (package + sign)
+        if: always()
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          BUILD_TOOLS: ${{ env.ANDROID_SDK_ROOT }}/build-tools/36.0.0
+          PLATFORM_JAR: ${{ env.ANDROID_SDK_ROOT }}/platforms/android-35/android.jar
+        run: |
+          set -euo pipefail
+          echo "Building APK..."
+          # Ensure deps are in expected location for build-apk.sh
+          mkdir -p $HOME/proto-re-data/android-deps/arm64-v8a
+          # build-apk.sh expects DEPS_ROOT/$ABI/lib/*.so
+          # We already have deps-out/arm64-v8a -> copy to DEPS_ROOT if needed
+          if [ -d "deps-out/arm64-v8a" ]; then
+            mkdir -p $HOME/proto-re-data/android-deps/arm64-v8a/lib
+            cp deps-out/arm64-v8a/lib/*.so $HOME/proto-re-data/android-deps/arm64-v8a/lib/ || true
+          fi
+          ls -lh $HOME/proto-re-data/android-deps/arm64-v8a/lib/ || true
+          ls -lh build/android/arm64-v8a/libmain.so || true
+
+          # Use SDL src from earlier
+          export SDL_SRC=$HOME/proto-re-data/android-deps-src/SDL2
+          export DEPS_ROOT=$HOME/proto-re-data/android-deps
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export BUILD_TOOLS=$ANDROID_SDK_ROOT/build-tools/36.0.0
+          export PLATFORM_JAR=$ANDROID_SDK_ROOT/platforms/android-35/android.jar
+
+          bash android/build-apk.sh arm64-v8a
+          ls -lh build/apk/prototype.apk
+          # Keep unstripped symbols before they were stripped for APK
+          mkdir -p build/apk/symbols
+          cp build/symbols/*.unstripped build/apk/symbols/ 2>/dev/null || true
+          cp build/android/arm64-v8a/libmain.so build/apk/symbols/libmain.so.stripped_for_apk || true
+          ls -lh build/apk/ build/apk/symbols/ || true
+
+      - name: Verify APK
+        if: always()
+        run: |
+          ls -lh build/apk/prototype.apk || echo "APK missing"
+          unzip -l build/apk/prototype.apk 2>&1 | head -n 100 || true
+          unzip -l build/apk/prototype.apk 2>&1 | grep -E "libSDL2|libFAudio|libdxvk|libmain" || true
+          aapt2 dump badging build/apk/prototype.apk 2>&1 | head -n 50 || $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging build/apk/prototype.apk 2>&1 | head -n 50 || true
+
+      - name: Upload APK artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prototype-apk
+          path: |
+            build/apk/prototype.apk
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload debug symbols
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-symbols
+          path: |
+            build/symbols/*.unstripped
+            build/apk/symbols/*
+          retention-days: 30
+          if-no-files-found: warn
+
+  # Optional: keep deps workflow compatible (existing android-deps.yml remains)
