@@ -32,10 +32,15 @@ fetch FAudio https://github.com/FNA-XNA/FAudio.git $FAUDIO_TAG
 fetch dxvk https://github.com/doitsujin/dxvk.git $DXVK_TAG
 
 # Android patches (android/patches/<project>-*.patch), applied once.
+# git -C changes the working directory, so patch paths must be absolute.
+# Never silently continue with unpatched upstream source.
+PATCH_DIR=$(realpath "$(dirname "${BASH_SOURCE[0]}")/patches")
 for proj in SDL2 FAudio dxvk; do
-    for p in "$(dirname "$0")"/patches/"${proj,,}"-*.patch; do
+    for p in "$PATCH_DIR/${proj,,}"-*.patch; do
         [ -e "$p" ] || continue
-        git -C "$SRC/$proj" apply --check "$p" 2>/dev/null && git -C "$SRC/$proj" apply "$p" && echo "applied $(basename "$p")"
+        echo "applying $(basename "$p") to $proj"
+        git -C "$SRC/$proj" apply --check "$p"
+        git -C "$SRC/$proj" apply "$p"
     done
 done
 
@@ -87,14 +92,6 @@ meson setup "$SRC/build/dxvk-$ABI" "$SRC/dxvk" --cross-file "$CROSS" --buildtype
       -Ddxvk_native_wsi=sdl2
 ninja -C "$SRC/build/dxvk-$ABI" -j "$JOBS"
 ninja -C "$SRC/build/dxvk-$ABI" install
-
-echo "=== DXVK Android compiler inspection ==="
-echo | "$TC/$TRIPLE$API-clang++" -dM -E -x c++ - | grep -E '__ANDROID__|__ANDROID_API__' || true
-ninja -C "$SRC/build/dxvk-$ABI" -t commands | grep 'wsi_platform_sdl2.cpp' || true
-sed -n '10,28p' "$SRC/dxvk/src/wsi/sdl2/wsi_platform_sdl2.cpp"
-WSI_CMD=$(ninja -C "$SRC/build/dxvk-$ABI" -t commands | grep 'wsi_platform_sdl2.cpp' | head -n 1 | sed -E 's/ -c / -E /; s#-o [^ ]+#-o /tmp/protodroid-wsi.ii#')
-eval "$WSI_CMD"
-grep -A 12 -B 2 'libsdl =' /tmp/protodroid-wsi.ii | head -n 25 || true
 
 # Fail the build rather than shipping a desktop-WSI DXVK by accident. This
 # checks the installed library, not just the compiler or a successful link.
