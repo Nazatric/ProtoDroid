@@ -175,7 +175,7 @@ jobs:
           echo "Building recompiled sources from $DLL_PATH"
           mkdir -p build/recomp/native
           ls -lh re/functions.csv re/extra_functions.txt || true
-          PROTORE_ENGINE="$DLL_PATH" python3 tools/recomp/recomp.py --functions re/functions.csv --base 0x7c000000 --split 400 --out build/recomp/native
+          PROTORE_ENGINE="$DLL_PATH" python3 tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native
           ls -lh build/recomp/native | head -n 20
           echo "Recompilation done, lines: $(wc -l build/recomp/native/*.c | tail -n1)"
 
