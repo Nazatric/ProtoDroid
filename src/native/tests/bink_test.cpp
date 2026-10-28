@@ -1,0 +1,442 @@
+// Standalone production-code Bink tests against a minimal host FFmpeg; the sample stays outside the repository.
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <zlib.h>
+
+#include <algorithm>
+#include <chrono>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <functional>
+#include <iostream>
+#include <map>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include "bink_abi.h"
+#include "bink_blit.h"
+#include "guest.h"
+#include "sdl_stub.h"
+
+extern "C" {
+#include <libavutil/log.h>
+#include <libavcodec/avcodec.h>
+}
+
+uint8_t* RecompMemoryBase = nullptr;
+volatile uint32_t RecompRestrictLo = 0, RecompRestrictHi = 0, RecompTestDetours = 0;
+
+namespace native {
+const char* g_game_dir = nullptr;
+const char* g_data_dir = nullptr;
+uint32_t g_engine_lo = 0, g_engine_hi = 0;
+
+namespace {
+std::map<std::string, ImportDef>& Imports() { static std::map<std::string, ImportDef> m; return m; }
+std::unordered_map<uint32_t, int> g_test_handles;
+using TestGuestFunction = std::function<uint32_t(const std::vector<uint32_t>&)>;
+std::unordered_map<uint32_t, TestGuestFunction> g_test_guest_functions;
+uint32_t g_next_heap = 0x100000;
+constexpr uint32_t kHeapBytes = 512u << 20;
+
+void CheckHost(bool ok, const char* what) {
+    if (!ok) throw std::runtime_error(what);
+}
+std::string Lower(std::string s) {
+    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+}
+
+void Log(const char* fmt, ...) {
+    if (!getenv("PROTORE_BINK_TEST_VERBOSE")) return;
+    va_list ap; va_start(ap, fmt); vfprintf(stderr, fmt, ap); va_end(ap);
+}
+[[noreturn]] void Fatal(const char* fmt, ...) {
+    va_list ap; va_start(ap, fmt); vfprintf(stderr, fmt, ap); va_end(ap); abort();
+}
+[[noreturn]] void StartupFailure(const char* what) { throw std::runtime_error(what); }
+uint32_t HeapAlloc(uint32_t size) {
+    uint32_t at = (g_next_heap + 15) & ~15u;
+    if (!size || at < 0x100000 || uint64_t(at) + size > 0x100000ull + kHeapBytes) return 0;
+    g_next_heap = at + size;
+    memset(Ptr<void>(at), 0, size);
+    return at;
+}
+void HeapFree(uint32_t) {}
+uint32_t HeapSize(uint32_t) { return 0; }
+uint32_t HeapRealloc(uint32_t old, uint32_t size) { (void)old; return HeapAlloc(size); }
+uint32_t PageAlloc(uint32_t size, uint32_t at) { (void)at; return HeapAlloc(size); }
+void PageFree(uint32_t) {}
+uint32_t GuestStrdup(const char* s) {
+    uint32_t a = HeapAlloc(static_cast<uint32_t>(strlen(s) + 1));
+    if (a) memcpy(Ptr<void>(a), s, strlen(s) + 1);
+    return a;
+}
+uint32_t GuestCall(uint32_t va, std::initializer_list<uint32_t> args, uint32_t ecx, uint32_t*) {
+    CheckHost(ecx == 0, "test guest callback unexpectedly used thiscall");
+    auto it = g_test_guest_functions.find(va);
+    CheckHost(it != g_test_guest_functions.end(), "call to unregistered test guest function");
+    return it->second(std::vector<uint32_t>(args));
+}
+void RegisterImports(const ImportDef* defs, size_t count) {
+    for (size_t i = 0; i < count; ++i) Imports()[std::string(defs[i].dll) + "!" + defs[i].name] = defs[i];
+}
+uint32_t ImportThunk(const char*, const char*) { return 0x90000000; }
+bool DispatchImport(Ctx*, uint32_t) { return false; }
+std::string HostPath(const char* win_path) {
+    if (!win_path) return {};
+    std::string s = win_path;
+    std::replace(s.begin(), s.end(), '\\', '/');
+    if (!s.empty() && s[0] == '/') return s;
+    if (s.size() >= 2 && s[1] == ':') s.erase(0, 2);
+    while (!s.empty() && s[0] == '/') s.erase(s.begin());
+    if (Lower(s).compare(0, 5, "game/") == 0) s.erase(0, 5);
+    std::filesystem::path current = g_game_dir ? g_game_dir : ".";
+    size_t at = 0;
+    while (at <= s.size()) {
+        size_t end = s.find('/', at); if (end == std::string::npos) end = s.size();
+        std::string part = s.substr(at, end - at);
+        if (!part.empty() && part != ".") {
+            std::error_code ec;
+            if (!std::filesystem::exists(current / part, ec)) {
+                for (const auto& entry : std::filesystem::directory_iterator(current, ec)) {
+                    if (Lower(entry.path().filename().string()) == Lower(part)) { part = entry.path().filename().string(); break; }
+                }
+            }
+            current /= part;
+        }
+        if (end == s.size()) break;
+        at = end + 1;
+    }
+    return current.string();
+}
+int DuplicateFileHandle(uint32_t h) {
+    auto it = g_test_handles.find(h);
+    return it == g_test_handles.end() ? -1 : fcntl(it->second, F_DUPFD_CLOEXEC, 0);
+}
+std::string Setting(const char*, const char* def) { return def ? def : ""; }
+int SettingInt(const char*, int def) { return def; }
+void PerfHintStart(int) {}
+void PerfHintAddThread(int) {}
+void PerfHintTarget(int) {}
+void PerfHintFrame(int64_t) {}
+}
+
+namespace {
+using namespace native;
+using namespace native::bink;
+
+void Check(bool ok, const std::string& what) { if (!ok) throw std::runtime_error(what); }
+uint32_t Call(const char* name, int args, std::initializer_list<uint32_t> values) {
+    Check(static_cast<int>(values.size()) == args, std::string("bad test argument count for ") + name);
+    std::string key = std::string("binkw32.dll!_") + name + "@" + std::to_string(args * 4);
+    auto it = Imports().find(key);
+    Check(it != Imports().end(), "missing import " + key);
+    Ctx c {};
+    c.esp = 0x400000;
+    W32(c.esp, 0xdeadbeef);
+    int i = 0; for (uint32_t value : values) W32(c.esp + 4 + 4 * i++, value);
+    it->second.fn(&c);
+    Check(c.ret_target == 0xdeadbeef && c.esp == uint32_t(0x400000 + 4 + 4 * args), "stdcall cleanup mismatch for " + key);
+    return c.eax;
+}
+uint32_t OpenName(const std::string& name, uint32_t flags = 0) {
+    uint32_t address = GuestStrdup(name.c_str());
+    return Call("BinkOpen", 2, {address, flags});
+}
+uint32_t OpenRaw(uint32_t address, uint32_t flags) { return Call("BinkOpen", 2, {address, flags}); }
+void Close(uint32_t h) { if (h) Call("BinkClose", 1, {h}); }
+void Decode(uint32_t h) { Check(Call("BinkDoFrame", 1, {h}) == 0, "BinkDoFrame failed"); }
+void Next(uint32_t h) { Call("BinkNextFrame", 1, {h}); }
+
+std::vector<uint8_t> ReadBytes(const std::filesystem::path& path) {
+    std::ifstream f(path, std::ios::binary);
+    return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+}
+void Put32(std::vector<uint8_t>& b, uint32_t v) { for (int i = 0; i < 4; ++i) b.push_back((v >> (8 * i)) & 255); }
+void Set32(std::vector<uint8_t>& b, size_t at, uint32_t v) { for (int i = 0; i < 4; ++i) b.at(at + i) = (v >> (8 * i)) & 255; }
+uint32_t HashName(std::string name) {
+    if (!name.empty() && name.front() == '\\') name.erase(name.begin());
+    uint32_t h = 0;
+    for (unsigned char byte : name) {
+        int c = byte >= 128 ? int(byte) - 256 : int(byte);
+        if (c < 0x61) c += 0x20;
+        h = h * 31 + static_cast<uint32_t>(c);
+    }
+    return h;
+}
+
+void WriteRCF(const std::filesystem::path& path, const std::string& name, const std::vector<uint8_t>& data,
+              bool hashed, bool wide = false) {
+    std::vector<uint8_t> out(0x3c, 0);
+    memcpy(out.data(), "ATG CORE CEMENT LIBRARY", 24);
+    out[0x20] = 2; out[0x21] = wide ? 0 : 1; out[0x22] = 0; out[0x23] = 1;
+    uint32_t data_offset = static_cast<uint32_t>(out.size());
+    out.insert(out.end(), data.begin(), data.end());
+    uint32_t dir_offset = static_cast<uint32_t>(out.size());
+    Put32(out, hashed ? HashName(name) : 0); Put32(out, data_offset);
+    if (wide) {
+        Put32(out, static_cast<uint32_t>(data.size() + 32));  // legacy entry_size, not the range size
+        Put32(out, static_cast<uint32_t>(data.size()));       // value_c: range size used by the engine
+        Put32(out, 0);                                        // value_10
+    } else {
+        Put32(out, static_cast<uint32_t>(data.size()));
+    }
+    uint32_t names_offset = static_cast<uint32_t>(out.size());
+    Put32(out, 0); Put32(out, 0);  // name table alignment/reserved
+    Put32(out, 0); Put32(out, 0); Put32(out, 0); Put32(out, static_cast<uint32_t>(name.size() + 1));
+    out.insert(out.end(), name.begin(), name.end()); out.push_back(0); out.insert(out.end(), 3, 0);
+    Set32(out, 0x24, dir_offset); Set32(out, 0x28, wide ? 20 : 12); Set32(out, 0x2c, names_offset);
+    Set32(out, 0x30, static_cast<uint32_t>(out.size() - names_offset)); Set32(out, 0x38, 1);
+    std::ofstream f(path, std::ios::binary); f.write(reinterpret_cast<const char*>(out.data()), out.size());
+    Check(f.good(), "could not write RCF fixture");
+}
+
+void CheckPublic(uint32_t h) {
+    auto* p = Ptr<Public>(h);
+    Check(p && p->width == 1920 && p->height == 1080 && p->frames == 291, "unexpected Bink public header");
+    Check(p->frame_num == 1 && p->num_tracks == 1 && p->frame_rate == 25 && p->frame_rate_div == 1,
+          "unexpected frame rate/track metadata");
+    Check(p->size > 1000000, "missing bounded Bink size");
+}
+
+void CheckOpenDecodeClose(uint32_t h) {
+    Check(h != 0, "BinkOpen returned null"); CheckPublic(h); Decode(h); Close(h);
+}
+
+void CheckRegisteredAndCopies() {
+    uint32_t h = OpenName("c:\\GaMe\\movies\\intro.bik");
+    Check(h != 0, "loose open failed"); CheckPublic(h);
+    uint32_t fb_address = HeapAlloc(sizeof(FrameBuffers));
+    Call("BinkGetFrameBuffersInfo", 2, {h, fb_address});
+    auto* fb = Ptr<FrameBuffers>(fb_address);
+    Check(fb->total_frames == 2 && fb->ya_width == 1920 && fb->crcb_width == 960, "framebuffer info ABI");
+    auto allocate_plane = [](Plane& p, uint32_t width, uint32_t height, bool negative) {
+        uint32_t stride = width + 32;
+        uint32_t raw = HeapAlloc(stride * height + 64);
+        uint32_t base = raw + 32;
+        memset(Ptr<void>(raw), 0xcd, stride * height + 64);
+        p.allocate = 1; p.pitch = negative ? static_cast<uint32_t>(-static_cast<int>(stride)) : stride;
+        p.buffer = negative ? base + (height - 1) * stride : base;
+    };
+    for (auto& set : fb->frames) {
+        allocate_plane(set.y, fb->ya_width, fb->ya_height, true);
+        allocate_plane(set.cr, fb->crcb_width, fb->crcb_height, true);
+        allocate_plane(set.cb, fb->crcb_width, fb->crcb_height, true);
+        allocate_plane(set.alpha, fb->ya_width, fb->ya_height, true);
+    }
+    Call("BinkRegisterFrameBuffers", 2, {h, fb_address});
+    Decode(h);
+    Check(fb->frame_num == 0 && Ptr<Public>(h)->last_frame_num == 1, "first registered frame decode");
+    auto* p = Ptr<Public>(h);
+    uint32_t yv_pitch = p->width, yv_size = yv_pitch * p->height + 2 * (yv_pitch / 2) * (p->height / 2);
+    uint32_t yv = HeapAlloc(yv_size);
+    Check(Call("BinkCopyToBuffer", 7, {h, yv, yv_pitch, p->height, 0, 0, kSurfaceYV12}) == 0, "YV12 copy export");
+    auto& set = fb->frames[0];
+    for (uint32_t row = 0; row < p->height; ++row) {
+        int32_t address = static_cast<int32_t>(set.y.buffer) + static_cast<int32_t>(row) * static_cast<int32_t>(set.y.pitch);
+        Check(memcmp(Ptr<void>(static_cast<uint32_t>(address)), Ptr<void>(yv + row * yv_pitch), p->width) == 0,
+              "registered Y plane differs from CPU YV12");
+    }
+    for (uint32_t row = 0; row < p->height / 2; ++row) {
+        uint32_t cr_address = static_cast<uint32_t>(static_cast<int32_t>(set.cr.buffer) + row * static_cast<int32_t>(set.cr.pitch));
+        uint32_t cb_address = static_cast<uint32_t>(static_cast<int32_t>(set.cb.buffer) + row * static_cast<int32_t>(set.cb.pitch));
+        Check(memcmp(Ptr<void>(cr_address), Ptr<void>(yv + yv_pitch * p->height + row * (yv_pitch / 2)), p->width / 2) == 0,
+              "registered Cr plane ordering/pitch");
+        Check(memcmp(Ptr<void>(cb_address), Ptr<void>(yv + yv_pitch * p->height + (p->height / 2) * (yv_pitch / 2) + row * (yv_pitch / 2)), p->width / 2) == 0,
+              "registered Cb plane ordering/pitch");
+    }
+    uint32_t rgb_stride = p->width * 4 + 32, rgb_raw = HeapAlloc(rgb_stride * p->height + 64);
+    uint32_t rgb_base = rgb_raw + 32;
+    memset(Ptr<void>(rgb_raw), 0xcd, rgb_stride * p->height + 64);
+    uint32_t rgb = rgb_base + (p->height - 1) * rgb_stride;
+    Check(Call("BinkCopyToBufferRect", 11, {h, rgb, static_cast<uint32_t>(-static_cast<int>(rgb_stride)), p->height,
+        0, 0, 0, 0, p->width, p->height, kSurface32A}) == 0, "negative-pitch RGB Rect copy");
+    for (uint32_t i = 0; i < 32; ++i) {
+        Check(Ptr<uint8_t>(rgb_base - 32)[i] == 0xcd, "RGB copy wrote before destination");
+        Check(Ptr<uint8_t>(rgb_base + rgb_stride * p->height)[i] == 0xcd, "RGB copy wrote after destination");
+    }
+    Next(h); Check(p->frame_num == 2 && fb->frame_num == 1, "NextFrame did not advance buffer index"); Decode(h);
+    p->frame_num = p->frames;  // exercise wrap without decoding the entire sample in this unit test
+    Next(h); Check(p->frame_num == 1 && fb->frame_num == 0, "NextFrame end wrap"); Decode(h);
+    Call("BinkPause", 2, {h, 1});
+    auto before = std::chrono::steady_clock::now(); Call("BinkWait", 1, {h});
+    Check(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - before).count() < 100,
+          "paused BinkWait slept unexpectedly");
+    Call("BinkPause", 2, {h, 0});
+    Close(h);
+}
+
+void CheckAudioAndTrackApi() {
+    uint32_t h = OpenName("movies\\intro.bik");
+    Check(h != 0, "audio test open failed");
+    Check(Call("BinkGetTrackID", 2, {h, 0}) == 0 && Call("BinkGetTrackType", 2, {h, 0}) == 0,
+          "track type/ID lookup");
+    Check(Call("BinkGetTrackMaxSize", 2, {h, 0}) >= 4096, "track max size");
+    uint32_t track = Call("BinkOpenTrack", 2, {h, 0});
+    Check(track && Ptr<TrackPublic>(track)->frequency == 44100 && Ptr<TrackPublic>(track)->channels == 2,
+          "BinkOpenTrack public layout");
+    Decode(h);
+    uint32_t pcm = HeapAlloc(Ptr<TrackPublic>(track)->max_size);
+    uint32_t pcm_bytes = Call("BinkGetTrackData", 2, {track, pcm});
+    Check(pcm_bytes > 0 && pcm_bytes <= Ptr<TrackPublic>(track)->max_size,
+          "legacy BinkGetTrackData returned no PCM");
+    bool nonzero = false;
+    for (int i = 0; i < 12; ++i) { SDLTestPumpAudio(1024); nonzero |= SDLTestOutputNonzero(); }
+    Check(nonzero, "selected Bink audio track produced only silence");
+    Call("BinkSetVolume", 3, {h, 0, 0});
+    Decode(h); SDLTestPumpAudio(1024);
+    Check(!SDLTestOutputNonzero(), "zero volume did not mute Bink audio");
+    Call("BinkSetVolume", 3, {h, 0, 32768});
+    uint32_t bins = HeapAlloc(8), volumes = HeapAlloc(8); W32(bins, 0); W32(volumes, 16384);
+    Call("BinkSetMixBinVolumes", 5, {h, 0, bins, volumes, 1});
+    Call("BinkSetPan", 3, {h, 0, static_cast<uint32_t>(-32768)});
+    Next(h); Decode(h); SDLTestPumpAudio(1024);
+    Call("BinkPause", 2, {h, 1}); SDLTestPumpAudio(1024);
+    Check(!SDLTestOutputNonzero(), "paused movie audio was not silent");
+    Call("BinkPause", 2, {h, 0});
+    Call("BinkCloseTrack", 1, {track});
+    Close(h);
+    Check(Call("BinkGetTrackData", 2, {track, pcm}) == 0, "closed legacy track remained usable");
+}
+
+void CheckCustomIO(const std::vector<uint8_t>& bytes) {
+    constexpr uint32_t kOpen = 0x91000000, kRead = 0x91000100, kReadFrame = 0x91000200;
+    constexpr uint32_t kGetSize = 0x91000300, kSetInfo = 0x91000400, kIdle = 0x91000500;
+    constexpr uint32_t kClose = 0x91000600, kBackground = 0x91000700;
+    int opens = 0, header_reads = 0, frame_reads = 0, idles = 0, closes = 0, background = 0;
+    bool info_set = false;
+    uint32_t expected_io = 0;
+
+    auto read = [&](const std::vector<uint32_t>& a, bool frame) -> uint32_t {
+        Check(a.size() == (frame ? 5u : 4u), "custom read callback argument count");
+        uint32_t io = a[0], offset = a[frame ? 2 : 1], dest = a[frame ? 3 : 2], size = a[frame ? 4 : 3];
+        Check(io == expected_io && (!frame || info_set), "custom read arrived before SetInfo");
+        Check(offset <= bytes.size(), "custom read offset exceeds fixture");
+        uint32_t count = static_cast<uint32_t>(std::min<size_t>(size, bytes.size() - offset));
+        memcpy(Ptr<void>(dest), bytes.data() + offset, count);
+        if (frame) ++frame_reads; else ++header_reads;
+        return count;
+    };
+    g_test_guest_functions[kOpen] = [&](const std::vector<uint32_t>& a) {
+        Check(a.size() == 3 && !strcmp(Str(a[1]), "movies\\intro.bik"), "custom opener filename/arguments");
+        expected_io = a[0]; ++opens;
+        W32(expected_io + 0x00, kRead); W32(expected_io + 0x04, kReadFrame);
+        W32(expected_io + 0x08, kGetSize); W32(expected_io + 0x0c, kSetInfo);
+        W32(expected_io + 0x10, kIdle); W32(expected_io + 0x14, kClose); W32(expected_io + 0x18, kBackground);
+        return 1;
+    };
+    g_test_guest_functions[kRead] = [&](const std::vector<uint32_t>& a) { return read(a, false); };
+    g_test_guest_functions[kReadFrame] = [&](const std::vector<uint32_t>& a) { return read(a, true); };
+    g_test_guest_functions[kGetSize] = [&](const std::vector<uint32_t>& a) {
+        Check(a.size() == 2 && a[0] == expected_io, "GetBufferSize arguments");
+        return (a[1] + 0x3fffu) & ~0x3fffu;
+    };
+    g_test_guest_functions[kSetInfo] = [&](const std::vector<uint32_t>& a) {
+        Check(a.size() == 5 && a[0] == expected_io, "SetInfo arguments");
+        Check((a[1] & 0x3fffu) == 0 && a[2] >= 65536 && a[3] == bytes.size() && a[4] == 0,
+              "SetInfo alignment/size/file size");
+        info_set = true; return 0;
+    };
+    g_test_guest_functions[kIdle] = [&](const std::vector<uint32_t>& a) {
+        Check(a.size() == 1 && a[0] == expected_io, "Idle arguments"); ++idles; return 0;
+    };
+    g_test_guest_functions[kClose] = [&](const std::vector<uint32_t>& a) {
+        Check(a.size() == 1 && a[0] == expected_io && info_set, "Close arguments/order"); ++closes; return 0;
+    };
+    g_test_guest_functions[kBackground] = [&](const std::vector<uint32_t>& a) {
+        Check(a.size() == 2 && a[0] == expected_io, "BGControl arguments"); ++background; return 0;
+    };
+
+    Call("BinkSetIO", 1, {kOpen});
+    uint32_t h = OpenName("movies\\intro.bik");
+    Check(h != 0, "custom-I/O BinkOpen failed"); CheckPublic(h);
+    Decode(h); Next(h); Decode(h);
+    Call("BinkControlBackgroundIO", 2, {h, 1});
+    Call("BinkService", 1, {h});  // suspended: must not call guest Idle
+    Call("BinkControlBackgroundIO", 2, {h, 0});
+    Call("BinkService", 1, {h});
+    Close(h);
+    Check(opens == 1 && closes == 1 && header_reads > 0 && frame_reads > 0 && info_set && idles == 1 && background == 2,
+          "custom BINKIO callback coverage/lifecycle");
+    Call("BinkSetIO", 1, {0});
+    for (uint32_t address : {kOpen, kRead, kReadFrame, kGetSize, kSetInfo, kIdle, kClose, kBackground})
+        g_test_guest_functions.erase(address);
+    CheckOpenDecodeClose(OpenName("movies\\intro.bik"));  // built-in loose-file fallback after restoring the default
+}
+
+}  // namespace
+
+using namespace native;
+
+int main(int argc, char** argv) {
+    try {
+        Check(argc >= 3, "usage: bink_test <sample.bik> <fixture-dir>");
+        std::filesystem::path sample = argv[1], root = argv[2];
+        std::filesystem::remove_all(root); std::filesystem::create_directories(root / "Movies");
+        std::filesystem::copy_file(sample, root / "Movies" / "Intro.BIK");
+        auto bytes = ReadBytes(sample);
+        Check(bytes.size() > 1000000, "sample is unexpectedly small");
+        std::vector<uint8_t> compressed(16 + compressBound(bytes.size()));
+        memcpy(compressed.data(), "RZ\0\0", 4);
+        Set32(compressed, 8, static_cast<uint32_t>(bytes.size()));
+        uLongf compressed_size = static_cast<uLongf>(compressed.size() - 16);
+        Check(compress2(compressed.data() + 16, &compressed_size, bytes.data(), bytes.size(), 1) == Z_OK,
+              "could not create RZ fixture");
+        compressed.resize(16 + compressed_size);
+        WriteRCF(root / "Movies.RCF", "Video\\Intro.bik", bytes, true);
+        WriteRCF(root / "WOI.RCF", "Video\\Compressed.bik.rz", compressed, false);
+        WriteRCF(root / "Wide.RCF", "Video\\Wide.bik", bytes, true, true);
+        std::ofstream(root / "Other.RCF", std::ios::binary).write("not an archive", 14);
+
+        void* base = mmap(reinterpret_cast<void*>(kGuestBase), 0x100000000ull, PROT_NONE,
+                          MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        Check(base == reinterpret_cast<void*>(kGuestBase), "could not reserve guest test window");
+        void* heap = mmap(reinterpret_cast<void*>(kGuestBase + 0x100000), kHeapBytes, PROT_READ | PROT_WRITE,
+                          MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        Check(heap == reinterpret_cast<void*>(kGuestBase + 0x100000), "could not map guest test heap");
+        g_game_dir = root.c_str();
+        if (const char* rate = getenv("BINK_TEST_AUDIO_RATE")) g_sdl_test_forced_rate = atoi(rate);
+        av_log_set_level(AV_LOG_ERROR);
+        Check(avcodec_find_decoder(AV_CODEC_ID_BINKAUDIO_RDFT) && avcodec_find_decoder(AV_CODEC_ID_BINKAUDIO_DCT),
+              "minimal FFmpeg is missing a Bink audio decoder");
+        uint32_t ids = HeapAlloc(4); W32(ids, 0); Call("BinkSetSoundTrack", 2, {1, ids});
+
+        CheckOpenDecodeClose(OpenName("c:\\GaMe\\movies\\intro.bik"));
+        CheckOpenDecodeClose(OpenName("video\\intro.bik"));
+        CheckOpenDecodeClose(OpenName("video/compressed.BIK"));
+        CheckOpenDecodeClose(OpenName("video\\wide.bik"));
+        uint32_t memory = HeapAlloc(static_cast<uint32_t>(bytes.size()));
+        memcpy(Ptr<void>(memory), bytes.data(), bytes.size());
+        CheckOpenDecodeClose(OpenRaw(memory, kFromMemory));
+        int fd = open((root / "Movies" / "Intro.BIK").c_str(), O_RDONLY | O_CLOEXEC);
+        Check(fd >= 0, "could not open file-handle fixture");
+        g_test_handles[0x100] = fd;
+        CheckOpenDecodeClose(OpenRaw(0x100, kFileHandle));
+        close(fd); g_test_handles.erase(0x100);
+        CheckCustomIO(bytes);
+
+        CheckRegisteredAndCopies();
+        uint32_t selection = HeapAlloc(300 * 4);
+        for (uint32_t i = 0; i < 300; ++i) W32(selection + i * 4, 0x1000 + i);
+        W32(selection + 299 * 4, 0);  // the real ID is deliberately beyond the former 256-entry truncation
+        Call("BinkSetSoundTrack", 2, {300, selection});
+        CheckAudioAndTrackApi();
+        uint32_t palette = HeapAlloc(1024); Call("BinkGetPalette", 1, {palette});
+        Check(R32(palette) == 0 && R32(palette + 4) == (36u << 16) && R32(palette + 64 * 4) == 85,
+              "Bink 8-bit palette values");
+        std::cout << "Bink tests passed: loose/RCF/RZ/memory/file-handle/custom-IO input, decoder, ABI, planes, CPU copies, wrap, audio controls\n";
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << "Bink test failure: " << e.what() << "\n";
+        return 1;
+    }
+}

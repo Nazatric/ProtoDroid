@@ -1167,4 +1167,9 @@ ImportRegistrar g_kernel32(kKernel32);
 
 }  // namespace
 
+int DuplicateFileHandle(uint32_t h) {
+    File* f = FileOf(h);
+    return f ? fcntl(f->fd, F_DUPFD_CLOEXEC, 0) : -1;
+}
+
 }  // namespace native

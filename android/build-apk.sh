@@ -78,6 +78,8 @@ du -sh "$OUT/pkg"/lib/*/* 2>&1 | head -n 20
 "$BUILD_TOOLS/zipalign" -P 16 -f 4 "$OUT/base.apk" "$OUT/aligned.apk"
 "$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-pass pass:android --key-pass pass:android \
     --out "$OUT/prototype.apk" "$OUT/aligned.apk"
+"$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT/prototype.apk"
+"$BUILD_TOOLS/zipalign" -c -P 16 4 "$OUT/prototype.apk"
 echo "=== Final APK ==="
 ls -lh "$OUT/prototype.apk"
 stat -c%s "$OUT/prototype.apk" | awk '{printf "APK size bytes: %d (MB %.2f)\n", $1, $1/1024/1024}'

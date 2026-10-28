@@ -1,6 +1,6 @@
 #!/bin/bash
-# Builds the third-party native libraries of the Android port for one ABI: SDL2, FAudio and DXVK (d3d9 only, SDL2
-# WSI). Same script locally and on GitHub Actions; nothing here depends on the game files.
+# Builds the third-party native libraries of the Android port for one ABI: SDL2, FAudio, minimal FFmpeg Bink
+# decoding and DXVK (d3d9 only, SDL2 WSI). Same script locally and on GitHub Actions; nothing here depends on game files.
 #
 # Usage: android/build-deps.sh <abi: arm64-v8a | x86_64> <source dir> <install prefix>
 # Needs ANDROID_NDK_HOME (or ANDROID_NDK_LATEST_HOME), cmake, ninja, meson, glslang, git.
@@ -15,6 +15,7 @@ JOBS=${JOBS:-$(nproc)}
 
 SDL2_TAG=release-2.30.9
 FAUDIO_TAG=25.10
+FFMPEG_TAG=n7.1.1
 DXVK_TAG=v2.5.3
 
 case $ABI in
@@ -29,6 +30,7 @@ fetch() {  # fetch <dir> <url> <tag>
 mkdir -p "$SRC" "$PREFIX"
 fetch SDL2 https://github.com/libsdl-org/SDL.git $SDL2_TAG
 fetch FAudio https://github.com/FNA-XNA/FAudio.git $FAUDIO_TAG
+fetch FFmpeg https://github.com/FFmpeg/FFmpeg.git $FFMPEG_TAG
 fetch dxvk https://github.com/doitsujin/dxvk.git $DXVK_TAG
 
 # Android patches (android/patches/<project>-*.patch), applied once.
@@ -59,8 +61,34 @@ cmake -S "$SRC/FAudio" -B "$SRC/build/FAudio-$ABI" "${CMAKE_ANDROID[@]}" -DBUILD
 cmake --build "$SRC/build/FAudio-$ABI" -j "$JOBS"
 cmake --install "$SRC/build/FAudio-$ABI"
 
-# DXVK native, d3d9 only.
+# FFmpeg is deliberately a tiny static build: Bink video, both Bink audio codec variants, the Bink demuxer and
+# swresample for the shared SDL mixer.
 TC=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin
+# No network, programs, filters, external codec or auto-detected dependency is
+# allowed into the APK. Keeping the archives in the dependency artifact is essential: build-apk runs on a fresh job.
+FFMPEG_BUILD=$SRC/build/FFmpeg-$ABI
+mkdir -p "$FFMPEG_BUILD"
+FFMPEG_ARCH=$CPU_FAMILY
+if [ "$ABI" = arm64-v8a ]; then FFMPEG_ARCH=aarch64; fi
+(
+    cd "$FFMPEG_BUILD"
+    "$SRC/FFmpeg/configure" \
+        --prefix="$PREFIX" --cc="$TC/$TRIPLE$API-clang" --cxx="$TC/$TRIPLE$API-clang++" \
+        --ar="$TC/llvm-ar" --ranlib="$TC/llvm-ranlib" --strip="$TC/llvm-strip" \
+        --arch="$FFMPEG_ARCH" --target-os=android --enable-cross-compile --enable-pic \
+        --enable-static --disable-shared --disable-programs --disable-doc --disable-debug --disable-network \
+        --disable-autodetect --disable-pthreads --disable-w32threads --disable-os2threads --disable-x86asm \
+        --disable-avdevice --disable-avfilter --disable-swscale --disable-postproc --disable-everything \
+        --enable-avformat --enable-avcodec --enable-avutil --enable-swresample \
+        --enable-demuxer=bink --enable-decoder=bink,binkaudio_rdft,binkaudio_dct
+    make -j "$JOBS"
+    make install
+)
+for archive in libavformat.a libavcodec.a libavutil.a libswresample.a; do
+    test -s "$PREFIX/lib/$archive" || { echo "missing FFmpeg archive $PREFIX/lib/$archive" >&2; exit 1; }
+done
+
+# DXVK native, d3d9 only.
 CROSS=$SRC/build/android-$ABI.cross
 cat > "$CROSS" <<EOF
 [binaries]

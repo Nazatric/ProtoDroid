@@ -15,6 +15,56 @@ on:
   workflow_dispatch:
 
 jobs:
+  bink-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host test dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zlib1g-dev
+
+      - name: Build minimal host FFmpeg
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch n7.1.1 https://github.com/FFmpeg/FFmpeg.git /tmp/bink-ffmpeg-src
+          mkdir -p /tmp/bink-ffmpeg-build
+          cd /tmp/bink-ffmpeg-build
+          /tmp/bink-ffmpeg-src/configure \
+            --prefix=/tmp/bink-ffmpeg --enable-static --disable-shared --disable-programs --disable-doc \
+            --disable-debug --disable-network --disable-autodetect --disable-pthreads --disable-w32threads \
+            --disable-os2threads --disable-x86asm --disable-avdevice --disable-avfilter --disable-swscale \
+            --disable-postproc --disable-everything --enable-avformat --enable-avcodec --enable-avutil \
+            --enable-swresample --enable-demuxer=bink --enable-decoder=bink,binkaudio_rdft,binkaudio_dct
+          make -j 2
+          make install
+
+      - name: Download external Bink test sample
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse \
+            https://github.com/dimhotepus/Bink-1-and-2-async-media-player.git /tmp/bink-test-sample-repo
+          git -C /tmp/bink-test-sample-repo sparse-checkout set --no-cone '/valve.bik'
+          cp /tmp/bink-test-sample-repo/valve.bik /tmp/bink-test-sample.bik
+          test "$(stat -c%s /tmp/bink-test-sample.bik)" = 15563652
+
+      - name: Compile and run production Bink harness
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bink-test-obj
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -Wno-unused-parameter \
+            -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTORE_BINK_TEST -fsigned-char \
+            -fsanitize=undefined -fno-sanitize-recover=all -I. -Isrc/recomp -Isrc/native -I/tmp/bink-ffmpeg/include"
+          for src in src/native/bink_media.cpp src/native/bink_blit.cpp src/native/bink.cpp src/native/tests/bink_test.cpp; do
+            g++ $CXXFLAGS -c "$src" -o "/tmp/bink-test-obj/$(basename "${src%.cpp}").o"
+          done
+          g++ -fsanitize=undefined -pthread /tmp/bink-test-obj/bink_test.o /tmp/bink-test-obj/bink.o \
+            /tmp/bink-test-obj/bink_media.o /tmp/bink-test-obj/bink_blit.o \
+            -L/tmp/bink-ffmpeg/lib -lavformat -lavcodec -lswresample -lavutil -lz -lm -o /tmp/bink_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures
+          BINK_TEST_AUDIO_RATE=44100 /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures-44100
+
   build-deps:
     runs-on: ubuntu-24.04
     strategy:
@@ -28,7 +78,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/deps-out/${{ matrix.abi }}
-          key: android-deps-mali-eager-dummy-v2-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/patches/**') }}
+          key: android-deps-bink-ffmpeg-v1-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/patches/**') }}
 
       - name: Install build tools
         if: steps.cache-deps.outputs.cache-hit != 'true'
@@ -64,6 +114,7 @@ jobs:
           name: android-deps-${{ matrix.abi }}
           path: |
             deps-out/${{ matrix.abi }}/lib/*.so
+            deps-out/${{ matrix.abi }}/lib/*.a
             deps-out/${{ matrix.abi }}/include
           retention-days: 14
 
@@ -103,6 +154,9 @@ jobs:
         run: |
           mkdir -p $HOME/proto-re-data/android-deps/arm64-v8a
           cp -r deps-out/arm64-v8a/* $HOME/proto-re-data/android-deps/arm64-v8a/ || true
+          for archive in libavformat.a libavcodec.a libavutil.a libswresample.a; do
+            test -s "$HOME/proto-re-data/android-deps/arm64-v8a/lib/$archive"
+          done
           mkdir -p $HOME/proto-re-data/android-deps-src/SDL2
           # SDL src was used in build-apk.sh for Java, we keep minimal
           ls -R deps-out || true
@@ -506,6 +560,9 @@ jobs:
           SDL=/tmp/protodroid-apk-check/lib/arm64-v8a/libSDL2.so
           MAIN=/tmp/protodroid-apk-check/lib/arm64-v8a/libmain.so
           test "$(stat -c%s "$MAIN")" -gt 100000
+          $TOOLS/llvm-readelf -d "$MAIN" | tee /tmp/libmain-dynamic.txt
+          ! grep -E 'libav(format|codec|util)|libswresample' /tmp/libmain-dynamic.txt
+          $TOOLS/llvm-strings "$MAIN" | grep -F 'binkw32.dll'
           STRINGS=$($TOOLS/llvm-strings "$DXVK")
           printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2.so'
           ! printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2-2.0.so.0'

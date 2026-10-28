@@ -38,8 +38,11 @@ RECOMP_OPT := -O2
 TSO ?= 1
 RECOMP_EXTRA := $(if $(filter 1,$(TSO)),-DRECOMP_TSO)
 DEP_INCLUDES := -I$(DEPS)/include
+FFMPEG_LIBS := -Wl,--start-group $(DEPS)/lib/libavformat.a $(DEPS)/lib/libavcodec.a \
+               $(DEPS)/lib/libswresample.a $(DEPS)/lib/libavutil.a -Wl,--end-group -lz -lm
 # Keep symbol tables for crash stack traces (dladdr) even after strip: --export-dynamic preserves symbols in dynamic table
-LDFLAGS := -shared -Wl,-Bsymbolic -static-libstdc++ -Wl,--no-undefined -Wl,--export-dynamic -L$(DEPS)/lib -ldxvk_d3d9 -lFAudio -lSDL2 -llog -landroid
+LDFLAGS := -shared -Wl,-Bsymbolic -static-libstdc++ -Wl,--no-undefined -Wl,--export-dynamic -L$(DEPS)/lib \
+           -ldxvk_d3d9 -lFAudio -lSDL2 $(FFMPEG_LIBS) -llog -landroid
 # Adreno: Turnip and libadrenotools from android/build-turnip.sh (arm64 only; built without them otherwise).
 TURNIP ?= $(HOME)/proto-re-data/android-turnip
 ifneq ($(and $(filter arm64-v8a,$(ABI)),$(wildcard $(TURNIP)/lib/libadrenotools.a)),)
@@ -58,15 +61,18 @@ OUT ?= ../../build/native
 DXVK_LIB ?= $(DXVK)/build-native/src/d3d9
 FAUDIO ?= $(HOME)/proto-re-data/deps/FAudio
 FAUDIO_LIB ?= $(FAUDIO)/build-native
+FFMPEG ?= $(HOME)/proto-re-data/deps/ffmpeg
+FFMPEG_LIBS ?= -Wl,--start-group $(FFMPEG)/lib/libavformat.a $(FFMPEG)/lib/libavcodec.a \
+               $(FFMPEG)/lib/libswresample.a $(FFMPEG)/lib/libavutil.a -Wl,--end-group -lz -lm
 TARGET_FLAGS :=
-DEP_INCLUDES := -I$(FAUDIO)/include
+DEP_INCLUDES := -I$(FAUDIO)/include -I$(FFMPEG)/include
 LDFLAGS := -rdynamic -pthread -L$(DXVK_LIB) -Wl,-rpath,$(DXVK_LIB) -ldxvk_d3d9 -L$(FAUDIO_LIB) -Wl,-rpath,$(FAUDIO_LIB) -lFAudio \
-           -lSDL2
+           -lSDL2 $(FFMPEG_LIBS)
 BINARY := proto-native
 endif
 
 SRCS := main.cpp memory.cpp loader.cpp imports.cpp runtime.cpp thread.cpp kernel32.cpp msvcr80.cpp user32.cpp \
-        advapi32.cpp misc.cpp d3d9.cpp input.cpp xaudio2.cpp bink.cpp dinput.cpp gamepad.cpp config.cpp watchdog.cpp hot_audio.cpp hot_skin.cpp \
+        advapi32.cpp misc.cpp d3d9.cpp input.cpp xaudio2.cpp bink.cpp bink_media.cpp bink_blit.cpp dinput.cpp gamepad.cpp config.cpp watchdog.cpp hot_audio.cpp hot_skin.cpp \
         vulkan_driver.cpp perf_hint.cpp
 GEN := $(wildcard $(RECOMP_DIR)/*.c)
 OBJS = $(SRCS:%.cpp=$(OUT)/%.o) $(GEN:$(RECOMP_DIR)/%.c=$(OUT)/gen/%.o)
