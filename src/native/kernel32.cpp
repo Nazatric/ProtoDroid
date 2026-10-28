@@ -598,42 +598,8 @@ K(SuspendThread) {
     Log("SuspendThread(%08x) ignored", Arg(c, 0));
     Return(c, 0, 1);
 }
-// Windows priorities -> nice values: the engine raises its audio mixer and render threads; on a phone they compete
-// with half a dozen busy workers, so the hint matters.
-// Threads the engine raises above normal (its render, streaming and audio feeder threads) are kept off the slowest
-// cores (by cpu_capacity): left to the scheduler, and with power hints lowering clocks, Snapdragon phones park them
-// on the little cores, where the audio feeder falls behind (choppy sound). Not with battery_saver.
-static void AvoidLittleCores(int tid) {
-#ifdef __ANDROID__
-    static const cpu_set_t* fast = []() -> const cpu_set_t* {
-        if (SettingInt("battery_saver", 0)) return nullptr;
-        int caps[64], min_cap = -1, n = 0;
-        for (; n < 64; ++n) {
-            char path[96];
-            snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpu_capacity", n);
-            FILE* f = fopen(path, "r");
-            if (!f) break;
-            if (fscanf(f, "%d", &caps[n]) != 1) caps[n] = 0;
-            fclose(f);
-            if (min_cap < 0 || caps[n] < min_cap) min_cap = caps[n];
-        }
-        static cpu_set_t set;
-        CPU_ZERO(&set);
-        int count = 0;
-        for (int i = 0; i < n; ++i) {
-            if (caps[i] > min_cap) {
-                CPU_SET(i, &set);
-                ++count;
-            }
-        }
-        return count ? &set : nullptr;
-    }();
-    if (fast) sched_setaffinity(pid_t(tid), sizeof(*fast), fast);
-#else
-    (void)tid;
-#endif
-}
-
+// Windows priorities become nice values only. No host affinity is set: Android must remain free to schedule the
+// engine, DXVK submission, and compiler threads across every available core.
 K(SetThreadPriority) {
     uint32_t h = Arg(c, 0);
     int prio = int32_t(Arg(c, 1));
@@ -651,7 +617,6 @@ K(SetThreadPriority) {
         Log("SetThreadPriority(%d) -> nice %d on tid %d%s", prio, nice, tid, r == 0 ? "" : " (not permitted)");
         // THREAD_PRIORITY_HIGHEST: the engine's render thread; TIME_CRITICAL: its audio feeder
         if (prio == 2 || prio >= 15) PerfHintAddThread(tid);
-        if (prio > 0) AvoidLittleCores(tid);
     }
     Return(c, 1, 2);
 }
@@ -1166,5 +1131,10 @@ const ImportDef kKernel32[] = {
 ImportRegistrar g_kernel32(kKernel32);
 
 }  // namespace
+
+int DuplicateFileHandle(uint32_t h) {
+    File* f = FileOf(h);
+    return f ? fcntl(f->fd, F_DUPFD_CLOEXEC, 0) : -1;
+}
 
 }  // namespace native

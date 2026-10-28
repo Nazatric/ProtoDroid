@@ -56,7 +56,7 @@ Logs go to the same folder (`proto-native.log`, `app_process64_d3d9.log`) and to
 | `render_height` | 720, 900, 1080, 0 = screen |
 | `texture_skip_mips` | 0 original, 1 half, 2 quarter |
 | `fps_limit` | 30 / 45 / 60 |
-| `battery_saver` | 30 fps, no big core pinning |
+| `battery_saver` | 30 fps cap; CPU scheduling remains unrestricted |
 | `perf_hint` | ADPF on/off |
 | `vulkan_driver` | `auto` / `system` / `turnip` |
 | `audio_driver` | `aaudio` (default) / `openslES`, try it if the sound stutters |

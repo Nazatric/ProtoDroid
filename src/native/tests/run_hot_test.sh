@@ -6,7 +6,7 @@ DLL=${PROTORE_ENGINE:-$HOME/Downloads/Prototype (2009)/Prototype/prototypeengine
 OUT=$ROOT/build/hot_test
 mkdir -p "$OUT"
 printf '105e8860\n105e85b0\n105c62e0\n105eb280\n1071b610\n' > "$OUT/functions.txt"
-python3 -I "$ROOT/tools/recomp/recomp.py" --functions "$OUT/functions.txt" --out "$OUT/ref.c" --base 0x58000000 \
+python3 -I "$ROOT/tools/recomp/recomp.py" --functions "$OUT/functions.txt" --out "$OUT/ref.c" --base 0x7c000000 \
     --no-native >/dev/null
 # Engine data pages read by the tested functions (constants and tables), as {DLL address, 4096 bytes} records.
 python3 -I - "$DLL" "$OUT/pages.bin" <<'EOF'

@@ -16,10 +16,10 @@
 extern "C" {
 volatile uint32_t RecompRestrictLo = 0, RecompRestrictHi = 0xffffffffu, RecompTestDetours = 0;
 uint8_t* RecompMemoryBase = nullptr;
-void f_585e8860(Ctx* c);  // recompiled references (ref.c)
-void f_585c62e0(Ctx* c);
-void f_585eb280(Ctx* c);
-void f_5871b610(Ctx* c);
+void f_7c5e8860(Ctx* c);  // recompiled references (ref.c)
+void f_7c5c62e0(Ctx* c);
+void f_7c5eb280(Ctx* c);
+void f_7c71b610(Ctx* c);
 void Native_1071b610(Ctx* c);
 void Native_105e8860(Ctx* c);
 void Native_105c62e0(Ctx* c);
@@ -51,7 +51,7 @@ static void FakeSkipFlag(Ctx* c) {
     c->ret_target = Pop32(c);
 }
 RecompFn RecompLookup(uint32_t va) {
-    if (va == 0x585ba610u) return FakeAlloc;
+    if (va == 0x7c5ba610u) return FakeAlloc;
     if (va == 0x2e100060u) return FakeGetSettings;
     if (va == 0x2e10001cu) return FakeSkipFlag;
     return nullptr;
@@ -157,7 +157,7 @@ int main(int argc, char** argv) {
             return c;
         };
         memcpy(native::Ptr<void>(lo), start.data(), size);
-        Ctx a = run(f_585e8860);
+        Ctx a = run(f_7c5e8860);
         memcpy(ref.data(), native::Ptr<void>(lo), size);
         memcpy(native::Ptr<void>(lo), start.data(), size);
         Ctx b = run(Native_105e8860);
@@ -218,7 +218,7 @@ int main(int argc, char** argv) {
             return c;
         };
         memcpy(native::Ptr<void>(lo), start.data(), size);
-        Ctx a = run(f_585c62e0);
+        Ctx a = run(f_7c5c62e0);
         memcpy(ref.data(), native::Ptr<void>(lo), size);
         memcpy(native::Ptr<void>(lo), start.data(), size);
         Ctx b = run(Native_105c62e0);
@@ -266,7 +266,7 @@ int main(int argc, char** argv) {
             return c;
         };
         memcpy(native::Ptr<void>(lo), start.data(), size);
-        Ctx a = run(f_585eb280);
+        Ctx a = run(f_7c5eb280);
         uint32_t calls_a = g_alloc_calls;
         memcpy(ref.data(), native::Ptr<void>(lo), size);
         memcpy(native::Ptr<void>(lo), start.data(), size);
@@ -316,7 +316,7 @@ int main(int argc, char** argv) {
             return c;
         };
         memcpy(native::Ptr<void>(lo), start.data(), size);
-        Ctx a = run(f_5871b610);
+        Ctx a = run(f_7c71b610);
         memcpy(ref.data(), native::Ptr<void>(lo), size);
         memcpy(native::Ptr<void>(lo), start.data(), size);
         Ctx b = run(Native_1071b610);

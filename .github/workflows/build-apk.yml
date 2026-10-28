@@ -3,6 +3,7 @@ name: build-apk
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 on:
   push:
@@ -14,6 +15,64 @@ on:
   workflow_dispatch:
 
 jobs:
+  bink-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host test dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zlib1g-dev
+
+      - name: Compile and run graphics UBSAN tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/d3d9_dxt.cpp src/native/tests/graphics_test.cpp -o /tmp/graphics_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/graphics_test
+
+      - name: Build minimal host FFmpeg
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch n7.1.1 https://github.com/FFmpeg/FFmpeg.git /tmp/bink-ffmpeg-src
+          mkdir -p /tmp/bink-ffmpeg-build
+          cd /tmp/bink-ffmpeg-build
+          /tmp/bink-ffmpeg-src/configure \
+            --prefix=/tmp/bink-ffmpeg --enable-static --disable-shared --disable-programs --disable-doc \
+            --disable-debug --disable-network --disable-autodetect --enable-pthreads --disable-w32threads \
+            --disable-os2threads --disable-x86asm --disable-avdevice --disable-avfilter --disable-swscale \
+            --disable-postproc --disable-everything --enable-avformat --enable-avcodec --enable-avutil \
+            --enable-swresample --enable-demuxer=bink --enable-decoder=bink,binkaudio_rdft,binkaudio_dct
+          make -j 2
+          make install
+
+      - name: Download external Bink test sample
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse \
+            https://github.com/dimhotepus/Bink-1-and-2-async-media-player.git /tmp/bink-test-sample-repo
+          git -C /tmp/bink-test-sample-repo sparse-checkout set --no-cone '/valve.bik'
+          cp /tmp/bink-test-sample-repo/valve.bik /tmp/bink-test-sample.bik
+          test "$(stat -c%s /tmp/bink-test-sample.bik)" = 15563652
+
+      - name: Compile and run production Bink harness
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bink-test-obj
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -Wno-unused-parameter \
+            -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTORE_BINK_TEST -fsigned-char \
+            -fsanitize=undefined -fno-sanitize-recover=all -I. -Isrc/recomp -Isrc/native -I/tmp/bink-ffmpeg/include"
+          for src in src/native/bink_media.cpp src/native/bink_blit.cpp src/native/bink.cpp src/native/tests/bink_test.cpp; do
+            g++ $CXXFLAGS -c "$src" -o "/tmp/bink-test-obj/$(basename "${src%.cpp}").o"
+          done
+          g++ -fsanitize=undefined -pthread /tmp/bink-test-obj/bink_test.o /tmp/bink-test-obj/bink.o \
+            /tmp/bink-test-obj/bink_media.o /tmp/bink-test-obj/bink_blit.o \
+            -L/tmp/bink-ffmpeg/lib -lavformat -lavcodec -lswresample -lavutil -lz -lm -o /tmp/bink_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures
+          BINK_TEST_AUDIO_RATE=44100 /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures-44100
+
   build-deps:
     runs-on: ubuntu-24.04
     strategy:
@@ -27,7 +86,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/deps-out/${{ matrix.abi }}
-          key: android-deps-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/patches/**') }}
+          key: android-deps-bink-ffmpeg-v1-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/patches/**') }}
 
       - name: Install build tools
         if: steps.cache-deps.outputs.cache-hit != 'true'
@@ -43,16 +102,27 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_LATEST_HOME }}
         run: |
+          set -euo pipefail
           export PATH=$HOME/.local/bin:$PATH
           echo "NDK: $ANDROID_NDK_HOME"
           ls -la android/patches/
-          android/build-deps.sh ${{ matrix.abi }} /tmp/deps-src deps-out/${{ matrix.abi }}
+          android/build-deps.sh ${{ matrix.abi }} /tmp/deps-src deps-out/${{ matrix.abi }} 2>&1 | tee /tmp/build-deps.log
+
+      - name: Report dependency build failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tail -n 180 /tmp/build-deps.log || true
+          gh api repos/${{ github.repository }}/issues/1/comments \
+            --raw-field body="Dependency build failed for ${{ github.sha }}:\n\`\`\`\n$(tail -n 180 /tmp/build-deps.log 2>/dev/null || echo 'no dependency log')\n\`\`\`" || true
 
       - uses: actions/upload-artifact@v4
         with:
           name: android-deps-${{ matrix.abi }}
           path: |
             deps-out/${{ matrix.abi }}/lib/*.so
+            deps-out/${{ matrix.abi }}/lib/*.a
             deps-out/${{ matrix.abi }}/include
           retention-days: 14
 
@@ -92,6 +162,9 @@ jobs:
         run: |
           mkdir -p $HOME/proto-re-data/android-deps/arm64-v8a
           cp -r deps-out/arm64-v8a/* $HOME/proto-re-data/android-deps/arm64-v8a/ || true
+          for archive in libavformat.a libavcodec.a libavutil.a libswresample.a; do
+            test -s "$HOME/proto-re-data/android-deps/arm64-v8a/lib/$archive"
+          done
           mkdir -p $HOME/proto-re-data/android-deps-src/SDL2
           # SDL src was used in build-apk.sh for Java, we keep minimal
           ls -R deps-out || true
@@ -234,43 +307,107 @@ jobs:
 
       - name: Build libmain.so from source (Android arm64-v8a)
         if: env.HAS_DLL == '1'
-        continue-on-error: true
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
           DEPS: ${{ env.HOME }}/proto-re-data/android-deps/arm64-v8a
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           export PATH=$HOME/.local/bin:$PATH
-          # DXVK headers needed: use deps-src dxvk checkout from deps build
-          if [ ! -d "/tmp/deps-src/dxvk" ]; then
-            git clone --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/deps-src/dxvk || true
+          if [ ! -d "/tmp/deps-src/dxvk/include/native/directx/d3d9.h" ]; then
+            echo "Cloning DXVK v2.5.3..."
+            rm -rf /tmp/deps-src/dxvk
+            mkdir -p /tmp/deps-src
+            git clone -q --depth 1 --branch v2.5.3 --recurse-submodules --shallow-submodules https://github.com/doitsujin/dxvk.git /tmp/deps-src/dxvk
+            echo "DXVK clone done"
+            ls -lh /tmp/deps-src/dxvk/include/native/directx/d3d9.h || (echo "DXVK headers still missing!" && exit 1)
           fi
           DXVK_SRC="/tmp/deps-src/dxvk"
-          ls -la $DXVK_SRC/include/native 2>&1 | head -n 20 || true
-          echo "NDK at $ANDROID_NDK_HOME / $ANDROID_NDK_LATEST_HOME"
-          ls -ld "$ANDROID_NDK_HOME" "$ANDROID_NDK_LATEST_HOME" 2>&1 | head
-          ls "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" 2>&1 | head
-          echo "DEPS at $HOME/proto-re-data/android-deps/arm64-v8a"
-          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/lib" 2>&1 | head -n 20
-          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/include" 2>&1 | head -n 20
-          echo "::group::Make libmain.so"
+          echo "=== DXVK headers ==="
+          ls -la $DXVK_SRC/include/native/directx/d3d9.h 2>&1 | head || true
+          echo "=== NDK ==="
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "ANDROID_NDK_LATEST_HOME=$ANDROID_NDK_LATEST_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          env | grep -i ndk || true
+          ls -ld "$ANDROID_NDK_HOME" 2>&1 | head || true
+          ls -ld "$ANDROID_NDK_LATEST_HOME" 2>&1 | head || true
+          ls -ld "$ANDROID_HOME/ndk" 2>&1 | head || true
+          ls -ld "$HOME/Android" 2>&1 | head || true
+          ls "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" 2>&1 | head || true
+          ls "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" 2>&1 | head || true
+          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++ --version 2>&1 | head || true
+          $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++ --version 2>&1 | head || true
+          echo "Effective NDK for make: ${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
+          echo "=== DEPS ==="
+          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/lib/" 2>&1 | head -n 20 || true
+          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/include/SDL2/SDL.h" 2>&1 | head || true
+          echo "=== RECOMP ==="
+          ls -lh build/recomp/native/table.c 2>&1 | head || true
+          echo "recomp files: $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          du -sh build/recomp/native 2>&1 | head || true
+          free -h 2>&1 | head || true
+          df -h 2>&1 | head -n 10 || true
+          echo "=== main.cpp check ==="
+          git log --oneline -1 2>&1 | head || true
+          grep -n 'fscanf.*pages\|main thread pinned\|MirrorInit(base)' src/native/main.cpp 2>&1 | head -n 20 || true
+          echo "=== main.cpp hex check for 312 ==="
+          sed -n '312p' src/native/main.cpp 2>&1 | od -An -tx1 | head || true
+          EFFECTIVE_NDK="${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
+          if [ -z "$EFFECTIVE_NDK" ]; then EFFECTIVE_NDK="$ANDROID_HOME/ndk/28.2.13676358"; fi
+          echo "Using NDK=$EFFECTIVE_NDK for make"
+          ls -ld "$EFFECTIVE_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" 2>&1 | head || true
+          echo "::group::Make libmain.so (single job for memory)"
+          # Do not use pipefail for this block - capture exit code manually
           set +e
-          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make.log
-          MAKE_EXIT=${PIPESTATUS[0]}
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 V=1 > /tmp/make.log 2>&1
+          MAKE_EXIT=$?
           set -e
           echo "make exit $MAKE_EXIT"
-          cat /tmp/make.log | tail -n 200
+          cat /tmp/make.log | tail -n 200 || true
+          echo "=== Full make.log size $(wc -l /tmp/make.log 2>&1) ===" || true
+          ls -lh /tmp/make.log 2>&1 || true
+          cp /tmp/make.log ./make.log 2>&1 || true
+          ls -lh ./make.log 2>&1 || true
           if [ "$MAKE_EXIT" != "0" ]; then
-            echo "::warning::MAKE FAILED with $MAKE_EXIT - will use fallback dummy for APK"
-            exit 1
+            echo "::error::MAKE FAILED with $MAKE_EXIT - posting to issue 1"
+            echo "GH_TOKEN len ${#GH_TOKEN}"
+            which gh 2>&1 | head || true
+            # Post via curl (more reliable than gh in this shell)
+            TAIL=$(tail -n 150 /tmp/make.log 2>&1 | head -c 7500 | sed 's/"/\\"/g' | tr -d '\r')
+            curl -s -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/Nazatric/ProtoDroid/issues/1/comments \
+              -d "{\"body\":\"🔍 **MAKE FAILED $MAKE_EXIT**\\n\\\`\\\`\\\`\\n$TAIL\\n\\\`\\\`\\\`\"}" 2>&1 | head || true
+            gh api repos/Nazatric/ProtoDroid/issues/1/comments -f body="🔍 MAKE FAILED $MAKE_EXIT tail 150:\n\`\`\`$(tail -n 150 /tmp/make.log 2>&1 | head -c 7000)\n\`\`\`" 2>&1 | head || true
+            echo "=== grep error ==="
+            grep -n "error:\|fatal error\|No such file" /tmp/make.log 2>&1 | head -n 100 || true
+            # post grep too
+            GREP=$(grep -n "error:" /tmp/make.log 2>&1 | head -n 50 | head -c 6000 | sed 's/"/\\"/g' | tr -d '\r')
+            curl -s -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/Nazatric/ProtoDroid/issues/1/comments -d "{\"body\":\"🔍 **GREP error**\n\`\`\`\n$GREP\n\`\`\`\"}" 2>&1 | head || true
+            exit $MAKE_EXIT
           fi
           echo "::endgroup::"
-          ls -lh build/android/arm64-v8a/libmain.so
+          ls -lh build/android/arm64-v8a/libmain.so 2>&1 || echo "libmain.so MISSING after make!"
+          du -sh build/android/arm64-v8a/ 2>&1 || true
+          echo "=== check build output ==="
+          ls -lh build/android/ 2>&1 || true
+          ls -lh build/android/arm64-v8a/ 2>&1 || true
+          if [ ! -f build/android/arm64-v8a/libmain.so ]; then
+            echo "::error::libmain.so not created despite make exit 0 - dumping make.log"
+            cat /tmp/make.log 2>&1 | tail -n 500 || true
+            wc -l /tmp/make.log 2>&1 || true
+            # also check for OOM
+            dmesg 2>&1 | tail -n 50 || true
+            exit 1
+          fi
           echo "::group::Make v80 variant"
           set +e
-          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$ANDROID_NDK_HOME" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j$(nproc) 2>&1 | tee /tmp/make_v80.log
-          cat /tmp/make_v80.log | tail -n 50 || true
+          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 > /tmp/make_v80.log 2>&1
+          V80_EXIT=$?
           set -e
+          echo "v80 make exit $V80_EXIT"
+          cat /tmp/make_v80.log | tail -n 50 || true
+          cp /tmp/make_v80.log ./make_v80.log || true
           echo "::endgroup::"
           ls -lh build/android/arm64-v8a*/libmain*.so || true
           mkdir -p build/symbols
@@ -280,13 +417,57 @@ jobs:
           cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libSDL2.so build/symbols/libSDL2.so.unstripped || true
           cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
           ls -lh build/symbols/
+          du -sh build/symbols/
+
+      - name: Upload make logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: make-logs
+          path: |
+            /tmp/make.log
+            /tmp/make_v80.log
+            ./make.log
+            ./make_v80.log
+            /tmp/dxvk-addr2line.txt
+            /tmp/dxvk-nm.txt
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Post make log via github-script
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const log = fs.readFileSync('/tmp/make.log', 'utf8');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: 1,
+                body: "🔍 **Build libmain.so FAILED – tail 500**\n```\n" + log.slice(-9000) + "\n```"
+              });
+            } catch(e) {
+              console.log("No make.log: " + e);
+            }
 
       - name: Fallback dummy libmain.so if build failed
-        if: always() && env.HAS_DLL == '1' && hashFiles('build/android/arm64-v8a/libmain.so') == ''
+        if: failure()
         run: |
-          echo "Build failed or libmain.so missing - creating fallback for CI artifact"
+          echo "Build failed - checking libmain.so"
+          if [ -f build/android/arm64-v8a/libmain.so ] && [ -s build/android/arm64-v8a/libmain.so ]; then
+            SZ=$(stat -c%s build/android/arm64-v8a/libmain.so 2>/dev/null || wc -c < build/android/arm64-v8a/libmain.so)
+            echo "libmain.so exists size $SZ, not overwriting"
+            ls -lh build/android/arm64-v8a/libmain.so
+            if [ "$SZ" -gt 100000 ]; then
+              echo "Real libmain.so present - keeping"
+              exit 0
+            fi
+            echo "libmain.so too small ($SZ), will recreate fallback"
+          fi
+          echo "Creating fallback dummy libmain.so for APK packaging"
           mkdir -p build/android/arm64-v8a build/symbols
-          # Create a minimal ELF dummy (use NDK clang to make a tiny shared lib if available, else dummy)
           if [ -x "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang" ]; then
             echo "int dummy=0;" | $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang -shared -o build/android/arm64-v8a/libmain.so -x c - -fPIC || echo "dummy" > build/android/arm64-v8a/libmain.so
           else
@@ -311,6 +492,20 @@ jobs:
           # Now rebuild libmain.so with patched DXVK? Actually we will still need to rebuild libdxvk_d3d9.so with patch
           # But we already have deps built with patched DXVK (via build-deps)
           echo "Using prebuilt libmain.so, but deps are rebuilt with Mali fix"
+
+      - name: DXVK symbolization diagnostics
+        run: |
+          set -euo pipefail
+          TOOLS="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          LIB=build/symbols/libdxvk_d3d9.so.unstripped
+          test -s "$LIB"
+          echo "Symbolizing $LIB"
+          sha256sum "$LIB"
+          # Keep the offsets from the physical Mali report with the matching
+          # unstripped library in CI logs for post-mortem comparisons.
+          "$TOOLS/llvm-addr2line" -f -C -i -e "$LIB" \
+            0x237268 0x236bd4 0x143ac8 0x1d8bd4 0x1d8fcc | tee /tmp/dxvk-addr2line.txt
+          "$TOOLS/llvm-nm" -D "$LIB" | tee /tmp/dxvk-nm.txt
 
       - name: Setup Android keystore (debug)
         if: always()
@@ -357,13 +552,44 @@ jobs:
           cp build/android/arm64-v8a/libmain.so build/apk/symbols/libmain.so.stripped_for_apk || true
           ls -lh build/apk/ build/apk/symbols/ || true
 
-      - name: Verify APK
+      - name: Verify APK and embedded Android DXVK
         if: always()
         run: |
-          ls -lh build/apk/prototype.apk || echo "APK missing"
-          unzip -l build/apk/prototype.apk 2>&1 | head -n 100 || true
-          unzip -l build/apk/prototype.apk 2>&1 | grep -E "libSDL2|libFAudio|libdxvk|libmain" || true
-          aapt2 dump badging build/apk/prototype.apk 2>&1 | head -n 50 || $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging build/apk/prototype.apk 2>&1 | head -n 50 || true
+          set -euo pipefail
+          APK=build/apk/prototype.apk
+          test -s "$APK"
+          ls -lh "$APK"
+          unzip -l "$APK" | grep -E 'libSDL2|libFAudio|libdxvk|libmain'
+          TOOLS="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          rm -rf /tmp/protodroid-apk-check
+          mkdir -p /tmp/protodroid-apk-check
+          unzip -q "$APK" 'lib/arm64-v8a/libdxvk_d3d9.so' 'lib/arm64-v8a/libSDL2.so' 'lib/arm64-v8a/libmain.so' -d /tmp/protodroid-apk-check
+          DXVK=/tmp/protodroid-apk-check/lib/arm64-v8a/libdxvk_d3d9.so
+          SDL=/tmp/protodroid-apk-check/lib/arm64-v8a/libSDL2.so
+          MAIN=/tmp/protodroid-apk-check/lib/arm64-v8a/libmain.so
+          test "$(stat -c%s "$MAIN")" -gt 100000
+          $TOOLS/llvm-readelf -d "$MAIN" | tee /tmp/libmain-dynamic.txt
+          ! grep -E 'libav(format|codec|util)|libswresample' /tmp/libmain-dynamic.txt
+          $TOOLS/llvm-strings "$MAIN" | grep -F 'binkw32.dll'
+          STRINGS=$($TOOLS/llvm-strings "$DXVK")
+          printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2.so'
+          ! printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2-2.0.so.0'
+          printf '%s\n' "$STRINGS" | grep -F 'vkCreateAndroidSurfaceKHR'
+          for marker in \
+            '/storage/emulated/0/Prototype/logs/pipeline_trace.log' \
+            'last_vs.spv' \
+            'last_fs.spv' \
+            'PROTORE_PIPELINE_TRACE' \
+            'pre-created dummy sampler, buffer, and all 14 image views' \
+            'dummy image GPU initialization complete' \
+            'Disabling maintenance5, EDS3' \
+            'Unmapped descriptor binding'; do
+            printf '%s\n' "$STRINGS" | grep -F "$marker"
+          done
+          for sym in SDL_GetWindowWMInfo SDL_Vulkan_LoadLibrary SDL_Vulkan_GetInstanceExtensions SDL_Vulkan_CreateSurface SDL_GetError; do
+            $TOOLS/llvm-nm -D "$SDL" | grep -E " [A-Za-z] ${sym}$"
+          done
+          $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging "$APK" | head -n 20
 
       - name: Upload APK artifact
         if: always()

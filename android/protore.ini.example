@@ -18,8 +18,14 @@ texture_skip_min_size = 512
 # automatically; 1/0 forces it on/off.
 #decode_dxt = 1
 
+# Maximum texture anisotropy. Android defaults to 1 (linear); Settings offers 1/2/4/8.
+# At 1, anisotropic min/mag/mip filters become linear. An explicit d3d9.samplerAnisotropy in DXVK config is preserved.
+#max_anisotropy = 1
+
 # Audio backend: aaudio (default) or openslES. Try openslES if the sound stutters while the game runs smoothly.
 #audio_driver = openslES
+# Reuse the default mastering voice/output thread when the engine recreates its audio voices (Android default 1).
+#audio_master_reuse = 1
 
 # Present mode for Mali-G720 MC7 (Xiaomi POCO X7 Pro) crash fix:
 # Mali driver crashes with VK_PRESENT_MODE_MAILBOX_KHR (addr 0xb0 NULL deref) during initial
@@ -32,6 +38,11 @@ texture_skip_min_size = 512
 
 # DXVK extra config: d3d9.presentInterval, d3d9.numBackBuffers etc. Comma as separator (semicolon in DXVK).
 #dxvk_config = d3d9.presentInterval = 1
+
+# Low-level Mali pipeline diagnostics. Disabled by default because every traced pipeline performs
+# SPIR-V analysis plus durable file/fsync writes. Enables pipeline_trace.log and last_vs/last_fs.spv.
+# The PROTORE_PIPELINE_TRACE=1 environment variable is an equivalent override.
+#pipeline_trace = 1
 
 # Audio mixer and vsync debugging
 #present_stats = 1

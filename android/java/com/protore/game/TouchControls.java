@@ -146,6 +146,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         }
     }
 
+    private static boolean isLiveEngineSetting(Setting s) {
+        return s.key.equals("fps_limit");
+    }
+
     private final Setting[] settings = {
         new Setting("Resolution", "render_height", new String[] {"540p", "720p", "900p", "1080p"},
                 new int[] {540, 720, 900, 1080}, true),
@@ -166,8 +170,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                 new int[] {50, 75, 100, 150, 200}, false),
         new Setting("Invert Y", "ui_invert", new String[] {"Off", "On"}, new int[] {0, 1}, false),
         new Setting("Power buttons", "ui_power_buttons", new String[] {"Off", "On"}, new int[] {0, 1}, false),
+        new Setting("Anisotropy", "max_anisotropy", new String[] {"1x", "2x", "4x", "8x"},
+                new int[] {1, 2, 4, 8}, true),
     };
-    private static final int[] DEFAULTS = {1, 1, 0, 0, 2, 1, 1, 0, 0, 0, 2, 0, 0};
+    private static final int[] DEFAULTS = {1, 1, 0, 0, 2, 1, 1, 0, 0, 0, 2, 0, 0, 0};
     private boolean panelOpen = false, restartNeeded = false;
     private final RectF panel = new RectF(), restartRect = new RectF(), closeRect = new RectF(),
             layoutRect = new RectF();
@@ -381,7 +387,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             stickHomeX = stickCustomX * w;
             stickHomeY = stickCustomY * h;
         } else {
-            stickHomeX = 225 * u;  // right of the minimap
+            stickHomeX = 225 * u;  // right of the stock HUD
             stickHomeY = h - 112 * u;
         }
         stickX = knobX = stickHomeX;
@@ -730,10 +736,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             if (delta == 0) continue;
             Setting s = settings[i];
             s.index = (s.index + delta + s.values.length) % s.values.length;
-            prefs.edit().putInt(s.key, s.index).apply();
             buzz();
+            prefs.edit().putInt(s.key, s.index).apply();
             if (s.key.equals("fps_limit")) nativeSetFpsLimit(s.value());  // applies right away
-            else if (s.engine) restartNeeded = true;
+            else if (s.engine && !isLiveEngineSetting(s)) restartNeeded = true;
             if (s.engine) writeEngineSettings();
             applyUiSettings();
             return;
@@ -955,7 +961,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             float y = top + rowH * (i % rows) + rowH / 2;
             text.setTextAlign(Paint.Align.LEFT);
             text.setColor(0xffe8d6d4);
-            c.drawText(s.label + (s.engine && !s.key.equals("fps_limit") ? " *" : ""), colLeft, y + 5 * density,
+            c.drawText(s.label + (s.engine && !isLiveEngineSetting(s) ? " *" : ""), colLeft, y + 5 * density,
                     text);
             float vx = colRight - 62 * density;
             RectF l = new RectF(vx - 64 * density, y - rowH / 2, vx - 32 * density, y + rowH / 2);
