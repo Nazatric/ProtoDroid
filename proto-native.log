@@ -1,0 +1,392 @@
+proto-re build Oct 27 2026 20:26:29
+logs mirrored to /storage/emulated/0/Prototype/logs
+proto-re build Oct 27 2026 20:26:29
+DXVK logs mirrored to /storage/emulated/0/Prototype/logs
+game dir: /storage/emulated/0/Prototype
+data dir: /storage/emulated/0/Android/data/com.protore.game/files
+memory: guest window at 1000000000, arena 2000 MiB
+config: loaded protore.ini
+config: render_height = 900
+config: texture_skip_mips = 1
+config: fps_limit = 0
+config: battery_saver = 0
+render size 2000x900 (window 2712x1220)
+loader: rebased to 7c000000 (418563 fixups)
+loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
+DllMain(PROCESS_ATTACH)
+DllMain returned 1
+EngineInitialize
+SetThreadPriority(0) -> nice 0 on tid 20025
+SetThreadPriority(2) -> nice -4 on tid 20035
+SetThreadPriority(0) -> nice 0 on tid 20036
+SetThreadPriority(0) -> nice 0 on tid 20037
+SetThreadPriority(0) -> nice 0 on tid 20038
+SetThreadPriority(15) -> nice -10 on tid 20039
+SetThreadPriority(1) -> nice -2 on tid 20040
+SetThreadPriority(1) -> nice -2 on tid 20041
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+Direct3DCreate9(32) -> 0xb400006f1614cdb0
+GPU BC (DXT) textures: not supported, decoding on (DXT1 as 16-bit)
+CreateDevice 2000x900 fmt 22 windowed 1 msaa 0/0 interval 2147483648 -> 00000000
+textures: skip 1 mip level(s) of textures >= 512, decode DXT on
+SetThreadPriority(0) -> nice 0 on tid 20058
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Keyboard)
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Mouse)
+xaudio2: Initialize(flags 0) -> 0
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 20064
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 20070
+SetThreadPriority(15) -> nice -10 on tid 20071
+SetThreadPriority(1) -> nice -2 on tid 20072
+SetThreadPriority(1) -> nice -2 on tid 20073
+EngineInitialize returned 1
+perf hint: unavailable (target 16.7 ms, 7 threads)
+frame 0
+Reset 2000x900 msaa 0/0 interval 1 -> 00000000
+frame 1
+frame 2
+frame 4
+frame 8
+frame 16
+frame 32
+frame 64
+frame 128
+frame 256
+frame 512
+frame 1024
+frame 2048
+frame 4096
+frame 8192
+frame 16384
+frame 32768
+audio: 231 passes, max gap 32.3 ms, guest 20.3 ms (max 0.72), starved 229, underruns 4, submits 939
+bink: BinkOpen(movies/activisionRadicalLogos.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+audio: 235 passes, max gap 23.4 ms, guest 25.7 ms (max 1.95), starved 235, underruns 0, submits 940
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_start.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+audio: 235 passes, max gap 23.5 ms, guest 21.5 ms (max 1.29), starved 235, underruns 0, submits 940
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+bink: BinkOpen(movies/fe_ambientMovie_1.bik) -> no decoder, movie skipped
+LoadLibraryA(RPCRT4): not provided
+frame 65536
+audio: 235 passes, max gap 23.5 ms, guest 30.6 ms (max 5.56), starved 235, underruns 0, submits 940
+LoadLibraryA(RPCRT4): not provided
+textures: 1024 created, 136 reduced, 979 decoded; top levels 138 MiB -> 217 MiB
+audio: 235 passes, max gap 26.6 ms, guest 25.1 ms (max 1.80), starved 235, underruns 0, submits 940
+frame 131072
+audio: 235 passes, max gap 24.5 ms, guest 20.9 ms (max 0.95), starved 235, underruns 0, submits 940
+perf: 19081.8 fps, 15.8 ms, 1784 MiB resident; arena 582 MiB (peak 582), up to 256b0000; io: 464 reads, 206 MiB, 0 over 50 ms, longest 8.1 ms
+audio: 235 passes, max gap 25.4 ms, guest 36.5 ms (max 1.77), starved 235, underruns 0, submits 940
+frame 262144
+audio: 235 passes, max gap 24.4 ms, guest 34.8 ms (max 2.35), starved 235, underruns 0, submits 940
+bink: BinkOpen(movies/NIS_0_1_FMV.bik) -> no decoder, movie skipped
+audio: 235 passes, max gap 27.7 ms, guest 35.3 ms (max 4.45), starved 235, underruns 0, submits 940
+samplers: max anisotropy 1x:10271 2x:2050 3x:3010 4x:4870 5x:1127 6x:838 8x:55 | min filter none/point/linear/aniso 0/5373/16256/11275 | mip 24499/23987/18847/0
+audio: 235 passes, max gap 24.6 ms, guest 25.1 ms (max 3.09), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.5 ms, guest 22.2 ms (max 2.15), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.8 ms, guest 14.3 ms (max 1.20), starved 235, underruns 0, submits 940
+perf: 43.9 fps, 19.9 ms, 1854 MiB resident; arena 590 MiB (peak 590), up to 25f50000; io: 69 reads, 12 MiB, 0 over 50 ms, longest 9.2 ms
+audio: 235 passes, max gap 28.2 ms, guest 19.6 ms (max 1.24), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.0 ms, guest 18.3 ms (max 1.27), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.3 ms, guest 21.9 ms (max 3.44), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.5 ms, guest 15.6 ms (max 0.82), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.8 ms, guest 20.4 ms (max 1.15), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.2 ms, guest 19.1 ms (max 1.37), starved 235, underruns 0, submits 940
+perf: 3250.8 fps, 16.1 ms, 1865 MiB resident; arena 597 MiB (peak 597), up to 26580000; io: 115 reads, 29 MiB, 0 over 50 ms, longest 9.8 ms
+audio: 235 passes, max gap 25.4 ms, guest 23.3 ms (max 1.07), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.7 ms, guest 24.6 ms (max 3.27), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.4 ms, guest 28.3 ms (max 4.05), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.1 ms, guest 16.9 ms (max 1.29), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.1 ms, guest 29.1 ms (max 3.44), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.8 ms, guest 25.3 ms (max 1.46), starved 235, underruns 0, submits 940
+perf: 44.9 fps, 37.3 ms, 1868 MiB resident; arena 593 MiB (peak 597), up to 26840000; io: 100 reads, 25 MiB, 0 over 50 ms, longest 6.9 ms
+audio: 235 passes, max gap 29.0 ms, guest 23.1 ms (max 1.93), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.1 ms, guest 29.6 ms (max 7.59), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.5 ms, guest 21.8 ms (max 3.05), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.0 ms, guest 20.1 ms (max 1.13), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.6 ms, guest 22.2 ms (max 3.02), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.3 ms, guest 16.2 ms (max 1.32), starved 235, underruns 0, submits 940
+perf: 43.0 fps, 22.3 ms, 1906 MiB resident; arena 598 MiB (peak 598), up to 26840000; io: 97 reads, 27 MiB, 0 over 50 ms, longest 6.9 ms
+audio: 235 passes, max gap 27.2 ms, guest 21.8 ms (max 3.00), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.9 ms, guest 23.8 ms (max 2.60), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.6 ms, guest 19.3 ms (max 1.34), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.7 ms, guest 19.2 ms (max 0.96), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.3 ms, guest 22.0 ms (max 1.26), starved 235, underruns 0, submits 940
+textures: 2048 created, 352 reduced, 2003 decoded; top levels 210 MiB -> 378 MiB
+audio: 235 passes, max gap 24.8 ms, guest 18.0 ms (max 1.68), starved 235, underruns 0, submits 940
+perf: 39.5 fps, 29.5 ms, 1904 MiB resident; arena 593 MiB (peak 598), up to 26840000; io: 197 reads, 77 MiB, 0 over 50 ms, longest 8.2 ms
+audio: 235 passes, max gap 25.4 ms, guest 29.5 ms (max 1.62), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.9 ms, guest 20.3 ms (max 1.59), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.1 ms, guest 23.0 ms (max 2.15), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.4 ms, guest 19.2 ms (max 0.90), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.0 ms, guest 27.2 ms (max 2.16), starved 235, underruns 0, submits 940
+perf: 40.4 fps, 26.4 ms, 1889 MiB resident; arena 599 MiB (peak 599), up to 26a00000; io: 168 reads, 56 MiB, 0 over 50 ms, longest 11.3 ms
+audio: 235 passes, max gap 26.6 ms, guest 24.6 ms (max 2.18), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.7 ms, guest 24.5 ms (max 2.50), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.0 ms, guest 28.8 ms (max 3.00), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.2 ms, guest 22.5 ms (max 2.18), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.2 ms, guest 19.9 ms (max 2.61), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.0 ms, guest 24.5 ms (max 4.65), starved 235, underruns 0, submits 940
+perf: 42.0 fps, 23.9 ms, 1908 MiB resident; arena 597 MiB (peak 599), up to 26840000; io: 130 reads, 34 MiB, 0 over 50 ms, longest 9.0 ms
+audio: 235 passes, max gap 24.9 ms, guest 16.6 ms (max 1.16), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.9 ms, guest 22.9 ms (max 2.22), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 25.5 ms (max 2.71), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.3 ms, guest 18.0 ms (max 1.54), starved 235, underruns 0, submits 940
+textures: 3072 created, 539 reduced, 3027 decoded; top levels 280 MiB -> 545 MiB
+audio: 235 passes, max gap 24.9 ms, guest 22.4 ms (max 3.69), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.8 ms, guest 20.4 ms (max 1.65), starved 235, underruns 0, submits 940
+perf: 38.8 fps, 24.6 ms, 1923 MiB resident; arena 600 MiB (peak 600), up to 26a90000; io: 311 reads, 119 MiB, 0 over 50 ms, longest 12.1 ms
+audio: 235 passes, max gap 26.1 ms, guest 18.3 ms (max 2.38), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.6 ms, guest 21.5 ms (max 1.47), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.3 ms, guest 21.6 ms (max 2.39), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.6 ms, guest 23.4 ms (max 2.40), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.5 ms, guest 25.5 ms (max 3.77), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 28.0 ms, guest 30.0 ms (max 2.32), starved 235, underruns 0, submits 940
+perf: 40.7 fps, 20.4 ms, 1899 MiB resident; arena 600 MiB (peak 600), up to 26a90000; io: 115 reads, 27 MiB, 0 over 50 ms, longest 8.8 ms
+audio: 235 passes, max gap 24.4 ms, guest 20.1 ms (max 1.32), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.6 ms, guest 16.9 ms (max 1.46), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.9 ms, guest 27.6 ms (max 3.77), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.0 ms, guest 25.4 ms (max 3.19), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.5 ms, guest 19.3 ms (max 5.12), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.6 ms, guest 13.3 ms (max 1.47), starved 235, underruns 0, submits 940
+perf: 38.4 fps, 25.2 ms, 1903 MiB resident; arena 600 MiB (peak 600), up to 26a30000; io: 76 reads, 13 MiB, 0 over 50 ms, longest 6.6 ms
+audio: 235 passes, max gap 27.8 ms, guest 15.8 ms (max 1.16), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.2 ms, guest 23.8 ms (max 4.39), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.5 ms, guest 27.3 ms (max 1.87), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.0 ms, guest 20.3 ms (max 4.78), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 20.0 ms (max 2.10), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.8 ms, guest 15.4 ms (max 1.66), starved 235, underruns 0, submits 940
+perf: 46.0 fps, 24.6 ms, 1914 MiB resident; arena 601 MiB (peak 601), up to 26a30000; io: 61 reads, 11 MiB, 0 over 50 ms, longest 8.9 ms
+audio: 235 passes, max gap 25.2 ms, guest 19.0 ms (max 1.94), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.9 ms, guest 30.2 ms (max 2.67), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.8 ms, guest 21.2 ms (max 1.84), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.7 ms, guest 16.9 ms (max 1.40), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.7 ms, guest 27.6 ms (max 2.22), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.3 ms, guest 22.5 ms (max 1.54), starved 235, underruns 0, submits 940
+perf: 48.8 fps, 17.9 ms, 1902 MiB resident; arena 599 MiB (peak 601), up to 26b30000; io: 63 reads, 12 MiB, 0 over 50 ms, longest 5.6 ms
+audio: 235 passes, max gap 27.2 ms, guest 23.0 ms (max 4.93), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.9 ms, guest 35.9 ms (max 5.79), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.1 ms, guest 33.3 ms (max 2.04), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.4 ms, guest 32.1 ms (max 2.25), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.4 ms, guest 22.2 ms (max 1.61), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.6 ms, guest 18.5 ms (max 1.13), starved 235, underruns 0, submits 940
+perf: 39.0 fps, 29.7 ms, 1909 MiB resident; arena 600 MiB (peak 601), up to 26a70000; io: 120 reads, 41 MiB, 0 over 50 ms, longest 6.5 ms
+audio: 235 passes, max gap 26.8 ms, guest 30.4 ms (max 2.70), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 24.0 ms (max 2.44), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.1 ms, guest 25.4 ms (max 1.76), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.8 ms, guest 23.3 ms (max 2.51), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.4 ms, guest 18.8 ms (max 1.23), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 19.0 ms (max 1.30), starved 235, underruns 0, submits 940
+textures: 4096 created, 698 reduced, 4051 decoded; top levels 346 MiB -> 713 MiB
+perf: 37.3 fps, 24.7 ms, 1918 MiB resident; arena 601 MiB (peak 601), up to 26a90000; io: 152 reads, 46 MiB, 0 over 50 ms, longest 9.0 ms
+audio: 235 passes, max gap 25.6 ms, guest 30.9 ms (max 5.99), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.9 ms, guest 27.9 ms (max 1.47), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.7 ms, guest 29.5 ms (max 1.56), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.0 ms, guest 23.9 ms (max 1.49), starved 235, underruns 0, submits 940
+bink: BinkOpen(movies/NIS_0_2_closing.bik) -> no decoder, movie skipped
+LoadLibraryA(RPCRT4): not provided
+audio: 235 passes, max gap 27.4 ms, guest 31.4 ms (max 2.30), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.0 ms, guest 41.1 ms (max 1.36), starved 235, underruns 0, submits 940
+crash: signal 11 (Segmentation fault) code 1 addr 0x19bffffffff on tid 20047
+crash: pc 0x6d4e4b91d4 = libGLES_mali.so+0x92e1d4 (?)
+crash: lr 0x6d4e4b7e10 = libGLES_mali.so+0x92ce10 (?)
+crash: fault addr 0x19bffffffff
+crash: #00 0x6c5edb44b8 = libmain.so+0xf334b8 (?)
+crash: #01 0x705686a094 = libsigchain.so+0x7094 (_ZN3art11SignalChain7HandlerEiP7siginfoPv+0x484)
+crash: #02 0x706a12a848 = [vdso]+0x848 (__kernel_rt_sigreturn+0)
+crash: #03 0x6d4e4b91d4 = libGLES_mali.so+0x92e1d4 (?)
+crash: #04 0x6d4e4b7e10 = libGLES_mali.so+0x92ce10 (?)
+crash: #05 0x6d4e4b72d0 = libGLES_mali.so+0x92c2d0 (?)
+crash: #06 0x6c63419cd8 = libdxvk_d3d9.so+0x1cecd8 (?)
+crash: #07 0x6c634165cc = libdxvk_d3d9.so+0x1cb5cc (?)
+crash: #08 0x6c63405f14 = libdxvk_d3d9.so+0x1baf14 (?)
+crash: #09 0x6c6337c404 = libdxvk_d3d9.so+0x131404 (?)
+crash: #10 0x6c634270dc = libdxvk_d3d9.so+0x1dc0dc (?)
+crash: #11 0x6c634274d4 = libdxvk_d3d9.so+0x1dc4d4 (?)
+crash: #12 0x7063916390 = libc.so+0x84390 (?)
+crash: #13 0x70639088b4 = libc.so+0x768b4 (?)
