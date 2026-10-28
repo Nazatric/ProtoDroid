@@ -1,0 +1,2114 @@
+proto-re build Oct 28 2026 08:32:37
+logs mirrored to /storage/emulated/0/Prototype/logs
+proto-re build Oct 28 2026 08:32:37
+DXVK logs mirrored to /storage/emulated/0/Prototype/logs
+game dir: /storage/emulated/0/Prototype
+data dir: /storage/emulated/0/Android/data/com.protore.game/files
+memory: guest window at 1000000000, arena 2000 MiB
+render size 1600x720 (window 2712x1220)
+loader: rebased to 7c000000 (418563 fixups)
+loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
+DllMain(PROCESS_ATTACH)
+DllMain returned 1
+EngineInitialize
+SetThreadPriority(0) -> nice 0 on tid 11785
+SetThreadPriority(2) -> nice -4 on tid 11796
+SetThreadPriority(0) -> nice 0 on tid 11797
+SetThreadPriority(0) -> nice 0 on tid 11798
+SetThreadPriority(0) -> nice 0 on tid 11799
+SetThreadPriority(15) -> nice -10 on tid 11801
+SetThreadPriority(1) -> nice -2 on tid 11802
+SetThreadPriority(1) -> nice -2 on tid 11803
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+Direct3DCreate9(32) -> 0xb400006f1615f7d0
+GPU BC (DXT) textures: not supported, decoding on (DXT1 as 16-bit)
+CreateDevice 1600x720 fmt 22 windowed 1 msaa 0/0 interval 2147483648 -> 00000000
+textures: skip 1 mip level(s) of textures >= 512, decode DXT on
+SetThreadPriority(0) -> nice 0 on tid 11815
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Keyboard)
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Mouse)
+xaudio2: Initialize(flags 0) -> 0
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 11821
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 11827
+SetThreadPriority(15) -> nice -10 on tid 11828
+SetThreadPriority(1) -> nice -2 on tid 11829
+SetThreadPriority(1) -> nice -2 on tid 11830
+EngineInitialize returned 1
+perf hint: unavailable (target 16.7 ms, 7 threads)
+frame 0
+Reset 1600x720 msaa 0/0 interval 1 -> 00000000
+frame 1
+frame 2
+frame 4
+frame 8
+frame 16
+frame 32
+frame 64
+frame 128
+frame 256
+frame 512
+frame 1024
+frame 2048
+frame 4096
+frame 8192
+audio: 228 passes, max gap 25.8 ms, guest 35.2 ms (max 3.56), starved 226, underruns 2, submits 927
+[bink] SDL movie audio: 48000 Hz, stereo float
+
+[bink] custom input movies/activisionRadicalLogos.bik (21244780 bytes)
+
+[bink] opened guest BINKIO movies/activisionRadicalLogos.bik: 1280x720, 427 frames, 4 audio tracks
+
+[bink] deferred frame 1 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 6 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 8 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 9 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 10 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 11 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 12 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 21 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 23 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 24 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 28 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 29 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 30 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 31 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 33 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 38 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 39 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 40 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 41 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 42 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 24.6 ms, guest 30.2 ms (max 1.60), starved 235, underruns 0, submits 940
+[bink] deferred frame 43 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 47 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 56 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 57 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 58 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 59 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 60 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 63 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 65 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 67 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 68 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 70 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 71 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 73 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 74 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 75 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 76 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 78 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 79 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 80 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 82 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 83 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 84 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 85 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 87 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 88 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 89 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 90 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 92 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 93 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 94 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 96 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 97 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 98 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 99 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 101 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 106 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 109 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 110 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 111 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 112 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 113 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 115 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 116 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 118 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 120 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 122 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 124 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 125 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 127 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 128 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 129 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 131 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 132 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 133 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 134 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 135 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 136 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 137 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 139 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 140 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 141 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 142 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 143 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 147 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 148 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 167 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 168 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 169 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 170 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 171 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 172 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 173 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 174 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 182 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 184 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 185 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 186 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 188 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 189 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 190 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 194 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 23.9 ms, guest 29.1 ms (max 0.74), starved 235, underruns 0, submits 940
+[bink] deferred frame 195 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 196 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 197 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 198 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 199 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 201 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 202 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 203 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 204 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 205 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 206 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 207 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 211 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 214 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 216 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 218 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 219 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 221 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 222 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 224 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 225 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 226 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 228 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 229 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 230 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 231 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 233 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 234 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 235 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 237 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 241 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 242 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 243 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 244 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 249 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 255 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 256 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 258 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 259 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 260 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 261 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 262 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 265 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 266 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 267 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 269 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 270 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 275 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 276 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 277 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 282 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 283 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 285 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 287 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 288 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 289 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 291 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 293 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 295 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 297 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 298 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 300 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 302 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 303 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 305 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 306 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 307 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 309 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 310 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 311 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 313 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 314 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 315 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 316 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 317 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 318 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 319 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 320 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 321 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 322 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 323 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 324 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 326 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 327 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 328 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 330 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 331 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 332 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 334 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 335 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 343 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 27.3 ms, guest 27.2 ms (max 0.93), starved 235, underruns 0, submits 940
+[bink] deferred frame 344 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 345 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 346 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 347 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 348 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 350 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 352 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 354 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 356 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 357 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 359 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 360 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 361 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 363 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 364 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 367 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 368 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 370 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 377 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 379 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 380 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 381 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 382 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 383 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 384 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 385 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 386 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 387 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 388 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 389 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 390 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 402 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 403 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 404 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 405 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 406 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 407 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 415 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 416 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 417 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 418 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 419 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 420 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 423 after 1 call(s); retaining the last complete planes
+
+[bink] custom input movies/fe_ambientMovie_start.bik (13275304 bytes)
+
+[bink] opened guest BINKIO movies/fe_ambientMovie_start.bik: 1280x720, 612 frames, 0 audio tracks
+
+[bink] deferred frame 1 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 2 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 3 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 6 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 12 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 15 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 17 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 20 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 22 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 26 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 31 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 43 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 44 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 48 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 52 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 61 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 64 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 66 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 67 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 26.6 ms, guest 25.5 ms (max 3.59), starved 235, underruns 0, submits 940
+[bink] deferred frame 72 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 76 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 80 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 82 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 86 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 90 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 92 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 94 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 112 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 115 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 116 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 127 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 132 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 138 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 139 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 143 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 158 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 163 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 165 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 171 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 186 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 192 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 195 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 196 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 198 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 200 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 204 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 209 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 212 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 216 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 220 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 222 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 225 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 226 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 24.8 ms, guest 22.5 ms (max 1.89), starved 235, underruns 0, submits 940
+[bink] deferred frame 235 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 245 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 248 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 251 after 1 call(s); retaining the last complete planes
+
+perf: 7.9 fps, 118.3 ms, 764 MiB resident; arena 356 MiB (peak 356), up to 174a0000; io: 27969 reads, 73 MiB, 0 over 50 ms, longest 10.7 ms
+[bink] deferred frame 260 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 261 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 265 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 269 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 273 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 284 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 287 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 291 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 293 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 299 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 319 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 321 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 323 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 327 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 329 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 332 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 336 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 339 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 342 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 344 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 347 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 350 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 351 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 357 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 359 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 367 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 369 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 372 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 373 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 375 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 381 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 385 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 26.4 ms, guest 18.7 ms (max 1.04), starved 235, underruns 0, submits 940
+[bink] deferred frame 391 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 399 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 401 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 404 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 409 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 413 after 1 call(s); retaining the last complete planes
+
+[bink] custom input movies/fe_ambientMovie_1.bik (58061816 bytes)
+
+[bink] opened guest BINKIO movies/fe_ambientMovie_1.bik: 1280x720, 1808 frames, 0 audio tracks
+
+[bink] deferred frame 19 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 31 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 34 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 40 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 44 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 60 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 61 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 62 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 64 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 74 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 76 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 80 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 87 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 90 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 91 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 93 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 96 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 97 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 98 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 100 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 103 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 105 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 106 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 111 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 115 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 116 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 118 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 120 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 27.1 ms, guest 27.0 ms (max 0.68), starved 235, underruns 0, submits 940
+[bink] deferred frame 121 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 122 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 123 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 127 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 128 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 130 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 135 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 137 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 139 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 142 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 146 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 150 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 151 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 152 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 158 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 161 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 162 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 163 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 172 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 173 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 177 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 181 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 182 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 185 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 188 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 189 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 196 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 197 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 200 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 205 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 208 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 210 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 211 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 212 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 216 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 221 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 231 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 232 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 236 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 237 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 240 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 241 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 242 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 243 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 244 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 247 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 248 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 253 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 255 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 257 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 258 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 259 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 260 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 261 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 262 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 25.4 ms, guest 28.0 ms (max 2.16), starved 235, underruns 0, submits 940
+[bink] deferred frame 280 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 281 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 284 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 286 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 291 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 292 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 302 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 306 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 307 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 308 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 311 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 315 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 317 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 318 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 323 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 325 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 327 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 329 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 330 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 331 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 340 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 341 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 347 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 348 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 350 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 351 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 352 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 353 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 354 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 355 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 356 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 357 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 358 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 360 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 361 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 362 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 365 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 367 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 380 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 381 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 382 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 383 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 396 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 397 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 398 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 404 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 405 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 408 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 409 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 419 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 421 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 33.2 ms, guest 29.7 ms (max 3.94), starved 235, underruns 0, submits 940
+[bink] deferred frame 422 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 423 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 424 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 427 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 428 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 430 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 431 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 433 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 434 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 436 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 446 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 451 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 452 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 453 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 456 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 460 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 467 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 469 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 470 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 471 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 472 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 473 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 485 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 487 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 491 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 492 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 493 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 494 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 498 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 500 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 505 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 506 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 508 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 511 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 512 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 518 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 528 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 529 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 530 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 531 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 532 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 545 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 547 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 548 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 549 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 550 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 555 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 556 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 557 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 558 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 559 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 560 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 561 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 563 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 565 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 566 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 568 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 571 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 23.9 ms, guest 27.1 ms (max 0.92), starved 235, underruns 0, submits 940
+[bink] deferred frame 572 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 574 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 579 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 587 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 590 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 591 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 592 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 593 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 600 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 605 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 608 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 610 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 612 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 613 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 614 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 621 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 631 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 632 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 633 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 635 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 636 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 638 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 642 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 644 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 646 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 656 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 658 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 661 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 663 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 664 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 665 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 666 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 668 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 672 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 674 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 677 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 680 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 683 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 685 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 687 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 688 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 689 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 692 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 695 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 697 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 702 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 705 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 708 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 709 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 710 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 713 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 715 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 716 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 717 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 720 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 721 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 722 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 28.5 ms, guest 30.4 ms (max 1.39), starved 235, underruns 0, submits 940
+[bink] deferred frame 725 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 726 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 727 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 732 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 733 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 735 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 740 after 1 call(s); retaining the last complete planes
+
+perf: 14.6 fps, 76.1 ms, 635 MiB resident; arena 356 MiB (peak 356), up to 174f0000; io: 27885 reads, 26 MiB, 0 over 50 ms, longest 10.7 ms
+[bink] deferred frame 742 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 745 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 746 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 750 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 757 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 759 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 761 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 762 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 765 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 766 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 767 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 768 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 769 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 770 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 771 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 772 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 775 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 778 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 781 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 786 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 788 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 791 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 793 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 794 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 795 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 798 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 805 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 809 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 810 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 811 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 812 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 813 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 817 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 820 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 821 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 825 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 826 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 827 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 830 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 831 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 834 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 838 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 843 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 853 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 854 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 855 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 856 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 865 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 866 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 867 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 868 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 869 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 871 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 872 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 24.2 ms, guest 29.1 ms (max 0.82), starved 235, underruns 0, submits 940
+[bink] deferred frame 875 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 880 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 884 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 886 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 890 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 891 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 892 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 893 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 894 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 895 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 896 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 900 after 1 call(s); retaining the last complete planes
+
+LoadLibraryA(RPCRT4): not provided
+audio: 235 passes, max gap 25.7 ms, guest 33.8 ms (max 3.77), starved 235, underruns 0, submits 940
+frame 16384
+textures: 1024 created, 139 reduced, 979 decoded; top levels 110 MiB -> 190 MiB
+frame 32768
+audio: 235 passes, max gap 25.4 ms, guest 46.1 ms (max 5.21), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.1 ms, guest 35.7 ms (max 3.82), starved 235, underruns 0, submits 940
+[bink] custom input movies/NIS_0_1_FMV.bik (311658208 bytes)
+
+[bink] opened guest BINKIO movies/NIS_0_1_FMV.bik: 1280x544, 5721 frames, 4 audio tracks
+
+[bink] deferred frame 1 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 5 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 12 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 15 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 18 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 19 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 21 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 22 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 23 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 24 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 27 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 28 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 29 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 30 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 31 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 36 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 39 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 41 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 42 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 43 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 44 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 45 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 46 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 48 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 49 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 50 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 51 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 52 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 53 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 54 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 55 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 56 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 57 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 58 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 59 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 60 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 61 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 62 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 63 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 64 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 65 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 67 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 68 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 69 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 70 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 71 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 72 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 73 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 74 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 76 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 77 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 78 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 79 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 80 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 82 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 83 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 84 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 85 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 86 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 87 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 89 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 90 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 91 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 92 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 93 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 95 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 96 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 97 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 98 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 99 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 100 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 102 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 103 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 104 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 105 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 106 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 109 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 26.9 ms, guest 30.8 ms (max 3.58), starved 235, underruns 0, submits 940
+[bink] deferred frame 117 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 120 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 121 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 122 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 123 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 124 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 126 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 127 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 128 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 129 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 130 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 132 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 133 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 134 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 135 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 136 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 137 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 139 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 140 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 141 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 142 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 143 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 145 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 146 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 147 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 148 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 149 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 151 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 152 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 153 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 154 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 155 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 157 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 158 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 159 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 160 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 161 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 163 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 164 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 165 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 166 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 168 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 169 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 170 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 172 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 174 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 175 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 176 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 177 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 178 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 180 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 181 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 182 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 183 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 184 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 186 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 187 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 188 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 189 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 190 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 191 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 192 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 193 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 194 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 195 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 196 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 197 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 198 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 200 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 201 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 202 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 203 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 204 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 206 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 207 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 208 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 209 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 210 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 212 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 213 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 214 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 215 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 216 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 217 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 219 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 220 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 221 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 222 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 223 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 225 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 226 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 227 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 228 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 229 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 230 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 232 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 233 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 234 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 235 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 236 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 237 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 239 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 240 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 241 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 242 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 243 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 245 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 246 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 247 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 248 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 249 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 250 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 253 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 254 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 256 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 258 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 259 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 260 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 261 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 25.7 ms, guest 32.4 ms (max 2.47), starved 235, underruns 0, submits 940
+[bink] deferred frame 262 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 263 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 264 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 266 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 267 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 268 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 269 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 270 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 272 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 273 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 274 after 1 call(s); retaining the last complete planes
+
+perf: 23.3 fps, 32.9 ms, 1667 MiB resident; arena 578 MiB (peak 578), up to 25210000; io: 20652 reads, 182 MiB, 0 over 50 ms, longest 12.9 ms
+[bink] deferred frame 276 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 278 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 279 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 280 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 281 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 286 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 287 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 288 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 290 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 291 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 292 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 293 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 294 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 296 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 297 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 298 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 299 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 301 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 303 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 304 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 305 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 306 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 307 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 309 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 310 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 311 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 312 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 313 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 315 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 316 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 317 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 318 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 319 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 321 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 322 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 323 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 324 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 325 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 327 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 328 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 329 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 330 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 332 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 334 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 335 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 336 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 337 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 338 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 339 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 340 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 342 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 343 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 344 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 345 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 346 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 347 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 349 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 350 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 351 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 352 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 353 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 355 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 356 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 357 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 359 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 361 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 362 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 363 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 364 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 365 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 367 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 368 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 369 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 370 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 371 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 372 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 374 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 375 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 376 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 377 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 378 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 379 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 381 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 382 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 383 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 385 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 386 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 388 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 389 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 390 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 391 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 392 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 394 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 395 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 396 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 397 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 398 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 400 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 401 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 402 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 403 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 404 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 405 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 407 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 408 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 409 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 410 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 411 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 26.0 ms, guest 27.4 ms (max 0.41), starved 235, underruns 0, submits 940
+[bink] deferred frame 412 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 414 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 415 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 416 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 417 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 418 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 419 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 420 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 422 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 423 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 424 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 425 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 430 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 435 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 436 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 437 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 438 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 439 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 440 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 442 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 443 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 444 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 447 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 449 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 450 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 451 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 452 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 453 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 454 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 456 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 459 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 460 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 462 after 1 call(s); retaining the last complete planes
+
+[bink] deferred frame 464 after 1 call(s); retaining the last complete planes
+
+audio: 235 passes, max gap 26.5 ms, guest 26.0 ms (max 1.41), starved 235, underruns 0, submits 940
+samplers: max anisotropy 1x:10749 2x:2050 3x:3003 4x:5217 5x:1144 6x:919 8x:55 | min filter none/point/linear/aniso 0/3677/15568/12280 | mip 21158/23195/16726/0
+audio: 235 passes, max gap 26.6 ms, guest 34.4 ms (max 2.19), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.9 ms, guest 26.2 ms (max 1.70), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.9 ms, guest 31.8 ms (max 6.43), starved 235, underruns 0, submits 940

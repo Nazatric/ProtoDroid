@@ -1,0 +1,88 @@
+proto-re build Oct 28 2026 07:37:59
+logs mirrored to /storage/emulated/0/Prototype/logs
+proto-re build Oct 28 2026 07:37:59
+DXVK logs mirrored to /storage/emulated/0/Prototype/logs
+game dir: /storage/emulated/0/Prototype
+data dir: /storage/emulated/0/Android/data/com.protore.game/files
+memory: guest window at 1000000000, arena 2000 MiB
+render size 1600x720 (window 2712x1220)
+loader: rebased to 7c000000 (418563 fixups)
+loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
+DllMain(PROCESS_ATTACH)
+DllMain returned 1
+EngineInitialize
+SetThreadPriority(0) -> nice 0 on tid 15422
+SetThreadPriority(2) -> nice -4 on tid 15438
+SetThreadPriority(0) -> nice 0 on tid 15440
+SetThreadPriority(0) -> nice 0 on tid 15441
+SetThreadPriority(0) -> nice 0 on tid 15442
+SetThreadPriority(15) -> nice -10 on tid 15443
+SetThreadPriority(1) -> nice -2 on tid 15444
+SetThreadPriority(1) -> nice -2 on tid 15445
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+Direct3DCreate9(32) -> 0xb400006f1614ced0
+GPU BC (DXT) textures: not supported, decoding on (DXT1 as 16-bit)
+CreateDevice 1600x720 fmt 22 windowed 1 msaa 0/0 interval 2147483648 -> 00000000
+textures: skip 1 mip level(s) of textures >= 512, decode DXT on
+SetThreadPriority(0) -> nice 0 on tid 15462
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Keyboard)
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Mouse)
+xaudio2: Initialize(flags 0) -> 0
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 15467
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 15472
+SetThreadPriority(15) -> nice -10 on tid 15473
+SetThreadPriority(1) -> nice -2 on tid 15477
+SetThreadPriority(1) -> nice -2 on tid 15478
+EngineInitialize returned 1
+perf hint: unavailable (target 16.7 ms, 7 threads)
+frame 0
+Reset 1600x720 msaa 0/0 interval 1 -> 00000000
+frame 1
+frame 2
+frame 4
+frame 8
+frame 16
+frame 32
+frame 64
+frame 128
+frame 256
+frame 512
+frame 1024
+frame 2048
+frame 4096
+frame 8192
+frame 16384
+frame 32768
+audio: 237 passes, max gap 23.5 ms, guest 21.7 ms (max 0.88), starved 235, underruns 3, submits 963
+[bink] SDL movie audio: 48000 Hz, stereo float
+
+[bink] custom input movies/activisionRadicalLogos.bik (21244780 bytes)
+
+[bink] opened guest BINKIO movies/activisionRadicalLogos.bik: 1280x720, 427 frames, 4 audio tracks
+
+audio: 235 passes, max gap 26.8 ms, guest 16.3 ms (max 1.69), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.2 ms, guest 9.8 ms (max 0.17), starved 235, underruns 0, submits 940
+watchdog: no frame for 10 s (frame 44478), guest thread backtraces:
+watchdog: thread 15422: syscall+0x1c 0x7063907534 pthread_cond_wait+0x4c _ZNSt6__ndk118condition_variable4waitERNS_11unique_lockINS_5mutexEEE+0x20 0x6c5fe07cac _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c63d2f0+0x8c f_7c860e80+0x230 f_7c861170+0x2cc f_7c849190+0x8f0 RecompDispatch+0x1c8 f_7c838ed0+0x4b0 f_7c85eb20+0x3b4 _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc SDL_main+0x2434 Java_org_libsdl_app_SDLActivity_nativeRunMain+0x2c4
+watchdog: thread 15438: syscall+0x1c 0x7063907534 pthread_cond_wait+0x4c _ZNSt6__ndk118condition_variable4waitERNS_11unique_lockINS_5mutexEEE+0x20 0x6c5fe07cac _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c63d2f0+0x8c f_7c652790+0x150 RecompDispatch+0x1c8 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x6c5fe0b3d4 0x7063916390 0x70639088b4
+watchdog: thread 15440: syscall+0x1c 0x7063907534 pthread_cond_wait+0x4c _ZNSt6__ndk118condition_variable4waitERNS_11unique_lockINS_5mutexEEE+0x20 0x6c5fe07cac _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c63d2f0+0x8c f_7cb82400+0x1b4 f_7cb7ee70+0x11c RecompDispatch+0x1c8 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x6c5fe0b3d4 0x7063916390 0x70639088b4
+watchdog: thread 15441: syscall+0x1c 0x7063907534 pthread_cond_wait+0x4c _ZNSt6__ndk118condition_variable4waitERNS_11unique_lockINS_5mutexEEE+0x20 0x6c5fe07cac _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c63d2f0+0x8c f_7cb82400+0x1b4 f_7cb7ee70+0x11c RecompDispatch+0x1c8 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x6c5fe0b3d4 0x7063916390 0x70639088b4
+watchdog: thread 15442: syscall+0x1c 0x7063907534 pthread_cond_wait+0x4c _ZNSt6__ndk118condition_variable4waitERNS_11unique_lockINS_5mutexEEE+0x20 0x6c5fe07cac _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c63d2f0+0x8c f_7cb82400+0x1b4 f_7cb7ee70+0x11c RecompDispatch+0x1c8 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x6c5fe0b3d4 0x7063916390 0x70639088b4
+watchdog: thread 15443: syscall+0x1c 0x7063907534 pthread_cond_wait+0x4c _ZNSt6__ndk118condition_variable4waitERNS_11unique_lockINS_5mutexEEE+0x20 0x6c5fe07cac _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c63d2f0+0x8c f_7c8831e0+0x354 RecompDispatch+0x1c8 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x6c5fe0b3d4 0x7063916390 0x70639088b4
+watchdog: thread 15444: syscall+0x1c 0x7063907534 pthread_cond_wait+0x4c _ZNSt6__ndk118condition_variable4waitERNS_11unique_lockINS_5mutexEEE+0x20 0x6c5fe07cac _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c63d2f0+0x8c f_7c60bd40+0x180 f_7c60be30+0x40 RecompDispatch+0x1c8 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x6c5fe0b3d4 0x7063916390 0x70639088b4
+watchdog: thread 15445: syscall+0x1c 0x7063907534 pthread_cond_wait+0x4c _ZNSt6__ndk118condition_variable4waitERNS_11unique_lockINS_5mutexEEE+0x20 0x6c5fe07cac _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c63d2f0+0x8c f_7c607ef0+0x17c f_7c6082a0+0x40 RecompDispatch+0x1c8 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x6c5fe0b3d4 0x7063916390 0x70639088b4
+watchdog: thread 15462: RecompDispatch+0x1c4 f_7c64fb30+0x94 RecompDispatch+0x1c8 f_7c64a030+0x1fc f_7c5a1650+0x464 _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x6c5fe44b84 0x6c5fe38fd0 0x6c630aa0f4 avio_read+0x44 0x6c630be3dc 0x6c630b7c64 ff_read_packet+0x88 0x6c630aee00 av_read_frame+0x258 0x6c5fe38568 0x6c5fe38404 0x6c5fe33020 _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c5a01b0+0x344 f_7c82f300+0x574
+audio: 235 passes, max gap 24.8 ms, guest 7.1 ms (max 0.08), starved 235, underruns 0, submits 940
+watchdog: thread 15472: syscall+0x1c 0x7063907534 pthread_cond_wait+0x4c _ZNSt6__ndk118condition_variable4waitERNS_11unique_lockINS_5mutexEEE+0x20 0x6c5fe07cac _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c63d2f0+0x8c f_7cac2c90+0x16c RecompDispatch+0x1c8 f_7c5c2360+0x14c RecompDispatch+0x1c8 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x6c5fe0b3d4 0x7063916390 0x70639088b4
+watchdog: thread 15471: syscall+0x20 0x7063907534 pthread_cond_timedwait+0x88 SDL_CondWaitTimeout+0xa4 0x6c677c151c 0x6c678dee98 0x6c67953e4c 0x7063916390 0x70639088b4
+watchdog: thread 15473: syscall+0x1c 0x7063907534 pthread_cond_wait+0x4c _ZNSt6__ndk118condition_variable4waitERNS_11unique_lockINS_5mutexEEE+0x20 0x6c5fe07cac _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c63d2f0+0x8c f_7c5ca690+0x25c RecompDispatch+0x1c8 f_7c5c2360+0x14c RecompDispatch+0x1c8 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x6c5fe0b3d4 0x7063916390 0x70639088b4
+watchdog: thread 15477: syscall+0x1c 0x7063907534 pthread_cond_wait+0x4c _ZNSt6__ndk118condition_variable4waitERNS_11unique_lockINS_5mutexEEE+0x20 0x6c5fe07cac _ZN6native14DispatchImportEP3Ctxj+0x1ac RecompDispatch+0x1f4 f_7c63d2f0+0x8c f_7c5a0ac0+0x27c RecompDispatch+0x1c8 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x6c5fe0b3d4 0x7063916390 0x70639088b4
+audio: 235 passes, max gap 23.5 ms, guest 12.5 ms (max 0.29), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.8 ms, guest 19.6 ms (max 4.02), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.2 ms, guest 20.8 ms (max 0.22), starved 235, underruns 0, submits 940
