@@ -33,7 +33,6 @@
 
 #include "guest.h"
 #include "win.h"
-#include "cpu_topology.h"
 
 namespace native {
 
@@ -334,13 +333,6 @@ extern "C" JNIEXPORT void JNICALL Java_com_protore_game_TouchControls_nativeSetF
     native::PerfHintTarget(fps);
 }
 #endif
-
-// big.LITTLE/all-big-core topology is shared with high-priority guest workers in kernel32.cpp.
-static void PinToBigCores() {
-#ifdef __ANDROID__
-    if (const cpu_set_t* set = native::FastCoreAffinity(true)) sched_setaffinity(0, sizeof(*set), set);
-#endif
-}
 
 using namespace native;
 
@@ -653,7 +645,6 @@ int main(int argc, char** argv) {
     }
     static std::atomic<uint64_t> frames{0};
     StartWatchdog(&frames);
-    PinToBigCores();
     int fps_limit = SettingInt("fps_limit", 0);
     if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
     g_fps_limit.store(fps_limit);

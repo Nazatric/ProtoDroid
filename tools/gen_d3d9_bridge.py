@@ -22,8 +22,7 @@ MANUAL = {
     "IDirect3D9::CreateDevice", "IDirect3D9::GetAdapterMonitor",
     "IDirect3DDevice9::Reset", "IDirect3DDevice9::Present", "IDirect3DDevice9::TestCooperativeLevel",
     "IDirect3DDevice9::SetSamplerState", "IDirect3DDevice9::GetCreationParameters",
-    "IDirect3DDevice9::SetRenderState", "IDirect3DDevice9::SetTextureStageState",
-    "IDirect3DDevice9::BeginStateBlock", "IDirect3DDevice9::EndStateBlock", "IDirect3DStateBlock9::Apply",
+    "IDirect3DStateBlock9::Apply",
     "IDirect3DDevice9::CreateAdditionalSwapChain", "IDirect3DDevice9::SetCursorProperties",
     "IDirect3DSwapChain9::Present", "IDirect3DSwapChain9::GetPresentParameters",
     "IDirect3DSurface9::LockRect", "IDirect3DSurface9::UnlockRect", "IDirect3DSurface9::GetDC",
@@ -133,6 +132,11 @@ def gen(ifaces):
                 body += f" {call}; Return(c, 1, {nargs});"
             else:
                 body += f" auto r = {call}; {' '.join(post)} Return(c, (uint32_t)r, {nargs});"
+            if full == "IDirect3DDevice9::SetRenderState":
+                body = "D3D9TrackRenderState((DWORD)Arg(c, 1), (DWORD)Arg(c, 2)); " + body
+            if full in {"IDirect3DDevice9::DrawPrimitive", "IDirect3DDevice9::DrawIndexedPrimitive",
+                        "IDirect3DDevice9::DrawPrimitiveUP", "IDirect3DDevice9::DrawIndexedPrimitiveUP"}:
+                body = "D3D9TrackDraw(); " + body
             lines.append(f"static void {fn}(Ctx* c) {{ {body.strip()} }}")
         lines.append(f"static const MethodDef kMethods_{name}[] = {{")
         for _, mname, _ in methods:

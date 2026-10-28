@@ -1485,4 +1485,12 @@ const ImportDef kBink[] = {
 ImportRegistrar g_bink(kBink);
 
 }  // namespace
+
+// Read-only frontend classification for D3D9 Present. The caller queries this only on non-world wide-aspect frames;
+// playback, plane registration, I/O, decode, pacing, and teardown behavior are unchanged.
+bool BinkHasOpenMovie() {
+    std::lock_guard<std::mutex> lock(g_registry_mutex);
+    return !g_movies.empty();
+}
+
 }  // namespace native

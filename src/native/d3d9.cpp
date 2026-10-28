@@ -33,6 +33,7 @@ namespace native {
 
 SDL_Window* g_sdl_window = nullptr;
 uint32_t HostWindow();
+bool BinkHasOpenMovie();
 void ClientSize(int* w, int* h);     // user32.cpp
 void SetClientSize(int w, int h);
 
@@ -195,8 +196,6 @@ void DrainGraves(bool all) {
     g_graves.resize(kept);
 }
 
-void InvalidateD3D9States(uint32_t device);
-
 template <typename T>
 void ReleaseImpl(Ctx* c) {
     uint32_t g = Arg(c, 0);
@@ -217,7 +216,6 @@ void ReleaseImpl(Ctx* c) {
     }
     ULONG r = host->Release();
     if (r == 0) {
-        if constexpr (std::is_same_v<T, IDirect3DDevice9>) InvalidateD3D9States(g);
         ForgetResource(host);
         Forget(g);
     }
@@ -538,34 +536,6 @@ void AdaptDesc(const TexAdapt& a, UINT level, D3DSURFACE_DESC* d) {
 }
 
 
-// ---- redundant state filtering ----
-// Final device Release invalidates the entry so a reused guest address can never inherit the previous device's state.
-// Apply can change any state without calling the individual setters; conservatively invalidate every device then.
-std::mutex g_state_mutex;
-std::unordered_map<uint32_t, D3D9StateCache> g_state_caches;
-
-void InvalidateD3D9States() {
-    std::lock_guard<std::mutex> lock(g_state_mutex);
-    for (auto& entry : g_state_caches) entry.second.Invalidate();
-}
-
-void InvalidateD3D9States(uint32_t device) {
-    std::lock_guard<std::mutex> lock(g_state_mutex);
-    auto it = g_state_caches.find(device);
-    if (it != g_state_caches.end()) it->second.Invalidate();
-}
-
-template <typename F>
-HRESULT SetCachedState(uint32_t device, D3D9StateCache::Kind kind, uint32_t index, uint32_t value, F&& call) {
-    std::lock_guard<std::mutex> lock(g_state_mutex);
-    D3D9StateCache& cache = g_state_caches[device];
-    if (cache.Equal(kind, index, value)) return D3D_OK;
-    HRESULT hr = call();
-    if (SUCCEEDED(hr)) cache.Store(kind, index, value);
-    else cache.Invalidate();  // the host may have changed part of its state before reporting the error
-    return hr;
-}
-
 // ---- display modes ----
 // With override_modes (default on Android) the engine sees modes of the render resolution instead of the screen's:
 // the render size (render_height) first, then 540p/720p/900p/1080p at the screen's aspect ratio. Its default
@@ -598,6 +568,78 @@ void WriteMode(uint32_t out, const D3DDISPLAYMODE& m) {
     W32(out + 4, m.Height);
     W32(out + 8, m.RefreshRate);
     W32(out + 12, uint32_t(m.Format));
+}
+
+// Minimal frame classification for loading/Bink pillarboxes. These are plain render-thread flags, not a forwarded
+// state cache: no locks, allocation, scanning, or deduplication occurs in any setter or draw. Unknown depth state is
+// treated as world geometry so a StateBlock Apply can never enable an unsafe gameplay mask.
+uint32_t g_backbuffer_width = 0, g_backbuffer_height = 0;
+int g_depth_test = D3DZB_TRUE, g_depth_write = 1;
+bool g_frame_has_world = false;
+uint32_t g_last_world_frame = 0;
+
+void D3D9TrackRenderState(DWORD type, DWORD value) {
+    if (type == D3DRS_ZENABLE) g_depth_test = int(value);
+    else if (type == D3DRS_ZWRITEENABLE) g_depth_write = int(value);
+}
+
+inline void D3D9TrackDraw() {
+    if (D3D9DepthDrawMayBeWorld(g_depth_test, g_depth_write)) g_frame_has_world = true;
+}
+
+void D3D9StateBlockApplied() {
+    g_depth_test = g_depth_write = -1;  // conservative until setters establish a known non-world state
+}
+
+void D3D9ResetFrameState(uint32_t width, uint32_t height) {
+    g_backbuffer_width = width;
+    g_backbuffer_height = height;
+    g_depth_test = D3DZB_TRUE;
+    g_depth_write = 1;
+    g_frame_has_world = false;
+    g_last_world_frame = g_present_count;
+}
+
+void MaskFrontendPillarboxes(IDirect3DDevice9* dev) {
+    const bool world = g_frame_has_world;
+    g_frame_has_world = false;
+    if (world) {
+        g_last_world_frame = g_present_count;
+        return;  // never mask a frame containing the normal 3D world
+    }
+
+    D3D9Pillarboxes bars;
+    if (!D3D9WidePillarboxes(g_backbuffer_width, g_backbuffer_height, bars)) return;
+    const bool movie = BinkHasOpenMovie();
+    // Active Bink/loading movies are masked immediately. Other frontend fades wait two complete non-world frames,
+    // avoiding a one-off gameplay frame with no opaque draw. There is no movie-registry lookup on world frames.
+    if (!D3D9FrontendMaskTiming(movie, g_present_count - g_last_world_frame)) return;
+
+    const uint32_t width = g_backbuffer_width, height = g_backbuffer_height;
+    D3DRECT rects[2];
+    DWORD count = 0;
+    if (bars.left) rects[count++] = {0, 0, LONG(bars.left), LONG(height)};
+    if (bars.right < width) rects[count++] = {LONG(bars.right), 0, LONG(width), LONG(height)};
+    if (!count) return;
+
+    // DXVK clips Clear to viewport/scissor state. Temporarily cover the full backbuffer, then restore both states.
+    D3DVIEWPORT9 old_viewport {};
+    DWORD old_scissor = FALSE;
+    if (FAILED(dev->GetViewport(&old_viewport)) ||
+        FAILED(dev->GetRenderState(D3DRS_SCISSORTESTENABLE, &old_scissor))) return;
+    const D3DVIEWPORT9 full {0, 0, width, height, 0.0f, 1.0f};
+    HRESULT hr = dev->SetViewport(&full);
+    if (SUCCEEDED(hr)) hr = dev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+    if (SUCCEEDED(hr)) hr = dev->Clear(count, rects, D3DCLEAR_TARGET, 0xff000000u, 0.0f, 0);
+    dev->SetViewport(&old_viewport);
+    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, old_scissor);
+
+    static bool logged = false;
+    if (!logged) {
+        Log("loading: opaque #000000 pillarboxes %ux%u [0,%u) [%u,%u), movie=%d -> %08x", width, height,
+            bars.left, bars.right, width, movie ? 1 : 0, uint32_t(hr));
+        logged = true;
+    }
 }
 
 // ---- Direct3DCreate9 ----
@@ -708,6 +750,7 @@ M(IDirect3D9, CreateDevice) {
         StartupFailure("The graphics driver could not create the D3D9 device (DXVK on Vulkan). "
                        "See app_process64_d3d9.log for the reason.");
     }
+    if (SUCCEEDED(hr)) D3D9ResetFrameState(pp.BackBufferWidth, pp.BackBufferHeight);
     if (OverrideModes()) SetClientSize(int(pp.BackBufferWidth), int(pp.BackBufferHeight));
     ToGuest(pp, Arg(c, 5));
     W32(Arg(c, 6), Wrap(dev));
@@ -738,48 +781,20 @@ M(IDirect3DDevice9, CreateAdditionalSwapChain) {
 }
 M(IDirect3DDevice9, Reset) {
     D3DPRESENT_PARAMETERS pp = ToHost(Arg(c, 1));
-    InvalidateD3D9States(Arg(c, 0));  // Reset restores defaults even when no individual setter is observed.
     DrainGraves(true);
     HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->Reset(&pp);
     Log("Reset %ux%u msaa %u/%u interval %u -> %08x", pp.BackBufferWidth, pp.BackBufferHeight, pp.MultiSampleType,
         pp.MultiSampleQuality, pp.PresentationInterval, uint32_t(hr));
-    if (SUCCEEDED(hr) && OverrideModes()) SetClientSize(int(pp.BackBufferWidth), int(pp.BackBufferHeight));
+    if (SUCCEEDED(hr)) {
+        D3D9ResetFrameState(pp.BackBufferWidth, pp.BackBufferHeight);
+        if (OverrideModes()) SetClientSize(int(pp.BackBufferWidth), int(pp.BackBufferHeight));
+    }
     ToGuest(pp, Arg(c, 1));
     Return(c, uint32_t(hr), 2);
 }
 
-M(IDirect3DDevice9, SetRenderState) {
-    const DWORD type = Arg(c, 1), value = Arg(c, 2);
-    HRESULT hr = SetCachedState(Arg(c, 0), D3D9StateCache::Kind::Render, type, value, [&] {
-        return Host<IDirect3DDevice9>(Arg(c, 0))->SetRenderState(D3DRENDERSTATETYPE(type), value);
-    });
-    Return(c, uint32_t(hr), 3);
-}
-
-M(IDirect3DDevice9, SetTextureStageState) {
-    const DWORD stage = Arg(c, 1), type = Arg(c, 2), value = Arg(c, 3);
-    HRESULT hr = SetCachedState(Arg(c, 0), D3D9StateCache::Kind::TextureStage,
-                                D3D9TextureStageCacheIndex(stage, type), value, [&] {
-        return Host<IDirect3DDevice9>(Arg(c, 0))->SetTextureStageState(stage, D3DTEXTURESTAGESTATETYPE(type), value);
-    });
-    Return(c, uint32_t(hr), 4);
-}
-
-M(IDirect3DDevice9, BeginStateBlock) {
-    InvalidateD3D9States(Arg(c, 0));
-    Return(c, uint32_t(Host<IDirect3DDevice9>(Arg(c, 0))->BeginStateBlock()), 1);
-}
-
-M(IDirect3DDevice9, EndStateBlock) {
-    InvalidateD3D9States(Arg(c, 0));
-    IDirect3DStateBlock9* out = nullptr;
-    HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->EndStateBlock(Arg(c, 1) ? &out : nullptr);
-    if (Arg(c, 1)) W32(Arg(c, 1), Wrap(out));
-    Return(c, uint32_t(hr), 2);
-}
-
 M(IDirect3DStateBlock9, Apply) {
-    InvalidateD3D9States();  // a state block has no owning-device pointer in its guest ABI; invalidate all devices
+    D3D9StateBlockApplied();  // only the loading-frame classifier becomes conservative; DXVK state stays authoritative
     Return(c, uint32_t(Host<IDirect3DStateBlock9>(Arg(c, 0))->Apply()), 1);
 }
 
@@ -879,6 +894,7 @@ M(IDirect3DDevice9, Present) {
     ++g_present_count;
     if (!g_graves.empty()) DrainGraves(false);
     auto* dev = Host<IDirect3DDevice9>(Arg(c, 0));
+    MaskFrontendPillarboxes(dev);
     MaybeScreenshot(dev);
     HRESULT hr =
         GuardedPresent([&] { return dev->Present(Ptr<RECT>(Arg(c, 1)), Ptr<RECT>(Arg(c, 2)), nullptr, nullptr); });
@@ -887,37 +903,26 @@ M(IDirect3DDevice9, Present) {
 // Clamp expensive filtering at the bridge as well as in DXVK. At 1x, anisotropic filtering is exactly linear
 // filtering; using LINEAR also avoids DXVK enabling a sampler's anisotropy feature with maxAnisotropy = 1.
 int MaxAnisotropy() {
+    static const int value = [] {
 #ifdef __ANDROID__
-    static const int value = std::clamp(SettingInt("max_anisotropy", 1), 1, 16);
+        const int configured = std::clamp(SettingInt("max_anisotropy", 1), 1, 16);
 #else
-    static const int value = std::clamp(SettingInt("max_anisotropy", 16), 1, 16);
+        const int configured = std::clamp(SettingInt("max_anisotropy", 16), 1, 16);
 #endif
+        Log("samplers: effective DXVK forwarding maximum %dx%s", configured,
+            configured == 1 ? "; MIN/MAG anisotropic -> LINEAR" : "");
+        return configured;
+    }();
     return value;
 }
 
-// The first 200000 calls are tallied once to log the filtering the engine asks for (before the configured clamp).
 M(IDirect3DDevice9, SetSamplerState) {
-    static std::atomic<uint32_t> calls{0};
-    static std::atomic<uint32_t> aniso[17], minf[4], mipf[4];
-    const DWORD type = Arg(c, 2), requested = Arg(c, 3);
-    const DWORD value = D3D9EffectiveSamplerValue(type, requested, MaxAnisotropy());
-    if (uint32_t n = calls.fetch_add(1); n < 200000) {
-        if (type == D3DSAMP_MAXANISOTROPY) ++aniso[requested > 16 ? 16 : requested];
-        if (type == D3DSAMP_MINFILTER) ++minf[requested & 3];
-        if (type == D3DSAMP_MIPFILTER) ++mipf[requested & 3];
-        if (n == 199999) {
-            std::string a;
-            for (int i = 0; i <= 16; ++i)
-                if (aniso[i]) a += " " + std::to_string(i) + "x:" + std::to_string(aniso[i].load());
-            Log("samplers: max anisotropy%s | min filter none/point/linear/aniso %u/%u/%u/%u | mip %u/%u/%u/%u",
-                a.c_str(), minf[0].load(), minf[1].load(), minf[2].load(), minf[3].load(), mipf[0].load(),
-                mipf[1].load(), mipf[2].load(), mipf[3].load());
-        }
-    }
-    HRESULT hr = SetCachedState(Arg(c, 0), D3D9StateCache::Kind::Sampler,
-                                D3D9SamplerCacheIndex(Arg(c, 1), type), value, [&] {
-        return Host<IDirect3DDevice9>(Arg(c, 0))->SetSamplerState(Arg(c, 1), D3DSAMPLERSTATETYPE(type), value);
-    });
+    const DWORD stage = Arg(c, 1), type = Arg(c, 2), requested = Arg(c, 3);
+    // This is the effective value forwarded to DXVK, not a pre-clamp request statistic. No cache or atomic counter
+    // sits in the hot path; Reset and StateBlock Apply therefore cannot leave stale shadow state behind.
+    const DWORD effective = D3D9EffectiveSamplerValue(type, requested, MaxAnisotropy());
+    HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->SetSamplerState(
+        stage, D3DSAMPLERSTATETYPE(type), effective);
     Return(c, uint32_t(hr), 4);
 }
 // The engine's worker threads poll this before every buffer lock; DXVK answers D3D_OK for a windowed device but

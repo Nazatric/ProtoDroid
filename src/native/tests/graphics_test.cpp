@@ -1,6 +1,7 @@
-// Host UBSAN tests for the production DXT decoder and the state cache used by the D3D9 bridge.
+// Host UBSAN tests for production DXT decoding, effective sampler values, frontend geometry, and the GFx float ABI.
 #include "d3d9_dxt.h"
 #include "d3d9_state.h"
+#include "minimap_logic.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -141,29 +142,42 @@ void TestSamplerTransform() {
     Check(D3D9EffectiveSamplerValue(10, 2, 8) == 2, "lower anisotropy request was raised");
 }
 
-void TestStateCache() {
-    D3D9StateCache cache;
-    using Kind = D3D9StateCache::Kind;
-    Check(!cache.Equal(Kind::Render, 7, 1), "empty render cache hit");
-    cache.Store(Kind::Render, 7, 1);
-    Check(cache.Equal(Kind::Render, 7, 1), "stored render state missed");
-    Check(!cache.Equal(Kind::Render, 7, 2), "changed render state was suppressed");
-    Check(!cache.Equal(Kind::Render, 8, 1), "render states alias");
+void TestPillarboxes() {
+    Check(D3D9DepthDrawMayBeWorld(1, 1), "depth-tested world draw was not detected");
+    Check(D3D9DepthDrawMayBeWorld(-1, -1), "unknown StateBlock depth was not conservative");
+    Check(!D3D9DepthDrawMayBeWorld(0, 1) && !D3D9DepthDrawMayBeWorld(1, 0),
+          "2D draw was misclassified as world geometry");
+    Check(D3D9FrontendMaskTiming(true, 0), "active Bink did not mask immediately");
+    Check(!D3D9FrontendMaskTiming(false, 2), "frontend grace period was shortened");
+    Check(D3D9FrontendMaskTiming(false, 3), "non-world frontend never became eligible");
 
-    const uint32_t sampler = D3D9SamplerCacheIndex(2, 10);
-    cache.Store(Kind::Sampler, sampler, 4);
-    Check(cache.Equal(Kind::Sampler, sampler, 4), "stored sampler state missed");
-    const uint32_t stage = D3D9TextureStageCacheIndex(3, 26);
-    cache.Store(Kind::TextureStage, stage, 2);
-    Check(cache.Equal(Kind::TextureStage, stage, 2), "stored texture-stage state missed");
-    Check(!cache.Equal(Kind::TextureStage, stage + 1, 2), "texture-stage states alias");
+    D3D9Pillarboxes p {};
+    Check(!D3D9WidePillarboxes(1280, 720, p), "16:9 must not be masked");
+    Check(!D3D9WidePillarboxes(1280, 800, p), "narrow aspects must not be masked");
+    Check(!D3D9WidePillarboxes(0, 720, p), "empty backbuffer was accepted");
+    Check(D3D9WidePillarboxes(1600, 720, p), "20:9 pillarboxes missing");
+    Check(p.left == 160 && p.right == 1440 && p.content == 1280, "1600x720 pillarbox rectangles changed");
+    Check(D3D9WidePillarboxes(2400, 1080, p), "wide 1080p pillarboxes missing");
+    Check(p.left == 240 && p.right == 2160 && p.content == 1920, "2400x1080 pillarbox rectangles changed");
+    Check(D3D9WidePillarboxes(2712, 1220, p), "POCO screen pillarboxes missing");
+    Check(p.left == 272 && p.right == 2440 && p.content == 2168, "integer pillarbox coverage is not deterministic");
+}
 
-    cache.Store(Kind::Sampler, D3D9SamplerCacheIndex(16, 0), 1);
-    Check(!cache.Equal(Kind::Sampler, D3D9SamplerCacheIndex(16, 0), 1), "invalid sampler index was cached");
-    cache.Invalidate();
-    Check(!cache.Equal(Kind::Render, 7, 1) && !cache.Equal(Kind::Sampler, sampler, 4) &&
-              !cache.Equal(Kind::TextureStage, stage, 2),
-          "Reset/StateBlock invalidation left a cached state valid");
+void TestMinimapFloatABI() {
+    float value = 0;
+    const uint32_t x = MinimapEncodeFloat(50.0f), y = MinimapEncodeFloat(-400.0f);
+    Check(MinimapDecodeFloat(4, x, value) && value == 50.0f, "GFx x payload is not a 32-bit float");
+    Check(MinimapDecodeFloat(4, y, value) && value == -400.0f, "GFx y payload is not a 32-bit float");
+    Check(!MinimapDecodeFloat(3, x, value), "non-numeric GFx type was accepted");
+    Check(!MinimapDecodeFloat(4, 0x7fc00000u, value), "NaN GFx coordinate was accepted");
+    Check(MinimapDecodeFloat(4, MinimapEncodeFloat(1.0e30f), value) && !MinimapCoordinateValid(value),
+          "unbounded GFx coordinate was accepted");
+    Check(MinimapCoordinateNear(50.0f, 50.005f), "float readback tolerance is too strict");
+    Check(!MinimapCoordinateNear(50.0f, 50.02f), "incorrect GFx readback was accepted");
+    // The reserved high word no longer participates: even a garbage high half cannot turn x=50 into a huge double.
+    const uint64_t old_bad_double = (uint64_t(0x7e589421u) << 32) | x;
+    Check(MinimapDecodeFloat(4, uint32_t(old_bad_double), value) && value == 50.0f,
+          "reserved GFx high payload contaminated the float");
 }
 
 }  // namespace
@@ -172,8 +186,9 @@ int main() {
     try {
         TestDxt();
         TestSamplerTransform();
-        TestStateCache();
-        std::puts("graphics tests passed (DXT1/2/3/4/5, BGRA/A1R5G5B5, anisotropy, state invalidation)");
+        TestPillarboxes();
+        TestMinimapFloatABI();
+        std::puts("graphics tests passed (DXT1/2/3/4/5, BGRA/A1R5G5B5, effective anisotropy, pillarboxes, GFx floats)");
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "graphics test failed: %s\n", e.what());

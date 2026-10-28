@@ -109,21 +109,17 @@ static void h_IDirect3DDevice9_LightEnable(Ctx* c) { auto r = Host<IDirect3DDevi
 static void h_IDirect3DDevice9_GetLightEnable(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->GetLightEnable((DWORD)Arg(c, 1), reinterpret_cast<WINBOOL*>(Ptr<void>(Arg(c, 2))));  Return(c, (uint32_t)r, 3); }
 static void h_IDirect3DDevice9_SetClipPlane(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->SetClipPlane((DWORD)Arg(c, 1), reinterpret_cast<const float *>(Ptr<void>(Arg(c, 2))));  Return(c, (uint32_t)r, 3); }
 static void h_IDirect3DDevice9_GetClipPlane(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->GetClipPlane((DWORD)Arg(c, 1), reinterpret_cast<float*>(Ptr<void>(Arg(c, 2))));  Return(c, (uint32_t)r, 3); }
-void Manual_IDirect3DDevice9_SetRenderState(Ctx* c);
-static void h_IDirect3DDevice9_SetRenderState(Ctx* c) { Manual_IDirect3DDevice9_SetRenderState(c); }
+static void h_IDirect3DDevice9_SetRenderState(Ctx* c) { D3D9TrackRenderState((DWORD)Arg(c, 1), (DWORD)Arg(c, 2));  auto r = Host<IDirect3DDevice9>(Arg(c, 0))->SetRenderState((D3DRENDERSTATETYPE)Arg(c, 1), (DWORD)Arg(c, 2));  Return(c, (uint32_t)r, 3); }
 static void h_IDirect3DDevice9_GetRenderState(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->GetRenderState((D3DRENDERSTATETYPE)Arg(c, 1), reinterpret_cast<DWORD*>(Ptr<void>(Arg(c, 2))));  Return(c, (uint32_t)r, 3); }
 static void h_IDirect3DDevice9_CreateStateBlock(Ctx* c) { IDirect3DStateBlock9* out2 = nullptr; auto r = Host<IDirect3DDevice9>(Arg(c, 0))->CreateStateBlock((D3DSTATEBLOCKTYPE)Arg(c, 1), Arg(c, 2) ? &out2 : nullptr); if (Arg(c, 2)) W32(Arg(c, 2), Wrap(out2)); Return(c, (uint32_t)r, 3); }
-void Manual_IDirect3DDevice9_BeginStateBlock(Ctx* c);
-static void h_IDirect3DDevice9_BeginStateBlock(Ctx* c) { Manual_IDirect3DDevice9_BeginStateBlock(c); }
-void Manual_IDirect3DDevice9_EndStateBlock(Ctx* c);
-static void h_IDirect3DDevice9_EndStateBlock(Ctx* c) { Manual_IDirect3DDevice9_EndStateBlock(c); }
+static void h_IDirect3DDevice9_BeginStateBlock(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->BeginStateBlock();  Return(c, (uint32_t)r, 1); }
+static void h_IDirect3DDevice9_EndStateBlock(Ctx* c) { IDirect3DStateBlock9* out1 = nullptr; auto r = Host<IDirect3DDevice9>(Arg(c, 0))->EndStateBlock(Arg(c, 1) ? &out1 : nullptr); if (Arg(c, 1)) W32(Arg(c, 1), Wrap(out1)); Return(c, (uint32_t)r, 2); }
 static void h_IDirect3DDevice9_SetClipStatus(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->SetClipStatus(reinterpret_cast<const D3DCLIPSTATUS9 *>(Ptr<void>(Arg(c, 1))));  Return(c, (uint32_t)r, 2); }
 static void h_IDirect3DDevice9_GetClipStatus(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->GetClipStatus(reinterpret_cast<D3DCLIPSTATUS9*>(Ptr<void>(Arg(c, 1))));  Return(c, (uint32_t)r, 2); }
 static void h_IDirect3DDevice9_GetTexture(Ctx* c) { IDirect3DBaseTexture9* out2 = nullptr; auto r = Host<IDirect3DDevice9>(Arg(c, 0))->GetTexture((DWORD)Arg(c, 1), Arg(c, 2) ? &out2 : nullptr); if (Arg(c, 2)) W32(Arg(c, 2), Wrap(out2)); Return(c, (uint32_t)r, 3); }
 static void h_IDirect3DDevice9_SetTexture(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->SetTexture((DWORD)Arg(c, 1), Unwrap<IDirect3DBaseTexture9>(Arg(c, 2)));  Return(c, (uint32_t)r, 3); }
 static void h_IDirect3DDevice9_GetTextureStageState(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->GetTextureStageState((DWORD)Arg(c, 1), (D3DTEXTURESTAGESTATETYPE)Arg(c, 2), reinterpret_cast<DWORD*>(Ptr<void>(Arg(c, 3))));  Return(c, (uint32_t)r, 4); }
-void Manual_IDirect3DDevice9_SetTextureStageState(Ctx* c);
-static void h_IDirect3DDevice9_SetTextureStageState(Ctx* c) { Manual_IDirect3DDevice9_SetTextureStageState(c); }
+static void h_IDirect3DDevice9_SetTextureStageState(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->SetTextureStageState((DWORD)Arg(c, 1), (D3DTEXTURESTAGESTATETYPE)Arg(c, 2), (DWORD)Arg(c, 3));  Return(c, (uint32_t)r, 4); }
 static void h_IDirect3DDevice9_GetSamplerState(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->GetSamplerState((DWORD)Arg(c, 1), (D3DSAMPLERSTATETYPE)Arg(c, 2), reinterpret_cast<DWORD*>(Ptr<void>(Arg(c, 3))));  Return(c, (uint32_t)r, 4); }
 void Manual_IDirect3DDevice9_SetSamplerState(Ctx* c);
 static void h_IDirect3DDevice9_SetSamplerState(Ctx* c) { Manual_IDirect3DDevice9_SetSamplerState(c); }
@@ -138,10 +134,10 @@ static void h_IDirect3DDevice9_SetSoftwareVertexProcessing(Ctx* c) { auto r = Ho
 static void h_IDirect3DDevice9_GetSoftwareVertexProcessing(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->GetSoftwareVertexProcessing();  Return(c, (uint32_t)r, 1); }
 static void h_IDirect3DDevice9_SetNPatchMode(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->SetNPatchMode(ArgF(c, 1));  Return(c, (uint32_t)r, 2); }
 static void h_IDirect3DDevice9_GetNPatchMode(Ctx* c) { float r = Host<IDirect3DDevice9>(Arg(c, 0))->GetNPatchMode();  ReturnFStd(c, r, 1); }
-static void h_IDirect3DDevice9_DrawPrimitive(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->DrawPrimitive((D3DPRIMITIVETYPE)Arg(c, 1), (UINT)Arg(c, 2), (UINT)Arg(c, 3));  Return(c, (uint32_t)r, 4); }
-static void h_IDirect3DDevice9_DrawIndexedPrimitive(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->DrawIndexedPrimitive((D3DPRIMITIVETYPE)Arg(c, 1), (INT)Arg(c, 2), (UINT)Arg(c, 3), (UINT)Arg(c, 4), (UINT)Arg(c, 5), (UINT)Arg(c, 6));  Return(c, (uint32_t)r, 7); }
-static void h_IDirect3DDevice9_DrawPrimitiveUP(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->DrawPrimitiveUP((D3DPRIMITIVETYPE)Arg(c, 1), (UINT)Arg(c, 2), Ptr<void>(Arg(c, 3)), (UINT)Arg(c, 4));  Return(c, (uint32_t)r, 5); }
-static void h_IDirect3DDevice9_DrawIndexedPrimitiveUP(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->DrawIndexedPrimitiveUP((D3DPRIMITIVETYPE)Arg(c, 1), (UINT)Arg(c, 2), (UINT)Arg(c, 3), (UINT)Arg(c, 4), Ptr<void>(Arg(c, 5)), (D3DFORMAT)Arg(c, 6), Ptr<void>(Arg(c, 7)), (UINT)Arg(c, 8));  Return(c, (uint32_t)r, 9); }
+static void h_IDirect3DDevice9_DrawPrimitive(Ctx* c) { D3D9TrackDraw();  auto r = Host<IDirect3DDevice9>(Arg(c, 0))->DrawPrimitive((D3DPRIMITIVETYPE)Arg(c, 1), (UINT)Arg(c, 2), (UINT)Arg(c, 3));  Return(c, (uint32_t)r, 4); }
+static void h_IDirect3DDevice9_DrawIndexedPrimitive(Ctx* c) { D3D9TrackDraw();  auto r = Host<IDirect3DDevice9>(Arg(c, 0))->DrawIndexedPrimitive((D3DPRIMITIVETYPE)Arg(c, 1), (INT)Arg(c, 2), (UINT)Arg(c, 3), (UINT)Arg(c, 4), (UINT)Arg(c, 5), (UINT)Arg(c, 6));  Return(c, (uint32_t)r, 7); }
+static void h_IDirect3DDevice9_DrawPrimitiveUP(Ctx* c) { D3D9TrackDraw();  auto r = Host<IDirect3DDevice9>(Arg(c, 0))->DrawPrimitiveUP((D3DPRIMITIVETYPE)Arg(c, 1), (UINT)Arg(c, 2), Ptr<void>(Arg(c, 3)), (UINT)Arg(c, 4));  Return(c, (uint32_t)r, 5); }
+static void h_IDirect3DDevice9_DrawIndexedPrimitiveUP(Ctx* c) { D3D9TrackDraw();  auto r = Host<IDirect3DDevice9>(Arg(c, 0))->DrawIndexedPrimitiveUP((D3DPRIMITIVETYPE)Arg(c, 1), (UINT)Arg(c, 2), (UINT)Arg(c, 3), (UINT)Arg(c, 4), Ptr<void>(Arg(c, 5)), (D3DFORMAT)Arg(c, 6), Ptr<void>(Arg(c, 7)), (UINT)Arg(c, 8));  Return(c, (uint32_t)r, 9); }
 static void h_IDirect3DDevice9_ProcessVertices(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->ProcessVertices((UINT)Arg(c, 1), (UINT)Arg(c, 2), (UINT)Arg(c, 3), Unwrap<IDirect3DVertexBuffer9>(Arg(c, 4)), Unwrap<IDirect3DVertexDeclaration9>(Arg(c, 5)), (DWORD)Arg(c, 6));  Return(c, (uint32_t)r, 7); }
 static void h_IDirect3DDevice9_CreateVertexDeclaration(Ctx* c) { IDirect3DVertexDeclaration9* out2 = nullptr; auto r = Host<IDirect3DDevice9>(Arg(c, 0))->CreateVertexDeclaration(reinterpret_cast<const D3DVERTEXELEMENT9 *>(Ptr<void>(Arg(c, 1))), Arg(c, 2) ? &out2 : nullptr); if (Arg(c, 2)) W32(Arg(c, 2), Wrap(out2)); Return(c, (uint32_t)r, 3); }
 static void h_IDirect3DDevice9_SetVertexDeclaration(Ctx* c) { auto r = Host<IDirect3DDevice9>(Arg(c, 0))->SetVertexDeclaration(Unwrap<IDirect3DVertexDeclaration9>(Arg(c, 1)));  Return(c, (uint32_t)r, 2); }
