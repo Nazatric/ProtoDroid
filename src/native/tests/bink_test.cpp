@@ -17,6 +17,7 @@
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -154,7 +155,17 @@ uint32_t OpenName(const std::string& name, uint32_t flags = 0) {
 }
 uint32_t OpenRaw(uint32_t address, uint32_t flags) { return Call("BinkOpen", 2, {address, flags}); }
 void Close(uint32_t h) { if (h) Call("BinkClose", 1, {h}); }
-void Decode(uint32_t h) { Check(Call("BinkDoFrame", 1, {h}) == 0, "BinkDoFrame failed"); }
+void Decode(uint32_t h) {
+    // A budgeted call may legitimately defer. Retry the same requested frame; never confuse deferral with EOF or
+    // advance past it before its registered/CPU-copy image is complete.
+    for (unsigned attempt = 0; attempt < 128; ++attempt) {
+        Check(Call("BinkDoFrame", 1, {h}) == 0, "BinkDoFrame failed");
+        auto* p = Ptr<Public>(h);
+        if (p->last_frame_num == p->frame_num) return;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    Check(false, "BinkDoFrame made no progress after repeated deferred calls");
+}
 void Next(uint32_t h) { Call("BinkNextFrame", 1, {h}); }
 
 std::vector<uint8_t> ReadBytes(const std::filesystem::path& path) {
@@ -313,13 +324,15 @@ void CheckCustomIO(const std::vector<uint8_t>& bytes) {
     constexpr uint32_t kGetSize = 0x91000300, kSetInfo = 0x91000400, kIdle = 0x91000500;
     constexpr uint32_t kClose = 0x91000600, kBackground = 0x91000700;
     int opens = 0, header_reads = 0, frame_reads = 0, idles = 0, closes = 0, background = 0;
-    bool info_set = false;
+    bool info_set = false, slow_reads = false;
     uint32_t expected_io = 0;
 
     auto read = [&](const std::vector<uint32_t>& a, bool frame) -> uint32_t {
         Check(a.size() == (frame ? 5u : 4u), "custom read callback argument count");
         uint32_t io = a[0], offset = a[frame ? 2 : 1], dest = a[frame ? 3 : 2], size = a[frame ? 4 : 3];
         Check(io == expected_io && (!frame || info_set), "custom read arrived before SetInfo");
+        Check(frame || size <= 16 * 1024, "custom AVIO read exceeded the synchronous guest path");
+        if (slow_reads && !frame) std::this_thread::sleep_for(std::chrono::milliseconds(20));
         Check(offset <= bytes.size(), "custom read offset exceeds fixture");
         uint32_t count = static_cast<uint32_t>(std::min<size_t>(size, bytes.size() - offset));
         memcpy(Ptr<void>(dest), bytes.data() + offset, count);
@@ -335,7 +348,14 @@ void CheckCustomIO(const std::vector<uint8_t>& bytes) {
         return 1;
     };
     g_test_guest_functions[kRead] = [&](const std::vector<uint32_t>& a) { return read(a, false); };
-    g_test_guest_functions[kReadFrame] = [&](const std::vector<uint32_t>& a) { return read(a, true); };
+    g_test_guest_functions[kReadFrame] = [&](const std::vector<uint32_t>& a) {
+        // Reproduce the device contract: this entry point is stateful and must not be used for generic AVIO. Returning
+        // a read error makes any regression fail the decode instead of silently passing with synthetic frame data.
+        ++frame_reads;
+        Check(a.size() == 5 && a[0] == expected_io, "unexpected custom ReadFrame invocation");
+        W32(expected_io + 0x20, 1);
+        return 0;
+    };
     g_test_guest_functions[kGetSize] = [&](const std::vector<uint32_t>& a) {
         Check(a.size() == 2 && a[0] == expected_io, "GetBufferSize arguments");
         return (a[1] + 0x3fffu) & ~0x3fffu;
@@ -359,14 +379,31 @@ void CheckCustomIO(const std::vector<uint8_t>& bytes) {
     Call("BinkSetIO", 1, {kOpen});
     uint32_t h = OpenName("movies\\intro.bik");
     Check(h != 0, "custom-I/O BinkOpen failed"); CheckPublic(h);
+    Call("BinkGoto", 3, {h, 100, 0});  // force a real decode backlog, not just data already buffered during open
+    auto* public_movie = Ptr<Public>(h);
+    public_movie->last_frame_num = 77;  // sentinels: a deferred call must retain the last complete presentation
+    public_movie->frame_size = 123;
+    public_movie->num_rects = 1;
+    slow_reads = true;
+    auto before = std::chrono::steady_clock::now();
+    Check(Call("BinkDoFrame", 1, {h}) == 0, "slow custom read was treated as a fatal frame error");
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - before).count();
+    Check(elapsed < 250, "slow custom read monopolized BinkDoFrame");
+    slow_reads = false;
+    uint32_t summary_address = HeapAlloc(sizeof(Summary));
+    Call("BinkGetSummary", 2, {h, summary_address});
+    Check(Ptr<Summary>(summary_address)->skipped_frames > 0, "slow-read fixture did not exercise deferred decoding");
+    Check(public_movie->last_frame_num == 77 && public_movie->frame_size == 123 && public_movie->num_rects == 1 &&
+              public_movie->read_error == 0,
+          "deferred decoding discarded the previous presentation");
     Decode(h); Next(h); Decode(h);
     Call("BinkControlBackgroundIO", 2, {h, 1});
     Call("BinkService", 1, {h});  // suspended: must not call guest Idle
     Call("BinkControlBackgroundIO", 2, {h, 0});
     Call("BinkService", 1, {h});
     Close(h);
-    Check(opens == 1 && closes == 1 && header_reads > 0 && frame_reads > 0 && info_set && idles == 1 && background == 2,
-          "custom BINKIO callback coverage/lifecycle");
+    Check(opens == 1 && closes == 1 && header_reads > 0 && frame_reads == 0 && info_set && idles == 1 && background == 2,
+          "custom BINKIO callback coverage/lifecycle; FFmpeg must not enter stateful ReadFrame");
     Call("BinkSetIO", 1, {0});
     for (uint32_t address : {kOpen, kRead, kReadFrame, kGetSize, kSetInfo, kIdle, kClose, kBackground})
         g_test_guest_functions.erase(address);

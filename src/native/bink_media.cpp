@@ -166,7 +166,6 @@ public:
         }
         opened_ = true;
         read_header_ = R32(io_);
-        read_frame_ = R32(io_ + 4);
         if (!read_header_) {
             if (error) *error = "guest BINKIO has no ReadHeader callback";
             return false;
@@ -220,7 +219,7 @@ public:
     int64_t Read(uint64_t offset, void* dst, size_t bytes) override {
         if (offset >= media_size_ || !bytes) return 0;
         bytes = static_cast<size_t>(std::min<uint64_t>(bytes, media_size_ - offset));
-        return ReadAbsolute(media_offset_ + offset, dst, bytes, true);
+        return ReadAbsolute(media_offset_ + offset, dst, bytes);
     }
     std::string Description() const override { return description_; }
     void Service() override {
@@ -237,18 +236,18 @@ public:
     }
 
 private:
-    int64_t ReadAbsolute(uint64_t offset, void* dst, size_t bytes, bool frame_read = false) {
+    int64_t ReadAbsolute(uint64_t offset, void* dst, size_t bytes) {
         auto* out = static_cast<uint8_t*>(dst);
         size_t total = 0;
         while (total < bytes) {
             if (offset + total > 0x7fffffffu) return total ? static_cast<int64_t>(total) : -1;
-            uint32_t chunk = static_cast<uint32_t>(std::min<size_t>(capacity_, bytes - total));
+            // The guest's 16 KiB ReadHeader path is a synchronous positioned read. ReadFrame is different: the
+            // game's implementation drives RAD's own background frame-cache state machine and can wait for a Bink
+            // service thread when used as a generic FFmpeg AVIO callback. FFmpeg reads are not frame-attributed, so
+            // keep them on ReadHeader and cap each request below the guest's internal 16 KiB buffering threshold.
+            uint32_t chunk = static_cast<uint32_t>(std::min<size_t>({capacity_, size_t(16 * 1024), bytes - total}));
             uint32_t file_offset = uint32_t(offset + total);
-            // FFmpeg AVIO reads are not attributed to a demux frame yet. The original offset is the authoritative
-            // positioning argument; frame zero denotes an unattributed read to callbacks that maintain frame caches.
-            uint32_t got = frame_read && read_frame_
-                               ? GuestCall(read_frame_, {io_, 0, file_offset, read_buffer_, chunk})
-                               : GuestCall(read_header_, {io_, file_offset, read_buffer_, chunk});
+            uint32_t got = GuestCall(read_header_, {io_, file_offset, read_buffer_, chunk});
             if (got > chunk) return total ? static_cast<int64_t>(total) : -1;
             if (!got) {
                 if (R32(io_ + 0x20) && !total) return -1;
@@ -262,7 +261,7 @@ private:
     }
 
     uint32_t open_ = 0, flags_ = 0, capacity_ = 0, simulate_ = 0;
-    uint32_t io_ = 0, read_buffer_ = 0, buffer_raw_ = 0, read_header_ = 0, read_frame_ = 0;
+    uint32_t io_ = 0, read_buffer_ = 0, buffer_raw_ = 0, read_header_ = 0;
     uint32_t media_offset_ = 0;
     uint64_t media_size_ = 0;
     bool opened_ = false;

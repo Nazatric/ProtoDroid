@@ -52,6 +52,9 @@ using namespace bink;
 constexpr size_t kMaxTracks = 32;
 constexpr uint32_t kGuestAllocation = 0x400;
 constexpr int kAudioRate = 48000;
+constexpr auto kDecodeBudget = std::chrono::milliseconds(8);
+constexpr auto kAudioBudget = std::chrono::milliseconds(4);
+constexpr auto kLockBudget = std::chrono::milliseconds(2);
 std::atomic<uint32_t> g_output_rate{static_cast<uint32_t>(kAudioRate)};
 uint32_t OutputRate() { return g_output_rate.load(std::memory_order_relaxed); }
 
@@ -170,7 +173,7 @@ int64_t SeekPacket(void* opaque, int64_t offset, int whence) {
 }
 
 struct Movie {
-    std::mutex mutex;
+    std::timed_mutex mutex;
     uint32_t guest = 0;
     std::unique_ptr<Source> source;
     AvioState* avio_state = nullptr;
@@ -199,6 +202,7 @@ struct Movie {
     uint64_t played_frames = 0, anchor_played = 0;
     uint32_t audio_rate = kAudioRate;
     uint64_t total_decodes = 0, skipped_frames = 0;
+    uint64_t deferred_calls = 0;
     uint64_t decode_us = 0, audio_decode_us = 0;
     Clock::time_point start = Clock::now();
     Clock::time_point anchor_mono = start;
@@ -276,7 +280,7 @@ void SDLCALL AudioCallback(void*, Uint8* stream, int length) {
         for (const auto& entry : g_movies) movies.push_back(entry.second);
     }
     for (const auto& movie : movies) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         if (movie->closed || movie->paused) continue;
         size_t consumed_max = 0;
         for (auto& track_ptr : movie->tracks) {
@@ -385,7 +389,7 @@ bool TrackSelected(const Track& track, size_t index) {
 }
 
 void ApplyTrackSelection(const std::shared_ptr<Movie>& movie) {
-    std::lock_guard<std::mutex> lock(movie->mutex);
+    std::lock_guard<std::timed_mutex> lock(movie->mutex);
     for (size_t i = 0; i < movie->tracks.size(); ++i) {
         Track& track = *movie->tracks[i];
         track.enabled = TrackSelected(track, i);
@@ -492,7 +496,9 @@ bool PumpOnePacket(Movie& movie) {
     if (movie.read_eof) return false;
     int r = av_read_frame(movie.format, movie.read_packet);
     if (r < 0) {
-        movie.read_eof = true;
+        // A temporarily unavailable source is not EOF: retain the demux/decoder state and let the caller's deadline
+        // turn repeated EAGAIN results into a deferred frame instead of spinning forever.
+        if (r != AVERROR(EAGAIN)) movie.read_eof = true;
         return false;
     }
     if (movie.read_packet->stream_index == movie.video_index) {
@@ -518,21 +524,24 @@ bool PumpOnePacket(Movie& movie) {
     return true;
 }
 
-bool DecodeOneVideo(Movie& movie) {
+// 1 = decoded a frame, 0 = fatal/EOF, -1 = the foreground work budget expired. FFmpeg state is deliberately kept
+// intact in the deferred case, so the next DoFrame resumes at the same packet/decoder boundary.
+int DecodeOneVideo(Movie& movie, Clock::time_point deadline) {
     for (unsigned guard = 0; guard < 4096; ++guard) {
+        if (Clock::now() >= deadline) return -1;
         int r = avcodec_receive_frame(movie.video_codec, movie.video_frame);
-        if (r == 0) return true;
-        if (r != AVERROR(EAGAIN) && r != AVERROR_EOF) return false;
-        if (r == AVERROR_EOF) return false;
+        if (r == 0) return 1;
+        if (r != AVERROR(EAGAIN) && r != AVERROR_EOF) return 0;
+        if (r == AVERROR_EOF) return 0;
         if (movie.video_packets.empty()) {
             if (movie.read_eof) {
-                if (movie.drain_sent) return false;
+                if (movie.drain_sent) return 0;
                 movie.drain_sent = true;
                 r = avcodec_send_packet(movie.video_codec, nullptr);
-                if (r < 0 && r != AVERROR_EOF) return false;
+                if (r < 0 && r != AVERROR_EOF) return 0;
                 continue;
             }
-            if (!PumpOnePacket(movie)) continue;
+            if (!PumpOnePacket(movie) && !movie.read_eof) std::this_thread::yield();
             continue;
         }
         AVPacket* p = movie.video_packets.front();
@@ -540,9 +549,9 @@ bool DecodeOneVideo(Movie& movie) {
         movie.current_packet_size = static_cast<uint32_t>(p->size);
         r = avcodec_send_packet(movie.video_codec, p);
         av_packet_free(&p);
-        if (r < 0) return false;
+        if (r < 0) return 0;
     }
-    return false;
+    return 0;
 }
 
 bool RewindLocked(Movie& movie, uint32_t target_frame) {
@@ -566,20 +575,19 @@ bool RewindLocked(Movie& movie, uint32_t target_frame) {
     return true;
 }
 
-bool EnsureAudioLead(Movie& movie) {
-    std::lock_guard<std::mutex> lock(movie.mutex);
-    if (!g_audio.device || movie.paused || !movie.sound_on || !movie.background_io) return true;
+void EnsureAudioLeadLocked(Movie& movie, Clock::time_point deadline) {
+    if (!g_audio.device || movie.paused || !movie.sound_on || !movie.background_io) return;
     size_t target = OutputRate() / 4;  // 250 ms: enough to absorb decode and Android audio scheduling jitter
     bool needs = false;
     for (auto& track : movie.tracks)
         if (track->enabled && track->ring.frames < target) needs = true;
-    for (unsigned steps = 0; needs && !movie.read_eof && steps < 512 && movie.video_packets.size() < 128; ++steps) {
-        PumpOnePacket(movie);
+    for (unsigned steps = 0; needs && !movie.read_eof && steps < 512 && movie.video_packets.size() < 128 &&
+                            Clock::now() < deadline; ++steps) {
+        if (!PumpOnePacket(movie) && !movie.read_eof) std::this_thread::yield();
         needs = false;
         for (auto& track : movie.tracks)
             if (track->enabled && track->ring.frames < target) needs = true;
     }
-    return true;
 }
 
 std::vector<uint32_t> ReadHeaderMaxSizes(Source& source) {
@@ -776,7 +784,7 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
 void DestroyMovie(const std::shared_ptr<Movie>& movie) {
     if (!movie) return;
     {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         movie->closed = true;
         FreeVideoPackets(*movie);
         if (movie->read_packet) av_packet_free(&movie->read_packet);
@@ -792,24 +800,29 @@ void DestroyMovie(const std::shared_ptr<Movie>& movie) {
     movie->guest = 0;
 }
 
-bool DecodeCurrentFrame(Movie& movie) {
+// 1 = presented, 0 = failed, -1 = deferred. A deferred frame does not clear last_frame_num, frame_size or rectangles:
+// the guest can unlock/represent the previous complete registered planes while decoding resumes on a later call.
+int DecodeCurrentFrame(Movie& movie, Clock::time_point deadline) {
     Public* p = movie.Pub();
-    if (!p || movie.closed || !movie.video_on) return false;
+    if (!p || movie.closed || !movie.video_on) return 0;
     if (movie.decoded_position > p->frame_num) {
-        if (!RewindLocked(movie, p->frame_num)) return false;
+        if (!RewindLocked(movie, p->frame_num)) return 0;
     }
     auto t0 = Clock::now();
     unsigned guard = 0;
     while (movie.decoded_position < p->frame_num && guard++ <= movie.frames + 1) {
-        if (!DecodeOneVideo(movie)) {
+        if (Clock::now() >= deadline) return -1;
+        int decoded = DecodeOneVideo(movie, deadline);
+        if (decoded < 0) return -1;
+        if (!decoded) {
             p->read_error = 1;
-            return false;
+            return 0;
         }
         ++movie.decoded_position;
         // Only the requested frame is exposed; skipped frames are deliberately not copied into the registered set.
         if (movie.decoded_position < p->frame_num) av_frame_unref(movie.video_frame);
     }
-    if (!movie.decoded_position || movie.decoded_position != p->frame_num) return false;
+    if (!movie.decoded_position || movie.decoded_position != p->frame_num) return 0;
     p->last_frame_num = p->frame_num;
     p->frame_size = movie.current_packet_size;
     p->snd_size = movie.pending_snd_size;
@@ -822,12 +835,12 @@ bool DecodeCurrentFrame(Movie& movie) {
         auto* buffers = Ptr<FrameBuffers>(movie.registered_buffers);
         if (!CopyRegisteredFrame(movie.video_frame, *p, *buffers)) {
             p->read_error = 1;
-            return false;
+            return 0;
         }
     }
     movie.total_decodes++;
     movie.decode_us += static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - t0).count());
-    return true;
+    return 1;
 }
 
 thread_local std::string tl_bink_error = "no error";
@@ -841,14 +854,35 @@ uint32_t ErrorAddress() {
     return tl_bink_error_addr;
 }
 
+bool RunDoFrame(Movie& movie) {
+    std::unique_lock<std::timed_mutex> lock(movie.mutex, std::defer_lock);
+    if (!lock.try_lock_for(kLockBudget)) return true;  // defer, never turn a busy decoder into a guest-thread deadlock
+    Clock::time_point deadline = Clock::now() + kDecodeBudget;
+    EnsureAudioLeadLocked(movie, std::min(deadline, Clock::now() + kAudioBudget));
+    int result = DecodeCurrentFrame(movie, deadline);
+    if (result < 0) {
+        Public* p = movie.Pub();
+        ++movie.deferred_calls;
+        ++movie.skipped_frames;
+        if (movie.deferred_calls == 1 || movie.deferred_calls % 128 == 0)
+            Log("[bink] deferred frame %u after %llu call(s); retaining the last complete planes\n",
+                p ? p->frame_num : 0, static_cast<unsigned long long>(movie.deferred_calls));
+        return true;
+    }
+    movie.deferred_calls = 0;
+    return result > 0;
+}
+
 void SleepUntilFrame(Movie& movie) {
     Clock::time_point due;
     {
-        std::lock_guard<std::mutex> lock(movie.mutex);
-        if (movie.paused || movie.closed) return;
+        std::unique_lock<std::timed_mutex> lock(movie.mutex, std::defer_lock);
+        if (!lock.try_lock_for(kLockBudget) || movie.paused || movie.closed) return;
         double seconds = movie.Pub()->frame_num * movie.FrameSeconds();
         double delay = seconds - movie.MediaSeconds(Clock::now());
-        due = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(std::clamp(delay, 0.0, 2.0)));
+        // Waiting for the next presentation deadline is intentional; waiting seconds for a malformed rate or a busy
+        // decoder is not. The worst case is one ordinary low-frame-rate movie interval, with no spin loop.
+        due = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(std::clamp(delay, 0.0, 0.1)));
     }
     if (due > Clock::now()) std::this_thread::sleep_until(due);
 }
@@ -887,18 +921,13 @@ B(BinkClose) {
 }
 B(BinkDoFrame) {
     auto movie = FindMovie(Arg(c, 0));
-    bool ok = false;
-    if (movie) {
-        EnsureAudioLead(*movie);
-        std::lock_guard<std::mutex> lock(movie->mutex);
-        ok = DecodeCurrentFrame(*movie);
-    }
+    bool ok = movie ? RunDoFrame(*movie) : false;
     Return(c, ok ? 0 : 1, 1);
 }
 B(BinkNextFrame) {
     auto movie = FindMovie(Arg(c, 0));
     if (movie) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         Public* p = movie->Pub();
         if (p->frame_num < movie->decoded_position) movie->skipped_frames += movie->decoded_position - p->frame_num;
         if (p->frame_num >= movie->frames) {
@@ -923,7 +952,7 @@ B(BinkPause) {
     auto movie = FindMovie(Arg(c, 0));
     int old = 0;
     if (movie) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         old = movie->paused ? 1 : 0;
         bool pause = Arg(c, 1) != 0;
         if (pause != movie->paused) {
@@ -945,7 +974,7 @@ B(BinkGetFrameBuffersInfo) {
     auto movie = FindMovie(Arg(c, 0));
     uint32_t out = Arg(c, 1);
     if (movie && out) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         auto* b = Ptr<FrameBuffers>(out);
         memset(b, 0, sizeof(*b));
         b->total_frames = 2;
@@ -959,7 +988,7 @@ B(BinkGetFrameBuffersInfo) {
 B(BinkRegisterFrameBuffers) {
     auto movie = FindMovie(Arg(c, 0));
     if (movie) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         uint32_t buffers = Arg(c, 1);
         movie->registered_buffers = buffers;
         movie->Pub()->frame_buffers = buffers;
@@ -1011,7 +1040,7 @@ B(BinkSoundOpen) { Return(c, g_audio.device ? 1u : 0u, 6); }
 B(BinkSetVolume) {
     auto movie = FindMovie(Arg(c, 0));
     if (movie) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         if (Track* t = FindTrack(movie, Arg(c, 1))) t->volume = std::clamp<int>(static_cast<int>(Arg(c, 2)), 0, 32768);
     }
     Return(c, 0, 3);
@@ -1019,7 +1048,7 @@ B(BinkSetVolume) {
 B(BinkSetPan) {
     auto movie = FindMovie(Arg(c, 0));
     if (movie) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         if (Track* t = FindTrack(movie, Arg(c, 1))) t->pan = std::clamp(static_cast<int>(Arg(c, 1 + 1)), -32768, 32768);
     }
     Return(c, 0, 3);
@@ -1027,7 +1056,7 @@ B(BinkSetPan) {
 B(BinkSetMixBins) {
     auto movie = FindMovie(Arg(c, 0));
     if (movie) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         if (Track* t = FindTrack(movie, Arg(c, 1))) {
             uint32_t address = Arg(c, 2), total = std::min(Arg(c, 3), 64u);
             t->mix_bins.clear();
@@ -1040,7 +1069,7 @@ B(BinkSetMixBins) {
 B(BinkSetMixBinVolumes) {
     auto movie = FindMovie(Arg(c, 0));
     if (movie) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         if (Track* t = FindTrack(movie, Arg(c, 1))) {
             uint32_t bins = Arg(c, 2), volumes = Arg(c, 3), total = std::min(Arg(c, 4), 64u);
             t->mix_bins.clear(); t->mix_volumes.clear();
@@ -1054,12 +1083,12 @@ B(BinkSetMixBinVolumes) {
 }
 B(BinkSetSoundOnOff) {
     auto movie = FindMovie(Arg(c, 0));
-    if (movie) { std::lock_guard<std::mutex> lock(movie->mutex); movie->sound_on = Arg(c, 1) != 0; }
+    if (movie) { std::lock_guard<std::timed_mutex> lock(movie->mutex); movie->sound_on = Arg(c, 1) != 0; }
     Return(c, 0, 2);
 }
 B(BinkSetVideoOnOff) {
     auto movie = FindMovie(Arg(c, 0));
-    if (movie) { std::lock_guard<std::mutex> lock(movie->mutex); movie->video_on = Arg(c, 1) != 0; }
+    if (movie) { std::lock_guard<std::timed_mutex> lock(movie->mutex); movie->video_on = Arg(c, 1) != 0; }
     Return(c, 0, 2);
 }
 
@@ -1069,7 +1098,7 @@ B(BinkOpenTrack) {
     auto movie_it = g_movies.find(Arg(c, 0));
     if (movie_it != g_movies.end()) {
         auto movie = movie_it->second;
-        std::lock_guard<std::mutex> movie_lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> movie_lock(movie->mutex);
         size_t index = 0;
         Track* track = TrackAtIndex(movie, Arg(c, 1), &index);
         if (track) {
@@ -1096,7 +1125,7 @@ B(BinkCloseTrack) {
     std::lock_guard<std::mutex> lock(g_registry_mutex);
     auto it = g_open_tracks.find(address);
     if (it != g_open_tracks.end()) {
-        std::lock_guard<std::mutex> movie_lock(it->second.first->mutex);
+        std::lock_guard<std::timed_mutex> movie_lock(it->second.first->mutex);
         if (it->second.second < it->second.first->tracks.size()) {
             Track& track = *it->second.first->tracks[it->second.second];
             track.legacy_open = false;
@@ -1111,20 +1140,20 @@ B(BinkCloseTrack) {
 B(BinkGetTrackID) {
     auto movie = FindMovie(Arg(c, 0));
     uint32_t id = 0;
-    if (movie) { std::lock_guard<std::mutex> lock(movie->mutex); if (Track* t = TrackAtIndex(movie, Arg(c, 1))) id = t->id; }
+    if (movie) { std::lock_guard<std::timed_mutex> lock(movie->mutex); if (Track* t = TrackAtIndex(movie, Arg(c, 1))) id = t->id; }
     Return(c, id, 2);
 }
 B(BinkGetTrackType) {
     auto movie = FindMovie(Arg(c, 0));
     bool valid = false;
-    if (movie) { std::lock_guard<std::mutex> lock(movie->mutex); valid = TrackAtIndex(movie, Arg(c, 1)) != nullptr; }
+    if (movie) { std::lock_guard<std::timed_mutex> lock(movie->mutex); valid = TrackAtIndex(movie, Arg(c, 1)) != nullptr; }
     Return(c, valid ? 0u : 0xffffffffu, 2);
 }
 B(BinkGetTrackMaxSize) {
     auto movie = FindMovie(Arg(c, 0));
     uint32_t size = 0;
     if (movie) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         if (Track* t = TrackAtIndex(movie, Arg(c, 1))) size = t->max_size;
     }
     Return(c, size, 2);
@@ -1135,7 +1164,7 @@ B(BinkGetTrackData) {
     auto it = g_open_tracks.find(address);
     if (it != g_open_tracks.end() && dest) {
         auto movie = it->second.first;
-        std::lock_guard<std::mutex> movie_lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> movie_lock(movie->mutex);
         if (it->second.second < movie->tracks.size()) {
             Track& track = *movie->tracks[it->second.second];
             auto* public_track = Ptr<TrackPublic>(address);
@@ -1156,7 +1185,7 @@ B(BinkCopyToBuffer) {
     auto movie = FindMovie(Arg(c, 0));
     bool ok = false;
     if (movie) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         if (movie->decoded_position == movie->Pub()->frame_num && movie->video_frame->data[0])
             ok = CopyToBuffer(movie->video_frame, *movie->Pub(), Arg(c, 1), static_cast<int32_t>(Arg(c, 2)),
                               Arg(c, 3), Arg(c, 4), Arg(c, 5), Arg(c, 6));
@@ -1167,7 +1196,7 @@ B(BinkCopyToBufferRect) {
     auto movie = FindMovie(Arg(c, 0));
     bool ok = false;
     if (movie) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         if (movie->decoded_position == movie->Pub()->frame_num && movie->video_frame->data[0])
             ok = CopyRectToBuffer(movie->video_frame, *movie->Pub(), Arg(c, 1), static_cast<int32_t>(Arg(c, 2)),
                     Arg(c, 3), Arg(c, 4), Arg(c, 5), Arg(c, 6), Arg(c, 7), Arg(c, 8), Arg(c, 9), Arg(c, 10));
@@ -1176,14 +1205,14 @@ B(BinkCopyToBufferRect) {
 }
 B(BinkGetRects) {
     auto movie = FindMovie(Arg(c, 0));
-    if (movie) { std::lock_guard<std::mutex> lock(movie->mutex); movie->Pub()->num_rects = 1; }
+    if (movie) { std::lock_guard<std::timed_mutex> lock(movie->mutex); movie->Pub()->num_rects = 1; }
     Return(c, movie ? 1u : 0u, 2);
 }
 
 B(BinkGoto) {
     auto movie = FindMovie(Arg(c, 0));
     if (movie) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         uint32_t frame = std::clamp(Arg(c, 1), 1u, movie->frames);
         if (RewindLocked(*movie, frame)) movie->Pub()->frame_num = frame;
     }
@@ -1197,8 +1226,9 @@ B(BinkShouldSkip) {
     auto movie = FindMovie(Arg(c, 0));
     bool skip = false;
     if (movie && !g_simulate) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
-        skip = !movie->paused && movie->MediaSeconds(Clock::now()) > movie->Pub()->frame_num * movie->FrameSeconds();
+        std::unique_lock<std::timed_mutex> lock(movie->mutex, std::defer_lock);
+        if (lock.try_lock_for(kLockBudget))
+            skip = !movie->paused && movie->MediaSeconds(Clock::now()) > movie->Pub()->frame_num * movie->FrameSeconds();
     }
     Return(c, skip ? 1u : 0u, 1);
 }
@@ -1207,7 +1237,7 @@ B(BinkGetRealtime) {
     auto movie = FindMovie(Arg(c, 0));
     uint32_t out = Arg(c, 1);
     if (movie && out) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         auto* r = Ptr<Realtime>(out); memset(r, 0, sizeof(*r));
         r->frame_num = movie->Pub()->frame_num;
         r->frame_rate = movie->Pub()->frame_rate; r->frame_rate_div = movie->Pub()->frame_rate_div;
@@ -1224,7 +1254,7 @@ B(BinkGetSummary) {
     auto movie = FindMovie(Arg(c, 0));
     uint32_t out = Arg(c, 1);
     if (movie && out) {
-        std::lock_guard<std::mutex> lock(movie->mutex);
+        std::lock_guard<std::timed_mutex> lock(movie->mutex);
         auto* s = Ptr<Summary>(out); memset(s, 0, sizeof(*s));
         s->width = movie->width; s->height = movie->height;
         s->total_time = static_cast<uint32_t>(movie->MediaSeconds(Clock::now()) * 1000.0);
@@ -1243,7 +1273,7 @@ B(BinkControlBackgroundIO) {
     auto movie = FindMovie(Arg(c, 0));
     uint32_t control = Arg(c, 1);
     if (movie) {
-        { std::lock_guard<std::mutex> lock(movie->mutex); movie->background_io = control != 1; }
+        { std::lock_guard<std::timed_mutex> lock(movie->mutex); movie->background_io = control != 1; }
         movie->source->ControlBackgroundIO(control);
     }
     Return(c, 0, 2);
@@ -1252,9 +1282,14 @@ B(BinkControlPlatformFeatures) { Return(c, 0, 2); }
 B(BinkService) {
     auto movie = FindMovie(Arg(c, 0));
     if (movie) {
-        EnsureAudioLead(*movie);
         bool service = false;
-        { std::lock_guard<std::mutex> lock(movie->mutex); service = movie->background_io; }
+        {
+            std::unique_lock<std::timed_mutex> lock(movie->mutex, std::defer_lock);
+            if (lock.try_lock_for(kLockBudget)) {
+                EnsureAudioLeadLocked(*movie, Clock::now() + kAudioBudget);
+                service = movie->background_io;
+            }
+        }
         if (service) movie->source->Service();
     }
     Return(c, 0, 1);
@@ -1272,11 +1307,10 @@ B(BinkGetPalette) {
 }
 
 B(BinkDoFrameAsync) {
-    // Async decoding is intentionally synchronous: it preserves ordering with guest-registered planes and avoids a
-    // second thread touching the guest window. The return value has the same success/deferred meaning as DoFrame.
+    // Keep the async ABI on the same bounded path. Plane publication remains on the calling guest thread, and the
+    // wait export therefore never has to wait on a native worker touching the guest window.
     auto movie = FindMovie(Arg(c, 0));
-    bool ok = false;
-    if (movie) { std::lock_guard<std::mutex> lock(movie->mutex); ok = DecodeCurrentFrame(*movie); }
+    bool ok = movie ? RunDoFrame(*movie) : false;
     Return(c, ok ? 0 : 1, 3);
 }
 B(BinkDoFrameAsyncWait) { Return(c, 0, 2); }
