@@ -156,12 +156,17 @@ uint32_t OpenName(const std::string& name, uint32_t flags = 0) {
 uint32_t OpenRaw(uint32_t address, uint32_t flags) { return Call("BinkOpen", 2, {address, flags}); }
 void Close(uint32_t h) { if (h) Call("BinkClose", 1, {h}); }
 void Decode(uint32_t h) {
-    // A budgeted call may legitimately defer. Retry the same requested frame; never confuse deferral with EOF or
-    // advance past it before its registered/CPU-copy image is complete.
+    // The real guest treats nonzero as a bounded NextFrame/DoFrame retry. This helper retries the same requested frame
+    // so registered and CPU-copy tests can wait for one exact image without advancing past it.
     for (unsigned attempt = 0; attempt < 128; ++attempt) {
-        Check(Call("BinkDoFrame", 1, {h}) == 0, "BinkDoFrame failed");
+        uint32_t result = Call("BinkDoFrame", 1, {h});
+        Check(result <= 1, "BinkDoFrame returned an invalid status");
         auto* p = Ptr<Public>(h);
-        if (p->last_frame_num == p->frame_num) return;
+        if (!result) {
+            Check(p->last_frame_num == p->frame_num, "successful BinkDoFrame did not publish its frame");
+            return;
+        }
+        Check(p->last_frame_num != p->frame_num, "fatal BinkDoFrame looked like a completed presentation");
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     Check(false, "BinkDoFrame made no progress after repeated deferred calls");
@@ -223,9 +228,7 @@ void CheckOpenDecodeClose(uint32_t h) {
     Check(h != 0, "BinkOpen returned null"); CheckPublic(h); Decode(h); Close(h);
 }
 
-void CheckRegisteredAndCopies() {
-    uint32_t h = OpenName("c:\\GaMe\\movies\\intro.bik");
-    Check(h != 0, "loose open failed"); CheckPublic(h);
+uint32_t RegisterTestFrameBuffers(uint32_t h) {
     uint32_t fb_address = HeapAlloc(sizeof(FrameBuffers));
     Call("BinkGetFrameBuffersInfo", 2, {h, fb_address});
     auto* fb = Ptr<FrameBuffers>(fb_address);
@@ -245,25 +248,60 @@ void CheckRegisteredAndCopies() {
         allocate_plane(set.alpha, fb->ya_width, fb->ya_height, true);
     }
     Call("BinkRegisterFrameBuffers", 2, {h, fb_address});
+    return fb_address;
+}
+
+void CheckNeutralPlanes(const FrameBuffers& fb) {
+    for (const auto& set : fb.frames) {
+        Check(*Ptr<uint8_t>(set.y.buffer) == 16 && *Ptr<uint8_t>(set.cr.buffer) == 128 &&
+                  *Ptr<uint8_t>(set.cb.buffer) == 128 && *Ptr<uint8_t>(set.alpha.buffer) == 255,
+              "neutral registered planes are not Y=16/Cb=Cr=128/A=255");
+    }
+}
+
+void CheckRegisteredAndCopies() {
+    uint32_t h = OpenName("c:\\GaMe\\movies\\intro.bik");
+    Check(h != 0, "loose open failed"); CheckPublic(h);
+    uint32_t fb_address = RegisterTestFrameBuffers(h);
+    auto* fb = Ptr<FrameBuffers>(fb_address);
+    CheckNeutralPlanes(*fb);
+    FrameBuffers invalid = *fb;
+    invalid.frame_num = 2;
+    Check(!CopyRegisteredFrame(nullptr, *Ptr<Public>(h), invalid), "invalid active plane-set index was accepted");
+    CheckNeutralPlanes(*fb);
     Decode(h);
     Check(fb->frame_num == 0 && Ptr<Public>(h)->last_frame_num == 1, "first registered frame decode");
     auto* p = Ptr<Public>(h);
     uint32_t yv_pitch = p->width, yv_size = yv_pitch * p->height + 2 * (yv_pitch / 2) * (p->height / 2);
     uint32_t yv = HeapAlloc(yv_size);
     Check(Call("BinkCopyToBuffer", 7, {h, yv, yv_pitch, p->height, 0, 0, kSurfaceYV12}) == 0, "YV12 copy export");
-    auto& set = fb->frames[0];
-    for (uint32_t row = 0; row < p->height; ++row) {
-        int32_t address = static_cast<int32_t>(set.y.buffer) + static_cast<int32_t>(row) * static_cast<int32_t>(set.y.pitch);
-        Check(memcmp(Ptr<void>(static_cast<uint32_t>(address)), Ptr<void>(yv + row * yv_pitch), p->width) == 0,
-              "registered Y plane differs from CPU YV12");
+    for (auto& set : fb->frames) {
+        for (uint32_t row = 0; row < p->height; ++row) {
+            int32_t address = static_cast<int32_t>(set.y.buffer) + static_cast<int32_t>(row) * static_cast<int32_t>(set.y.pitch);
+            Check(memcmp(Ptr<void>(static_cast<uint32_t>(address)), Ptr<void>(yv + row * yv_pitch), p->width) == 0,
+                  "registered Y plane differs from CPU YV12 in a non-active set");
+        }
+        for (uint32_t row = 0; row < p->height / 2; ++row) {
+            uint32_t cr_address = static_cast<uint32_t>(static_cast<int32_t>(set.cr.buffer) + row * static_cast<int32_t>(set.cr.pitch));
+            uint32_t cb_address = static_cast<uint32_t>(static_cast<int32_t>(set.cb.buffer) + row * static_cast<int32_t>(set.cb.pitch));
+            Check(memcmp(Ptr<void>(cr_address), Ptr<void>(yv + yv_pitch * p->height + row * (yv_pitch / 2)), p->width / 2) == 0,
+                  "registered Cr plane ordering/pitch");
+            Check(memcmp(Ptr<void>(cb_address), Ptr<void>(yv + yv_pitch * p->height + (p->height / 2) * (yv_pitch / 2) + row * (yv_pitch / 2)), p->width / 2) == 0,
+                  "registered Cb plane ordering/pitch");
+        }
     }
-    for (uint32_t row = 0; row < p->height / 2; ++row) {
-        uint32_t cr_address = static_cast<uint32_t>(static_cast<int32_t>(set.cr.buffer) + row * static_cast<int32_t>(set.cr.pitch));
-        uint32_t cb_address = static_cast<uint32_t>(static_cast<int32_t>(set.cb.buffer) + row * static_cast<int32_t>(set.cb.pitch));
-        Check(memcmp(Ptr<void>(cr_address), Ptr<void>(yv + yv_pitch * p->height + row * (yv_pitch / 2)), p->width / 2) == 0,
-              "registered Cr plane ordering/pitch");
-        Check(memcmp(Ptr<void>(cb_address), Ptr<void>(yv + yv_pitch * p->height + (p->height / 2) * (yv_pitch / 2) + row * (yv_pitch / 2)), p->width / 2) == 0,
-              "registered Cb plane ordering/pitch");
+    // Move a live plane without re-registering. DoFrame must re-read the guest structure, not cache its first pointer.
+    Plane& live_y = fb->frames[0].y;
+    live_y.buffer -= 16;
+    int32_t live_lowest = static_cast<int32_t>(live_y.buffer) +
+                          static_cast<int32_t>(p->height - 1) * static_cast<int32_t>(live_y.pitch);
+    memset(Ptr<void>(static_cast<uint32_t>(live_lowest)), 0, (p->width + 32) * p->height);
+    Check(Call("BinkDoFrame", 1, {h}) == 0, "live-pointer re-present failed");
+    for (uint32_t row = 0; row < p->height; ++row) {
+        uint32_t address = static_cast<uint32_t>(static_cast<int32_t>(live_y.buffer) +
+                                                row * static_cast<int32_t>(live_y.pitch));
+        Check(memcmp(Ptr<void>(address), Ptr<void>(yv + row * yv_pitch), p->width) == 0,
+              "DoFrame used a stale registered plane pointer");
     }
     uint32_t rgb_stride = p->width * 4 + 32, rgb_raw = HeapAlloc(rgb_stride * p->height + 64);
     uint32_t rgb_base = rgb_raw + 32;
@@ -340,7 +378,7 @@ void CheckCustomIO(const std::vector<uint8_t>& bytes) {
         return count;
     };
     g_test_guest_functions[kOpen] = [&](const std::vector<uint32_t>& a) {
-        Check(a.size() == 3 && !strcmp(Str(a[1]), "movies\\intro.bik"), "custom opener filename/arguments");
+        Check(a.size() == 3 && !strcmp(Str(a[1]), "movies\\synthetic.bik"), "custom opener filename/arguments");
         expected_io = a[0]; ++opens;
         W32(expected_io + 0x00, kRead); W32(expected_io + 0x04, kReadFrame);
         W32(expected_io + 0x08, kGetSize); W32(expected_io + 0x0c, kSetInfo);
@@ -377,8 +415,33 @@ void CheckCustomIO(const std::vector<uint8_t>& bytes) {
     };
 
     Call("BinkSetIO", 1, {kOpen});
-    uint32_t h = OpenName("movies\\intro.bik");
-    Check(h != 0, "custom-I/O BinkOpen failed"); CheckPublic(h);
+    CheckOpenDecodeClose(OpenName("movies\\intro.bik"));   // loose host fast path
+    CheckOpenDecodeClose(OpenName("video\\intro.bik"));    // uncompressed RCF-slice host fast path
+    Check(opens == 0 && header_reads == 0 && frame_reads == 0 && closes == 0,
+          "host-resolvable custom-I/O movies entered guest callbacks");
+
+    uint32_t h = OpenName("movies\\synthetic.bik");
+    Check(h != 0, "synthetic custom-I/O fallback BinkOpen failed"); CheckPublic(h);
+    uint32_t fb_address = RegisterTestFrameBuffers(h);
+    auto* fb = Ptr<FrameBuffers>(fb_address);
+    Call("BinkGoto", 3, {h, 1, 0});
+    slow_reads = true;
+    Check(Call("BinkDoFrame", 1, {h}) == 0 && Ptr<Public>(h)->last_frame_num == 1,
+          "frame 1 deferred instead of completing synchronously");
+    slow_reads = false;
+    auto snapshot = [&]() {
+        std::vector<std::vector<uint8_t>> samples;
+        for (auto& set : fb->frames) {
+            for (Plane* plane : {&set.y, &set.cr, &set.cb, &set.alpha}) {
+                uint8_t* at = Ptr<uint8_t>(plane->buffer);
+                samples.emplace_back(at, at + 16);
+            }
+        }
+        return samples;
+    };
+    auto retained = snapshot();
+    for (auto& set : fb->frames)
+        for (Plane* plane : {&set.y, &set.cr, &set.cb, &set.alpha}) memset(Ptr<void>(plane->buffer), 0, 16);
     Call("BinkGoto", 3, {h, 100, 0});  // force a real decode backlog, not just data already buffered during open
     auto* public_movie = Ptr<Public>(h);
     public_movie->last_frame_num = 77;  // sentinels: a deferred call must retain the last complete presentation
@@ -386,9 +449,10 @@ void CheckCustomIO(const std::vector<uint8_t>& bytes) {
     public_movie->num_rects = 1;
     slow_reads = true;
     auto before = std::chrono::steady_clock::now();
-    Check(Call("BinkDoFrame", 1, {h}) == 0, "slow custom read was treated as a fatal frame error");
+    Check(Call("BinkDoFrame", 1, {h}) == 1, "slow custom read did not return the guest's deferred status");
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - before).count();
     Check(elapsed < 250, "slow custom read monopolized BinkDoFrame");
+    Check(snapshot() == retained, "deferred decode did not restore retained Y/Cb/Cr/A into both live plane sets");
     slow_reads = false;
     uint32_t summary_address = HeapAlloc(sizeof(Summary));
     Call("BinkGetSummary", 2, {h, summary_address});
@@ -397,19 +461,19 @@ void CheckCustomIO(const std::vector<uint8_t>& bytes) {
               public_movie->read_error == 0,
           "deferred decoding discarded the previous presentation");
     Next(h);
-    Check(public_movie->frame_num == 100, "deferred NextFrame abandoned the retry frame");
+    Check(public_movie->frame_num == 101 && fb->frame_num == 1, "deferred NextFrame did not advance normally");
     Decode(h);
     Next(h);
-    Check(public_movie->frame_num == 101, "completed frame did not advance after a deferred retry");
+    Check(public_movie->frame_num == 102, "completed frame did not advance after a deferred retry");
     Decode(h);
     Call("BinkGoto", 3, {h, 200, 0});
     slow_reads = true;
     for (unsigned attempt = 0; attempt < 4; ++attempt) {
-        Check(Call("BinkDoFrame", 1, {h}) == 0, "persistent slow decode became fatal");
+        Check(Call("BinkDoFrame", 1, {h}) <= 1, "persistent slow decode returned an invalid status");
         Next(h);
     }
     slow_reads = false;
-    Check(public_movie->frame_num == 201, "deferred retries did not have a bounded skip-forward path");
+    Check(public_movie->frame_num == 204, "deferred retries did not have a bounded skip-forward path");
     Call("BinkControlBackgroundIO", 2, {h, 1});
     Call("BinkService", 1, {h});  // suspended: must not call guest Idle
     Call("BinkControlBackgroundIO", 2, {h, 0});

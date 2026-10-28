@@ -10,8 +10,9 @@ struct AVFrame;
 
 namespace native::bink {
 
-// Copies one decoded frame into the exact set selected by FrameBuffers::frame_num. Y, Cr, Cb and optional alpha are
-// deliberately ordered to match BINKFRAMEBUFFERS, not FFmpeg's numerical plane order.
+// Re-reads the live guest structure and copies one decoded frame into every registered set. This is required because
+// the guest can advance FrameNum without relocking the original textures. A null frame writes neutral Y=16, Cb=Cr=128,
+// alpha=255. Y, Cr, Cb and optional alpha are deliberately ordered to match BINKFRAMEBUFFERS, not FFmpeg plane order.
 bool CopyRegisteredFrame(const AVFrame* frame, const Public& pub, FrameBuffers& buffers);
 
 // CPU compatibility exports. Coordinates are unsigned in the Bink ABI; invalid/empty rectangles fail without writes.

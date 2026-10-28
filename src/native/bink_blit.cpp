@@ -144,24 +144,33 @@ uint8_t PaletteIndex(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 bool CopyRegisteredFrame(const AVFrame* frame, const Public& pub, FrameBuffers& buffers) {
-    if (!frame || buffers.frame_num >= 2 || !pub.width || !pub.height) return false;
-    unsigned index = buffers.frame_num;
-    if (index >= static_cast<unsigned>(buffers.total_frames)) return false;
-    const FramePlaneSet& p = buffers.frames[index];
+    if (buffers.total_frames < 1 || buffers.total_frames > 2 || buffers.frame_num >= 2 ||
+        buffers.frame_num >= static_cast<uint32_t>(buffers.total_frames) || !pub.width || !pub.height) return false;
     uint32_t cw = (pub.width + 1) / 2, ch = (pub.height + 1) / 2;
     if (buffers.crcb_width < cw || buffers.crcb_height < ch || buffers.ya_width < pub.width ||
         buffers.ya_height < pub.height) return false;
-    // Preflight every destination before the first memcpy. Prototype points at the final physical row and uses a
-    // negative pitch, so checking only buffer+pitch*height would accept an underflowing interval.
-    if (!PlaneSpan(p.y, pub.width, pub.height, true) || !PlaneSpan(p.cr, cw, ch, true) ||
-        !PlaneSpan(p.cb, cw, ch, true) || !PlaneSpan(p.alpha, pub.width, pub.height, false)) return false;
-    if (!frame->data[0] || !frame->data[1] || !frame->data[2]) return false;
-    if (!CopyPlane(frame->data[0], frame->linesize[0], p.y, pub.width, pub.height, 0, true) ||
-        !CopyPlane(frame->data[2], frame->linesize[2], p.cr, cw, ch, 0, true) ||
-        !CopyPlane(frame->data[1], frame->linesize[1], p.cb, cw, ch, 0, true)) return false;
-    if (p.alpha.buffer) {
-        const uint8_t* alpha = frame->data[3];
-        if (!CopyPlane(alpha, alpha ? frame->linesize[3] : 0, p.alpha, pub.width, pub.height, 255, false)) return false;
+    if (frame && (!frame->data[0] || !frame->data[1] || !frame->data[2])) return false;
+
+    // The guest can call NextFrame and change FrameNum while the originally selected textures are still locked. Copy
+    // every live set, not just the newest index, so UnlockRect always flushes this same retained/decoded presentation.
+    // Preflight all destinations before the first write: Prototype uses bottom-row pointers and negative pitches.
+    for (unsigned index = 0; index < static_cast<unsigned>(buffers.total_frames); ++index) {
+        const FramePlaneSet& p = buffers.frames[index];
+        if (!PlaneSpan(p.y, pub.width, pub.height, true) || !PlaneSpan(p.cr, cw, ch, true) ||
+            !PlaneSpan(p.cb, cw, ch, true) || !PlaneSpan(p.alpha, pub.width, pub.height, false)) return false;
+    }
+    for (unsigned index = 0; index < static_cast<unsigned>(buffers.total_frames); ++index) {
+        const FramePlaneSet& p = buffers.frames[index];
+        const uint8_t* y = frame ? frame->data[0] : nullptr;
+        const uint8_t* cb = frame ? frame->data[1] : nullptr;
+        const uint8_t* cr = frame ? frame->data[2] : nullptr;
+        const uint8_t* alpha = frame ? frame->data[3] : nullptr;
+        // A missing retained frame is a neutral black presentation, never zero chroma (which renders bright green).
+        if (!CopyPlane(y, frame ? frame->linesize[0] : 0, p.y, pub.width, pub.height, 16, true) ||
+            !CopyPlane(cr, frame ? frame->linesize[2] : 0, p.cr, cw, ch, 128, true) ||
+            !CopyPlane(cb, frame ? frame->linesize[1] : 0, p.cb, cw, ch, 128, true)) return false;
+        if (p.alpha.buffer && !CopyPlane(alpha, frame && alpha ? frame->linesize[3] : 0, p.alpha,
+                                         pub.width, pub.height, 255, false)) return false;
     }
     return true;
 }

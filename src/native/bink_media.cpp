@@ -74,7 +74,7 @@ bool PreadExact(int fd, void* dst, size_t bytes, uint64_t offset) {
     size_t done = 0;
     while (done < bytes) {
         if (offset + done > std::numeric_limits<off_t>::max()) return false;
-        ssize_t n = pread(fd, out + done, bytes - done, static_cast<off_t>(offset + done));
+        ssize_t n = pread64(fd, out + done, bytes - done, static_cast<off_t>(offset + done));
         if (n < 0 && errno == EINTR) continue;
         if (n <= 0) return false;
         done += static_cast<size_t>(n);
@@ -91,14 +91,16 @@ public:
     int64_t Read(uint64_t offset, void* dst, size_t bytes) override {
         if (offset >= size_ || !bytes) return 0;
         bytes = static_cast<size_t>(std::min<uint64_t>(bytes, size_ - offset));
-        if (base_ + offset > std::numeric_limits<off_t>::max()) return -1;
+        if (base_ + offset > uint64_t(std::numeric_limits<off_t>::max())) return -1;
         ssize_t n;
         do {
-            n = pread(fd_, dst, bytes, static_cast<off_t>(base_ + offset));
+            n = pread64(fd_, dst, bytes, static_cast<off_t>(base_ + offset));
         } while (n < 0 && errno == EINTR);
         return n;
     }
     std::string Description() const override { return description_; }
+    bool HostDirect() const override { return true; }
+    size_t PreferredAVIOBufferSize() const override { return 256 * 1024; }
 private:
     int fd_ = -1;
     uint64_t base_ = 0, size_ = 0;

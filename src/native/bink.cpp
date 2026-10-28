@@ -52,10 +52,9 @@ using namespace bink;
 constexpr size_t kMaxTracks = 32;
 constexpr uint32_t kGuestAllocation = 0x400;
 constexpr int kAudioRate = 48000;
-constexpr auto kDecodeBudget = std::chrono::milliseconds(8);
+constexpr auto kDecodeBudget = std::chrono::milliseconds(12);
 constexpr auto kAudioBudget = std::chrono::milliseconds(4);
 constexpr auto kLockBudget = std::chrono::milliseconds(2);
-constexpr uint64_t kMaxDeferredRetries = 3;
 std::atomic<uint32_t> g_output_rate{static_cast<uint32_t>(kAudioRate)};
 uint32_t OutputRate() { return g_output_rate.load(std::memory_order_relaxed); }
 
@@ -182,6 +181,7 @@ struct Movie {
     AVFormatContext* format = nullptr;
     AVCodecContext* video_codec = nullptr;
     AVFrame* video_frame = nullptr;
+    AVFrame* presentation_frame = nullptr;  // last complete requested frame, retained across later decode deferrals
     AVPacket* read_packet = nullptr;
     AVStream* video_stream = nullptr;
     int video_index = -1;
@@ -204,6 +204,7 @@ struct Movie {
     uint32_t audio_rate = kAudioRate;
     uint64_t total_decodes = 0, skipped_frames = 0;
     uint64_t deferred_calls = 0;
+    uint32_t plane_copy_logs = 0;
     uint64_t decode_us = 0, audio_decode_us = 0;
     Clock::time_point start = Clock::now();
     Clock::time_point anchor_mono = start;
@@ -653,9 +654,20 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
     if ((flags & kFromMemory) && (flags & kFileHandle)) return 0;
     std::string error;
     std::unique_ptr<Source> source;
-    if (flags & kFromMemory) source = OpenMemorySource(name, flags, &error);
-    else if ((flags & kFileHandle) || !g_custom_io_open) source = OpenFileSource(name, flags, &error);
-    else source = OpenCallbackSource(g_custom_io_open, name, flags, g_io_size, g_simulate, &error);
+    if (flags & kFromMemory) {
+        source = OpenMemorySource(name, flags, &error);
+    } else if ((flags & kFileHandle) || !g_custom_io_open) {
+        source = OpenFileSource(name, flags, &error);
+    } else {
+        // Resolve real loose/RCF media directly even when the game installs BINKIO. Generic FFmpeg reads must not
+        // make thousands of synchronous guest ReadHeader calls; only synthetic/unresolvable names need callbacks.
+        source = OpenFileSource(name, flags, &error);
+        if (!source) {
+            Log("[bink] host input unavailable for %s (%s); using guest BINKIO fallback\n", name ? name : "<null>",
+                error.c_str());
+            source = OpenCallbackSource(g_custom_io_open, name, flags, g_io_size, g_simulate, &error);
+        }
+    }
     if (!source) {
         Log("[bink] open failed for %s: %s\n", (flags & (kFromMemory | kFileHandle)) ? "<non-name input>" : name ? name : "<null>",
             error.c_str());
@@ -673,7 +685,9 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
     memset(movie->Pub(), 0, kGuestAllocation);
     movie->format = avformat_alloc_context();
     movie->avio_state = new AvioState{movie->source.get(), 0};
-    int io_size = static_cast<int>(std::clamp<uint32_t>(g_io_size, 4096, 1024 * 1024));
+    size_t preferred_io = movie->source->PreferredAVIOBufferSize();
+    int io_size = static_cast<int>(preferred_io ? preferred_io
+                                                : std::clamp<uint32_t>(g_io_size, 4096, 1024 * 1024));
     auto* io_buffer = static_cast<unsigned char*>(av_malloc(io_size));
     movie->avio = avio_alloc_context(io_buffer, io_size, 0, movie->avio_state, ReadPacket, nullptr, SeekPacket);
     if (!movie->format || !movie->avio) {
@@ -684,6 +698,8 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
         if (movie->format) avformat_free_context(movie->format);
         return 0;
     }
+    Log("[bink] %s input %s: %lld bytes, AVIO %d KiB\n", movie->source->HostDirect() ? "host direct" : "bounded",
+        movie->description.c_str(), static_cast<long long>(movie->source->Size()), io_size / 1024);
     movie->avio->seekable = AVIO_SEEKABLE_NORMAL;
     movie->format->pb = movie->avio;
     movie->format->flags |= AVFMT_FLAG_CUSTOM_IO;
@@ -707,7 +723,9 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
         const AVCodec* codec = avcodec_find_decoder(movie->video_stream->codecpar->codec_id);
         movie->video_codec = codec ? avcodec_alloc_context3(codec) : nullptr;
         if (movie->video_codec) {
-            movie->video_codec->thread_count = 1;
+            unsigned cores = std::thread::hardware_concurrency();
+            movie->video_codec->thread_count = static_cast<int>(cores ? std::clamp(cores, 1u, 4u) : 1u);
+            movie->video_codec->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
             r = avcodec_parameters_to_context(movie->video_codec, movie->video_stream->codecpar);
             if (r >= 0) r = avcodec_open2(movie->video_codec, codec, nullptr);
         } else r = AVERROR_DECODER_NOT_FOUND;
@@ -726,8 +744,9 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
     }
     if (r >= 0) {
         movie->video_frame = av_frame_alloc();
+        movie->presentation_frame = av_frame_alloc();
         movie->read_packet = av_packet_alloc();
-        if (!movie->video_frame || !movie->read_packet) r = AVERROR(ENOMEM);
+        if (!movie->video_frame || !movie->presentation_frame || !movie->read_packet) r = AVERROR(ENOMEM);
     }
     if (r >= 0) {
         for (unsigned i = 0; i < movie->format->nb_streams && movie->tracks.size() < kMaxTracks; ++i) {
@@ -764,6 +783,7 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
         FreeVideoPackets(*movie);
         if (movie->read_packet) av_packet_free(&movie->read_packet);
         if (movie->video_frame) av_frame_free(&movie->video_frame);
+        if (movie->presentation_frame) av_frame_free(&movie->presentation_frame);
         if (movie->video_codec) avcodec_free_context(&movie->video_codec);
         movie->tracks.clear();
         if (movie->format) avformat_close_input(&movie->format);
@@ -777,8 +797,9 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
         g_movies[movie->guest] = movie;
     }
     UpdateDeviceState();
-    Log("[bink] opened %s: %ux%u, %u frames, %zu audio tracks\n", movie->description.c_str(), movie->width,
-        movie->height, movie->frames, movie->tracks.size());
+    Log("[bink] opened %s: %ux%u, %u frames, %zu audio tracks, video threads=%d type=0x%x active=0x%x\n",
+        movie->description.c_str(), movie->width, movie->height, movie->frames, movie->tracks.size(),
+        movie->video_codec->thread_count, movie->video_codec->thread_type, movie->video_codec->active_thread_type);
     return movie->guest;
 }
 
@@ -790,6 +811,7 @@ void DestroyMovie(const std::shared_ptr<Movie>& movie) {
         FreeVideoPackets(*movie);
         if (movie->read_packet) av_packet_free(&movie->read_packet);
         if (movie->video_frame) av_frame_free(&movie->video_frame);
+        if (movie->presentation_frame) av_frame_free(&movie->presentation_frame);
         if (movie->video_codec) avcodec_free_context(&movie->video_codec);
         movie->tracks.clear();
         if (movie->format) avformat_close_input(&movie->format);
@@ -799,6 +821,38 @@ void DestroyMovie(const std::shared_ptr<Movie>& movie) {
     }
     HeapFree(movie->guest);
     movie->guest = 0;
+}
+
+void LogPlaneCopy(Movie& movie, const AVFrame& frame, const FrameBuffers& buffers) {
+    if (movie.plane_copy_logs >= 3 || !movie.Pub() || movie.Pub()->frame_num > 3) return;
+    ++movie.plane_copy_logs;
+    unsigned alpha = frame.data[3] ? frame.data[3][0] : 255;
+    Log("[bink] plane copy frame %u active=%u total=%d src Y/Cb/Cr/A=%u/%u/%u/%u\n",
+        movie.Pub()->frame_num, buffers.frame_num, buffers.total_frames,
+        frame.data[0][0], frame.data[1][0], frame.data[2][0], alpha);
+    for (unsigned index = 0; index < static_cast<unsigned>(buffers.total_frames); ++index) {
+        const FramePlaneSet& p = buffers.frames[index];
+        int a = p.alpha.buffer ? *Ptr<uint8_t>(p.alpha.buffer) : -1;
+        Log("[bink]  set %u%s Y=%08x/%d=%u Cb=%08x/%d=%u Cr=%08x/%d=%u A=%08x/%d=%d\n", index,
+            index == buffers.frame_num ? " (locked)" : "", p.y.buffer, static_cast<int32_t>(p.y.pitch),
+            *Ptr<uint8_t>(p.y.buffer), p.cb.buffer, static_cast<int32_t>(p.cb.pitch), *Ptr<uint8_t>(p.cb.buffer),
+            p.cr.buffer, static_cast<int32_t>(p.cr.pitch), *Ptr<uint8_t>(p.cr.buffer), p.alpha.buffer,
+            static_cast<int32_t>(p.alpha.pitch), a);
+    }
+}
+
+bool UploadRegisteredLocked(Movie& movie, const AVFrame* frame, bool decoded) {
+    if (!movie.registered_buffers) return true;
+    Public* p = movie.Pub();
+    auto* buffers = Ptr<FrameBuffers>(movie.registered_buffers);
+    if (!p || !buffers || !CopyRegisteredFrame(frame, *p, *buffers)) {
+        Log("[bink] rejected registered plane upload: buffers=%08x active=%u total=%d frame=%u\n",
+            movie.registered_buffers, buffers ? buffers->frame_num : 0, buffers ? buffers->total_frames : 0,
+            p ? p->frame_num : 0);
+        return false;
+    }
+    if (decoded && frame) LogPlaneCopy(movie, *frame, *buffers);
+    return true;
 }
 
 // 1 = presented, 0 = failed, -1 = deferred. A deferred frame does not clear last_frame_num, frame_size or rectangles:
@@ -824,6 +878,16 @@ int DecodeCurrentFrame(Movie& movie, Clock::time_point deadline) {
         if (movie.decoded_position < p->frame_num) av_frame_unref(movie.video_frame);
     }
     if (!movie.decoded_position || movie.decoded_position != p->frame_num) return 0;
+    av_frame_unref(movie.presentation_frame);
+    if (av_frame_ref(movie.presentation_frame, movie.video_frame) < 0) {
+        p->read_error = 1;
+        return 0;
+    }
+    if (!UploadRegisteredLocked(movie, movie.video_frame, true)) {
+        p->read_error = 1;
+        return 0;
+    }
+    // Publish metadata only after the live guest planes contain the same complete presentation.
     p->last_frame_num = p->frame_num;
     p->frame_size = movie.current_packet_size;
     p->snd_size = movie.pending_snd_size;
@@ -832,13 +896,6 @@ int DecodeCurrentFrame(Movie& movie, Clock::time_point deadline) {
     p->frame_change_percent = 100;
     p->num_rects = 1;
     p->frame_rects[0] = {0, 0, static_cast<int32_t>(movie.width), static_cast<int32_t>(movie.height)};
-    if (movie.registered_buffers) {
-        auto* buffers = Ptr<FrameBuffers>(movie.registered_buffers);
-        if (!CopyRegisteredFrame(movie.video_frame, *p, *buffers)) {
-            p->read_error = 1;
-            return 0;
-        }
-    }
     movie.total_decodes++;
     movie.decode_us += static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - t0).count());
     return 1;
@@ -855,23 +912,32 @@ uint32_t ErrorAddress() {
     return tl_bink_error_addr;
 }
 
-bool RunDoFrame(Movie& movie) {
+int RunDoFrame(Movie& movie) {
     std::unique_lock<std::timed_mutex> lock(movie.mutex, std::defer_lock);
-    if (!lock.try_lock_for(kLockBudget)) return true;  // defer, never turn a busy decoder into a guest-thread deadlock
-    Clock::time_point deadline = Clock::now() + kDecodeBudget;
+    if (!lock.try_lock_for(kLockBudget)) return -1;  // never turn a busy decoder into a guest-thread deadlock
+    Public* p = movie.Pub();
+    if (!p) return 0;
+    // Frame 1 must complete before the guest's first UnlockRect. Later frames use a short foreground budget and can
+    // safely present the retained frame while the guest performs its own bounded NextFrame/DoFrame retry loop.
+    Clock::time_point deadline = p->frame_num == 1 ? Clock::time_point::max() : Clock::now() + kDecodeBudget;
     EnsureAudioLeadLocked(movie, std::min(deadline, Clock::now() + kAudioBudget));
     int result = DecodeCurrentFrame(movie, deadline);
     if (result < 0) {
-        Public* p = movie.Pub();
+        const AVFrame* retained = movie.presentation_frame && movie.presentation_frame->data[0]
+                                      ? movie.presentation_frame : nullptr;
+        if (!UploadRegisteredLocked(movie, retained, false)) {
+            p->read_error = 1;
+            return 0;
+        }
         ++movie.deferred_calls;
         ++movie.skipped_frames;
         if (movie.deferred_calls == 1 || movie.deferred_calls % 128 == 0)
-            Log("[bink] deferred frame %u after %llu call(s); retaining the last complete planes\n",
-                p ? p->frame_num : 0, static_cast<unsigned long long>(movie.deferred_calls));
-        return true;
+            Log("[bink] deferred frame %u after %llu call(s); uploaded %s planes\n", p->frame_num,
+                static_cast<unsigned long long>(movie.deferred_calls), retained ? "retained" : "neutral");
+        return -1;
     }
     movie.deferred_calls = 0;
-    return result > 0;
+    return result;
 }
 
 void SleepUntilFrame(Movie& movie) {
@@ -922,22 +988,17 @@ B(BinkClose) {
 }
 B(BinkDoFrame) {
     auto movie = FindMovie(Arg(c, 0));
-    bool ok = movie ? RunDoFrame(*movie) : false;
-    Return(c, ok ? 0 : 1, 1);
+    int result = movie ? RunDoFrame(*movie) : 0;
+    // Prototype's state-5 caller loops on nonzero, calling NextFrame and DoFrame again before UnlockRect.
+    Return(c, result > 0 ? 0 : 1, 1);
 }
 B(BinkNextFrame) {
     auto movie = FindMovie(Arg(c, 0));
     if (movie) {
         std::lock_guard<std::timed_mutex> lock(movie->mutex);
         Public* p = movie->Pub();
-        // The game calls NextFrame after every successful-looking DoFrame call, including a deferred one. Retry the
-        // same frame/buffer a few times so a slow first packet does not turn into a permanently lagging black movie.
-        // The bound is essential: persistent failure still skips ahead and eventually reaches the normal end/wrap.
-        if (movie->deferred_calls && movie->deferred_calls <= kMaxDeferredRetries &&
-            p->last_frame_num != p->frame_num) {
-            Return(c, 0, 1);
-            return;
-        }
+        // A deferred DoFrame returns nonzero and the guest calls NextFrame before retrying while textures stay locked.
+        // Advance normally here; holding the failed frame would repeat it until the guest's 20-iteration bound.
         movie->deferred_calls = 0;
         if (p->frame_num < movie->decoded_position) movie->skipped_frames += movie->decoded_position - p->frame_num;
         if (p->frame_num >= movie->frames) {
@@ -948,7 +1009,11 @@ B(BinkNextFrame) {
         }
         if (movie->registered_buffers) {
             auto* b = Ptr<FrameBuffers>(movie->registered_buffers);
-            if (b->total_frames > 0) b->frame_num = (b->frame_num + 1) % static_cast<uint32_t>(b->total_frames);
+            if (b->total_frames >= 1 && b->total_frames <= 2) {
+                uint32_t total = static_cast<uint32_t>(b->total_frames);
+                uint32_t current = b->frame_num < total ? b->frame_num : 0;
+                b->frame_num = (current + 1) % total;
+            }
         }
     }
     Return(c, 0, 1);
@@ -1002,10 +1067,8 @@ B(BinkRegisterFrameBuffers) {
         uint32_t buffers = Arg(c, 1);
         movie->registered_buffers = buffers;
         movie->Pub()->frame_buffers = buffers;
-        if (buffers) {
-            auto* b = Ptr<FrameBuffers>(buffers);
-            b->frame_num = 0;
-        }
+        // Respect the guest's actual active index and initialize every valid set before its first UnlockRect.
+        if (buffers) (void)UploadRegisteredLocked(*movie, nullptr, false);
     }
     Return(c, 0, 2);
 }
@@ -1320,8 +1383,8 @@ B(BinkDoFrameAsync) {
     // Keep the async ABI on the same bounded path. Plane publication remains on the calling guest thread, and the
     // wait export therefore never has to wait on a native worker touching the guest window.
     auto movie = FindMovie(Arg(c, 0));
-    bool ok = movie ? RunDoFrame(*movie) : false;
-    Return(c, ok ? 0 : 1, 3);
+    int result = movie ? RunDoFrame(*movie) : 0;
+    Return(c, result > 0 ? 0 : 1, 3);
 }
 B(BinkDoFrameAsyncWait) { Return(c, 0, 2); }
 B(BinkStartAsyncThread) { Return(c, 0, 2); }

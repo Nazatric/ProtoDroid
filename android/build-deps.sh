@@ -77,7 +77,7 @@ if [ "$ABI" = arm64-v8a ]; then FFMPEG_ARCH=aarch64; fi
         --ar="$TC/llvm-ar" --ranlib="$TC/llvm-ranlib" --strip="$TC/llvm-strip" \
         --arch="$FFMPEG_ARCH" --target-os=android --enable-cross-compile --enable-pic \
         --enable-static --disable-shared --disable-programs --disable-doc --disable-debug --disable-network \
-        --disable-autodetect --disable-pthreads --disable-w32threads --disable-os2threads --disable-x86asm \
+        --disable-autodetect --enable-pthreads --disable-w32threads --disable-os2threads --disable-x86asm \
         --disable-avdevice --disable-avfilter --disable-swscale --disable-postproc --disable-everything \
         --enable-avformat --enable-avcodec --enable-avutil --enable-swresample \
         --enable-demuxer=bink --enable-decoder=bink,binkaudio_rdft,binkaudio_dct

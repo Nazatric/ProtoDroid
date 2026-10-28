@@ -14,6 +14,10 @@ public:
     virtual int64_t Size() const = 0;
     virtual int64_t Read(uint64_t offset, void* dst, size_t bytes) = 0;
     virtual std::string Description() const = 0;
+    // Direct loose files and uncompressed RCF slices can use large positioned host reads without entering the guest.
+    // Other sources keep the smaller legacy buffer because callback input is capped by the guest ReadHeader contract.
+    virtual bool HostDirect() const { return false; }
+    virtual size_t PreferredAVIOBufferSize() const { return 0; }
     virtual void Service() {}
     virtual void ControlBackgroundIO(uint32_t) {}
 };
