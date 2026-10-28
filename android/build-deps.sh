@@ -121,6 +121,9 @@ for marker in \
     '/storage/emulated/0/Prototype/logs/pipeline_trace.log' \
     'last_vs.spv' \
     'last_fs.spv' \
+    'PROTORE_PIPELINE_TRACE' \
+    'pre-created dummy sampler, buffer, and all 14 image views' \
+    'dummy image GPU initialization complete' \
     'Disabling maintenance5, EDS3' \
     'Unmapped descriptor binding'; do
     printf '%s\n' "$DXVK_STRINGS" | grep -F "$marker" >/dev/null || {

@@ -1,0 +1,505 @@
+diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
+index 1f36dd7..a99ec29 100644
+--- a/src/dxvk/dxvk_adapter.cpp
++++ b/src/dxvk/dxvk_adapter.cpp
+@@ -35,6 +35,14 @@ namespace dxvk {
+   static constexpr const char* g_maliTraceFile = "/storage/emulated/0/Prototype/logs/pipeline_trace.log";
+   static std::atomic<uint64_t> g_maliTraceSequence = { 0 };
+ 
++  static bool maliPipelineTraceEnabled() {
++    // The native launcher maps protore.ini pipeline_trace = 1 to this
++    // environment variable before creating the DXVK device. Keep the default
++    // path free of SPIR-V analysis, disk writes, and fsync calls.
++    static const bool enabled = env::getEnvVar("PROTORE_PIPELINE_TRACE") == "1";
++    return enabled;
++  }
++
+   struct MaliDescriptorDecorations {
+     uint32_t set = ~0u;
+     uint32_t binding = ~0u;
+@@ -461,7 +469,7 @@ namespace dxvk {
+     // Keep the trace and raw shader dumps inside the same lock as the real
+     // driver call. On the crashing path createInfoCount is one, so the last
+     // fsynced entry and last_vs/last_fs exactly describe the call that faults.
+-    if (pCreateInfos && createInfoCount) {
++    if (maliPipelineTraceEnabled() && pCreateInfos && createInfoCount) {
+       uint64_t sequence = g_maliTraceSequence.fetch_add(createInfoCount);
+       for (uint32_t i = 0; i < createInfoCount; i++)
+         maliTraceGraphicsPipeline(pCreateInfos[i], sequence + i, createInfoCount == 1);
+@@ -1115,7 +1123,11 @@ namespace dxvk {
+       vkd->vkCreateGraphicsPipelines = &serializedCreateGraphicsPipelines;
+       vkd->vkCreateComputePipelines  = &serializedCreateComputePipelines;
+       Logger::info("DXVK: Serializing Vulkan pipeline compilation on ARM");
+-      Logger::info("DXVK: ARM pipeline trace: /storage/emulated/0/Prototype/logs/pipeline_trace.log");
++      if (maliPipelineTraceEnabled()) {
++        Logger::info("DXVK: ARM pipeline trace: /storage/emulated/0/Prototype/logs/pipeline_trace.log");
++      } else {
++        Logger::info("DXVK: ARM pipeline trace disabled; set PROTORE_PIPELINE_TRACE=1 or pipeline_trace = 1 to enable");
++      }
+     }
+ #endif
+ 
+@@ -1124,7 +1136,10 @@ namespace dxvk {
+     queues.transfer = getDeviceQueue(vkd, queueFamilies.transfer, 0);
+     queues.sparse = getDeviceQueue(vkd, queueFamilies.sparse, 0);
+ 
+-    return new DxvkDevice(instance, this, vkd, enabledFeatures, queues, DxvkQueueCallback());
++    Rc<DxvkDevice> dxvkDevice = new DxvkDevice(
++      instance, this, vkd, enabledFeatures, queues, DxvkQueueCallback());
++    dxvkDevice->initializeUnboundResources();
++    return dxvkDevice;
+   }
+ 
+ 
+@@ -1270,7 +1285,10 @@ namespace dxvk {
+     queues.graphics = { args.queue, args.queueFamily };
+     queues.transfer = queues.graphics;
+ 
+-    return new DxvkDevice(instance, this, vkd, enabledFeatures, queues, args.queueCallback);
++    Rc<DxvkDevice> dxvkDevice = new DxvkDevice(
++      instance, this, vkd, enabledFeatures, queues, args.queueCallback);
++    dxvkDevice->initializeUnboundResources();
++    return dxvkDevice;
+   }
+ 
+ 
+diff --git a/src/dxvk/dxvk_context.cpp b/src/dxvk/dxvk_context.cpp
+index 73ccb74..95a1ded 100644
+--- a/src/dxvk/dxvk_context.cpp
++++ b/src/dxvk/dxvk_context.cpp
+@@ -1015,16 +1015,16 @@ namespace dxvk {
+ 
+ 
+   // Android port: without VK_EXT_robustness2 null descriptors (Mali), unbound slots get dummy resources.
+-  VkImageView DxvkContext::nullImageView(VkImageViewType type) {
++  VkImageView DxvkContext::nullImageView(VkImageViewType type, bool storage) {
+     if (likely(m_device->features().extRobustness2.nullDescriptor))
+       return VK_NULL_HANDLE;
+-    return m_common->dummyResources().imageViewHandle(this, type);
++    return m_common->dummyResources().imageViewHandle(type, storage);
+   }
+ 
+ 
+-  VkImageLayout DxvkContext::nullImageLayout() const {
++  VkImageLayout DxvkContext::nullImageLayout(bool storage) const {
+     return m_device->features().extRobustness2.nullDescriptor
+-      ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_GENERAL;
++      ? VK_IMAGE_LAYOUT_UNDEFINED : m_common->dummyResources().imageLayout(storage);
+   }
+ 
+ 
+@@ -5395,8 +5395,8 @@ namespace dxvk {
+               m_cmd->track(res.imageView->image(), DxvkAccess::Read);
+             } else {
+               descriptorInfo.image.sampler = VK_NULL_HANDLE;
+-              descriptorInfo.image.imageView = nullImageView(binding.viewType);
+-              descriptorInfo.image.imageLayout = nullImageLayout();
++              descriptorInfo.image.imageView = nullImageView(binding.viewType, false);
++              descriptorInfo.image.imageLayout = nullImageLayout(false);
+             }
+           } break;
+ 
+@@ -5417,8 +5417,8 @@ namespace dxvk {
+                 ? DxvkAccess::Write : DxvkAccess::Read);
+             } else {
+               descriptorInfo.image.sampler = VK_NULL_HANDLE;
+-              descriptorInfo.image.imageView = nullImageView(binding.viewType);
+-              descriptorInfo.image.imageLayout = nullImageLayout();
++              descriptorInfo.image.imageView = nullImageView(binding.viewType, true);
++              descriptorInfo.image.imageLayout = nullImageLayout(true);
+             }
+           } break;
+ 
+@@ -5439,8 +5439,8 @@ namespace dxvk {
+               m_cmd->track(res.imageView->image(), DxvkAccess::Read);
+             } else {
+               descriptorInfo.image.sampler = m_common->dummyResources().samplerHandle();
+-              descriptorInfo.image.imageView = nullImageView(binding.viewType);
+-              descriptorInfo.image.imageLayout = nullImageLayout();
++              descriptorInfo.image.imageView = nullImageView(binding.viewType, false);
++              descriptorInfo.image.imageLayout = nullImageLayout(false);
+             }
+           } break;
+ 
+diff --git a/src/dxvk/dxvk_context.h b/src/dxvk/dxvk_context.h
+index b67b11b..05f7306 100644
+--- a/src/dxvk/dxvk_context.h
++++ b/src/dxvk/dxvk_context.h
+@@ -906,8 +906,8 @@ namespace dxvk {
+             VkImageLayout             initialLayout);
+ 
+     // Android port: dummy resources for unbound slots on drivers without null descriptors.
+-    VkImageView nullImageView(VkImageViewType type);
+-    VkImageLayout nullImageLayout() const;
++    VkImageView nullImageView(VkImageViewType type, bool storage);
++    VkImageLayout nullImageLayout(bool storage) const;
+     VkBufferView nullBufferView();
+     VkBuffer nullBuffer();
+ 
+diff --git a/src/dxvk/dxvk_device.cpp b/src/dxvk/dxvk_device.cpp
+index 86c789d..89c3203 100644
+--- a/src/dxvk/dxvk_device.cpp
++++ b/src/dxvk/dxvk_device.cpp
+@@ -1,4 +1,5 @@
+ #include "dxvk_device.h"
++#include "dxvk_context.h"
+ #include "dxvk_instance.h"
+ 
+ namespace dxvk {
+@@ -185,6 +186,34 @@ namespace dxvk {
+   }
+ 
+ 
++  void DxvkDevice::initializeUnboundResources() {
++    if (likely(m_features.extRobustness2.nullDescriptor))
++      return;
++
++    // The adapter calls this while it still owns the device reference, before
++    // client API or CS threads can access descriptor state. Submit and finish
++    // the initial transitions now so every cached dummy handle is fully
++    // initialized before its first descriptor write.
++    Rc<DxvkContext> context = createContext();
++    context->beginRecording(createCommandList());
++    m_objects.dummyResources().initialize(context.ptr());
++
++    DxvkSubmitStatus status;
++    submitCommandList(context->endRecording(), &status);
++
++    VkResult result = waitForSubmission(&status);
++    if (result == VK_SUCCESS) {
++      waitForIdle();
++      result = getDeviceStatus();
++    }
++
++    if (result != VK_SUCCESS)
++      throw DxvkError(str::format("DxvkDevice: Failed to initialize dummy resources: ", result));
++
++    Logger::info("DxvkUnboundResources: dummy image GPU initialization complete");
++  }
++
++
+   Rc<DxvkEvent> DxvkDevice::createGpuEvent() {
+     return new DxvkEvent(this);
+   }
+diff --git a/src/dxvk/dxvk_device.h b/src/dxvk/dxvk_device.h
+index 219655f..8c84994 100644
+--- a/src/dxvk/dxvk_device.h
++++ b/src/dxvk/dxvk_device.h
+@@ -299,6 +299,15 @@ namespace dxvk {
+      */
+     Rc<DxvkContext> createContext();
+ 
++    /**
++     * \brief Initializes fallback resources for unbound descriptors
++     *
++     * Must be called by the adapter after wrapping the new device in an Rc,
++     * and before returning it to client API code. This is a no-op when the
++     * driver supports null descriptors.
++     */
++    void initializeUnboundResources();
++
+     /**
+      * \brief Creates a GPU event
+      * \returns New GPU event
+diff --git a/src/dxvk/dxvk_unbound.cpp b/src/dxvk/dxvk_unbound.cpp
+index b2a4d1b..11b42d9 100644
+--- a/src/dxvk/dxvk_unbound.cpp
++++ b/src/dxvk/dxvk_unbound.cpp
+@@ -5,7 +5,21 @@ namespace dxvk {
+   
+   DxvkUnboundResources::DxvkUnboundResources(DxvkDevice* dev)
+   : m_device(dev) {
++    if (likely(dev->features().extRobustness2.nullDescriptor))
++      return;
++
++    // Construct every object before the device is exposed to client API and
++    // worker threads. Descriptor updates must never grow DXVK's view caches
++    // or create driver objects lazily.
++    samplerHandle();
++    bufferViewHandle();
++
++    for (uint32_t usageIndex = 0; usageIndex < UsageCount; usageIndex++) {
++      for (uint32_t family = 0; family < ImageFamilyCount; family++)
++        createImageViews(usageIndex, family);
++    }
+ 
++    Logger::info("DxvkUnboundResources: pre-created dummy sampler, buffer, and all 14 image views");
+   }
+   
+   
+@@ -14,6 +28,34 @@ namespace dxvk {
+   }
+ 
+ 
++  void DxvkUnboundResources::initialize(DxvkContext* ctx) {
++    if (m_device->features().extRobustness2.nullDescriptor || m_imagesInitialized)
++      return;
++
++    DxvkImageUsageInfo stableUsage;
++    stableUsage.stableGpuAddress = VK_TRUE;
++
++    for (uint32_t usageIndex = 0; usageIndex < UsageCount; usageIndex++) {
++      for (uint32_t family = 0; family < ImageFamilyCount; family++) {
++        const auto& image = m_images[usageIndex][family];
++
++        // Raw Vulkan handles are cached for the lifetime of the device. Pin
++        // the allocation so defragmentation cannot replace the image storage
++        // and invalidate those handles after initialization.
++        if (!ctx->ensureImageCompatibility(image, stableUsage))
++          throw DxvkError("DxvkUnboundResources: failed to pin dummy image storage");
++
++        const auto& info = image->info();
++        VkImageSubresourceRange range = {
++          VK_IMAGE_ASPECT_COLOR_BIT, 0u, info.mipLevels, 0u, info.numLayers };
++        ctx->initImage(image, range, VK_IMAGE_LAYOUT_UNDEFINED);
++      }
++    }
++
++    m_imagesInitialized = true;
++  }
++
++
+   VkBuffer DxvkUnboundResources::bufferHandle() {
+     VkBuffer buffer = m_bufferHandle.load();
+ 
+@@ -54,66 +96,22 @@ namespace dxvk {
+   }
+ 
+ 
+-  VkImageView DxvkUnboundResources::imageViewHandle(DxvkContext* ctx, VkImageViewType type) {
++  VkImageView DxvkUnboundResources::imageViewHandle(VkImageViewType type, bool storage) const {
+     // SAMPLER descriptors have no image view and use MAX_ENUM as their
+     // binding type. Never use that sentinel as an array index or pass it to
+     // the driver; a 2D dummy is the safe fallback for an unspecified view.
+-    if (type == VK_IMAGE_VIEW_TYPE_MAX_ENUM || type > VK_IMAGE_VIEW_TYPE_CUBE_ARRAY)
++    if (uint32_t(type) >= ViewCount)
+       type = VK_IMAGE_VIEW_TYPE_2D;
+ 
+-    VkImageView view = m_viewHandles[type].load();
++    VkImageView view = m_viewHandles[storage ? 1u : 0u][type].load(std::memory_order_acquire);
+ 
+-    if (likely(view != VK_NULL_HANDLE))
+-      return view;
+-
+-    std::lock_guard lock(m_mutex);
+-    view = m_viewHandles[type].load();
+-
+-    if (view)
+-      return view;
+-
+-    uint32_t family = (type == VK_IMAGE_VIEW_TYPE_1D || type == VK_IMAGE_VIEW_TYPE_1D_ARRAY) ? 0u
+-                    : (type == VK_IMAGE_VIEW_TYPE_3D) ? 2u : 1u;
+-
+-    if (m_images[family] == nullptr) {
+-      Logger::info(str::format("DxvkUnboundResources: no null descriptors, dummy image for view type ", type));
+-
+-      DxvkImageCreateInfo info;
+-      info.type        = family == 0u ? VK_IMAGE_TYPE_1D : family == 2u ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
+-      info.format      = VK_FORMAT_R8G8B8A8_UNORM;
+-      info.flags       = family == 1u ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0u;
+-      info.sampleCount = VK_SAMPLE_COUNT_1_BIT;
+-      info.extent      = { 1u, 1u, 1u };
+-      info.numLayers   = family == 1u ? 6u : 1u;
+-      info.mipLevels   = 1u;
+-      info.usage       = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+-      info.stages      = VK_PIPELINE_STAGE_TRANSFER_BIT | m_device->getShaderPipelineStages();
+-      info.access      = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+-      info.layout      = VK_IMAGE_LAYOUT_GENERAL;
+-      info.debugName   = "Null image";
+-
+-      m_images[family] = m_device->createImage(info, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+-
+-      DxvkImageViewKey key;
+-      key.viewType   = family == 0u ? VK_IMAGE_VIEW_TYPE_1D_ARRAY
+-                     : family == 2u ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+-      key.usage      = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+-      key.format     = info.format;
+-      key.aspects    = VK_IMAGE_ASPECT_COLOR_BIT;
+-      key.mipIndex   = 0u;
+-      key.mipCount   = 1u;
+-      key.layerIndex = 0u;
+-      key.layerCount = uint16_t(info.numLayers);
+-      m_imageViews[family] = m_images[family]->createView(key);
+-
+-      VkImageSubresourceRange range = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, info.numLayers };
+-      ctx->initImage(m_images[family], range, VK_IMAGE_LAYOUT_UNDEFINED);
++    // No lazy fallback here by design. Creating a view or initializing an
++    // image at descriptor-update time was the unsafe path this class avoids.
++    if (unlikely(view == VK_NULL_HANDLE)) {
++      throw DxvkError(str::format("DxvkUnboundResources: missing pre-created dummy view ",
++        type, storage ? " (storage)" : " (sampled)"));
+     }
+ 
+-    view = m_imageViews[family]->handle(type);
+-    if (unlikely(view == VK_NULL_HANDLE))
+-      throw DxvkError("DxvkUnboundResources: failed to create a dummy image view");
+-    m_viewHandles[type].store(view, std::memory_order_release);
+     return view;
+   }
+ 
+@@ -147,6 +145,60 @@ namespace dxvk {
+   }
+ 
+ 
++  void DxvkUnboundResources::createImageViews(uint32_t usageIndex, uint32_t family) {
++    const bool storage = usageIndex != 0u;
++
++    DxvkImageCreateInfo info;
++    info.type        = family == 0u ? VK_IMAGE_TYPE_1D : family == 2u ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
++    info.format      = VK_FORMAT_R8G8B8A8_UNORM;
++    info.flags       = family == 1u ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0u;
++    info.sampleCount = VK_SAMPLE_COUNT_1_BIT;
++    info.extent      = { 1u, 1u, 1u };
++    info.numLayers   = family == 1u ? 6u : 1u;
++    info.mipLevels   = 1u;
++    info.usage       = VK_IMAGE_USAGE_TRANSFER_DST_BIT
++                     | (storage ? VK_IMAGE_USAGE_STORAGE_BIT : VK_IMAGE_USAGE_SAMPLED_BIT);
++    info.stages      = VK_PIPELINE_STAGE_TRANSFER_BIT | m_device->getShaderPipelineStages();
++    info.access      = VK_ACCESS_SHADER_READ_BIT
++                     | (storage ? VK_ACCESS_SHADER_WRITE_BIT : 0u);
++    info.layout      = imageLayout(storage);
++    info.debugName   = storage ? "Null storage image" : "Null sampled image";
++
++    auto& image = m_images[usageIndex][family];
++    image = m_device->createImage(info, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
++
++    DxvkImageViewKey key;
++    key.viewType   = family == 0u ? VK_IMAGE_VIEW_TYPE_1D_ARRAY
++                   : family == 2u ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D_ARRAY;
++    key.usage      = storage ? VK_IMAGE_USAGE_STORAGE_BIT : VK_IMAGE_USAGE_SAMPLED_BIT;
++    key.format     = info.format;
++    key.aspects    = VK_IMAGE_ASPECT_COLOR_BIT;
++    key.mipIndex   = 0u;
++    key.mipCount   = 1u;
++    key.layerIndex = 0u;
++    key.layerCount = uint16_t(info.numLayers);
++
++    auto& baseView = m_imageViews[usageIndex][family];
++    baseView = image->createView(key);
++
++    // Create exactly the view types supported by this image family. In
++    // particular, cube and cube-array views use a 2D cube-compatible image
++    // with six layers, and each cube view exposes exactly six layers.
++    for (uint32_t type = 0; type < ViewCount; type++) {
++      if (getImageFamily(VkImageViewType(type)) != family)
++        continue;
++
++      VkImageView view = baseView->handle(VkImageViewType(type));
++      if (unlikely(view == VK_NULL_HANDLE)) {
++        throw DxvkError(str::format("DxvkUnboundResources: failed to pre-create dummy view ",
++          type, storage ? " (storage)" : " (sampled)"));
++      }
++
++      m_viewHandles[usageIndex][type].store(view, std::memory_order_release);
++    }
++  }
++
++
+   Rc<DxvkSampler> DxvkUnboundResources::createSampler() {
+     DxvkSamplerKey info;
+     info.setFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR);
+@@ -191,4 +243,4 @@ namespace dxvk {
+     return buffer;
+   }
+   
+-}
+\ No newline at end of file
++}
+diff --git a/src/dxvk/dxvk_unbound.h b/src/dxvk/dxvk_unbound.h
+index 55d0ece..3beb3bc 100644
+--- a/src/dxvk/dxvk_unbound.h
++++ b/src/dxvk/dxvk_unbound.h
+@@ -18,11 +18,25 @@ namespace dxvk {
+    * not bind a compatible resource to a slot.
+    */
+   class DxvkUnboundResources {
++    constexpr static uint32_t UsageCount = 2u;
++    constexpr static uint32_t ImageFamilyCount = 3u;
++    constexpr static uint32_t ViewCount = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY + 1u;
+     
+   public:
+     
+     DxvkUnboundResources(DxvkDevice* dev);
+     ~DxvkUnboundResources();
++
++    /**
++     * \brief Initializes dummy images
++     *
++     * Called during device initialization, before the device is exposed to
++     * client API or worker threads. All Vulkan objects already exist at this
++     * point. This records their clear/layout transitions and pins their
++     * backing allocations so cached handles cannot become stale.
++     * \param [in] ctx Initialization context
++     */
++    void initialize(DxvkContext* ctx);
+     
+     /**
+      * \brief Dummy buffer handle
+@@ -47,14 +61,28 @@ namespace dxvk {
+     /**
+      * \brief Dummy image view (Android port)
+      *
+-     * For drivers without VK_EXT_robustness2 null descriptors (Arm's Mali
+-     * drivers): a 1x1 zero image of a compatible type. The first call for
+-     * an image type clears it through the given context.
+-     * \param [in] ctx Context to initialize the image with
++     * Returns a pre-created view and never allocates or mutates DXVK image
++     * view caches. This is required on Mali, where descriptor updates can
++     * happen on worker threads and null descriptors are unavailable.
+      * \param [in] type View type the descriptor expects
++     * \param [in] storage Whether this is a storage image descriptor
+      * \returns Dummy image view handle
+      */
+-    VkImageView imageViewHandle(DxvkContext* ctx, VkImageViewType type);
++    VkImageView imageViewHandle(VkImageViewType type, bool storage) const;
++
++    /**
++     * \brief Dummy image layout
++     *
++     * Sampled and combined image descriptors use a read-only layout, while
++     * storage image descriptors require GENERAL. Separate images ensure that
++     * each descriptor's declared layout matches its actual image layout.
++     * \param [in] storage Whether this is a storage image descriptor
++     * \returns Dummy image layout
++     */
++    VkImageLayout imageLayout(bool storage) const {
++      return storage ? VK_IMAGE_LAYOUT_GENERAL
++                     : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
++    }
+ 
+     /**
+      * \brief Dummy texel buffer view (Android port)
+@@ -76,16 +104,28 @@ namespace dxvk {
+     Rc<DxvkSampler>         m_sampler;
+     Rc<DxvkBuffer>          m_buffer;
+ 
+-    std::atomic<VkImageView> m_viewHandles[VK_IMAGE_VIEW_TYPE_CUBE_ARRAY + 1] = { };
+-    Rc<DxvkImage>           m_images[3];  // 1D, 2D (cube compatible, 6 layers), 3D
+-    Rc<DxvkImageView>       m_imageViews[3];
++    // Usage index 0 is sampled/combined, index 1 is storage. Keeping these
++    // images separate allows sampled reads to use SHADER_READ_ONLY_OPTIMAL
++    // without declaring an invalid layout for storage descriptors.
++    std::atomic<VkImageView> m_viewHandles[UsageCount][ViewCount] = { };
++    Rc<DxvkImage>           m_images[UsageCount][ImageFamilyCount];
++    Rc<DxvkImageView>       m_imageViews[UsageCount][ImageFamilyCount];
++    bool                    m_imagesInitialized = false;
++
+     std::atomic<VkBufferView> m_bufferViewHandle = { VK_NULL_HANDLE };
+     Rc<DxvkBufferView>      m_bufferView;
+     
+     Rc<DxvkSampler> createSampler();
+     
+     Rc<DxvkBuffer> createBuffer();
++
++    void createImageViews(uint32_t usageIndex, uint32_t family);
++
++    static uint32_t getImageFamily(VkImageViewType type) {
++      return (type == VK_IMAGE_VIEW_TYPE_1D || type == VK_IMAGE_VIEW_TYPE_1D_ARRAY) ? 0u
++           : (type == VK_IMAGE_VIEW_TYPE_3D) ? 2u : 1u;
++    }
+     
+   };
+   
+-}
+\ No newline at end of file
++}

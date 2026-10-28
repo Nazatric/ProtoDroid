@@ -33,6 +33,11 @@ texture_skip_min_size = 512
 # DXVK extra config: d3d9.presentInterval, d3d9.numBackBuffers etc. Comma as separator (semicolon in DXVK).
 #dxvk_config = d3d9.presentInterval = 1
 
+# Low-level Mali pipeline diagnostics. Disabled by default because every traced pipeline performs
+# SPIR-V analysis plus durable file/fsync writes. Enables pipeline_trace.log and last_vs/last_fs.spv.
+# The PROTORE_PIPELINE_TRACE=1 environment variable is an equivalent override.
+#pipeline_trace = 1
+
 # Audio mixer and vsync debugging
 #present_stats = 1
 #fps_limit = 30

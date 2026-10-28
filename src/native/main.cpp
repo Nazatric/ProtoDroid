@@ -504,6 +504,13 @@ int main(int argc, char** argv) {
     Log("game dir: %s", g_game_dir);
     Log("data dir: %s", g_data_dir ? g_data_dir : "(none)");
 #endif
+    // DXVK's durable pipeline diagnostics are strictly opt-in. Export this
+    // before any DXVK device can be created; PROTORE_PIPELINE_TRACE itself
+    // remains an equivalent direct environment override.
+    if (SettingInt("pipeline_trace", 0) == 1) {
+        setenv("PROTORE_PIPELINE_TRACE", "1", 0);
+        Log("DXVK pipeline trace enabled (pipeline_trace = 1)");
+    }
     InitGuestMemory();
     AttachThread(8u << 20);
     InitD3D9Bridge();
