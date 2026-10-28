@@ -130,7 +130,5 @@ void PerfHintStart(int fps_target);
 void PerfHintAddThread(int tid);
 void PerfHintTarget(int fps_target);
 void PerfHintFrame(int64_t work_ns);
-// Services only the minimap movie root on the engine thread; offsets come from protore.ini or live JNI.
-void MinimapService(uint64_t frame);
 
 }  // namespace native

@@ -570,50 +570,453 @@ void WriteMode(uint32_t out, const D3DDISPLAYMODE& m) {
     W32(out + 12, uint32_t(m.Format));
 }
 
-// Minimal frame classification for loading/Bink pillarboxes. These are plain render-thread flags, not a forwarded
-// state cache: no locks, allocation, scanning, or deduplication occurs in any setter or draw. Unknown depth state is
-// treated as world geometry so a StateBlock Apply can never enable an unsafe gameplay mask.
+// Minimap placement is exclusively a host D3D9 submission operation; no guest movie or engine object is accessed.
+// Java/ini offsets use logical 1600x720 HUD pixels; zero/zero is the stock Bottom-Left.
+std::mutex g_minimap_config_mutex;
+std::atomic<bool> g_minimap_configured{false};
+std::atomic<int> g_minimap_x{0}, g_minimap_y{0};
+std::atomic<uint32_t> g_minimap_generation{0};
+
+[[maybe_unused]] void SetPosition(int x, int y) {
+    x = std::clamp(x, -2000, 2000);
+    y = std::clamp(y, -2000, 2000);
+    {
+        std::lock_guard<std::mutex> lock(g_minimap_config_mutex);
+        g_minimap_x.store(x, std::memory_order_relaxed);
+        g_minimap_y.store(y, std::memory_order_relaxed);
+        g_minimap_configured.store(true, std::memory_order_release);
+        g_minimap_generation.fetch_add(1, std::memory_order_relaxed);
+    }
+    Log("minimap: live D3D9 draw offset %d,%d logical HUD px", x, y);
+}
+
+void EnsureMinimapConfigured() {
+    if (g_minimap_configured.load(std::memory_order_acquire)) return;
+    std::lock_guard<std::mutex> lock(g_minimap_config_mutex);
+    if (g_minimap_configured.load(std::memory_order_relaxed)) return;
+    g_minimap_x.store(std::clamp(SettingInt("minimap_x", 0), -2000, 2000), std::memory_order_relaxed);
+    g_minimap_y.store(std::clamp(SettingInt("minimap_y", 0), -2000, 2000), std::memory_order_relaxed);
+    g_minimap_configured.store(true, std::memory_order_release);
+    g_minimap_generation.fetch_add(1, std::memory_order_relaxed);
+}
+
+// Only three render states are shadowed for draw classification. StateBlock Apply refreshes them from DXVK; all
+// other setters/state remain direct forwards. These counters describe the frame currently being submitted.
 uint32_t g_backbuffer_width = 0, g_backbuffer_height = 0;
-int g_depth_test = D3DZB_TRUE, g_depth_write = 1;
-bool g_frame_has_world = false;
-uint32_t g_last_world_frame = 0;
+int g_depth_test = D3DZB_TRUE, g_depth_write = 1, g_stencil_enabled = 0;
+bool g_frame_has_world = false, g_late_loading_quad = false;
+uint32_t g_frame_draws = 0, g_depth_write_draws = 0;
+uint32_t g_minimap_matches = 0, g_minimap_vs = 0, g_minimap_up = 0, g_minimap_stencil = 0;
+uint32_t g_minimap_restored = 0, g_minimap_failed = 0;
+uint32_t g_minimap_logged_generation = 0, g_minimap_wait_logged_generation = 0, g_minimap_last_log = 0;
+D3D9NdcBounds g_minimap_last_bounds;
 
 void D3D9TrackRenderState(DWORD type, DWORD value) {
     if (type == D3DRS_ZENABLE) g_depth_test = int(value);
     else if (type == D3DRS_ZWRITEENABLE) g_depth_write = int(value);
+    else if (type == D3DRS_STENCILENABLE) g_stencil_enabled = int(value);
 }
 
-inline void D3D9TrackDraw() {
+void D3D9RefreshDeviceState(IDirect3DDevice9* dev) {
+    DWORD depth_test = 0, depth_write = 0, stencil = 0;
+    if (dev && SUCCEEDED(dev->GetRenderState(D3DRS_ZENABLE, &depth_test)) &&
+        SUCCEEDED(dev->GetRenderState(D3DRS_ZWRITEENABLE, &depth_write)) &&
+        SUCCEEDED(dev->GetRenderState(D3DRS_STENCILENABLE, &stencil))) {
+        g_depth_test = int(depth_test);
+        g_depth_write = int(depth_write);
+        g_stencil_enabled = int(stencil);
+    } else {
+        // Unknown is conservative for world classification. Bink and an independently detected quad can still mask.
+        g_depth_test = g_depth_write = g_stencil_enabled = -1;
+    }
+}
+
+void D3D9TrackDraw(IDirect3DDevice9* dev) {
+    if (g_depth_test < 0 || g_depth_write < 0 || g_stencil_enabled < 0) D3D9RefreshDeviceState(dev);
+    ++g_frame_draws;
+    if (g_depth_write != 0) ++g_depth_write_draws;
     if (D3D9DepthDrawMayBeWorld(g_depth_test, g_depth_write)) g_frame_has_world = true;
 }
 
-void D3D9StateBlockApplied() {
-    g_depth_test = g_depth_write = -1;  // conservative until setters establish a known non-world state
+void D3D9ResetFrameCounters() {
+    g_frame_has_world = false;
+    g_late_loading_quad = false;
+    g_frame_draws = g_depth_write_draws = 0;
+    g_minimap_matches = g_minimap_vs = g_minimap_up = g_minimap_stencil = 0;
+    g_minimap_restored = g_minimap_failed = 0;
 }
 
 void D3D9ResetFrameState(uint32_t width, uint32_t height) {
+    EnsureMinimapConfigured();
     g_backbuffer_width = width;
     g_backbuffer_height = height;
     g_depth_test = D3DZB_TRUE;
     g_depth_write = 1;
-    g_frame_has_world = false;
-    g_last_world_frame = g_present_count;
+    g_stencil_enabled = 0;
+    D3D9ResetFrameCounters();
+}
+
+uint32_t D3D9PrimitiveVertices(D3DPRIMITIVETYPE type, uint32_t primitives) {
+    uint64_t vertices = 0;
+    switch (type) {
+        case D3DPT_POINTLIST: vertices = primitives; break;
+        case D3DPT_LINELIST: vertices = uint64_t(primitives) * 2; break;
+        case D3DPT_LINESTRIP: vertices = primitives ? uint64_t(primitives) + 1 : 0; break;
+        case D3DPT_TRIANGLELIST: vertices = uint64_t(primitives) * 3; break;
+        case D3DPT_TRIANGLESTRIP:
+        case D3DPT_TRIANGLEFAN: vertices = primitives ? uint64_t(primitives) + 2 : 0; break;
+        default: return 0;
+    }
+    return vertices <= 0xffffffffull ? uint32_t(vertices) : 0;
+}
+
+struct D3D9DrawRequest {
+    D3DPRIMITIVETYPE type = D3DPT_POINTLIST;
+    uint32_t primitive_count = 0, vertex_count = 0;
+    int32_t base_vertex = 0;
+    uint32_t start_vertex = 0, min_vertex = 0, num_vertices = 0, start_index = 0;
+    bool indexed = false, up = false;
+    const void* vertices = nullptr;
+    const void* indices = nullptr;
+    D3DFORMAT index_format = D3DFMT_INDEX16;
+    uint32_t stride = 0;
+};
+
+struct D3D9PositionLayout {
+    bool valid = false, pretransformed = false;
+    uint32_t stream = 0, offset = 0, components = 0, bytes = 0;
+};
+
+bool D3D9GetPositionLayout(IDirect3DDevice9* dev, D3D9PositionLayout& out) {
+    IDirect3DVertexDeclaration9* declaration = nullptr;
+    if (FAILED(dev->GetVertexDeclaration(&declaration)) || !declaration) return false;
+    UINT count = 0;
+    HRESULT hr = declaration->GetDeclaration(nullptr, &count);
+    D3DVERTEXELEMENT9 elements[32];
+    if (SUCCEEDED(hr) && count >= 2 && count <= 32) {
+        hr = declaration->GetDeclaration(elements, &count);
+    } else {
+        hr = D3DERR_INVALIDCALL;
+    }
+    declaration->Release();
+    if (FAILED(hr)) return false;
+
+    for (UINT i = 0; i < count; ++i) {
+        const D3DVERTEXELEMENT9& e = elements[i];
+        if (e.Stream == 0xff && e.Type == D3DDECLTYPE_UNUSED) break;
+        if (e.UsageIndex != 0 || (e.Usage != D3DDECLUSAGE_POSITION && e.Usage != D3DDECLUSAGE_POSITIONT)) continue;
+        const bool pretransformed = e.Usage == D3DDECLUSAGE_POSITIONT;
+        uint32_t components = 0;
+        if (e.Type == D3DDECLTYPE_FLOAT2 && !pretransformed) components = 2;
+        else if (e.Type == D3DDECLTYPE_FLOAT3 && !pretransformed) components = 3;
+        else if (e.Type == D3DDECLTYPE_FLOAT4) components = 4;
+        if (!components || out.valid) return false;  // Missing or ambiguous position stream.
+        out.valid = true;
+        out.pretransformed = pretransformed;
+        out.stream = e.Stream;
+        out.offset = e.Offset;
+        out.components = components;
+        out.bytes = components * sizeof(float);
+    }
+    return out.valid;
+}
+
+struct D3D9VertexView {
+    const uint8_t* data = nullptr;  // First vertex in the draw's declared MinVertexIndex/StartVertex range.
+    uint32_t stride = 0;
+    IDirect3DVertexBuffer9* locked_buffer = nullptr;
+
+    void Release() {
+        if (locked_buffer) {
+            locked_buffer->Unlock();
+            locked_buffer->Release();
+            locked_buffer = nullptr;
+        }
+    }
+};
+
+bool D3D9AcquireVertexView(IDirect3DDevice9* dev, const D3D9DrawRequest& request,
+                           const D3D9PositionLayout& layout, uint32_t first, uint32_t count,
+                           D3D9VertexView& view) {
+    if (!count || !layout.bytes) return false;
+    if (request.up) {
+        if (layout.stream != 0 || !request.vertices || !request.stride) return false;
+        view.stride = request.stride;
+        const uint64_t bytes = (uint64_t(first) + count) * view.stride;
+        if (view.stride < layout.offset + layout.bytes || view.stride > 1024 || bytes > 4u * 1024u * 1024u)
+            return false;
+        view.data = static_cast<const uint8_t*>(request.vertices) + size_t(first) * view.stride;
+        return true;
+    }
+
+    IDirect3DVertexBuffer9* buffer = nullptr;
+    UINT stream_offset = 0, stride = 0;
+    if (FAILED(dev->GetStreamSource(layout.stream, &buffer, &stream_offset, &stride)) || !buffer) {
+        if (buffer) buffer->Release();
+        return false;
+    }
+    D3DVERTEXBUFFER_DESC desc {};
+    const uint64_t lock_offset = uint64_t(stream_offset) + uint64_t(first) * stride;
+    const uint64_t lock_size = uint64_t(count - 1) * stride + layout.offset + layout.bytes;
+    if (!stride || stride < layout.offset + layout.bytes || stride > 1024 ||
+        FAILED(buffer->GetDesc(&desc)) || lock_offset > desc.Size || lock_size > desc.Size - lock_offset ||
+        lock_offset > 0xffffffffull || lock_size > 0xffffffffull) {
+        buffer->Release();
+        return false;
+    }
+    void* data = nullptr;
+    const HRESULT lock_hr = buffer->Lock(UINT(lock_offset), UINT(lock_size), &data, D3DLOCK_READONLY);
+    if (FAILED(lock_hr) || !data) {
+        if (SUCCEEDED(lock_hr)) buffer->Unlock();
+        buffer->Release();
+        return false;
+    }
+    view.data = static_cast<const uint8_t*>(data);
+    view.stride = stride;
+    view.locked_buffer = buffer;
+    return true;
+}
+
+bool D3D9ComputeBounds(const D3D9VertexView& view, const D3D9PositionLayout& layout, uint32_t count,
+                       const D3DVIEWPORT9& viewport, uint32_t backbuffer_width, uint32_t backbuffer_height,
+                       const float constants[16], D3D9TransformLayout transform, D3D9NdcBounds& bounds) {
+    if (!backbuffer_width || !backbuffer_height || !viewport.Width || !viewport.Height) return false;
+    bounds = {1.0e30f, 1.0e30f, -1.0e30f, -1.0e30f};
+    for (uint32_t i = 0; i < count; ++i) {
+        float position[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        const uint8_t* source = view.data + size_t(i) * view.stride + layout.offset;
+        std::memcpy(position, source, layout.bytes);
+        float screen_x = 0, screen_y = 0;
+        if (layout.pretransformed) {
+            screen_x = position[0];
+            screen_y = position[1];
+        } else {
+            const D3D9ClipPosition clip = D3D9TransformPosition(constants, transform, position[0], position[1],
+                                                                 position[2], position[3]);
+            if (!std::isfinite(clip.x) || !std::isfinite(clip.y) || !std::isfinite(clip.w) ||
+                std::fabs(clip.w) < 1.0e-8f) return false;
+            const float ndc_x = clip.x / clip.w, ndc_y = clip.y / clip.w;
+            screen_x = float(viewport.X) + (ndc_x + 1.0f) * 0.5f * float(viewport.Width);
+            screen_y = float(viewport.Y) + (1.0f - ndc_y) * 0.5f * float(viewport.Height);
+        }
+        const float x = screen_x * (2.0f / float(backbuffer_width)) - 1.0f;
+        const float y = 1.0f - screen_y * (2.0f / float(backbuffer_height));
+        if (!std::isfinite(x) || !std::isfinite(y)) return false;
+        bounds.min_x = std::min(bounds.min_x, x);
+        bounds.max_x = std::max(bounds.max_x, x);
+        bounds.min_y = std::min(bounds.min_y, y);
+        bounds.max_y = std::max(bounds.max_y, y);
+    }
+    return count != 0;  // The minimap matcher also accepts finite point/line bounds; loading requires a real quad.
+}
+
+struct D3D9DrawAnalysis {
+    bool minimap = false, loading_quad = false, pretransformed = false;
+    D3D9TransformLayout transform = D3D9TransformLayout::Rows;
+    D3D9PositionLayout layout;
+    D3D9NdcBounds bounds;
+    D3DVIEWPORT9 viewport {};
+    float constants[16] = {};
+    uint32_t first = 0, count = 0;
+};
+
+bool D3D9AnalyzeDraw(IDirect3DDevice9* dev, const D3D9DrawRequest& request, bool want_minimap,
+                     bool want_loading_quad, D3D9DrawAnalysis& out) {
+    out.first = request.indexed ? request.min_vertex : request.start_vertex;
+    out.count = request.indexed ? request.num_vertices : request.vertex_count;
+    if (!out.count || out.count > 4096 || !D3D9GetPositionLayout(dev, out.layout) ||
+        FAILED(dev->GetViewport(&out.viewport))) return false;
+    out.pretransformed = out.layout.pretransformed;
+
+    if (!out.pretransformed) {
+        IDirect3DVertexShader9* shader = nullptr;
+        if (FAILED(dev->GetVertexShader(&shader)) || !shader) {
+            if (shader) shader->Release();
+            return false;  // Pure3D's verified submission path uploads c0..c3 and uses a vertex shader.
+        }
+        shader->Release();
+        if (FAILED(dev->GetVertexShaderConstantF(0, out.constants, 4))) return false;
+    }
+
+    D3D9VertexView view;
+    if (!D3D9AcquireVertexView(dev, request, out.layout, out.first, out.count, view)) return false;
+    int minimap_matches = 0, loading_matches = 0;
+    D3D9NdcBounds selected_bounds {}, first_bounds {};
+    D3D9TransformLayout selected_transform = D3D9TransformLayout::Rows;
+    const int layouts = out.pretransformed ? 1 : 2;
+    for (int i = 0; i < layouts; ++i) {
+        const D3D9TransformLayout transform = i == 0 ? D3D9TransformLayout::Rows : D3D9TransformLayout::Columns;
+        D3D9NdcBounds bounds;
+        if (!D3D9ComputeBounds(view, out.layout, out.count, out.viewport, g_backbuffer_width, g_backbuffer_height,
+                               out.constants, transform, bounds)) continue;
+        if (want_minimap && D3D9MinimapDrawMatch(bounds, g_depth_test, g_depth_write, g_stencil_enabled != 0)) {
+            ++minimap_matches;
+            if (minimap_matches == 1) first_bounds = bounds;
+            selected_bounds = bounds;
+            selected_transform = transform;
+        }
+        if (want_loading_quad && D3D9LateLoadingQuad(bounds, g_backbuffer_width, g_backbuffer_height,
+                                                     request.vertex_count, true)) ++loading_matches;
+    }
+    view.Release();
+
+    // One matching layout identifies the transform. Identity/symmetric matrices can match both; Pure3D's verified
+    // m4x4 convention is row-output, so use the first (row) result instead of leaving part of the minimap behind.
+    out.loading_quad = loading_matches != 0;
+    out.minimap = minimap_matches != 0;
+    if (minimap_matches > 1) {
+        selected_bounds = first_bounds;
+        selected_transform = D3D9TransformLayout::Rows;
+    }
+    out.bounds = selected_bounds;
+    out.transform = selected_transform;
+    return out.loading_quad || out.minimap;
+}
+
+struct D3D9DrawPreparation {
+    IDirect3DDevice9* device = nullptr;
+    std::vector<uint8_t> up_copy;
+    const void* up_data = nullptr;
+    float original_constants[16] = {};
+    bool restore_constants = false, matched = false, shader = false;
+
+    void Begin(IDirect3DDevice9* dev, const D3D9DrawRequest& request, bool post_world) {
+        D3D9TrackDraw(dev);
+        const bool triangle = request.type == D3DPT_TRIANGLELIST || request.type == D3DPT_TRIANGLESTRIP ||
+                              request.type == D3DPT_TRIANGLEFAN;
+        const int offset_x = g_minimap_x.load(std::memory_order_relaxed);
+        const int offset_y = g_minimap_y.load(std::memory_order_relaxed);
+        const bool depth_eligible = D3D9MinimapDepthEligible(g_depth_test, g_depth_write);
+        const bool want_minimap = post_world && depth_eligible && (offset_x != 0 || offset_y != 0);
+        // The late-quad trigger is independent of the depth-draw count. Only 4/6-vertex triangle quads are read;
+        // minimap relocation may inspect all small post-world HUD primitives, including lines/points and stencil.
+        const bool want_loading = triangle && depth_eligible && g_frame_draws > 1 &&
+                                  (request.vertex_count == 4 || request.vertex_count == 6);
+        if ((!want_minimap && !want_loading) || !request.vertex_count || request.vertex_count > 4096) return;
+
+        D3D9DrawAnalysis analysis;
+        if (!D3D9AnalyzeDraw(dev, request, want_minimap, want_loading, analysis)) return;
+        if (analysis.loading_quad) g_late_loading_quad = true;
+        if (!analysis.minimap) return;
+
+        float dx = 0, dy = 0;
+        D3D9MinimapOffsetNdc(offset_x, offset_y, dx, dy);
+        if (analysis.pretransformed) {
+            if (!request.up) {
+                static bool logged = false;
+                if (!logged) {
+                    Log("minimap: pretransformed buffer-backed draw left untouched (no safe UP substitution)");
+                    logged = true;
+                }
+                return;
+            }
+            const uint64_t vertices = uint64_t(analysis.first) + analysis.count;
+            const uint64_t bytes = vertices * request.stride;
+            if (!bytes || bytes > 4u * 1024u * 1024u) return;
+            up_copy.resize(size_t(bytes));
+            std::memcpy(up_copy.data(), request.vertices, size_t(bytes));
+            const float pixel_dx = dx * float(g_backbuffer_width) * 0.5f;
+            const float pixel_dy = -dy * float(g_backbuffer_height) * 0.5f;
+            D3D9TranslatePretransformedVertices(up_copy.data() + size_t(analysis.first) * request.stride,
+                                                analysis.count, request.stride, analysis.layout.offset,
+                                                pixel_dx, pixel_dy);
+            up_data = up_copy.data();
+            matched = true;
+            ++g_minimap_up;
+        } else {
+            // Convert full-backbuffer NDC delta to this viewport's clip-space delta, then add delta*clip.w.
+            const float local_dx = dx * float(g_backbuffer_width) / float(analysis.viewport.Width);
+            const float local_dy = dy * float(g_backbuffer_height) / float(analysis.viewport.Height);
+            float translated[16];
+            std::memcpy(original_constants, analysis.constants, sizeof(original_constants));
+            D3D9TranslateConstants(original_constants, translated, analysis.transform, local_dx, local_dy);
+            HRESULT hr = dev->SetVertexShaderConstantF(0, translated, 4);
+            if (FAILED(hr)) {
+                dev->SetVertexShaderConstantF(0, original_constants, 4);
+                static bool logged = false;
+                if (!logged) {
+                    Log("minimap: temporary vertex-constant upload failed -> %08x", uint32_t(hr));
+                    logged = true;
+                }
+                return;
+            }
+            device = dev;
+            restore_constants = shader = matched = true;
+            ++g_minimap_vs;
+        }
+        ++g_minimap_matches;
+        g_minimap_last_bounds = analysis.bounds;
+        if (g_stencil_enabled) ++g_minimap_stencil;
+    }
+
+    void Finish(HRESULT draw_hr) {
+        HRESULT restore_hr = D3D_OK;
+        if (restore_constants) {
+            restore_hr = device->SetVertexShaderConstantF(0, original_constants, 4);
+            restore_constants = false;
+            if (SUCCEEDED(restore_hr)) ++g_minimap_restored;
+        }
+        if (matched && (FAILED(draw_hr) || FAILED(restore_hr))) ++g_minimap_failed;
+    }
+};
+
+HRESULT D3D9SubmitDraw(IDirect3DDevice9* dev, const D3D9DrawRequest& request) {
+    const bool post_world = g_frame_has_world;
+    D3D9DrawPreparation preparation;
+    preparation.Begin(dev, request, post_world);
+    const void* up_vertices = preparation.up_data ? preparation.up_data : request.vertices;
+    HRESULT hr = D3DERR_INVALIDCALL;
+    if (request.up && request.indexed) {
+        hr = dev->DrawIndexedPrimitiveUP(request.type, request.min_vertex, request.num_vertices,
+                                         request.primitive_count, request.indices, request.index_format,
+                                         up_vertices, request.stride);
+    } else if (request.up) {
+        hr = dev->DrawPrimitiveUP(request.type, request.primitive_count, up_vertices, request.stride);
+    } else if (request.indexed) {
+        hr = dev->DrawIndexedPrimitive(request.type, request.base_vertex, request.min_vertex, request.num_vertices,
+                                       request.start_index, request.primitive_count);
+    } else {
+        hr = dev->DrawPrimitive(request.type, request.start_vertex, request.primitive_count);
+    }
+    preparation.Finish(hr);  // Before returning to the guest: no translated constant survives the draw.
+    return hr;
+}
+
+void D3D9FrameDiagnostics() {
+    const int x = g_minimap_x.load(std::memory_order_relaxed), y = g_minimap_y.load(std::memory_order_relaxed);
+    if (!x && !y) return;
+    const uint32_t generation = g_minimap_generation.load(std::memory_order_relaxed);
+    if (g_minimap_matches && (generation != g_minimap_logged_generation ||
+                              g_present_count - g_minimap_last_log >= 120)) {
+        Log("minimap: D3D9 submission offset %d,%d matched %u draws (VS %u/restored %u, UP copies %u, stencil %u), failed %u; last bounds [%.3f,%.3f]x[%.3f,%.3f]",
+            x, y, g_minimap_matches, g_minimap_vs, g_minimap_restored, g_minimap_up, g_minimap_stencil,
+            g_minimap_failed, g_minimap_last_bounds.min_x, g_minimap_last_bounds.max_x,
+            g_minimap_last_bounds.min_y, g_minimap_last_bounds.max_y);
+        g_minimap_logged_generation = generation;
+        g_minimap_last_log = g_present_count;
+    } else if (!g_minimap_matches && generation != g_minimap_wait_logged_generation) {
+        Log("minimap: waiting for matching post-world D3D9 HUD bounds; offset %d,%d", x, y);
+        g_minimap_wait_logged_generation = generation;
+    }
 }
 
 void MaskFrontendPillarboxes(IDirect3DDevice9* dev) {
-    const bool world = g_frame_has_world;
-    g_frame_has_world = false;
-    if (world) {
-        g_last_world_frame = g_present_count;
-        return;  // never mask a frame containing the normal 3D world
-    }
+    const uint32_t depth_draws = g_depth_write_draws;
+    const bool late_quad = g_late_loading_quad;
+    D3D9FrameDiagnostics();
+    D3D9ResetFrameCounters();
 
     D3D9Pillarboxes bars;
     if (!D3D9WidePillarboxes(g_backbuffer_width, g_backbuffer_height, bars)) return;
-    const bool movie = BinkHasOpenMovie();
-    // Active Bink/loading movies are masked immediately. Other frontend fades wait two complete non-world frames,
-    // avoiding a one-off gameplay frame with no opaque draw. There is no movie-registry lookup on world frames.
-    if (!D3D9FrontendMaskTiming(movie, g_present_count - g_last_world_frame)) return;
+    bool movie = false, movie_queried = false;
+    bool mask = D3D9LoadingMaskRequired(false, depth_draws, late_quad);
+    if (!mask) {
+        // If another trigger already fired, a registry lock cannot change the result and is unnecessary.
+        movie = BinkHasOpenMovie();
+        movie_queried = true;
+        mask = D3D9LoadingMaskRequired(movie, depth_draws, late_quad);
+    }
+    if (!mask) return;
 
     const uint32_t width = g_backbuffer_width, height = g_backbuffer_height;
     D3DRECT rects[2];
@@ -622,7 +1025,7 @@ void MaskFrontendPillarboxes(IDirect3DDevice9* dev) {
     if (bars.right < width) rects[count++] = {LONG(bars.right), 0, LONG(width), LONG(height)};
     if (!count) return;
 
-    // DXVK clips Clear to viewport/scissor state. Temporarily cover the full backbuffer, then restore both states.
+    // Clear immediately before Present. DXVK clips Clear to viewport/scissor state, so cover and restore both.
     D3DVIEWPORT9 old_viewport {};
     DWORD old_scissor = FALSE;
     if (FAILED(dev->GetViewport(&old_viewport)) ||
@@ -634,11 +1037,12 @@ void MaskFrontendPillarboxes(IDirect3DDevice9* dev) {
     dev->SetViewport(&old_viewport);
     dev->SetRenderState(D3DRS_SCISSORTESTENABLE, old_scissor);
 
-    static bool logged = false;
-    if (!logged) {
-        Log("loading: opaque #000000 pillarboxes %ux%u [0,%u) [%u,%u), movie=%d -> %08x", width, height,
-            bars.left, bars.right, width, movie ? 1 : 0, uint32_t(hr));
-        logged = true;
+    static uint32_t last_log = 0;
+    if (g_present_count - last_log >= 120 || last_log == 0) {
+        Log("loading: opaque #000000 pillarboxes %ux%u [0,%u) [%u,%u), movie=%s depth-draws=%u late-quad=%d -> %08x",
+            width, height, bars.left, bars.right, width, movie_queried ? (movie ? "1" : "0") : "not-queried",
+            depth_draws, late_quad ? 1 : 0, uint32_t(hr));
+        last_log = g_present_count;
     }
 }
 
@@ -668,6 +1072,51 @@ void x_Direct3DCreate9(Ctx* c) {
 
 // ---------------- manual methods ----------------
 #define M(iface, method) void Manual_##iface##_##method(Ctx* c)
+
+M(IDirect3DDevice9, DrawPrimitive) {
+    D3D9DrawRequest request;
+    request.type = D3DPRIMITIVETYPE(Arg(c, 1));
+    request.start_vertex = Arg(c, 2);
+    request.primitive_count = Arg(c, 3);
+    request.vertex_count = D3D9PrimitiveVertices(request.type, request.primitive_count);
+    Return(c, uint32_t(D3D9SubmitDraw(Host<IDirect3DDevice9>(Arg(c, 0)), request)), 4);
+}
+M(IDirect3DDevice9, DrawIndexedPrimitive) {
+    D3D9DrawRequest request;
+    request.type = D3DPRIMITIVETYPE(Arg(c, 1));
+    request.base_vertex = int32_t(Arg(c, 2));
+    request.min_vertex = Arg(c, 3);
+    request.num_vertices = Arg(c, 4);
+    request.start_index = Arg(c, 5);
+    request.primitive_count = Arg(c, 6);
+    request.vertex_count = D3D9PrimitiveVertices(request.type, request.primitive_count);
+    request.indexed = true;
+    Return(c, uint32_t(D3D9SubmitDraw(Host<IDirect3DDevice9>(Arg(c, 0)), request)), 7);
+}
+M(IDirect3DDevice9, DrawPrimitiveUP) {
+    D3D9DrawRequest request;
+    request.type = D3DPRIMITIVETYPE(Arg(c, 1));
+    request.primitive_count = Arg(c, 2);
+    request.vertex_count = D3D9PrimitiveVertices(request.type, request.primitive_count);
+    request.vertices = Ptr<void>(Arg(c, 3));
+    request.stride = Arg(c, 4);
+    request.up = true;
+    Return(c, uint32_t(D3D9SubmitDraw(Host<IDirect3DDevice9>(Arg(c, 0)), request)), 5);
+}
+M(IDirect3DDevice9, DrawIndexedPrimitiveUP) {
+    D3D9DrawRequest request;
+    request.type = D3DPRIMITIVETYPE(Arg(c, 1));
+    request.min_vertex = Arg(c, 2);
+    request.num_vertices = Arg(c, 3);
+    request.primitive_count = Arg(c, 4);
+    request.indices = Ptr<void>(Arg(c, 5));
+    request.index_format = D3DFORMAT(Arg(c, 6));
+    request.vertices = Ptr<void>(Arg(c, 7));
+    request.stride = Arg(c, 8);
+    request.vertex_count = D3D9PrimitiveVertices(request.type, request.primitive_count);
+    request.indexed = request.up = true;
+    Return(c, uint32_t(D3D9SubmitDraw(Host<IDirect3DDevice9>(Arg(c, 0)), request)), 9);
+}
 
 M(IDirect3D9, GetAdapterMonitor) { Return(c, 1, 2); }
 M(IDirect3D9, GetAdapterDisplayMode) {
@@ -794,8 +1243,16 @@ M(IDirect3DDevice9, Reset) {
 }
 
 M(IDirect3DStateBlock9, Apply) {
-    D3D9StateBlockApplied();  // only the loading-frame classifier becomes conservative; DXVK state stays authoritative
-    Return(c, uint32_t(Host<IDirect3DStateBlock9>(Arg(c, 0))->Apply()), 1);
+    auto* block = Host<IDirect3DStateBlock9>(Arg(c, 0));
+    const HRESULT hr = block->Apply();
+    IDirect3DDevice9* dev = nullptr;
+    if (SUCCEEDED(block->GetDevice(&dev)) && dev) {
+        D3D9RefreshDeviceState(dev);  // Apply never suppresses or invalidates the loading-mask triggers.
+        dev->Release();
+    } else {
+        g_depth_test = g_depth_write = g_stencil_enabled = -1;
+    }
+    Return(c, uint32_t(hr), 1);
 }
 
 // Setting shot=<frame>[,<frame>...] (PROTORE_SHOT): the back buffer of those presents is saved as shot_<frame>.ppm in
@@ -887,6 +1344,10 @@ extern "C" JNIEXPORT void JNICALL Java_com_protore_game_ProtoSurface_nativeSurfa
 extern "C" JNIEXPORT void JNICALL Java_com_protore_game_ProtoSurface_nativeSurfaceReady(JNIEnv*, jclass) {
     std::lock_guard<std::mutex> lock(g_present_mutex);
     g_surface_gone = false;
+}
+extern "C" JNIEXPORT void JNICALL Java_com_protore_game_TouchControls_nativeSetMinimapPosition(
+    JNIEnv*, jclass, jint x, jint y) {
+    native::SetPosition(int(x), int(y));
 }
 #endif
 

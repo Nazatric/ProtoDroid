@@ -709,7 +709,6 @@ int main(int argc, char** argv) {
         }
         bool keep = (GuestCall(service, {quit ? 1u : 0u, focused ? 0u : 1u}) & 0xff) != 0;
         GuestCall(focus, {focused ? 1u : 0u});
-        if (keep) MinimapService(frame);
         if (!keep) break;
     }
     GuestCall(terminate, {});

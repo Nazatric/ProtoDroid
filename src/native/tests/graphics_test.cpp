@@ -1,8 +1,9 @@
-// Host UBSAN tests for production DXT decoding, effective sampler values, frontend geometry, and the GFx float ABI.
+// Host UBSAN tests for production DXT decoding, effective sampler values, D3D9 HUD submission transforms, and loading masks.
 #include "d3d9_dxt.h"
 #include "d3d9_state.h"
-#include "minimap_logic.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -142,14 +143,167 @@ void TestSamplerTransform() {
     Check(D3D9EffectiveSamplerValue(10, 2, 8) == 2, "lower anisotropy request was raised");
 }
 
-void TestPillarboxes() {
+bool Near(float a, float b, float epsilon = 0.0001f) {
+    return std::fabs(a - b) <= epsilon;
+}
+
+D3D9NdcBounds QuadBounds(const float constants[16], D3D9TransformLayout layout) {
+    const float positions[4][2] = {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}};
+    D3D9NdcBounds b {1.0e30f, 1.0e30f, -1.0e30f, -1.0e30f};
+    for (const auto& p : positions) {
+        const D3D9ClipPosition clip = D3D9TransformPosition(constants, layout, p[0], p[1], 0.0f);
+        Check(clip.w != 0.0f, "test quad has no clip w");
+        const float x = clip.x / clip.w, y = clip.y / clip.w;
+        b.min_x = std::min(b.min_x, x);
+        b.max_x = std::max(b.max_x, x);
+        b.min_y = std::min(b.min_y, y);
+        b.max_y = std::max(b.max_y, y);
+    }
+    return b;
+}
+
+void TestMinimapMatching() {
+    const D3D9NdcBounds map {-1.0f, -1.0f, -0.5f, -0.3f};
+    Check(D3D9MinimapDrawMatch(map, 0, 1, false), "depth-disabled map did not match");
+    Check(D3D9MinimapDrawMatch(map, 1, 0, true), "stencil-write circular mask was rejected");
+    Check(D3D9MinimapDrawMatch(map, 0, 0, true), "stencil-tested map component was rejected");
+    Check(!D3D9MinimapDrawMatch(map, 1, 1, false), "depth-writing world draw matched the minimap");
+    Check(!D3D9MinimapDrawMatch(map, -1, -1, false), "unknown depth state matched the minimap");
+
+    const D3D9NdcBounds north_badge {-0.62f, -0.22f, -0.56f, -0.16f};
+    const D3D9NdcBounds marker {-0.72f, -0.61f, -0.70f, -0.57f};
+    const D3D9NdcBounds thin_ring {-1.02f, -1.02f, -0.48f, -0.28f};
+    Check(D3D9MinimapDrawMatch(north_badge, 0, 0, false), "north badge bounds were rejected");
+    Check(D3D9MinimapDrawMatch(marker, 0, 0, false), "small marker bounds were rejected");
+    Check(D3D9MinimapDrawMatch(thin_ring, 1, 0, true), "ring/stencil bounds were rejected");
+    Check(!D3D9MinimapDrawMatch({-0.39f, -1.0f, -0.1f, -0.3f}, 0, 0, false),
+          "adjacent health/HUD geometry matched");
+    Check(!D3D9MinimapDrawMatch({-1.04f, -1.0f, -0.41f, -0.3f}, 0, 0, false),
+          "over-wide bottom-left geometry matched");
+    Check(!D3D9MinimapDrawMatch({-1.0f, -0.14f, -0.5f, 0.4f}, 0, 0, false),
+          "geometry above the minimap zone matched");
+    Check(D3D9MinimapDrawMatch({-0.8f, -1.0f, -0.8f, -0.3f}, 0, 0, false),
+          "vertical ring segment was rejected");
+    Check(D3D9MinimapDrawMatch({-0.8f, -0.6f, -0.8f, -0.6f}, 0, 0, false),
+          "point-sprite marker was rejected");
+    Check(!D3D9MinimapDrawMatch({-0.2f, -0.6f, -0.2f, -0.6f}, 0, 0, false),
+          "out-of-zone point sprite matched");
+    Check(!D3D9MinimapDrawMatch({-1.0f, -1.0f, NAN, -0.3f}, 0, 0, false),
+          "non-finite geometry matched");
+
+    float dx = 0, dy = 0;
+    D3D9MinimapOffsetNdc(0, 0, dx, dy);
+    Check(dx == 0 && dy == 0, "Bottom-Left is not a no-op");
+    D3D9MinimapOffsetNdc(0, -450, dx, dy);
+    Check(dx == 0 && Near(dy, 1.25f), "Top-Left NDC translation changed");
+    D3D9MinimapOffsetNdc(50, 100, dx, dy);
+    Check(Near(dx, 0.0625f) && Near(dy, -2.0f * 100.0f / 720.0f), "live offset scaling changed");
+}
+
+void TestShaderTranslationAndRestoration() {
+    const float rows[16] = {
+        0.5f, 0.0f, 0.0f, -0.75f,
+        0.0f, 0.5f, 0.0f, -0.60f,
+        0.0f, 0.0f, 1.0f,  0.0f,
+        0.0f, 0.0f, 0.0f,  1.0f,
+    };
+    const D3D9NdcBounds original_bounds = QuadBounds(rows, D3D9TransformLayout::Rows);
+    Check(D3D9MinimapDrawMatch(original_bounds, 0, 0, false), "shader quad fixture is outside the minimap");
+
+    float columns[16];
+    for (size_t r = 0; r < 4; ++r)
+        for (size_t c = 0; c < 4; ++c) columns[4 * r + c] = rows[4 * c + r];
+    const D3D9NdcBounds column_bounds = QuadBounds(columns, D3D9TransformLayout::Columns);
+    Check(Near(column_bounds.min_x, original_bounds.min_x) && Near(column_bounds.max_y, original_bounds.max_y),
+          "column-layout fixture does not represent the same transform");
+
+    for (D3D9TransformLayout layout : {D3D9TransformLayout::Rows, D3D9TransformLayout::Columns}) {
+        const float* source = layout == D3D9TransformLayout::Rows ? rows : columns;
+        float device[16], translated[16];
+        std::memcpy(device, source, sizeof(device));
+        float dx = 0, dy = 0;
+        D3D9MinimapOffsetNdc(50, -100, dx, dy);
+        D3D9TranslateConstants(device, translated, layout, dx, dy);
+        std::memcpy(device, translated, sizeof(device));  // temporary SetVertexShaderConstantF(0, ..., 4)
+        const D3D9NdcBounds moved = QuadBounds(device, layout);
+        Check(Near(moved.min_x, original_bounds.min_x + dx) && Near(moved.max_x, original_bounds.max_x + dx) &&
+                  Near(moved.min_y, original_bounds.min_y + dy) && Near(moved.max_y, original_bounds.max_y + dy),
+              "shader translation is not a uniform NDC offset");
+        std::memcpy(device, source, sizeof(device));  // immediate post-draw restoration
+        Check(std::memcmp(device, source, sizeof(device)) == 0, "original shader constants were not restored exactly");
+    }
+
+    float perspective[16];
+    std::memcpy(perspective, rows, sizeof(rows));
+    perspective[12] = 0.1f;
+    perspective[13] = -0.2f;
+    perspective[15] = 1.1f;
+    float shifted[16];
+    D3D9TranslateConstants(perspective, shifted, D3D9TransformLayout::Rows, 0.2f, -0.3f);
+    const D3D9ClipPosition before = D3D9TransformPosition(perspective, D3D9TransformLayout::Rows, 0.3f, 0.4f, 0.2f);
+    const D3D9ClipPosition after = D3D9TransformPosition(shifted, D3D9TransformLayout::Rows, 0.3f, 0.4f, 0.2f);
+    Check(Near(after.x, before.x + 0.2f * before.w) && Near(after.y, before.y - 0.3f * before.w) &&
+              Near(after.w, before.w), "perspective-w translation or w preservation failed");
+}
+
+void TestPretransformedVertexCopy() {
+    struct Vertex {
+        float x, y, z, rhw;
+        uint32_t color;
+        float u, v;
+    };
+    const Vertex source[4] = {
+        {20.0f, 600.0f, 0.0f, 1.0f, 0x11223344u, 0.0f, 0.0f},
+        {180.0f, 600.0f, 0.2f, 1.0f, 0x22334455u, 1.0f, 0.0f},
+        {180.0f, 710.0f, 0.4f, 1.0f, 0x33445566u, 1.0f, 1.0f},
+        {20.0f, 710.0f, 0.6f, 1.0f, 0x44556677u, 0.0f, 1.0f},
+    };
+    Vertex temporary[4];
+    std::memcpy(temporary, source, sizeof(source));
+    D3D9TranslatePretransformedVertices(temporary, 4, sizeof(Vertex), 0, 100.0f, -450.0f);
+    for (size_t i = 0; i < 4; ++i) {
+        Check(Near(temporary[i].x, source[i].x + 100.0f) && Near(temporary[i].y, source[i].y - 450.0f),
+              "UP position copy was not translated");
+        Check(temporary[i].z == source[i].z && temporary[i].rhw == source[i].rhw &&
+                  temporary[i].color == source[i].color && temporary[i].u == source[i].u &&
+                  temporary[i].v == source[i].v,
+              "UP translation modified z/rhw/color/UV data");
+    }
+    Check(source[0].x == 20.0f && source[0].y == 600.0f, "source UP vertices were modified");
+
+    // Packed, deliberately unaligned host storage exercises the memcpy-based accessor under UBSAN.
+    std::vector<uint8_t> packed(3 + 4 * sizeof(Vertex) + 5, 0xa5);
+    std::memcpy(packed.data() + 3, source, sizeof(source));
+    D3D9TranslatePretransformedVertices(packed.data() + 3, 4, sizeof(Vertex), 0, 100.0f, -450.0f);
+    Check(packed[0] == 0xa5 && packed[1] == 0xa5 && packed[2] == 0xa5 && packed.back() == 0xa5,
+          "UP translation crossed the temporary allocation");
+    float x = 0, y = 0;
+    std::memcpy(&x, packed.data() + 3, sizeof(x));
+    std::memcpy(&y, packed.data() + 3 + sizeof(x), sizeof(y));
+    Check(Near(x, 120.0f) && Near(y, 150.0f), "unaligned UP copy was translated incorrectly");
+}
+
+void TestLoadingAndPillarboxes() {
     Check(D3D9DepthDrawMayBeWorld(1, 1), "depth-tested world draw was not detected");
     Check(D3D9DepthDrawMayBeWorld(-1, -1), "unknown StateBlock depth was not conservative");
     Check(!D3D9DepthDrawMayBeWorld(0, 1) && !D3D9DepthDrawMayBeWorld(1, 0),
           "2D draw was misclassified as world geometry");
-    Check(D3D9FrontendMaskTiming(true, 0), "active Bink did not mask immediately");
-    Check(!D3D9FrontendMaskTiming(false, 2), "frontend grace period was shortened");
-    Check(D3D9FrontendMaskTiming(false, 3), "non-world frontend never became eligible");
+    Check(D3D9LoadingMaskRequired(true, 100, false), "active Bink did not request a mask");
+    Check(D3D9LoadingMaskRequired(false, 19, false), "fewer than 20 depth-write draws did not request a mask");
+    Check(!D3D9LoadingMaskRequired(false, 20, false), "ordinary 20+ depth-write gameplay was masked");
+    Check(D3D9LoadingMaskRequired(false, 100, true), "late loading quad did not request a mask");
+
+    const D3D9NdcBounds centered_16_9 {-0.8f, -1.0f, 0.8f, 1.0f};
+    Check(D3D9LateLoadingQuad(centered_16_9, 1600, 720, 4, true), "1600x720 loading quad was not detected");
+    Check(D3D9LateLoadingQuad(centered_16_9, 2400, 1080, 6, true), "2400x1080 loading quad was not detected");
+    Check(!D3D9LateLoadingQuad(centered_16_9, 1600, 720, 4, false), "early quad was misclassified as late");
+    Check(!D3D9LateLoadingQuad(centered_16_9, 1600, 720, 5, true), "non-quad was misclassified");
+    Check(!D3D9LateLoadingQuad({-0.7f, -1.0f, 0.9f, 1.0f}, 1600, 720, 4, true),
+          "off-centre full-height quad was misclassified");
+    Check(!D3D9LateLoadingQuad({-1.0f, -1.0f, 1.0f, 1.0f}, 1600, 720, 4, true),
+          "full-width 20:9 gameplay quad was misclassified");
+    Check(!D3D9LateLoadingQuad({-0.8f, -0.9f, -0.6f, -0.7f}, 1600, 720, 4, true),
+          "small health/UI quad was misclassified");
 
     D3D9Pillarboxes p {};
     Check(!D3D9WidePillarboxes(1280, 720, p), "16:9 must not be masked");
@@ -163,32 +317,17 @@ void TestPillarboxes() {
     Check(p.left == 272 && p.right == 2440 && p.content == 2168, "integer pillarbox coverage is not deterministic");
 }
 
-void TestMinimapFloatABI() {
-    float value = 0;
-    const uint32_t x = MinimapEncodeFloat(50.0f), y = MinimapEncodeFloat(-400.0f);
-    Check(MinimapDecodeFloat(4, x, value) && value == 50.0f, "GFx x payload is not a 32-bit float");
-    Check(MinimapDecodeFloat(4, y, value) && value == -400.0f, "GFx y payload is not a 32-bit float");
-    Check(!MinimapDecodeFloat(3, x, value), "non-numeric GFx type was accepted");
-    Check(!MinimapDecodeFloat(4, 0x7fc00000u, value), "NaN GFx coordinate was accepted");
-    Check(MinimapDecodeFloat(4, MinimapEncodeFloat(1.0e30f), value) && !MinimapCoordinateValid(value),
-          "unbounded GFx coordinate was accepted");
-    Check(MinimapCoordinateNear(50.0f, 50.005f), "float readback tolerance is too strict");
-    Check(!MinimapCoordinateNear(50.0f, 50.02f), "incorrect GFx readback was accepted");
-    // The reserved high word no longer participates: even a garbage high half cannot turn x=50 into a huge double.
-    const uint64_t old_bad_double = (uint64_t(0x7e589421u) << 32) | x;
-    Check(MinimapDecodeFloat(4, uint32_t(old_bad_double), value) && value == 50.0f,
-          "reserved GFx high payload contaminated the float");
-}
-
 }  // namespace
 
 int main() {
     try {
         TestDxt();
         TestSamplerTransform();
-        TestPillarboxes();
-        TestMinimapFloatABI();
-        std::puts("graphics tests passed (DXT1/2/3/4/5, BGRA/A1R5G5B5, effective anisotropy, pillarboxes, GFx floats)");
+        TestMinimapMatching();
+        TestShaderTranslationAndRestoration();
+        TestPretransformedVertexCopy();
+        TestLoadingAndPillarboxes();
+        std::puts("graphics tests passed (DXT, samplers, D3D9 minimap bounds/transforms/copies/restoration, loading masks)");
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "graphics test failed: %s\n", e.what());
