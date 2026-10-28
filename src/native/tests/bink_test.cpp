@@ -225,8 +225,20 @@ void CheckPublic(uint32_t h) {
     Check(p->size > 1000000, "missing bounded Bink size");
 }
 
-void CheckOpenDecodeClose(uint32_t h) {
-    Check(h != 0, "BinkOpen returned null"); CheckPublic(h); Decode(h); Close(h);
+void CheckOpenDecodeClose(uint32_t h, bool check_host_backlog = false) {
+    Check(h != 0, "BinkOpen returned null");
+    CheckPublic(h);
+    Decode(h);
+    if (check_host_backlog) {
+        Call("BinkGoto", 3, {h, 50, 0});
+        uint32_t status = Call("BinkDoFrame", 1, {h});
+        auto* p = Ptr<Public>(h);
+        Check(status == 0, "host/memory-backed deep decode status=" + std::to_string(status) +
+              " read_error=" + std::to_string(p->read_error) + " frame=" + std::to_string(p->frame_num) +
+              " last=" + std::to_string(p->last_frame_num));
+        Check(p->last_frame_num == 50, "host/memory-backed deep decode did not finish synchronously");
+    }
+    Close(h);
 }
 
 uint32_t RegisterTestFrameBuffers(uint32_t h) {
@@ -485,8 +497,8 @@ void CheckCustomIO(const std::vector<uint8_t>& bytes) {
     };
 
     Call("BinkSetIO", 1, {kOpen});
-    CheckOpenDecodeClose(OpenName("movies\\intro.bik"));   // loose host fast path
-    CheckOpenDecodeClose(OpenName("video\\intro.bik"));    // uncompressed RCF-slice host fast path
+    CheckOpenDecodeClose(OpenName("movies\\intro.bik"), true);   // loose host fast path
+    CheckOpenDecodeClose(OpenName("video\\intro.bik"), true);    // uncompressed RCF-slice host fast path
     Check(opens == 0 && header_reads == 0 && frame_reads == 0 && closes == 0,
           "host-resolvable custom-I/O movies entered guest callbacks");
 
@@ -602,7 +614,7 @@ int main(int argc, char** argv) {
         CheckOpenDecodeClose(OpenName("video\\wide.bik"));
         uint32_t memory = HeapAlloc(static_cast<uint32_t>(bytes.size()));
         memcpy(Ptr<void>(memory), bytes.data(), bytes.size());
-        CheckOpenDecodeClose(OpenRaw(memory, kFromMemory));
+        CheckOpenDecodeClose(OpenRaw(memory, kFromMemory), true);
         int fd = open((root / "Movies" / "Intro.BIK").c_str(), O_RDONLY | O_CLOEXEC);
         Check(fd >= 0, "could not open file-handle fixture");
         g_test_handles[0x100] = fd;

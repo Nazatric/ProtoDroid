@@ -194,6 +194,7 @@ struct Movie {
     uint32_t registered_buffers = 0;
     bool read_eof = false, drain_sent = false, closed = false;
     bool video_on = true, sound_on = true;
+    bool custom_io = false;  // actual CallbackSource input, not merely an installed BinkSetIO handler
     bool paused = false;
     bool audio_anchored = false;
     bool background_io = true;
@@ -204,7 +205,6 @@ struct Movie {
     uint32_t audio_rate = kAudioRate;
     uint64_t total_decodes = 0, skipped_frames = 0;
     uint64_t deferred_calls = 0;
-    uint32_t plane_copy_logs = 0;
     uint64_t decode_us = 0, audio_decode_us = 0;
     Clock::time_point start = Clock::now();
     Clock::time_point anchor_mono = start;
@@ -390,6 +390,20 @@ bool TrackSelected(const Track& track, size_t index) {
     return false;
 }
 
+void UpdateStreamDiscardLocked(Movie& movie) {
+    if (!movie.format) return;
+    if (movie.video_stream) movie.video_stream->discard = AVDISCARD_DEFAULT;
+    for (unsigned i = 0; i < movie.format->nb_streams; ++i) {
+        AVStream* stream = movie.format->streams[i];
+        if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) stream->discard = AVDISCARD_ALL;
+    }
+    for (auto& track : movie.tracks) {
+        // A legacy-open track still owns a PCM consumer even when it is not in the normal soundtrack selection.
+        if (track->stream)
+            track->stream->discard = (track->enabled || track->legacy_open) ? AVDISCARD_DEFAULT : AVDISCARD_ALL;
+    }
+}
+
 void ApplyTrackSelection(const std::shared_ptr<Movie>& movie) {
     std::lock_guard<std::timed_mutex> lock(movie->mutex);
     for (size_t i = 0; i < movie->tracks.size(); ++i) {
@@ -397,6 +411,7 @@ void ApplyTrackSelection(const std::shared_ptr<Movie>& movie) {
         track.enabled = TrackSelected(track, i);
         if (!track.enabled) track.ring.Clear();
     }
+    UpdateStreamDiscardLocked(*movie);
 }
 
 void FreeVideoPackets(Movie& movie) {
@@ -516,8 +531,11 @@ bool PumpOnePacket(Movie& movie) {
     } else {
         for (auto& track : movie.tracks) {
             if (track->stream_index == movie.read_packet->stream_index) {
-                movie.pending_snd_size += static_cast<uint32_t>(movie.read_packet->size);
-                DecodeAudioPacket(movie, *track, movie.read_packet);
+                // Some demuxers still return discarded packets; never spend decode time on an unselected track.
+                if (track->stream->discard != AVDISCARD_ALL) {
+                    movie.pending_snd_size += static_cast<uint32_t>(movie.read_packet->size);
+                    DecodeAudioPacket(movie, *track, movie.read_packet);
+                }
                 break;
             }
         }
@@ -654,6 +672,7 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
     if ((flags & kFromMemory) && (flags & kFileHandle)) return 0;
     std::string error;
     std::unique_ptr<Source> source;
+    bool custom_io = false;
     if (flags & kFromMemory) {
         source = OpenMemorySource(name, flags, &error);
     } else if ((flags & kFileHandle) || !g_custom_io_open) {
@@ -665,6 +684,7 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
         if (!source) {
             Log("[bink] host input unavailable for %s (%s); using guest BINKIO fallback\n", name ? name : "<null>",
                 error.c_str());
+            custom_io = true;
             source = OpenCallbackSource(g_custom_io_open, name, flags, g_io_size, g_simulate, &error);
         }
     }
@@ -677,6 +697,7 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
     auto movie = std::make_shared<Movie>();
     movie->audio_rate = OutputRate();
     movie->source = std::move(source);
+    movie->custom_io = custom_io;
     movie->header_max_sizes = ReadHeaderMaxSizes(*movie->source);
     movie->flags = flags;
     movie->description = movie->source->Description();
@@ -776,6 +797,7 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
         movie->paused = false;
         movie->start = Clock::now();
         for (size_t i = 0; i < movie->tracks.size(); ++i) movie->tracks[i]->enabled = TrackSelected(*movie->tracks[i], i);
+        UpdateStreamDiscardLocked(*movie);
     }
     if (r < 0) {
         Log("[bink] decoder setup failed for %s: %s\n", movie->description.c_str(), AVError(r).c_str());
@@ -840,30 +862,7 @@ void LogFrameBufferSets(Movie& movie, const char* context) {
     }
 }
 
-void LogPlaneCopy(Movie& movie, const AVFrame& frame, const FrameBuffers& buffers) {
-    if (movie.plane_copy_logs >= 3 || !movie.Pub() || movie.Pub()->frame_num > 3) return;
-    ++movie.plane_copy_logs;
-    LogFrameBufferSets(movie, "copy");
-    unsigned alpha = frame.data[3] ? frame.data[3][0] : 255;
-    Log("[bink] plane copy frame %u active=%u total=%d src Y/Cb/Cr/A=%u/%u/%u/%u\n",
-        movie.Pub()->frame_num, buffers.frame_num, buffers.total_frames,
-        frame.data[0][0], frame.data[1][0], frame.data[2][0], alpha);
-    for (unsigned index = 0; index < static_cast<unsigned>(buffers.total_frames); ++index) {
-        const FramePlaneSet& p = buffers.frames[index];
-        if (!p.y.buffer && !p.cr.buffer && !p.cb.buffer && !p.alpha.buffer) {
-            Log("[bink]  set %u empty\n", index);
-            continue;
-        }
-        int a = p.alpha.buffer ? *Ptr<uint8_t>(p.alpha.buffer) : -1;
-        Log("[bink]  set %u%s Y=%08x/%d=%u Cb=%08x/%d=%u Cr=%08x/%d=%u A=%08x/%d=%d\n", index,
-            index == buffers.frame_num ? " (locked)" : "", p.y.buffer, static_cast<int32_t>(p.y.pitch),
-            *Ptr<uint8_t>(p.y.buffer), p.cb.buffer, static_cast<int32_t>(p.cb.pitch), *Ptr<uint8_t>(p.cb.buffer),
-            p.cr.buffer, static_cast<int32_t>(p.cr.pitch), *Ptr<uint8_t>(p.cr.buffer), p.alpha.buffer,
-            static_cast<int32_t>(p.alpha.pitch), a);
-    }
-}
-
-bool UploadRegisteredLocked(Movie& movie, const AVFrame* frame, bool decoded) {
+bool UploadRegisteredLocked(Movie& movie, const AVFrame* frame) {
     if (!movie.registered_buffers) return true;
     Public* p = movie.Pub();
     auto* buffers = Ptr<FrameBuffers>(movie.registered_buffers);
@@ -874,7 +873,6 @@ bool UploadRegisteredLocked(Movie& movie, const AVFrame* frame, bool decoded) {
         LogFrameBufferSets(movie, "rejected");
         return false;
     }
-    if (decoded && frame) LogPlaneCopy(movie, *frame, *buffers);
     return true;
 }
 
@@ -906,7 +904,7 @@ int DecodeCurrentFrame(Movie& movie, Clock::time_point deadline) {
         p->read_error = 1;
         return 0;
     }
-    if (!UploadRegisteredLocked(movie, movie.video_frame, true)) {
+    if (!UploadRegisteredLocked(movie, movie.video_frame)) {
         p->read_error = 1;
         return 0;
     }
@@ -937,18 +935,25 @@ uint32_t ErrorAddress() {
 
 int RunDoFrame(Movie& movie) {
     std::unique_lock<std::timed_mutex> lock(movie.mutex, std::defer_lock);
-    if (!lock.try_lock_for(kLockBudget)) return -1;  // never turn a busy decoder into a guest-thread deadlock
+    if (movie.custom_io) {
+        // Guest callbacks can re-enter the emulator, so retain the bounded lock/decode path for actual BINKIO input.
+        if (!lock.try_lock_for(kLockBudget)) return -1;
+    } else {
+        // Host files, RCF slices and memory cannot re-enter guest BINKIO while locked, so wait instead of deferring.
+        lock.lock();
+    }
     Public* p = movie.Pub();
     if (!p) return 0;
-    // Frame 1 must complete before the guest's first UnlockRect. Later frames use a short foreground budget and can
-    // safely present the retained frame while the guest performs its own bounded NextFrame/DoFrame retry loop.
-    Clock::time_point deadline = p->frame_num == 1 ? Clock::time_point::max() : Clock::now() + kDecodeBudget;
+    // Frame 1 and every host/memory-backed frame complete before UnlockRect. Only guest callback input may present a
+    // retained frame while the guest performs its bounded NextFrame/DoFrame retry loop.
+    const bool synchronous = p->frame_num == 1 || !movie.custom_io;
+    Clock::time_point deadline = synchronous ? Clock::time_point::max() : Clock::now() + kDecodeBudget;
     EnsureAudioLeadLocked(movie, std::min(deadline, Clock::now() + kAudioBudget));
     int result = DecodeCurrentFrame(movie, deadline);
     if (result < 0) {
         const AVFrame* retained = movie.presentation_frame && movie.presentation_frame->data[0]
                                       ? movie.presentation_frame : nullptr;
-        if (!UploadRegisteredLocked(movie, retained, false)) {
+        if (!UploadRegisteredLocked(movie, retained)) {
             p->read_error = 1;
             return 0;
         }
@@ -1022,8 +1027,8 @@ B(BinkNextFrame) {
     if (movie) {
         std::lock_guard<std::timed_mutex> lock(movie->mutex);
         Public* p = movie->Pub();
-        // A deferred DoFrame returns nonzero and the guest calls NextFrame before retrying while textures stay locked.
-        // Advance normally here; holding the failed frame would repeat it until the guest's 20-iteration bound.
+        // f_7c5a01b0 calls NextFrame between a deferred DoFrame and its retry while the original textures stay locked.
+        // Always advance both counters, including after deferral: parity must never depend on the preceding decode result.
         movie->deferred_calls = 0;
         if (p->frame_num < movie->decoded_position) movie->skipped_frames += movie->decoded_position - p->frame_num;
         if (p->frame_num >= movie->frames) {
@@ -1101,7 +1106,7 @@ B(BinkRegisterFrameBuffers) {
         movie->registered_buffers = buffers;
         movie->Pub()->frame_buffers = buffers;
         // Respect the guest's actual active index and initialize every valid set before its first UnlockRect.
-        if (buffers) (void)UploadRegisteredLocked(*movie, nullptr, false);
+        if (buffers) (void)UploadRegisteredLocked(*movie, nullptr);
     }
     Return(c, 0, 2);
 }
@@ -1219,6 +1224,7 @@ B(BinkOpenTrack) {
                 out->sndcomp = 0;
                 out->trackindex = static_cast<int32_t>(index);
                 track->legacy_open = true;
+                UpdateStreamDiscardLocked(*movie);
                 g_open_tracks[address] = {movie, index};
                 result = address;
             }
@@ -1237,6 +1243,7 @@ B(BinkCloseTrack) {
             track.legacy_open = false;
             track.legacy_frames.clear();
             track.legacy_bytes = 0;
+            UpdateStreamDiscardLocked(*it->second.first);
         }
         g_open_tracks.erase(it);
         HeapFree(address);
