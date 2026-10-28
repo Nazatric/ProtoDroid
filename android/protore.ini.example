@@ -18,8 +18,14 @@ texture_skip_min_size = 512
 # automatically; 1/0 forces it on/off.
 #decode_dxt = 1
 
+# Maximum texture anisotropy. Android defaults to 1 (linear); Settings offers 1/2/4/8.
+# At 1, anisotropic min/mag/mip filters become linear. An explicit d3d9.samplerAnisotropy in DXVK config is preserved.
+#max_anisotropy = 1
+
 # Audio backend: aaudio (default) or openslES. Try openslES if the sound stutters while the game runs smoothly.
 #audio_driver = openslES
+# Reuse the default mastering voice/output thread when the engine recreates its audio voices (Android default 1).
+#audio_master_reuse = 1
 
 # Present mode for Mali-G720 MC7 (Xiaomi POCO X7 Pro) crash fix:
 # Mali driver crashes with VK_PRESENT_MODE_MAILBOX_KHR (addr 0xb0 NULL deref) during initial
@@ -42,3 +48,8 @@ texture_skip_min_size = 512
 #present_stats = 1
 #fps_limit = 30
 #battery_saver = 1
+
+# Minimap offsets in logical HUD pixels, relative to the stock Bottom-Left position. Applied live through JNI.
+# 0,0 = Bottom-Left (default); 0,-450 = Top-Left under the health bar on the stock 720p HUD.
+#minimap_x = 0
+#minimap_y = 0

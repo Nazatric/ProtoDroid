@@ -51,6 +51,15 @@ struct Object {
     VoiceCallback* callback = nullptr;
     std::vector<EngineCallback*> engine_callbacks;
     uint32_t refs = 1;
+
+    // IXAudio2 is a singleton in this engine, but its driver recreates the default mastering/source voice pair.
+    // Keep the real mastering voice (and its real-time output thread) for the lifetime of the FAudio engine.
+    std::mutex mastering_mutex;
+    FAudioVoice* retained_master = nullptr;
+    uint32_t retained_channels = 0, retained_rate = 0, retained_flags = 0, retained_device = 0;
+    uint32_t retained_users = 0;
+    Object* master_owner = nullptr;     // retained mastering wrapper -> owning engine
+    bool uses_retained_master = false;  // set only on mastering-voice wrappers
 };
 
 std::recursive_mutex g_mutex;
@@ -238,6 +247,9 @@ M(EngineRelease) {
     Object* o = Obj(g);
     uint32_t r = --o->refs;
     if (!r) {
+        // FAudio_Release tears down the retained master together with any remaining voices, preserving its normal
+        // destruction ordering. Destroying the master first could leave a live source connected to a dead output.
+        o->retained_master = nullptr;
         FAudio_Release(o->audio);
         for (EngineCallback* cb : o->engine_callbacks) delete cb;
         delete o;
@@ -329,11 +341,61 @@ M(CreateSubmixVoice) {
 M(CreateMasteringVoice) {
     // (this, ppMasteringVoice, InputChannels, InputSampleRate, Flags, DeviceIndex, pEffectChain)
     Object* e = Obj(Arg(c, 0));
+    const auto started = std::chrono::steady_clock::now();
+#ifdef __ANDROID__
+    static const bool reuse_master = SettingInt("audio_master_reuse", 1) != 0;
+#else
+    static const bool reuse_master = SettingInt("audio_master_reuse", 0) != 0;
+#endif
+    const uint32_t channels = Arg(c, 2), rate = Arg(c, 3), flags = Arg(c, 4), device = Arg(c, 5);
+    FAudioEffectChain* effects = Effects(Arg(c, 6));
     FAudioMasteringVoice* v = nullptr;
-    uint32_t hr = FAudio_CreateMasteringVoice(e->audio, &v, Arg(c, 2), Arg(c, 3), Arg(c, 4), Arg(c, 5),
-                                              Effects(Arg(c, 6)));
-    Log("xaudio2: CreateMasteringVoice(%u ch, %u Hz, device %u) -> %x", Arg(c, 2), Arg(c, 3), Arg(c, 5), hr);
-    W32(Arg(c, 1), hr == 0 ? NewGuest(new Object(kMastering, nullptr, v)) : 0);
+    uint32_t hr = 0;
+    bool retained = false, reused = false;
+    if (reuse_master) {
+        std::lock_guard<std::mutex> lock(e->mastering_mutex);
+        if (e->retained_master && e->retained_channels == channels && e->retained_rate == rate &&
+            e->retained_flags == flags && e->retained_device == device) {
+            v = reinterpret_cast<FAudioMasteringVoice*>(e->retained_master);
+            // A freshly created XAudio2 mastering voice starts at unit volume.
+            hr = FAudioVoice_SetVolume(v, 1.0f, FAUDIO_COMMIT_NOW);
+            retained = hr == 0;
+            reused = true;
+        } else {
+            if (e->retained_master) {
+                if (e->retained_users) {
+                    hr = FAUDIO_E_INVALID_CALL;  // FAudio supports exactly one allocated master at a time
+                } else {
+                    // The logical old master is gone, so a different configuration can now replace its real output.
+                    FAudioVoice_DestroyVoice(e->retained_master);
+                    e->retained_master = nullptr;
+                }
+            }
+            if (hr == 0) {
+                hr = FAudio_CreateMasteringVoice(e->audio, &v, channels, rate, flags, device, effects);
+                retained = hr == 0;
+                if (retained) {
+                    e->retained_master = v;
+                    e->retained_channels = channels;
+                    e->retained_rate = rate;
+                    e->retained_flags = flags;
+                    e->retained_device = device;
+                }
+            }
+        }
+        if (retained) ++e->retained_users;
+    } else {
+        hr = FAudio_CreateMasteringVoice(e->audio, &v, channels, rate, flags, device, effects);
+    }
+    Object* wrapper = hr == 0 ? new Object(kMastering, nullptr, v) : nullptr;
+    if (wrapper && retained) {
+        wrapper->uses_retained_master = true;
+        wrapper->master_owner = e;
+    }
+    W32(Arg(c, 1), wrapper ? NewGuest(wrapper) : 0);
+    const double elapsed_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+    Log("xaudio2: CreateMasteringVoice(%u ch, %u Hz, device %u) %s -> %x in %.3f ms", channels, rate, device,
+        reused ? "reused retained output" : retained ? "created retained output" : "created", hr, elapsed_ms);
     Return(c, hr, 7);
 }
 M(StartEngine) { Return(c, FAudio_StartEngine(Obj(Arg(c, 0))->audio), 1); }
@@ -406,7 +468,14 @@ M(GetOutputMatrix) {
 M(DestroyVoice) {
     uint32_t g = Arg(c, 0);
     Object* o = Obj(g);
-    FAudioVoice_DestroyVoice(o->voice);  // waits for the mixing thread, so no callback runs afterwards
+    // Logical mastering wrappers can die; the retained real output dies with its owning engine (or a later valid
+    // configuration change). Other voices keep synchronous destruction, which waits for callbacks to finish.
+    if (o->uses_retained_master) {
+        std::lock_guard<std::mutex> lock(o->master_owner->mastering_mutex);
+        if (o->master_owner->retained_users) --o->master_owner->retained_users;
+    } else {
+        FAudioVoice_DestroyVoice(o->voice);
+    }
     delete o->callback;
     delete o;
     Forget(g);

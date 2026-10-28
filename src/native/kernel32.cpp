@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "win.h"
+#include "cpu_topology.h"
 
 namespace native {
 
@@ -599,36 +600,10 @@ K(SuspendThread) {
     Return(c, 0, 1);
 }
 // Windows priorities -> nice values: the engine raises its audio mixer and render threads; on a phone they compete
-// with half a dozen busy workers, so the hint matters.
-// Threads the engine raises above normal (its render, streaming and audio feeder threads) are kept off the slowest
-// cores (by cpu_capacity): left to the scheduler, and with power hints lowering clocks, Snapdragon phones park them
-// on the little cores, where the audio feeder falls behind (choppy sound). Not with battery_saver.
+// with half a dozen busy workers, so the hint matters. Use the main thread's cached capacity/max-frequency topology.
 static void AvoidLittleCores(int tid) {
 #ifdef __ANDROID__
-    static const cpu_set_t* fast = []() -> const cpu_set_t* {
-        if (SettingInt("battery_saver", 0)) return nullptr;
-        int caps[64], min_cap = -1, n = 0;
-        for (; n < 64; ++n) {
-            char path[96];
-            snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpu_capacity", n);
-            FILE* f = fopen(path, "r");
-            if (!f) break;
-            if (fscanf(f, "%d", &caps[n]) != 1) caps[n] = 0;
-            fclose(f);
-            if (min_cap < 0 || caps[n] < min_cap) min_cap = caps[n];
-        }
-        static cpu_set_t set;
-        CPU_ZERO(&set);
-        int count = 0;
-        for (int i = 0; i < n; ++i) {
-            if (caps[i] > min_cap) {
-                CPU_SET(i, &set);
-                ++count;
-            }
-        }
-        return count ? &set : nullptr;
-    }();
-    if (fast) sched_setaffinity(pid_t(tid), sizeof(*fast), fast);
+    if (const cpu_set_t* set = native::FastCoreAffinity(false)) sched_setaffinity(pid_t(tid), sizeof(*set), set);
 #else
     (void)tid;
 #endif

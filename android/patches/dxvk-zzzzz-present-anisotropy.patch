@@ -1,0 +1,41 @@
+diff --git a/src/dxvk/dxvk_sampler.h b/src/dxvk/dxvk_sampler.h
+index 4bb782d..ff8f801 100644
+--- a/src/dxvk/dxvk_sampler.h
++++ b/src/dxvk/dxvk_sampler.h
+@@ -56,7 +56,9 @@ namespace dxvk {
+     }
+ 
+     void setAniso(uint32_t anisotropy) {
+-      u.p.anisotropy = std::min(anisotropy, 16u);
++      // 1x anisotropy is linear filtering. Keep the feature disabled: DXVK's
++      // Vulkan sampler enables anisotropy for any nonzero value in this key.
++      u.p.anisotropy = anisotropy > 1u ? std::min(anisotropy, 16u) : 0u;
+     }
+ 
+     void setDepthCompare(bool enable, VkCompareOp op) {
+diff --git a/src/dxvk/dxvk_swapchain_blitter.cpp b/src/dxvk/dxvk_swapchain_blitter.cpp
+index aca8718..87ac994 100644
+--- a/src/dxvk/dxvk_swapchain_blitter.cpp
++++ b/src/dxvk/dxvk_swapchain_blitter.cpp
+@@ -90,9 +90,20 @@ namespace dxvk {
+     attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+     attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+ 
+-    if (srcRect.extent != dstRect.extent)
++    // An offset destination can leave pillarbox/letterbox areas uncovered even
++    // when source and destination extents match. Clear the complete attachment
++    // to opaque black before drawing the destination rectangle.
++    if (srcRect.extent != dstRect.extent
++     || dstRect.offset.x != 0 || dstRect.offset.y != 0
++     || dstRect.extent.width != dstExtent.width
++     || dstRect.extent.height != dstExtent.height)
+       attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+ 
++    attachmentInfo.clearValue.color.float32[0] = 0.0f;
++    attachmentInfo.clearValue.color.float32[1] = 0.0f;
++    attachmentInfo.clearValue.color.float32[2] = 0.0f;
++    attachmentInfo.clearValue.color.float32[3] = 1.0f;
++
+     VkRenderingInfo renderInfo = { VK_STRUCTURE_TYPE_RENDERING_INFO };
+     renderInfo.renderArea.offset = { 0u, 0u };
+     renderInfo.renderArea.extent = { dstExtent.width, dstExtent.height };

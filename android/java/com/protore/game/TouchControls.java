@@ -51,6 +51,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     static native float nativeFrameMs();
     static native int nativeMemoryMiB();
     static native void nativeSetFpsLimit(int fps);
+    static native void nativeSetMinimapPosition(int x, int y);
 
     private static final int MOUSE_LEFT = 1, MOUSE_RIGHT = 2, MOUSE_MIDDLE = 4;
     private static final int RED = 0xffe0261e, RED_DIM = 0xff7a1410, INK = 0xff0b0b0b;
@@ -146,6 +147,54 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         }
     }
 
+    private static final int MINIMAP_PRESET = 14, MINIMAP_X = 15, MINIMAP_Y = 16;
+
+    private static int[] range(int first, int last, int step) {
+        int[] values = new int[(last - first) / step + 1];
+        for (int i = 0; i < values.length; i++) values[i] = first + i * step;
+        return values;
+    }
+
+    private static String[] labels(int first, int last, int step) {
+        int[] values = range(first, last, step);
+        String[] names = new String[values.length];
+        for (int i = 0; i < values.length; i++) names[i] = Integer.toString(values[i]);
+        return names;
+    }
+
+    private static boolean isMinimapCoordinate(Setting s) {
+        return s.key.equals("minimap_x") || s.key.equals("minimap_y");
+    }
+
+    private static boolean isLiveEngineSetting(Setting s) {
+        return s.key.equals("fps_limit") || isMinimapCoordinate(s);
+    }
+
+    private static int nearestIndex(Setting s, int value) {
+        int best = 0, distance = Integer.MAX_VALUE;
+        for (int i = 0; i < s.values.length; i++) {
+            int d = Math.abs(s.values[i] - value);
+            if (d < distance) { distance = d; best = i; }
+        }
+        return best;
+    }
+
+    private void saveMinimapSettings() {
+        prefs.edit()
+                .putInt(settings[MINIMAP_PRESET].key, settings[MINIMAP_PRESET].index)
+                .putInt(settings[MINIMAP_X].key, settings[MINIMAP_X].value())
+                .putInt(settings[MINIMAP_Y].key, settings[MINIMAP_Y].value())
+                .apply();
+    }
+
+    private void applyMinimapSettings() {
+        try {
+            nativeSetMinimapPosition(settings[MINIMAP_X].value(), settings[MINIMAP_Y].value());
+        } catch (UnsatisfiedLinkError ignored) {
+            // protore.ini remains the startup fallback until the native library is loaded
+        }
+    }
+
     private final Setting[] settings = {
         new Setting("Resolution", "render_height", new String[] {"540p", "720p", "900p", "1080p"},
                 new int[] {540, 720, 900, 1080}, true),
@@ -166,8 +215,14 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                 new int[] {50, 75, 100, 150, 200}, false),
         new Setting("Invert Y", "ui_invert", new String[] {"Off", "On"}, new int[] {0, 1}, false),
         new Setting("Power buttons", "ui_power_buttons", new String[] {"Off", "On"}, new int[] {0, 1}, false),
+        new Setting("Anisotropy", "max_anisotropy", new String[] {"1x", "2x", "4x", "8x"},
+                new int[] {1, 2, 4, 8}, true),
+        new Setting("Minimap preset", "ui_minimap_preset", new String[] {"Bottom-Left", "Top-Left", "Custom"},
+                new int[] {0, 1, 2}, false),
+        new Setting("Minimap Horizontal X", "minimap_x", labels(-300, 300, 10), range(-300, 300, 10), true),
+        new Setting("Minimap Vertical Y", "minimap_y", labels(-500, 100, 10), range(-500, 100, 10), true),
     };
-    private static final int[] DEFAULTS = {1, 1, 0, 0, 2, 1, 1, 0, 0, 0, 2, 0, 0};
+    private static final int[] DEFAULTS = {1, 1, 0, 0, 2, 1, 1, 0, 0, 0, 2, 0, 0, 0, 0, 30, 50};
     private boolean panelOpen = false, restartNeeded = false;
     private final RectF panel = new RectF(), restartRect = new RectF(), closeRect = new RectF(),
             layoutRect = new RectF();
@@ -214,10 +269,17 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         prefs = context.getSharedPreferences("controls", Context.MODE_PRIVATE);
         for (int i = 0; i < settings.length; i++) {
             Setting s = settings[i];
-            s.index = Math.max(0, Math.min(s.values.length - 1, prefs.getInt(s.key, DEFAULTS[i])));
+            if (isMinimapCoordinate(s)) {
+                s.index = nearestIndex(s, prefs.getInt(s.key, s.values[DEFAULTS[i]]));
+            } else {
+                s.index = Math.max(0, Math.min(s.values.length - 1, prefs.getInt(s.key, DEFAULTS[i])));
+            }
         }
         loadLayout();
         applyUiSettings();
+        if (prefs.contains(settings[MINIMAP_X].key) && prefs.contains(settings[MINIMAP_Y].key)) {
+            applyMinimapSettings();  // saved UI values also win when Java starts before native INI initialization
+        }
         Typeface face = Typeface.create("sans-serif-condensed", Typeface.BOLD);
         text.setTypeface(face);
         text.setTextAlign(Paint.Align.CENTER);
@@ -730,11 +792,26 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             if (delta == 0) continue;
             Setting s = settings[i];
             s.index = (s.index + delta + s.values.length) % s.values.length;
-            prefs.edit().putInt(s.key, s.index).apply();
             buzz();
-            if (s.key.equals("fps_limit")) nativeSetFpsLimit(s.value());  // applies right away
-            else if (s.engine) restartNeeded = true;
-            if (s.engine) writeEngineSettings();
+            if (i == MINIMAP_PRESET) {
+                if (s.index == 0 || s.index == 1) {
+                    settings[MINIMAP_X].index = nearestIndex(settings[MINIMAP_X], 0);
+                    settings[MINIMAP_Y].index = nearestIndex(settings[MINIMAP_Y], s.index == 0 ? 0 : -450);
+                }
+                saveMinimapSettings();
+                applyMinimapSettings();
+                writeEngineSettings();
+            } else if (isMinimapCoordinate(s)) {
+                settings[MINIMAP_PRESET].index = 2;  // any manual axis adjustment becomes Custom
+                saveMinimapSettings();
+                applyMinimapSettings();
+                writeEngineSettings();
+            } else {
+                prefs.edit().putInt(s.key, s.index).apply();
+                if (s.key.equals("fps_limit")) nativeSetFpsLimit(s.value());  // applies right away
+                else if (s.engine) restartNeeded = true;
+                if (s.engine) writeEngineSettings();
+            }
             applyUiSettings();
             return;
         }
@@ -955,7 +1032,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             float y = top + rowH * (i % rows) + rowH / 2;
             text.setTextAlign(Paint.Align.LEFT);
             text.setColor(0xffe8d6d4);
-            c.drawText(s.label + (s.engine && !s.key.equals("fps_limit") ? " *" : ""), colLeft, y + 5 * density,
+            c.drawText(s.label + (s.engine && !isLiveEngineSetting(s) ? " *" : ""), colLeft, y + 5 * density,
                     text);
             float vx = colRight - 62 * density;
             RectF l = new RectF(vx - 64 * density, y - rowH / 2, vx - 32 * density, y + rowH / 2);

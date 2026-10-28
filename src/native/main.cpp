@@ -22,6 +22,7 @@
 #include <atomic>
 #include <chrono>
 #include <cerrno>
+#include <cctype>
 #include <cstdarg>
 #include <cstdlib>
 #include <cstring>
@@ -32,6 +33,7 @@
 
 #include "guest.h"
 #include "win.h"
+#include "cpu_topology.h"
 
 namespace native {
 
@@ -198,7 +200,7 @@ static bool EnsureDir(const std::string& path) {
     return access(path.c_str(), W_OK) == 0;
 }
 
-static void MirrorInit(const char* base) {
+[[maybe_unused]] static void MirrorInit(const char* base) {
     // Try shared storage logs directory
     const char* candidates[] = {
         "/storage/emulated/0/Prototype/logs",
@@ -333,36 +335,10 @@ extern "C" JNIEXPORT void JNICALL Java_com_protore_game_TouchControls_nativeSetF
 }
 #endif
 
-// big.LITTLE: keep the engine's main thread on the fast cores (cpu_capacity >= half of the largest). The scheduler
-// usually gets there by itself, but a frame-bound thread that waits on the GPU looks idle to it now and then and
-// lands on a small core for a while. Setting big_cores (Android default 1).
+// big.LITTLE/all-big-core topology is shared with high-priority guest workers in kernel32.cpp.
 static void PinToBigCores() {
 #ifdef __ANDROID__
-    // battery_saver: the scheduler picks the cores (the biggest ones draw several times the power per clock)
-    if (!native::SettingInt("big_cores", 1) || native::SettingInt("battery_saver", 0)) return;
-    int caps[64] = {}, max_cap = 0, n = 0;
-    for (; n < 64; ++n) {
-        char path[96];
-        snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpu_capacity", n);
-        FILE* f = fopen(path, "r");
-        if (!f) break;
-        if (fscanf(f, "%d", &caps[n]) != 1) caps[n] = 0;
-        fclose(f);
-        if (caps[n] > max_cap) max_cap = caps[n];
-    }
-    if (n == 0 || max_cap == 0) return;
-    cpu_set_t set;
-    CPU_ZERO(&set);
-    int big = 0;
-    for (int i = 0; i < n; ++i) {
-        if (caps[i] * 2 >= max_cap) {
-            CPU_SET(i, &set);
-            ++big;
-        }
-    }
-    if (big == 0 || big == n) return;  // not big.LITTLE
-    int r = sched_setaffinity(0, sizeof(set), &set);
-    native::Log("main thread pinned to %d of %d cores%s", big, n, r == 0 ? "" : " (failed)");
+    if (const cpu_set_t* set = native::FastCoreAffinity(true)) sched_setaffinity(0, sizeof(*set), set);
 #endif
 }
 
@@ -392,7 +368,7 @@ static void RedirectStderrToLogcat() {
 }
 #endif
 
-static std::string FindGameDir(const char* base, const char* env_game) {
+[[maybe_unused]] static std::string FindGameDir(const char* base, const char* env_game) {
     std::vector<std::string> candidates;
     if (env_game && env_game[0]) candidates.push_back(env_game);
     // Shared storage primary
@@ -561,6 +537,47 @@ int main(int argc, char** argv) {
         merged += dc;
         setenv("DXVK_CONFIG", merged.c_str(), 1);
     }
+    // Android starts at 1x for Mali-class tile GPUs. Explicit DXVK configuration wins over this convenience default;
+    // the D3D9 bridge still clamps requests to max_anisotropy and converts anisotropic filters to linear at 1x.
+    {
+#ifdef __ANDROID__
+        const bool configure_dxvk = true;
+        int max_anisotropy = SettingInt("max_anisotropy", 1);
+#else
+        const bool configure_dxvk = !Setting("max_anisotropy", "").empty();
+        int max_anisotropy = SettingInt("max_anisotropy", 16);
+#endif
+        max_anisotropy = max_anisotropy < 1 ? 1 : max_anisotropy > 16 ? 16 : max_anisotropy;
+        std::string merged = getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "";
+        auto has_aniso_option = [](std::string config) {
+            for (char& ch : config) if (ch == ',') ch = ';';
+            for (size_t begin = 0; begin <= config.size();) {
+                const size_t end = config.find(';', begin);
+                std::string key = config.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
+                const size_t equals = key.find('=');
+                if (equals != std::string::npos) key.resize(equals);
+                const size_t first = key.find_first_not_of(" \t\r\n");
+                const size_t last = key.find_last_not_of(" \t\r\n");
+                key = first == std::string::npos ? "" : key.substr(first, last - first + 1);
+                for (char& ch : key) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+                if (key == "d3d9.sampleranisotropy") return true;
+                if (end == std::string::npos) break;
+                begin = end + 1;
+            }
+            return false;
+        };
+        const char* config_file = getenv("DXVK_CONFIG_FILE");
+        if (configure_dxvk && !has_aniso_option(merged) && (!config_file || !*config_file)) {
+            if (!merged.empty()) merged += ";";
+            merged += "d3d9.samplerAnisotropy = " + std::to_string(max_anisotropy);
+            setenv("DXVK_CONFIG", merged.c_str(), 1);
+            Log("anisotropy: bridge/DXVK maximum %dx", max_anisotropy);
+        } else if (configure_dxvk) {
+            Log("anisotropy: bridge maximum %dx; explicit DXVK choice preserved", max_anisotropy);
+        } else {
+            Log("anisotropy: bridge maximum %dx; DXVK option unchanged", max_anisotropy);
+        }
+    }
 
     // The game window: DXVK's native WSI takes the SDL window as HWND.
 #ifdef __ANDROID__
@@ -701,6 +718,7 @@ int main(int argc, char** argv) {
         }
         bool keep = (GuestCall(service, {quit ? 1u : 0u, focused ? 0u : 1u}) & 0xff) != 0;
         GuestCall(focus, {focused ? 1u : 0u});
+        if (keep) MinimapService(frame);
         if (!keep) break;
     }
     GuestCall(terminate, {});

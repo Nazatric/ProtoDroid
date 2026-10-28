@@ -25,6 +25,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends zlib1g-dev
 
+      - name: Compile and run graphics/topology UBSAN tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/d3d9_dxt.cpp src/native/tests/graphics_test.cpp -o /tmp/graphics_test
+          g++ $CXXFLAGS src/native/cpu_topology.cpp src/native/tests/performance_test.cpp -o /tmp/performance_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/graphics_test
+          /tmp/performance_test
+
       - name: Build minimal host FFmpeg
         run: |
           set -euo pipefail
