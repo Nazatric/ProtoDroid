@@ -55,6 +55,7 @@ constexpr int kAudioRate = 48000;
 constexpr auto kDecodeBudget = std::chrono::milliseconds(8);
 constexpr auto kAudioBudget = std::chrono::milliseconds(4);
 constexpr auto kLockBudget = std::chrono::milliseconds(2);
+constexpr uint64_t kMaxDeferredRetries = 3;
 std::atomic<uint32_t> g_output_rate{static_cast<uint32_t>(kAudioRate)};
 uint32_t OutputRate() { return g_output_rate.load(std::memory_order_relaxed); }
 
@@ -929,6 +930,15 @@ B(BinkNextFrame) {
     if (movie) {
         std::lock_guard<std::timed_mutex> lock(movie->mutex);
         Public* p = movie->Pub();
+        // The game calls NextFrame after every successful-looking DoFrame call, including a deferred one. Retry the
+        // same frame/buffer a few times so a slow first packet does not turn into a permanently lagging black movie.
+        // The bound is essential: persistent failure still skips ahead and eventually reaches the normal end/wrap.
+        if (movie->deferred_calls && movie->deferred_calls <= kMaxDeferredRetries &&
+            p->last_frame_num != p->frame_num) {
+            Return(c, 0, 1);
+            return;
+        }
+        movie->deferred_calls = 0;
         if (p->frame_num < movie->decoded_position) movie->skipped_frames += movie->decoded_position - p->frame_num;
         if (p->frame_num >= movie->frames) {
             p->frame_num = 1;

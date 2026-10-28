@@ -396,7 +396,20 @@ void CheckCustomIO(const std::vector<uint8_t>& bytes) {
     Check(public_movie->last_frame_num == 77 && public_movie->frame_size == 123 && public_movie->num_rects == 1 &&
               public_movie->read_error == 0,
           "deferred decoding discarded the previous presentation");
-    Decode(h); Next(h); Decode(h);
+    Next(h);
+    Check(public_movie->frame_num == 100, "deferred NextFrame abandoned the retry frame");
+    Decode(h);
+    Next(h);
+    Check(public_movie->frame_num == 101, "completed frame did not advance after a deferred retry");
+    Decode(h);
+    Call("BinkGoto", 3, {h, 200, 0});
+    slow_reads = true;
+    for (unsigned attempt = 0; attempt < 4; ++attempt) {
+        Check(Call("BinkDoFrame", 1, {h}) == 0, "persistent slow decode became fatal");
+        Next(h);
+    }
+    slow_reads = false;
+    Check(public_movie->frame_num == 201, "deferred retries did not have a bounded skip-forward path");
     Call("BinkControlBackgroundIO", 2, {h, 1});
     Call("BinkService", 1, {h});  // suspended: must not call guest Idle
     Call("BinkControlBackgroundIO", 2, {h, 0});
