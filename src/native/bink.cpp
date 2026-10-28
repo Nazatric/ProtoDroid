@@ -823,15 +823,37 @@ void DestroyMovie(const std::shared_ptr<Movie>& movie) {
     movie->guest = 0;
 }
 
+void LogFrameBufferSets(Movie& movie, const char* context) {
+    const Public* p = movie.Pub();
+    const auto* b = Ptr<FrameBuffers>(movie.registered_buffers);
+    if (!p || !b) return;
+    Log("[bink] fbsets %s buffers=%08x frame=%u active=%u total=%d YA=%ux%u cRcB=%ux%u\n", context,
+        movie.registered_buffers, p->frame_num, b->frame_num, b->total_frames, b->ya_width, b->ya_height,
+        b->crcb_width, b->crcb_height);
+    for (unsigned index = 0; index < 2; ++index) {
+        const FramePlaneSet& s = b->frames[index];
+        Log("[bink] fbset[%u]: Y=(alloc=%u buf=%08x pitch=%d) cR=(alloc=%u buf=%08x pitch=%d) "
+            "cB=(alloc=%u buf=%08x pitch=%d) A=(alloc=%u buf=%08x pitch=%d)\n", index,
+            s.y.allocate, s.y.buffer, static_cast<int32_t>(s.y.pitch), s.cr.allocate, s.cr.buffer,
+            static_cast<int32_t>(s.cr.pitch), s.cb.allocate, s.cb.buffer, static_cast<int32_t>(s.cb.pitch),
+            s.alpha.allocate, s.alpha.buffer, static_cast<int32_t>(s.alpha.pitch));
+    }
+}
+
 void LogPlaneCopy(Movie& movie, const AVFrame& frame, const FrameBuffers& buffers) {
     if (movie.plane_copy_logs >= 3 || !movie.Pub() || movie.Pub()->frame_num > 3) return;
     ++movie.plane_copy_logs;
+    LogFrameBufferSets(movie, "copy");
     unsigned alpha = frame.data[3] ? frame.data[3][0] : 255;
     Log("[bink] plane copy frame %u active=%u total=%d src Y/Cb/Cr/A=%u/%u/%u/%u\n",
         movie.Pub()->frame_num, buffers.frame_num, buffers.total_frames,
         frame.data[0][0], frame.data[1][0], frame.data[2][0], alpha);
     for (unsigned index = 0; index < static_cast<unsigned>(buffers.total_frames); ++index) {
         const FramePlaneSet& p = buffers.frames[index];
+        if (!p.y.buffer && !p.cr.buffer && !p.cb.buffer && !p.alpha.buffer) {
+            Log("[bink]  set %u empty\n", index);
+            continue;
+        }
         int a = p.alpha.buffer ? *Ptr<uint8_t>(p.alpha.buffer) : -1;
         Log("[bink]  set %u%s Y=%08x/%d=%u Cb=%08x/%d=%u Cr=%08x/%d=%u A=%08x/%d=%d\n", index,
             index == buffers.frame_num ? " (locked)" : "", p.y.buffer, static_cast<int32_t>(p.y.pitch),
@@ -849,6 +871,7 @@ bool UploadRegisteredLocked(Movie& movie, const AVFrame* frame, bool decoded) {
         Log("[bink] rejected registered plane upload: buffers=%08x active=%u total=%d frame=%u\n",
             movie.registered_buffers, buffers ? buffers->frame_num : 0, buffers ? buffers->total_frames : 0,
             p ? p->frame_num : 0);
+        LogFrameBufferSets(movie, "rejected");
         return false;
     }
     if (decoded && frame) LogPlaneCopy(movie, *frame, *buffers);
@@ -947,9 +970,11 @@ void SleepUntilFrame(Movie& movie) {
         if (!lock.try_lock_for(kLockBudget) || movie.paused || movie.closed) return;
         double seconds = movie.Pub()->frame_num * movie.FrameSeconds();
         double delay = seconds - movie.MediaSeconds(Clock::now());
-        // Waiting for the next presentation deadline is intentional; waiting seconds for a malformed rate or a busy
-        // decoder is not. The worst case is one ordinary low-frame-rate movie interval, with no spin loop.
-        due = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(std::clamp(delay, 0.0, 0.1)));
+        if (delay <= 0) return;
+        // With zero audio tracks, no selected track, or no audio device, MediaSeconds uses the monotonic clock. Pace
+        // those movies too, and avoid sub-millisecond early-return spins around a frame boundary.
+        double bounded = std::clamp(delay, 0.001, 0.1);
+        due = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(bounded));
     }
     if (due > Clock::now()) std::this_thread::sleep_until(due);
 }
@@ -1057,6 +1082,14 @@ B(BinkGetFrameBuffersInfo) {
         b->ya_height = movie->height;
         b->crcb_width = (movie->width + 1) / 2;
         b->crcb_height = (movie->height + 1) / 2;
+        const bool alpha = movie->video_codec && movie->video_codec->pix_fmt == AV_PIX_FMT_YUVA420P &&
+                           (movie->flags & kAlpha);
+        for (auto& set : b->frames) {
+            // 0x105a0804 tests Allocate before creating each D3D9 texture. Leaving these zero produces null
+            // LockRect pointers and guarantees that every later registered upload is rejected.
+            set.y.allocate = set.cr.allocate = set.cb.allocate = 1;
+            set.alpha.allocate = alpha ? 1u : 0u;
+        }
     }
     Return(c, 0, 2);
 }

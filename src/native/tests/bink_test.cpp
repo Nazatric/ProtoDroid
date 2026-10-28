@@ -27,6 +27,7 @@
 #include "sdl_stub.h"
 
 extern "C" {
+#include <libavutil/frame.h>
 #include <libavutil/log.h>
 #include <libavcodec/avcodec.h>
 }
@@ -233,6 +234,10 @@ uint32_t RegisterTestFrameBuffers(uint32_t h) {
     Call("BinkGetFrameBuffersInfo", 2, {h, fb_address});
     auto* fb = Ptr<FrameBuffers>(fb_address);
     Check(fb->total_frames == 2 && fb->ya_width == 1920 && fb->crcb_width == 960, "framebuffer info ABI");
+    for (const auto& set : fb->frames)
+        Check(set.y.allocate == 1 && set.cr.allocate == 1 && set.cb.allocate == 1 &&
+                  set.alpha.allocate == fb->frames[0].alpha.allocate,
+              "BinkGetFrameBuffersInfo did not populate allocation flags");
     auto allocate_plane = [](Plane& p, uint32_t width, uint32_t height, bool negative) {
         uint32_t stride = width + 32;
         uint32_t raw = HeapAlloc(stride * height + 64);
@@ -245,7 +250,7 @@ uint32_t RegisterTestFrameBuffers(uint32_t h) {
         allocate_plane(set.y, fb->ya_width, fb->ya_height, true);
         allocate_plane(set.cr, fb->crcb_width, fb->crcb_height, true);
         allocate_plane(set.cb, fb->crcb_width, fb->crcb_height, true);
-        allocate_plane(set.alpha, fb->ya_width, fb->ya_height, true);
+        if (set.alpha.allocate) allocate_plane(set.alpha, fb->ya_width, fb->ya_height, true);
     }
     Call("BinkRegisterFrameBuffers", 2, {h, fb_address});
     return fb_address;
@@ -254,9 +259,59 @@ uint32_t RegisterTestFrameBuffers(uint32_t h) {
 void CheckNeutralPlanes(const FrameBuffers& fb) {
     for (const auto& set : fb.frames) {
         Check(*Ptr<uint8_t>(set.y.buffer) == 16 && *Ptr<uint8_t>(set.cr.buffer) == 128 &&
-                  *Ptr<uint8_t>(set.cb.buffer) == 128 && *Ptr<uint8_t>(set.alpha.buffer) == 255,
+                  *Ptr<uint8_t>(set.cb.buffer) == 128 &&
+                  (!set.alpha.buffer || *Ptr<uint8_t>(set.alpha.buffer) == 255),
               "neutral registered planes are not Y=16/Cb=Cr=128/A=255");
     }
+}
+
+void CheckPlaneCopyVariants() {
+    AVFrame* frame = av_frame_alloc();
+    Check(frame != nullptr, "could not allocate plane-variant frame");
+    frame->format = AV_PIX_FMT_YUVA420P;
+    frame->width = frame->height = 4;
+    Check(av_frame_get_buffer(frame, 16) == 0, "could not allocate YUVA test planes");
+    for (uint32_t row = 0; row < 4; ++row) {
+        memset(frame->data[0] + row * frame->linesize[0], 20 + row, 4);
+        memset(frame->data[3] + row * frame->linesize[3], 200 + row, 4);
+    }
+    for (uint32_t row = 0; row < 2; ++row) {
+        memset(frame->data[1] + row * frame->linesize[1], 110 + row, 2);
+        memset(frame->data[2] + row * frame->linesize[2], 120 + row, 2);
+    }
+    Public pub {};
+    pub.width = pub.height = 4;
+    FrameBuffers fb {};
+    fb.total_frames = 2;
+    fb.ya_width = fb.ya_height = 4;
+    fb.crcb_width = fb.crcb_height = 2;
+    auto allocate = [](Plane& p, uint32_t width, uint32_t height) {
+        p.allocate = 1;
+        p.pitch = width;
+        p.buffer = HeapAlloc(width * height);
+        memset(Ptr<void>(p.buffer), 0, width * height);
+    };
+    auto& only = fb.frames[0];
+    allocate(only.y, 4, 4); allocate(only.cr, 2, 2); allocate(only.cb, 2, 2); allocate(only.alpha, 4, 4);
+    // Set 1 is completely empty, as an unlocked/unallocated inactive set may be. Four-plane copy must still succeed.
+    Check(CopyRegisteredFrame(frame, pub, fb), "four-plane copy rejected an empty inactive set");
+    Check(*Ptr<uint8_t>(only.y.buffer) == 20 && *Ptr<uint8_t>(only.cb.buffer) == 110 &&
+              *Ptr<uint8_t>(only.cr.buffer) == 120 && *Ptr<uint8_t>(only.alpha.buffer) == 200,
+          "four-plane Y/Cb/Cr/A ordering");
+    fb.frame_num = 1;  // active set is empty; the populated alternate set remains a valid presentation target
+    *Ptr<uint8_t>(only.y.buffer) = 0;
+    Check(CopyRegisteredFrame(frame, pub, fb) && *Ptr<uint8_t>(only.y.buffer) == 20,
+          "copy did not use a populated set when the active set was empty");
+
+    // Three-plane movies have no alpha destination and must not require one.
+    only.alpha = {};
+    frame->data[3] = nullptr;
+    Check(CopyRegisteredFrame(frame, pub, fb), "three-plane copy required an alpha destination");
+    FrameBuffers empty = fb;
+    empty.frames[0] = {};
+    empty.frames[1] = {};
+    Check(!CopyRegisteredFrame(frame, pub, empty), "copy accepted two completely empty plane sets");
+    av_frame_free(&frame);
 }
 
 void CheckRegisteredAndCopies() {
@@ -322,6 +377,21 @@ void CheckRegisteredAndCopies() {
           "paused BinkWait slept unexpectedly");
     Call("BinkPause", 2, {h, 0});
     Close(h);
+}
+
+void CheckMonotonicWaitPacing() {
+    Call("BinkSetSoundTrack", 2, {0, 0});  // no selected/audio clock: the zero-audio-track timing path
+    uint32_t h = OpenName("movies\\intro.bik");
+    Check(h != 0, "monotonic-wait movie open failed");
+    auto before = std::chrono::steady_clock::now();
+    Call("BinkWait", 1, {h});
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now() - before).count();
+    Check(elapsed >= 20 && elapsed < 500, "movie without an audio clock spun or waited without a bound");
+    Close(h);
+    uint32_t selection = HeapAlloc(4);
+    W32(selection, 0);
+    Call("BinkSetSoundTrack", 2, {1, selection});
 }
 
 void CheckAudioAndTrackApi() {
@@ -433,6 +503,7 @@ void CheckCustomIO(const std::vector<uint8_t>& bytes) {
         std::vector<std::vector<uint8_t>> samples;
         for (auto& set : fb->frames) {
             for (Plane* plane : {&set.y, &set.cr, &set.cb, &set.alpha}) {
+                if (!plane->buffer) continue;
                 uint8_t* at = Ptr<uint8_t>(plane->buffer);
                 samples.emplace_back(at, at + 16);
             }
@@ -441,7 +512,8 @@ void CheckCustomIO(const std::vector<uint8_t>& bytes) {
     };
     auto retained = snapshot();
     for (auto& set : fb->frames)
-        for (Plane* plane : {&set.y, &set.cr, &set.cb, &set.alpha}) memset(Ptr<void>(plane->buffer), 0, 16);
+        for (Plane* plane : {&set.y, &set.cr, &set.cb, &set.alpha})
+            if (plane->buffer) memset(Ptr<void>(plane->buffer), 0, 16);
     Call("BinkGoto", 3, {h, 100, 0});  // force a real decode backlog, not just data already buffered during open
     auto* public_movie = Ptr<Public>(h);
     public_movie->last_frame_num = 77;  // sentinels: a deferred call must retain the last complete presentation
@@ -538,7 +610,9 @@ int main(int argc, char** argv) {
         close(fd); g_test_handles.erase(0x100);
         CheckCustomIO(bytes);
 
+        CheckPlaneCopyVariants();
         CheckRegisteredAndCopies();
+        CheckMonotonicWaitPacing();
         uint32_t selection = HeapAlloc(300 * 4);
         for (uint32_t i = 0; i < 300; ++i) W32(selection + i * 4, 0x1000 + i);
         W32(selection + 299 * 4, 0);  // the real ID is deliberately beyond the former 256-entry truncation

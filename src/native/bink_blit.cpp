@@ -152,15 +152,20 @@ bool CopyRegisteredFrame(const AVFrame* frame, const Public& pub, FrameBuffers& 
     if (frame && (!frame->data[0] || !frame->data[1] || !frame->data[2])) return false;
 
     // The guest can call NextFrame and change FrameNum while the originally selected textures are still locked. Copy
-    // every live set, not just the newest index, so UnlockRect always flushes this same retained/decoded presentation.
-    // Preflight all destinations before the first write: Prototype uses bottom-row pointers and negative pitches.
+    // every populated set, not just the newest index, so UnlockRect flushes this same retained/decoded presentation.
+    // A completely unused set is legal; a partially populated or out-of-range set is not. Preflight before any write.
+    unsigned populated = 0;
     for (unsigned index = 0; index < static_cast<unsigned>(buffers.total_frames); ++index) {
         const FramePlaneSet& p = buffers.frames[index];
+        if (!p.y.buffer && !p.cr.buffer && !p.cb.buffer && !p.alpha.buffer) continue;
         if (!PlaneSpan(p.y, pub.width, pub.height, true) || !PlaneSpan(p.cr, cw, ch, true) ||
             !PlaneSpan(p.cb, cw, ch, true) || !PlaneSpan(p.alpha, pub.width, pub.height, false)) return false;
+        ++populated;
     }
+    if (!populated) return false;
     for (unsigned index = 0; index < static_cast<unsigned>(buffers.total_frames); ++index) {
         const FramePlaneSet& p = buffers.frames[index];
+        if (!p.y.buffer && !p.cr.buffer && !p.cb.buffer && !p.alpha.buffer) continue;
         const uint8_t* y = frame ? frame->data[0] : nullptr;
         const uint8_t* cb = frame ? frame->data[1] : nullptr;
         const uint8_t* cr = frame ? frame->data[2] : nullptr;
