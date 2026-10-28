@@ -1,0 +1,334 @@
+proto-re build Oct 28 2026 16:19:55
+logs mirrored to /storage/emulated/0/Prototype/logs
+proto-re build Oct 28 2026 16:19:55
+DXVK logs mirrored to /storage/emulated/0/Prototype/logs
+game dir: /storage/emulated/0/Prototype
+data dir: /storage/emulated/0/Android/data/com.protore.game/files
+config: loaded protore.ini
+config: render_height = 1080
+config: texture_skip_mips = 1
+config: fps_limit = 0
+config: battery_saver = 0
+memory: guest window at 1000000000, arena 2000 MiB
+render size 2400x1080 (window 2712x1220)
+loader: rebased to 7c000000 (418563 fixups)
+loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
+DllMain(PROCESS_ATTACH)
+DllMain returned 1
+EngineInitialize
+SetThreadPriority(0) -> nice 0 on tid 19024
+SetThreadPriority(2) -> nice -4 on tid 19034
+SetThreadPriority(0) -> nice 0 on tid 19035
+SetThreadPriority(0) -> nice 0 on tid 19036
+SetThreadPriority(0) -> nice 0 on tid 19037
+SetThreadPriority(15) -> nice -10 on tid 19038
+SetThreadPriority(1) -> nice -2 on tid 19039
+SetThreadPriority(1) -> nice -2 on tid 19040
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+Direct3DCreate9(32) -> 0xb40000717de54d30
+GPU BC (DXT) textures: not supported, decoding on (DXT1 as 16-bit)
+CreateDevice 2400x1080 fmt 22 windowed 1 msaa 0/0 interval 2147483648 -> 00000000
+textures: skip 1 mip level(s) of textures >= 512, decode DXT on
+SetThreadPriority(0) -> nice 0 on tid 19056
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Keyboard)
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Mouse)
+xaudio2: Initialize(flags 0) -> 0
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 19063
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 19074
+SetThreadPriority(15) -> nice -10 on tid 19075
+SetThreadPriority(1) -> nice -2 on tid 19076
+SetThreadPriority(1) -> nice -2 on tid 19077
+EngineInitialize returned 1
+perf hint: unavailable (target 16.7 ms, 7 threads)
+frame 0
+Reset 2400x1080 msaa 0/0 interval 1 -> 00000000
+frame 1
+frame 2
+frame 4
+frame 8
+frame 16
+frame 32
+frame 64
+frame 128
+frame 256
+frame 512
+frame 1024
+frame 2048
+frame 4096
+frame 8192
+frame 16384
+frame 32768
+audio: 230 passes, max gap 23.4 ms, guest 14.9 ms (max 0.54), starved 228, underruns 4, submits 935
+[bink] SDL movie audio: 48000 Hz, stereo float
+
+[bink] indexed 18044 RCF paths from 11 archives
+
+[bink] RCF input movies/activisionRadicalLogos.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik +841885696 (21244780 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: 21244780 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: 1280x720, 427 frames, 4 audio tracks, video threads=1 type=0x3 active=0x0
+
+audio: 235 passes, max gap 23.7 ms, guest 11.2 ms (max 0.59), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.6 ms, guest 17.2 ms (max 0.73), starved 235, underruns 0, submits 940
+[bink] RCF input movies/fe_ambientMovie_start.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik +1016276992 (13275304 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 13275304 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 1280x720, 612 frames, 0 audio tracks, video threads=1 type=0x3 active=0x0
+
+audio: 235 passes, max gap 27.1 ms, guest 17.2 ms (max 1.76), starved 235, underruns 0, submits 940
+[bink] RCF input movies/fe_ambientMovie_1.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik +958214144 (58061816 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 58061816 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 1280x720, 1808 frames, 0 audio tracks, video threads=1 type=0x3 active=0x0
+
+audio: 235 passes, max gap 25.3 ms, guest 17.3 ms (max 1.19), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.6 ms, guest 22.7 ms (max 1.26), starved 235, underruns 0, submits 940
+perf: 29.5 fps, 36.6 ms, 797 MiB resident; arena 359 MiB (peak 359), up to 17770000; io: 106 reads, 46 MiB, 0 over 50 ms, longest 3.8 ms
+audio: 235 passes, max gap 26.1 ms, guest 31.5 ms (max 1.16), starved 235, underruns 0, submits 940
+LoadLibraryA(RPCRT4): not provided
+frame 65536
+audio: 235 passes, max gap 25.4 ms, guest 36.2 ms (max 2.68), starved 235, underruns 0, submits 940
+textures: 1024 created, 136 reduced, 961 decoded; top levels 173 MiB -> 251 MiB
+[bink] RCF input movies/NIS_0_1_FMV.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik +4096 (311658208 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik: 311658208 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik: 1280x544, 5721 frames, 4 audio tracks, video threads=1 type=0x3 active=0x0
+
+audio: 235 passes, max gap 26.4 ms, guest 37.0 ms (max 2.32), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.4 ms, guest 32.0 ms (max 1.98), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.4 ms, guest 32.3 ms (max 1.03), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 28.0 ms, guest 34.3 ms (max 2.13), starved 235, underruns 0, submits 940
+perf: 92.9 fps, 58.8 ms, 1805 MiB resident; arena 579 MiB (peak 579), up to 253f0000; io: 367 reads, 161 MiB, 0 over 50 ms, longest 8.8 ms
+audio: 235 passes, max gap 25.1 ms, guest 30.6 ms (max 1.97), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.2 ms, guest 30.6 ms (max 1.01), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.9 ms, guest 32.7 ms (max 2.03), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.4 ms, guest 26.3 ms (max 1.18), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.0 ms, guest 32.6 ms (max 2.35), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.9 ms, guest 37.9 ms (max 3.95), starved 235, underruns 0, submits 940
+perf: 30.5 fps, 31.4 ms, 1791 MiB resident; arena 579 MiB (peak 579), up to 253f0000; io: 0 reads, 0 MiB, 0 over 50 ms, longest 0.0 ms
+audio: 235 passes, max gap 25.5 ms, guest 32.7 ms (max 1.04), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.6 ms, guest 30.5 ms (max 1.45), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.2 ms, guest 32.2 ms (max 2.98), starved 235, underruns 0, submits 940
+audio: 234 passes, max gap 25.0 ms, guest 26.1 ms (max 0.82), starved 234, underruns 0, submits 936
+audio: 235 passes, max gap 24.5 ms, guest 30.0 ms (max 1.45), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.8 ms, guest 29.5 ms (max 1.27), starved 235, underruns 0, submits 940
+perf: 29.7 fps, 27.4 ms, 1766 MiB resident; arena 579 MiB (peak 579), up to 253f0000; io: 0 reads, 0 MiB, 0 over 50 ms, longest 0.0 ms
+audio: 235 passes, max gap 26.0 ms, guest 38.7 ms (max 2.31), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.0 ms, guest 35.2 ms (max 2.18), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.5 ms, guest 26.8 ms (max 1.13), starved 235, underruns 0, submits 940
+frame 131072
+audio: 235 passes, max gap 25.3 ms, guest 27.4 ms (max 2.07), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 28.1 ms, guest 33.2 ms (max 2.10), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.2 ms, guest 33.6 ms (max 1.33), starved 235, underruns 0, submits 940
+perf: 30.5 fps, 35.2 ms, 1618 MiB resident; arena 579 MiB (peak 579), up to 253f0000; io: 0 reads, 0 MiB, 0 over 50 ms, longest 0.0 ms
+audio: 235 passes, max gap 25.4 ms, guest 32.7 ms (max 2.72), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.5 ms, guest 29.0 ms (max 1.20), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.8 ms, guest 40.8 ms (max 3.30), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.4 ms, guest 32.3 ms (max 1.92), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.5 ms, guest 34.2 ms (max 3.84), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.1 ms, guest 28.3 ms (max 0.59), starved 235, underruns 0, submits 940
+perf: 43.2 fps, 61.4 ms, 1611 MiB resident; arena 579 MiB (peak 579), up to 253f0000; io: 0 reads, 0 MiB, 0 over 50 ms, longest 0.0 ms
+audio: 235 passes, max gap 24.5 ms, guest 27.4 ms (max 0.66), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.0 ms, guest 28.9 ms (max 1.26), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.1 ms, guest 29.9 ms (max 1.00), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.8 ms, guest 34.8 ms (max 2.03), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.2 ms, guest 33.1 ms (max 1.13), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.7 ms, guest 35.7 ms (max 1.64), starved 235, underruns 0, submits 940
+perf: 138.3 fps, 52.3 ms, 1595 MiB resident; arena 579 MiB (peak 579), up to 253f0000; io: 0 reads, 0 MiB, 0 over 50 ms, longest 0.0 ms
+audio: 235 passes, max gap 25.5 ms, guest 32.8 ms (max 1.17), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 33.5 ms (max 1.48), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.8 ms, guest 31.3 ms (max 1.45), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.1 ms, guest 34.4 ms (max 1.35), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.9 ms, guest 31.9 ms (max 1.80), starved 235, underruns 0, submits 940
+samplers: max anisotropy 1x:11154 2x:2119 3x:3343 4x:5503 5x:1233 6x:816 8x:71 | min filter none/point/linear/aniso 0/3439/15572/12528 | mip 22165/24027/17777/0
+audio: 235 passes, max gap 25.8 ms, guest 21.8 ms (max 1.03), starved 235, underruns 0, submits 940
+perf: 664.7 fps, 27.0 ms, 1712 MiB resident; arena 584 MiB (peak 584), up to 25960000; io: 13 reads, 2 MiB, 0 over 50 ms, longest 4.4 ms
+audio: 235 passes, max gap 27.3 ms, guest 29.8 ms (max 1.76), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.0 ms, guest 28.2 ms (max 3.92), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.6 ms, guest 32.1 ms (max 5.02), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.9 ms, guest 28.5 ms (max 1.39), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.7 ms, guest 16.3 ms (max 0.88), starved 235, underruns 0, submits 940
+perf: 42.7 fps, 17.3 ms, 1750 MiB resident; arena 586 MiB (peak 586), up to 25b40000; io: 74 reads, 13 MiB, 0 over 50 ms, longest 10.8 ms
+audio: 235 passes, max gap 25.2 ms, guest 15.9 ms (max 1.27), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 22.0 ms (max 1.88), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.5 ms, guest 17.2 ms (max 1.15), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.3 ms, guest 24.1 ms (max 2.59), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.4 ms, guest 19.0 ms (max 1.53), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.7 ms, guest 28.1 ms (max 3.46), starved 235, underruns 0, submits 940
+perf: 53.3 fps, 24.5 ms, 1783 MiB resident; arena 587 MiB (peak 587), up to 25c40000; io: 70 reads, 12 MiB, 0 over 50 ms, longest 7.9 ms
+audio: 235 passes, max gap 25.9 ms, guest 30.5 ms (max 2.65), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.3 ms, guest 25.4 ms (max 2.57), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.7 ms, guest 15.1 ms (max 1.19), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.6 ms, guest 26.0 ms (max 4.93), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.1 ms, guest 23.6 ms (max 1.28), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.3 ms, guest 27.4 ms (max 5.13), starved 235, underruns 0, submits 940
+perf: 56.7 fps, 16.8 ms, 1817 MiB resident; arena 586 MiB (peak 587), up to 25c40000; io: 58 reads, 12 MiB, 0 over 50 ms, longest 6.3 ms
+audio: 235 passes, max gap 26.3 ms, guest 25.3 ms (max 5.71), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.9 ms, guest 18.1 ms (max 2.61), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.1 ms, guest 25.0 ms (max 2.33), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.2 ms, guest 36.2 ms (max 3.52), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.9 ms, guest 20.9 ms (max 2.37), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 22.8 ms (max 1.51), starved 235, underruns 0, submits 940
+perf: 46.8 fps, 20.0 ms, 1732 MiB resident; arena 589 MiB (peak 589), up to 264f0000; io: 128 reads, 41 MiB, 0 over 50 ms, longest 10.9 ms
+audio: 235 passes, max gap 24.4 ms, guest 28.5 ms (max 2.27), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.4 ms, guest 29.8 ms (max 3.72), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.4 ms, guest 45.3 ms (max 4.53), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.2 ms, guest 32.7 ms (max 1.24), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.8 ms, guest 34.7 ms (max 1.74), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.1 ms, guest 26.6 ms (max 1.13), starved 235, underruns 0, submits 940
+perf: 59.0 fps, 16.8 ms, 1720 MiB resident; arena 587 MiB (peak 589), up to 264f0000; io: 24 reads, 4 MiB, 0 over 50 ms, longest 6.4 ms
+audio: 235 passes, max gap 27.0 ms, guest 37.1 ms (max 2.64), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.3 ms, guest 38.5 ms (max 1.95), starved 235, underruns 0, submits 940
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 19966
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 19970
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 19974
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 19978
+audio: 224 passes, max gap 172.1 ms, guest 33.0 ms (max 3.17), starved 220, underruns 9, submits 924
+audio: 237 passes, max gap 25.9 ms, guest 41.6 ms (max 1.96), starved 237, underruns 0, submits 948
+audio: 235 passes, max gap 24.5 ms, guest 39.0 ms (max 3.65), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.0 ms, guest 29.4 ms (max 1.13), starved 235, underruns 0, submits 940
+perf: 59.3 fps, 16.8 ms, 1727 MiB resident; arena 591 MiB (peak 591), up to 264f0000; io: 14 reads, 2 MiB, 0 over 50 ms, longest 6.8 ms
+audio: 235 passes, max gap 26.1 ms, guest 20.1 ms (max 1.27), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.2 ms, guest 29.9 ms (max 1.76), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.9 ms, guest 27.7 ms (max 1.04), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.5 ms, guest 25.5 ms (max 1.04), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.5 ms, guest 33.6 ms (max 1.11), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.9 ms, guest 41.0 ms (max 1.58), starved 235, underruns 0, submits 940
+perf: 59.4 fps, 16.8 ms, 1733 MiB resident; arena 591 MiB (peak 591), up to 264f0000; io: 12 reads, 1 MiB, 0 over 50 ms, longest 4.9 ms
+audio: 235 passes, max gap 25.0 ms, guest 31.8 ms (max 1.37), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.5 ms, guest 26.9 ms (max 1.44), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.3 ms, guest 32.9 ms (max 1.48), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.8 ms, guest 21.4 ms (max 2.20), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.8 ms, guest 21.0 ms (max 2.46), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.9 ms, guest 23.7 ms (max 1.40), starved 235, underruns 0, submits 940
+perf: 40.0 fps, 22.6 ms, 1782 MiB resident; arena 599 MiB (peak 599), up to 267d0000; io: 90 reads, 25 MiB, 0 over 50 ms, longest 11.6 ms
+audio: 235 passes, max gap 25.2 ms, guest 17.2 ms (max 1.40), starved 235, underruns 0, submits 940
+textures: 2048 created, 288 reduced, 1979 decoded; top levels 226 MiB -> 376 MiB
+audio: 235 passes, max gap 25.8 ms, guest 27.2 ms (max 4.66), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.8 ms, guest 19.0 ms (max 2.55), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.0 ms, guest 19.9 ms (max 1.21), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.5 ms, guest 25.0 ms (max 1.63), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.9 ms, guest 22.1 ms (max 2.41), starved 235, underruns 0, submits 940
+perf: 39.5 fps, 26.6 ms, 1795 MiB resident; arena 593 MiB (peak 599), up to 26700000; io: 156 reads, 52 MiB, 0 over 50 ms, longest 11.2 ms
+audio: 235 passes, max gap 27.6 ms, guest 17.2 ms (max 0.98), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.9 ms, guest 18.1 ms (max 0.97), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.5 ms, guest 23.4 ms (max 2.85), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.7 ms, guest 32.9 ms (max 2.49), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.5 ms, guest 25.4 ms (max 2.60), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.2 ms, guest 21.8 ms (max 2.00), starved 235, underruns 0, submits 940
+perf: 39.5 fps, 26.0 ms, 1786 MiB resident; arena 598 MiB (peak 599), up to 26a30000; io: 182 reads, 57 MiB, 0 over 50 ms, longest 11.8 ms
+audio: 235 passes, max gap 26.9 ms, guest 17.7 ms (max 3.29), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.3 ms, guest 14.5 ms (max 1.06), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.4 ms, guest 28.0 ms (max 5.04), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.6 ms, guest 20.5 ms (max 3.11), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.8 ms, guest 29.6 ms (max 3.91), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.7 ms, guest 22.5 ms (max 1.97), starved 235, underruns 0, submits 940
+perf: 37.1 fps, 30.7 ms, 1797 MiB resident; arena 600 MiB (peak 600), up to 26b30000; io: 94 reads, 13 MiB, 0 over 50 ms, longest 9.2 ms
+audio: 235 passes, max gap 26.3 ms, guest 17.8 ms (max 2.02), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.4 ms, guest 29.9 ms (max 4.13), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.6 ms, guest 35.7 ms (max 4.63), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 29.4 ms, guest 32.6 ms (max 5.05), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.8 ms, guest 31.6 ms (max 3.44), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.9 ms, guest 20.2 ms (max 2.97), starved 235, underruns 0, submits 940
+perf: 36.0 fps, 37.8 ms, 1807 MiB resident; arena 601 MiB (peak 601), up to 26b30000; io: 97 reads, 17 MiB, 0 over 50 ms, longest 8.2 ms
+audio: 235 passes, max gap 28.7 ms, guest 29.9 ms (max 3.46), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.0 ms, guest 27.4 ms (max 3.83), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.2 ms, guest 28.5 ms (max 3.21), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.8 ms, guest 25.5 ms (max 3.79), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 28.4 ms, guest 20.5 ms (max 2.08), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.9 ms, guest 18.6 ms (max 1.10), starved 235, underruns 0, submits 940
+perf: 35.9 fps, 23.9 ms, 1790 MiB resident; arena 600 MiB (peak 601), up to 26b30000; io: 77 reads, 12 MiB, 0 over 50 ms, longest 12.4 ms
+audio: 235 passes, max gap 25.0 ms, guest 29.4 ms (max 5.56), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 28.4 ms, guest 25.5 ms (max 3.85), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.7 ms, guest 19.9 ms (max 3.39), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.8 ms, guest 30.9 ms (max 3.69), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.4 ms, guest 31.2 ms (max 3.40), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.8 ms, guest 23.6 ms (max 2.03), starved 235, underruns 0, submits 940
+perf: 38.9 fps, 21.6 ms, 1799 MiB resident; arena 600 MiB (peak 601), up to 26b30000; io: 86 reads, 14 MiB, 0 over 50 ms, longest 6.8 ms
+audio: 235 passes, max gap 27.8 ms, guest 18.6 ms (max 1.27), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.6 ms, guest 17.4 ms (max 1.89), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.1 ms, guest 33.8 ms (max 4.64), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 29.1 ms (max 3.75), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.8 ms, guest 21.6 ms (max 1.14), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.9 ms, guest 36.1 ms (max 3.44), starved 235, underruns 0, submits 940
+perf: 38.8 fps, 24.0 ms, 1812 MiB resident; arena 601 MiB (peak 601), up to 26c30000; io: 133 reads, 43 MiB, 0 over 50 ms, longest 7.4 ms
+audio: 235 passes, max gap 26.5 ms, guest 25.3 ms (max 5.91), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 32.7 ms (max 2.97), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 25.9 ms (max 1.81), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.3 ms, guest 34.3 ms (max 3.01), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.1 ms, guest 24.8 ms (max 1.64), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.3 ms, guest 34.1 ms (max 3.72), starved 235, underruns 0, submits 940
+perf: 46.4 fps, 22.0 ms, 1806 MiB resident; arena 597 MiB (peak 601), up to 26d40000; io: 108 reads, 27 MiB, 0 over 50 ms, longest 8.4 ms
+audio: 235 passes, max gap 25.9 ms, guest 34.9 ms (max 2.98), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.8 ms, guest 25.6 ms (max 1.33), starved 235, underruns 0, submits 940
+[bink] RCF input movies/NIS_0_2_closing.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_2_closing.bik +311668736 (41053976 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_2_closing.bik: 41053976 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_2_closing.bik: 1280x576, 1073 frames, 4 audio tracks, video threads=1 type=0x3 active=0x0
+
+audio: 235 passes, max gap 24.4 ms, guest 27.7 ms (max 2.10), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.9 ms, guest 29.0 ms (max 1.20), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.5 ms, guest 32.3 ms (max 1.34), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.0 ms, guest 33.5 ms (max 2.64), starved 235, underruns 0, submits 940
+perf: 29.7 fps, 51.4 ms, 1805 MiB resident; arena 599 MiB (peak 601), up to 26d40000; io: 17 reads, 3 MiB, 0 over 50 ms, longest 4.6 ms
+audio: 235 passes, max gap 23.9 ms, guest 30.7 ms (max 1.93), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.9 ms, guest 30.5 ms (max 1.94), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.8 ms, guest 32.1 ms (max 1.37), starved 235, underruns 0, submits 940
+textures: 3072 created, 519 reduced, 2997 decoded; top levels 301 MiB -> 539 MiB
+LoadLibraryA(RPCRT4): not provided
+audio: 235 passes, max gap 25.3 ms, guest 34.2 ms (max 2.26), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.9 ms, guest 30.2 ms (max 1.94), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.5 ms, guest 39.4 ms (max 2.94), starved 235, underruns 0, submits 940
+perf: 59.2 fps, 16.8 ms, 1802 MiB resident; arena 585 MiB (peak 601), up to 27140000; io: 124 reads, 38 MiB, 0 over 50 ms, longest 10.7 ms
+audio: 235 passes, max gap 24.7 ms, guest 33.6 ms (max 1.83), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.4 ms, guest 34.6 ms (max 2.75), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.5 ms, guest 41.7 ms (max 2.16), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 28.0 ms, guest 30.6 ms (max 2.97), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.4 ms, guest 43.1 ms (max 3.45), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.9 ms, guest 41.4 ms (max 3.57), starved 235, underruns 0, submits 940
+perf: 59.3 fps, 17.5 ms, 1548 MiB resident; arena 585 MiB (peak 601), up to 27140000; io: 28 reads, 6 MiB, 0 over 50 ms, longest 7.4 ms
+audio: 235 passes, max gap 25.8 ms, guest 47.0 ms (max 3.95), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.8 ms, guest 32.8 ms (max 1.53), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.7 ms, guest 35.3 ms (max 2.47), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.8 ms, guest 44.2 ms (max 3.17), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.1 ms, guest 40.1 ms (max 3.18), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.4 ms, guest 34.7 ms (max 2.41), starved 235, underruns 0, submits 940
+perf: 58.3 fps, 16.8 ms, 1564 MiB resident; arena 585 MiB (peak 601), up to 27140000; io: 24 reads, 5 MiB, 0 over 50 ms, longest 7.9 ms
+audio: 235 passes, max gap 26.5 ms, guest 34.2 ms (max 3.74), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.8 ms, guest 39.8 ms (max 4.72), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.7 ms, guest 35.1 ms (max 4.43), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.7 ms, guest 35.5 ms (max 3.76), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.1 ms, guest 32.0 ms (max 3.11), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.7 ms, guest 35.9 ms (max 3.64), starved 235, underruns 0, submits 940
+perf: 59.4 fps, 17.1 ms, 1556 MiB resident; arena 585 MiB (peak 601), up to 27140000; io: 29 reads, 6 MiB, 0 over 50 ms, longest 10.6 ms
+audio: 235 passes, max gap 25.2 ms, guest 24.9 ms (max 2.64), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.8 ms, guest 38.8 ms (max 2.80), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 30.0 ms (max 1.33), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.9 ms, guest 24.6 ms (max 1.46), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 25.6 ms, guest 34.9 ms (max 1.51), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 24.1 ms, guest 40.9 ms (max 3.96), starved 235, underruns 0, submits 940
+perf: 59.3 fps, 16.8 ms, 1560 MiB resident; arena 585 MiB (peak 601), up to 27140000; io: 27 reads, 5 MiB, 0 over 50 ms, longest 6.6 ms
+audio: 235 passes, max gap 24.7 ms, guest 26.8 ms (max 1.40), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 23.4 ms, guest 35.8 ms (max 2.19), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.8 ms, guest 16.8 ms (max 0.56), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 26.1 ms, guest 24.4 ms (max 0.89), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.9 ms, guest 32.5 ms (max 5.47), starved 235, underruns 0, submits 940
