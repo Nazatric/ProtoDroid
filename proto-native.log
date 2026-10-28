@@ -1,0 +1,411 @@
+proto-re build Oct 28 2026 10:47:20
+logs mirrored to /storage/emulated/0/Prototype/logs
+proto-re build Oct 28 2026 10:47:20
+DXVK logs mirrored to /storage/emulated/0/Prototype/logs
+game dir: /storage/emulated/0/Prototype
+data dir: /storage/emulated/0/Android/data/com.protore.game/files
+memory: guest window at 1000000000, arena 2000 MiB
+render size 1600x720 (window 2712x1220)
+loader: rebased to 7c000000 (418563 fixups)
+loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
+DllMain(PROCESS_ATTACH)
+DllMain returned 1
+EngineInitialize
+SetThreadPriority(0) -> nice 0 on tid 21381
+SetThreadPriority(2) -> nice -4 on tid 21393
+SetThreadPriority(0) -> nice 0 on tid 21394
+SetThreadPriority(0) -> nice 0 on tid 21395
+SetThreadPriority(0) -> nice 0 on tid 21396
+SetThreadPriority(15) -> nice -10 on tid 21397
+SetThreadPriority(1) -> nice -2 on tid 21398
+SetThreadPriority(1) -> nice -2 on tid 21399
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+Direct3DCreate9(32) -> 0xb40000717de52db0
+GPU BC (DXT) textures: not supported, decoding on (DXT1 as 16-bit)
+CreateDevice 1600x720 fmt 22 windowed 1 msaa 0/0 interval 2147483648 -> 00000000
+textures: skip 1 mip level(s) of textures >= 512, decode DXT on
+SetThreadPriority(0) -> nice 0 on tid 21424
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Keyboard)
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Mouse)
+xaudio2: Initialize(flags 0) -> 0
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 21429
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) -> 0
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 21434
+SetThreadPriority(15) -> nice -10 on tid 21435
+SetThreadPriority(1) -> nice -2 on tid 21436
+SetThreadPriority(1) -> nice -2 on tid 21437
+EngineInitialize returned 1
+perf hint: unavailable (target 16.7 ms, 7 threads)
+frame 0
+Reset 1600x720 msaa 0/0 interval 1 -> 00000000
+frame 1
+frame 2
+frame 4
+frame 8
+frame 16
+frame 32
+frame 64
+frame 128
+frame 256
+frame 512
+frame 1024
+frame 2048
+frame 4096
+frame 8192
+frame 16384
+frame 32768
+audio: 228 passes, max gap 23.4 ms, guest 15.3 ms (max 0.94), starved 226, underruns 2, submits 927
+[bink] SDL movie audio: 48000 Hz, stereo float
+
+[bink] indexed 18044 RCF paths from 11 archives
+
+[bink] RCF input movies/activisionRadicalLogos.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik +841885696 (21244780 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: 21244780 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: 1280x720, 427 frames, 4 audio tracks, video threads=1 type=0x3 active=0x0
+
+[bink] fbsets copy buffers=16fcc1d0 frame=1 active=0 total=2 YA=1280x720 cRcB=640x360
+
+[bink] fbset[0]: Y=(alloc=1 buf=17460010 pitch=1280) cR=(alloc=1 buf=17550010 pitch=640) cB=(alloc=1 buf=17590010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=175d0010 pitch=1280) cR=(alloc=1 buf=176c0010 pitch=640) cB=(alloc=1 buf=17700010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 1 active=0 total=2 src Y/Cb/Cr/A=16/128/128/255
+
+[bink]  set 0 (locked) Y=17460010/1280=16 Cb=17590010/640=128 Cr=17550010/640=128 A=00000000/0=-1
+
+[bink]  set 1 Y=175d0010/1280=16 Cb=17700010/640=128 Cr=176c0010/640=128 A=00000000/0=-1
+
+[bink] fbsets copy buffers=16fcc1d0 frame=2 active=1 total=2 YA=1280x720 cRcB=640x360
+
+[bink] fbset[0]: Y=(alloc=1 buf=17460010 pitch=1280) cR=(alloc=1 buf=17550010 pitch=640) cB=(alloc=1 buf=17590010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=175d0010 pitch=1280) cR=(alloc=1 buf=176c0010 pitch=640) cB=(alloc=1 buf=17700010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 2 active=1 total=2 src Y/Cb/Cr/A=16/128/128/255
+
+[bink]  set 0 Y=17460010/1280=16 Cb=17590010/640=128 Cr=17550010/640=128 A=00000000/0=-1
+
+[bink]  set 1 (locked) Y=175d0010/1280=16 Cb=17700010/640=128 Cr=176c0010/640=128 A=00000000/0=-1
+
+[bink] fbsets copy buffers=16fcc1d0 frame=3 active=0 total=2 YA=1280x720 cRcB=640x360
+
+[bink] fbset[0]: Y=(alloc=1 buf=17460010 pitch=1280) cR=(alloc=1 buf=17550010 pitch=640) cB=(alloc=1 buf=17590010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=175d0010 pitch=1280) cR=(alloc=1 buf=176c0010 pitch=640) cB=(alloc=1 buf=17700010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 3 active=0 total=2 src Y/Cb/Cr/A=16/128/128/255
+
+[bink]  set 0 (locked) Y=17460010/1280=16 Cb=17590010/640=128 Cr=17550010/640=128 A=00000000/0=-1
+
+[bink]  set 1 Y=175d0010/1280=16 Cb=17700010/640=128 Cr=176c0010/640=128 A=00000000/0=-1
+
+[bink] deferred frame 8 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 10 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 12 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 38 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 23.5 ms, guest 21.5 ms (max 3.37), starved 235, underruns 0, submits 940
+[bink] deferred frame 56 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 109 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 167 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 25.6 ms, guest 14.2 ms (max 0.96), starved 235, underruns 0, submits 940
+[bink] deferred frame 206 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 343 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 345 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 23.9 ms, guest 14.9 ms (max 0.67), starved 235, underruns 0, submits 940
+[bink] deferred frame 403 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 405 after 1 call(s); uploaded retained planes
+
+[bink] RCF input movies/fe_ambientMovie_start.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik +1016276992 (13275304 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 13275304 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 1280x720, 612 frames, 0 audio tracks, video threads=1 type=0x3 active=0x0
+
+[bink] fbsets copy buffers=16fcc1d0 frame=1 active=0 total=2 YA=1280x720 cRcB=640x360
+
+[bink] fbset[0]: Y=(alloc=1 buf=17460010 pitch=1280) cR=(alloc=1 buf=17550010 pitch=640) cB=(alloc=1 buf=17590010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=175d0010 pitch=1280) cR=(alloc=1 buf=176c0010 pitch=640) cB=(alloc=1 buf=17700010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 1 active=0 total=2 src Y/Cb/Cr/A=17/128/128/255
+
+[bink]  set 0 (locked) Y=17460010/1280=17 Cb=17590010/640=128 Cr=17550010/640=128 A=00000000/0=-1
+
+[bink]  set 1 Y=175d0010/1280=17 Cb=17700010/640=128 Cr=176c0010/640=128 A=00000000/0=-1
+
+[bink] fbsets copy buffers=16fcc1d0 frame=2 active=1 total=2 YA=1280x720 cRcB=640x360
+
+[bink] fbset[0]: Y=(alloc=1 buf=17460010 pitch=1280) cR=(alloc=1 buf=17550010 pitch=640) cB=(alloc=1 buf=17590010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=175d0010 pitch=1280) cR=(alloc=1 buf=176c0010 pitch=640) cB=(alloc=1 buf=17700010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 2 active=1 total=2 src Y/Cb/Cr/A=17/128/128/255
+
+[bink]  set 0 Y=17460010/1280=17 Cb=17590010/640=128 Cr=17550010/640=128 A=00000000/0=-1
+
+[bink]  set 1 (locked) Y=175d0010/1280=17 Cb=17700010/640=128 Cr=176c0010/640=128 A=00000000/0=-1
+
+[bink] fbsets copy buffers=16fcc1d0 frame=3 active=0 total=2 YA=1280x720 cRcB=640x360
+
+[bink] fbset[0]: Y=(alloc=1 buf=17460010 pitch=1280) cR=(alloc=1 buf=17550010 pitch=640) cB=(alloc=1 buf=17590010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=175d0010 pitch=1280) cR=(alloc=1 buf=176c0010 pitch=640) cB=(alloc=1 buf=17700010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 3 active=0 total=2 src Y/Cb/Cr/A=17/128/128/255
+
+[bink]  set 0 (locked) Y=17460010/1280=17 Cb=17590010/640=128 Cr=17550010/640=128 A=00000000/0=-1
+
+[bink]  set 1 Y=175d0010/1280=17 Cb=17700010/640=128 Cr=176c0010/640=128 A=00000000/0=-1
+
+[bink] deferred frame 34 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 25.1 ms, guest 13.4 ms (max 0.60), starved 235, underruns 0, submits 940
+[bink] RCF input movies/fe_ambientMovie_1.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik +958214144 (58061816 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 58061816 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 1280x720, 1808 frames, 0 audio tracks, video threads=1 type=0x3 active=0x0
+
+[bink] fbsets copy buffers=16fcc1d0 frame=1 active=0 total=2 YA=1280x720 cRcB=640x360
+
+[bink] fbset[0]: Y=(alloc=1 buf=17460010 pitch=1280) cR=(alloc=1 buf=17550010 pitch=640) cB=(alloc=1 buf=17590010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=175d0010 pitch=1280) cR=(alloc=1 buf=176c0010 pitch=640) cB=(alloc=1 buf=17700010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 1 active=0 total=2 src Y/Cb/Cr/A=16/128/128/255
+
+[bink]  set 0 (locked) Y=17460010/1280=16 Cb=17590010/640=128 Cr=17550010/640=128 A=00000000/0=-1
+
+[bink]  set 1 Y=175d0010/1280=16 Cb=17700010/640=128 Cr=176c0010/640=128 A=00000000/0=-1
+
+[bink] fbsets copy buffers=16fcc1d0 frame=2 active=1 total=2 YA=1280x720 cRcB=640x360
+
+[bink] fbset[0]: Y=(alloc=1 buf=17460010 pitch=1280) cR=(alloc=1 buf=17550010 pitch=640) cB=(alloc=1 buf=17590010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=175d0010 pitch=1280) cR=(alloc=1 buf=176c0010 pitch=640) cB=(alloc=1 buf=17700010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 2 active=1 total=2 src Y/Cb/Cr/A=16/128/128/255
+
+[bink]  set 0 Y=17460010/1280=16 Cb=17590010/640=128 Cr=17550010/640=128 A=00000000/0=-1
+
+[bink]  set 1 (locked) Y=175d0010/1280=16 Cb=17700010/640=128 Cr=176c0010/640=128 A=00000000/0=-1
+
+[bink] fbsets copy buffers=16fcc1d0 frame=3 active=0 total=2 YA=1280x720 cRcB=640x360
+
+[bink] fbset[0]: Y=(alloc=1 buf=17460010 pitch=1280) cR=(alloc=1 buf=17550010 pitch=640) cB=(alloc=1 buf=17590010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=175d0010 pitch=1280) cR=(alloc=1 buf=176c0010 pitch=640) cB=(alloc=1 buf=17700010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 3 active=0 total=2 src Y/Cb/Cr/A=16/128/128/255
+
+[bink]  set 0 (locked) Y=17460010/1280=16 Cb=17590010/640=128 Cr=17550010/640=128 A=00000000/0=-1
+
+[bink]  set 1 Y=175d0010/1280=16 Cb=17700010/640=128 Cr=176c0010/640=128 A=00000000/0=-1
+
+[bink] deferred frame 90 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 106 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 24.0 ms, guest 16.6 ms (max 0.90), starved 235, underruns 0, submits 940
+[bink] deferred frame 115 after 1 call(s); uploaded retained planes
+
+perf: 28.5 fps, 37.4 ms, 745 MiB resident; arena 359 MiB (peak 359), up to 17740000; io: 104 reads, 46 MiB, 0 over 50 ms, longest 5.8 ms
+[bink] deferred frame 135 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 137 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 150 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 161 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 177 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 188 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 210 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 216 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 221 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 232 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 247 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 255 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 24.1 ms, guest 39.3 ms (max 1.53), starved 235, underruns 0, submits 940
+[bink] deferred frame 258 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 291 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 317 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 323 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 351 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 380 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 397 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 24.0 ms, guest 31.8 ms (max 1.61), starved 235, underruns 0, submits 940
+[bink] deferred frame 415 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 417 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 440 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 473 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 506 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 547 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 24.4 ms, guest 36.0 ms (max 4.89), starved 235, underruns 0, submits 940
+[bink] deferred frame 590 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 601 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 632 after 1 call(s); uploaded retained planes
+
+LoadLibraryA(RPCRT4): not provided
+frame 65536
+audio: 235 passes, max gap 26.7 ms, guest 44.2 ms (max 2.90), starved 235, underruns 0, submits 940
+textures: 1024 created, 136 reduced, 961 decoded; top levels 109 MiB -> 187 MiB
+audio: 235 passes, max gap 24.3 ms, guest 45.1 ms (max 6.95), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 29.4 ms, guest 38.3 ms (max 2.59), starved 235, underruns 0, submits 940
+perf: 1.7 fps, 4.4 ms, 1620 MiB resident; arena 577 MiB (peak 577), up to 251c0000; io: 359 reads, 159 MiB, 0 over 50 ms, longest 29.4 ms
+[bink] RCF input movies/NIS_0_1_FMV.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik +4096 (311658208 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik: 311658208 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik: 1280x544, 5721 frames, 4 audio tracks, video threads=1 type=0x3 active=0x0
+
+[bink] fbsets copy buffers=1de49980 frame=1 active=0 total=2 YA=1280x544 cRcB=640x272
+
+[bink] fbset[0]: Y=(alloc=1 buf=251d0010 pitch=1280) cR=(alloc=1 buf=25280010 pitch=640) cB=(alloc=1 buf=252b0010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=252e0010 pitch=1280) cR=(alloc=1 buf=25390010 pitch=640) cB=(alloc=1 buf=253c0010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 1 active=0 total=2 src Y/Cb/Cr/A=16/128/128/255
+
+[bink]  set 0 (locked) Y=251d0010/1280=16 Cb=252b0010/640=128 Cr=25280010/640=128 A=00000000/0=-1
+
+[bink]  set 1 Y=252e0010/1280=16 Cb=253c0010/640=128 Cr=25390010/640=128 A=00000000/0=-1
+
+[bink] fbsets copy buffers=1de49980 frame=2 active=1 total=2 YA=1280x544 cRcB=640x272
+
+[bink] fbset[0]: Y=(alloc=1 buf=251d0010 pitch=1280) cR=(alloc=1 buf=25280010 pitch=640) cB=(alloc=1 buf=252b0010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=252e0010 pitch=1280) cR=(alloc=1 buf=25390010 pitch=640) cB=(alloc=1 buf=253c0010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 2 active=1 total=2 src Y/Cb/Cr/A=16/128/128/255
+
+[bink]  set 0 Y=251d0010/1280=16 Cb=252b0010/640=128 Cr=25280010/640=128 A=00000000/0=-1
+
+[bink]  set 1 (locked) Y=252e0010/1280=16 Cb=253c0010/640=128 Cr=25390010/640=128 A=00000000/0=-1
+
+[bink] fbsets copy buffers=1de49980 frame=3 active=0 total=2 YA=1280x544 cRcB=640x272
+
+[bink] fbset[0]: Y=(alloc=1 buf=251d0010 pitch=1280) cR=(alloc=1 buf=25280010 pitch=640) cB=(alloc=1 buf=252b0010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] fbset[1]: Y=(alloc=1 buf=252e0010 pitch=1280) cR=(alloc=1 buf=25390010 pitch=640) cB=(alloc=1 buf=253c0010 pitch=640) A=(alloc=0 buf=00000000 pitch=0)
+
+[bink] plane copy frame 3 active=0 total=2 src Y/Cb/Cr/A=17/128/128/255
+
+[bink]  set 0 (locked) Y=251d0010/1280=17 Cb=252b0010/640=128 Cr=25280010/640=128 A=00000000/0=-1
+
+[bink]  set 1 Y=252e0010/1280=17 Cb=253c0010/640=128 Cr=25390010/640=128 A=00000000/0=-1
+
+audio: 235 passes, max gap 27.9 ms, guest 32.8 ms (max 4.22), starved 235, underruns 0, submits 940
+[bink] deferred frame 135 after 1 call(s); uploaded retained planes
+
+frame 131072
+audio: 235 passes, max gap 25.5 ms, guest 32.7 ms (max 6.16), starved 235, underruns 0, submits 940
+[bink] deferred frame 382 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 26.3 ms, guest 35.0 ms (max 5.33), starved 235, underruns 0, submits 940
+[bink] deferred frame 401 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 457 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 25.9 ms, guest 37.0 ms (max 3.53), starved 235, underruns 0, submits 940
+[bink] deferred frame 609 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 628 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 28.2 ms, guest 34.4 ms (max 2.12), starved 235, underruns 0, submits 940
+[bink] deferred frame 740 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 26.9 ms, guest 35.4 ms (max 7.93), starved 235, underruns 0, submits 940
+perf: 1673.7 fps, 31.3 ms, 1637 MiB resident; arena 579 MiB (peak 579), up to 253f0000; io: 16 reads, 3 MiB, 0 over 50 ms, longest 6.5 ms
+[bink] deferred frame 872 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 891 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 929 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 966 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 26.0 ms, guest 34.5 ms (max 3.68), starved 235, underruns 0, submits 940
+[bink] deferred frame 1004 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 1061 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 1117 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 25.3 ms, guest 30.3 ms (max 1.49), starved 235, underruns 0, submits 940
+[bink] deferred frame 1155 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 1193 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 1249 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 27.5 ms, guest 28.5 ms (max 1.72), starved 235, underruns 0, submits 940
+audio: 234 passes, max gap 26.0 ms, guest 32.9 ms (max 3.08), starved 234, underruns 0, submits 936
+[bink] deferred frame 1513 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 1588 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 26.3 ms, guest 24.9 ms (max 1.71), starved 235, underruns 0, submits 940
+[bink] deferred frame 1683 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 24.8 ms, guest 23.4 ms (max 1.47), starved 235, underruns 0, submits 940
+perf: 2057.9 fps, 32.9 ms, 1617 MiB resident; arena 579 MiB (peak 579), up to 253f0000; io: 0 reads, 0 MiB, 0 over 50 ms, longest 0.0 ms
+[bink] deferred frame 1817 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 1837 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 1894 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 26.9 ms, guest 25.1 ms (max 1.10), starved 235, underruns 0, submits 940
+[bink] deferred frame 1931 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 1949 after 1 call(s); uploaded retained planes
+
+[bink] deferred frame 1969 after 1 call(s); uploaded retained planes
+
+audio: 235 passes, max gap 25.3 ms, guest 27.4 ms (max 1.21), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 33.9 ms, guest 24.7 ms (max 5.95), starved 235, underruns 0, submits 940
+audio: 235 passes, max gap 27.3 ms, guest 69.7 ms (max 12.72), starved 235, underruns 0, submits 940
+samplers: max anisotropy 1x:10505 2x:2061 3x:3186 4x:5156 5x:1079 6x:935 8x:111 | min filter none/point/linear/aniso 0/3618/15252/11981 | mip 22695/23756/18114/0
+audio: 235 passes, max gap 26.0 ms, guest 25.9 ms (max 1.94), starved 235, underruns 0, submits 940
