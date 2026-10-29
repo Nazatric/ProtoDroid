@@ -1,0 +1,56 @@
+"installscript"
+{
+	"Registry"
+	{
+		"HKEY_LOCAL_MACHINE\\SOFTWARE\\Activision\\Prototype"
+		{
+			"string"
+			{
+				"EXEString"		"%INSTALLDIR%\\Prototypef.exe"
+				"InstallExePath"		"%INSTALLDIR%"
+				"IntVersion"		"26.000000"
+				"Path"		"%INSTALLDIR%"
+				"Version"		"1.000000"
+				"english"
+				{
+					"LanguageCode"		"ENU"
+					"LCID"		"1033"
+					"FE_Language"		"69"
+				}
+				"french"
+				{
+					"LanguageCode"		"FRA"
+					"LCID"		"1036"
+					"FE_Language"		"70"
+				}
+				"spanish"
+				{
+					"LanguageCode"		"ESP"
+					"LCID"		"1034"
+					"FE_Language"		"83"
+				}
+				"italian"
+				{
+					"LanguageCode"		"ITA"
+					"LCID"		"1040"
+					"FE_Language"		"73"
+				}
+			}
+		}
+	}
+	"Run Process"
+	{
+		"DirectX"
+		{
+			"Process 1"		"%INSTALLDIR%\\DirectX\\DXSETUP.exe"
+			"Command 1"		"/silent"
+			"NoCleanUp"		"1"
+		}
+		"vcredist"
+		{
+			"Process 1"		"%INSTALLDIR%\\vcredist_x86.exe"
+			"Command 1"		"/q:a"
+			"NoCleanUp"		"1"
+		}
+	}
+}
