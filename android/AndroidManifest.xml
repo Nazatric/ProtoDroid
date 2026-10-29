@@ -14,7 +14,7 @@
     <uses-feature android:name="android.hardware.type.pc" android:required="false" />
 
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Only for a game folder in shared storage (/sdcard/Prototype); asked for on the setup screen. -->
+    <!-- For the shared game/save folder (/sdcard/Prototype); asked for on the setup screen. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 

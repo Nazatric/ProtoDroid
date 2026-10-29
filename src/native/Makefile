@@ -96,7 +96,7 @@ $(OUT)/hot_audio.o $(OUT)/hot_skin.o: CXXFLAGS += -ffp-contract=off
 
 $(OUT)/perf_hint.o: perf_hint_session.h
 $(OUT)/main.o $(OUT)/state_cache.o: state_cache.h
-$(OUT)/main.o $(OUT)/path.o: save_path.h
+$(OUT)/main.o $(OUT)/path.o $(OUT)/save_path.o: save_path.h
 $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/present_stats.o: present_stats.h
 $(OUT)/vulkan_driver.o: gpu_profile.h
 
