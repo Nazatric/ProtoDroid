@@ -87,7 +87,7 @@ Frequently used keys include:
 | `audio_master_reuse` | Reuses the retained mastering output when the game recreates voices. |
 | `vulkan_driver` | `auto`, `system`, or `turnip`. |
 | `present_stats` | Enables detailed presentation diagnostics. |
-| `audio_stats` | Controls audio starvation and underrun diagnostics. |
+| `audio_stats` | `1` logs real output underruns (default), `2` logs every timing window, `0` disables audio diagnostics. |
 | `pipeline_trace` | Enables expensive Mali pipeline tracing for debugging only. |
 | `dxvk_config` | Additional DXVK options; separate entries with commas in this file. |
 | `watchdog`, `import_profile` | Hang and import profiling diagnostics. |
