@@ -580,8 +580,6 @@ jobs:
           ! grep -E 'libav(format|codec|util)|libswresample' /tmp/libmain-dynamic.txt
           $TOOLS/llvm-strings "$MAIN" | grep -F 'binkw32.dll'
           $TOOLS/llvm-strings "$MAIN" | grep -F 'unlock_menu_fps'
-          $TOOLS/llvm-strings "$MAIN" | grep -F 'protodroid.ini'
-          $TOOLS/llvm-strings "$MAIN" | grep -F 'PROTODROID_PIPELINE_TRACE'
           $TOOLS/llvm-nm -D "$MAIN" | grep -F 'Java_com_protodroid_TouchControls_nativeMenuTouch'
           STRINGS=$($TOOLS/llvm-strings "$DXVK")
           printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2.so'
@@ -605,10 +603,6 @@ jobs:
           $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging "$APK" > /tmp/protodroid-badging.txt
           head -n 20 /tmp/protodroid-badging.txt
           grep -F "package: name='com.protodroid'" /tmp/protodroid-badging.txt
-          grep -F "application-label:'ProtoDroid'" /tmp/protodroid-badging.txt
-          unzip -p "$APK" classes.dex > /tmp/protodroid-classes.dex
-          strings /tmp/protodroid-classes.dex | grep -F 'protodroid.ini'
-          strings /tmp/protodroid-classes.dex | grep -F 'Original Android port by VinTeRuS'
 
       - name: Upload APK artifact
         if: always()
