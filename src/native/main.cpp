@@ -295,8 +295,6 @@ void Fatal(const char* fmt, ...) {
 
 uint32_t HostWindow();  // user32.cpp
 void InitClientSize(int window_w, int window_h);
-void ClientSize(int* w, int* h);
-void ApplyNativeWindowGeometry(int width, int height);  // d3d9.cpp
 void StartWatchdog(std::atomic<uint64_t>* frames);  // watchdog.cpp
 void InitD3D9Bridge();  // d3d9.cpp
 void SelectVulkanDriver();  // vulkan_driver.cpp
@@ -618,9 +616,6 @@ int main(int argc, char** argv) {
     }
 #endif
     InitClientSize(window_w, window_h);
-    int client_w, client_h;
-    ClientSize(&client_w, &client_h);
-    ApplyNativeWindowGeometry(client_w, client_h);
 
     std::string dll = std::string(g_game_dir) + "/prototypeenginef.dll";
     if (!LoadImage(dll.c_str(), &g_engine, kEngineBase)) StartupFailure("Cannot load prototypeenginef.dll.");

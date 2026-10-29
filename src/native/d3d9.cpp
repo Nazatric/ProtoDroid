@@ -10,8 +10,6 @@
 
 #include <unistd.h>
 #ifdef __ANDROID__
-#include <SDL2/SDL_syswm.h>
-#include <android/native_window.h>
 #include <jni.h>
 #endif
 
@@ -38,8 +36,6 @@ SDL_Window* g_sdl_window = nullptr;
 uint32_t HostWindow();
 void ClientSize(int* w, int* h);     // user32.cpp
 void SetClientSize(int w, int h);
-void ApplyNativeWindowGeometry(int width, int height);
-void ReapplyNativeWindowGeometry();
 
 namespace {
 
@@ -655,7 +651,6 @@ M(IDirect3D9, CreateDevice) {
     for (int attempt = 0; attempt < 5; ++attempt) {
         WaitForWindow(600);
         D3DPRESENT_PARAMETERS try_pp = pp;
-        ApplyNativeWindowGeometry(int(try_pp.BackBufferWidth), int(try_pp.BackBufferHeight));
         hr = Host<IDirect3D9>(Arg(c, 0))->CreateDevice(Arg(c, 1), D3DDEVTYPE(Arg(c, 2)), HostHwnd(Arg(c, 3)),
                                                      Arg(c, 4), &try_pp, &dev);
         if (SUCCEEDED(hr)) {
@@ -709,7 +704,6 @@ M(IDirect3DDevice9, Reset) {
     // Matching width/height/format alone is not enough to skip Reset: D3D9 also resets device state and default-pool
     // resources. ToHost keeps the Android interval stable, avoiding the observed cutscene presentation-mode change.
     DrainGraves(true);
-    ApplyNativeWindowGeometry(int(pp.BackBufferWidth), int(pp.BackBufferHeight));
     HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->Reset(&pp);
     Log("Reset %ux%u msaa %u/%u interval %u -> %08x", pp.BackBufferWidth, pp.BackBufferHeight, pp.MultiSampleType,
         pp.MultiSampleQuality, pp.PresentationInterval, uint32_t(hr));
@@ -797,58 +791,6 @@ HRESULT GuardedPresent(F present) {
 }
 
 #ifdef __ANDROID__
-std::mutex g_geometry_mutex;
-int g_requested_buffer_width = 0, g_requested_buffer_height = 0;
-
-// The SDL window and TouchControls remain full-screen. Only SurfaceFlinger's buffer geometry changes, so SDL input
-// coordinates still normalize through the existing window-to-client path. The caller serializes this with presents
-// when responding to surface recreation.
-void ApplyNativeWindowGeometryLocked(int width, int height) {
-    if (!g_sdl_window) return;
-    SDL_SysWMinfo info;
-    SDL_VERSION(&info.version);
-    if (!SDL_GetWindowWMInfo(g_sdl_window, &info) || info.subsystem != SDL_SYSWM_ANDROID ||
-        !info.info.android.window) {
-        Log("native buffer geometry %dx%d unavailable: %s", width, height, SDL_GetError());
-        return;
-    }
-    ANativeWindow* window = info.info.android.window;
-    int old_width = ANativeWindow_getWidth(window), old_height = ANativeWindow_getHeight(window);
-    if (old_width == width && old_height == height) return;
-    // Format zero preserves the surface's existing pixel format. If the driver rejects the size, DXVK's WSI query
-    // falls back to the real buffer dimensions instead of failing device creation.
-    int result = ANativeWindow_setBuffersGeometry(window, width, height, 0);
-    if (result != 0) {
-        Log("native buffer geometry %dx%d failed (%d); keeping %dx%d", width, height, result, old_width, old_height);
-        return;
-    }
-    Log("native buffer geometry %dx%d -> %dx%d (SDL window unchanged)", old_width, old_height,
-        ANativeWindow_getWidth(window), ANativeWindow_getHeight(window));
-}
-#endif
-
-void ApplyNativeWindowGeometry(int width, int height) {
-#ifdef __ANDROID__
-    if (width <= 0 || height <= 0) return;
-    std::lock_guard<std::mutex> lock(g_geometry_mutex);
-    g_requested_buffer_width = width;
-    g_requested_buffer_height = height;
-    ApplyNativeWindowGeometryLocked(width, height);
-#else
-    (void)width;
-    (void)height;
-#endif
-}
-
-void ReapplyNativeWindowGeometry() {
-#ifdef __ANDROID__
-    std::lock_guard<std::mutex> lock(g_geometry_mutex);
-    if (g_requested_buffer_width > 0 && g_requested_buffer_height > 0)
-        ApplyNativeWindowGeometryLocked(g_requested_buffer_width, g_requested_buffer_height);
-#endif
-}
-
-#ifdef __ANDROID__
 // Waits up to `seconds` for the game's window (surface) to be on screen; true if it is.
 bool WaitForWindow(int seconds) {
     for (int i = 0; i <= seconds * 10; ++i) {
@@ -867,9 +809,6 @@ extern "C" JNIEXPORT void JNICALL Java_com_protodroid_ProtoSurface_nativeSurface
 }
 extern "C" JNIEXPORT void JNICALL Java_com_protodroid_ProtoSurface_nativeSurfaceReady(JNIEnv*, jclass) {
     std::lock_guard<std::mutex> lock(g_present_mutex);
-    // SDL's surfaceChanged callback has refreshed its ANativeWindow by this point. Android may restore the default
-    // full-screen buffer size on the new native window, so reapply the engine-selected geometry before presents resume.
-    ReapplyNativeWindowGeometry();
     g_surface_gone = false;
 }
 #endif
