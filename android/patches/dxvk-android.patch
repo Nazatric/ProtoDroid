@@ -403,7 +403,7 @@ diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
 index 1285c4e..15e8e3a 100644
 --- a/src/dxvk/dxvk_adapter.cpp
 +++ b/src/dxvk/dxvk_adapter.cpp
-@@ -165,104 +165,126 @@ namespace dxvk {
+@@ -165,104 +165,121 @@ namespace dxvk {
      return queues;
    }
  
@@ -420,18 +420,13 @@ index 1285c4e..15e8e3a 100644
 +  checkFeatureNeed(m_deviceFeatures.feature, required.feature, #feature)
 +
 +
-+  // Android port: drivers (Mali) reject features DXVK enables without checking support; turn each such feature
-+  // off and report it instead of failing device creation with VK_ERROR_FEATURE_NOT_PRESENT.
-+  template<typename T>
-+  static void clampFeatures(T& enabled, const T& supported, const char* name) {
-+    constexpr size_t header = 16;  // sType + pNext
-+    auto* e = reinterpret_cast<VkBool32*>(reinterpret_cast<char*>(&enabled) + header);
-+    auto* s = reinterpret_cast<const VkBool32*>(reinterpret_cast<const char*>(&supported) + header);
-+    for (size_t i = 0; i < (sizeof(T) - header) / sizeof(VkBool32); i++) {
-+      if (e[i] && !s[i]) {
-+        Logger::warn(str::format("DxvkAdapter: ", name, " feature #", i, " not supported, disabled"));
-+        e[i] = VK_FALSE;
-+      }
++  // Android port: report the actual feature name when a driver cannot
++  // provide something requested by the upstream device setup. In particular,
++  // do not report anonymous extRobustness2 "feature #0/#2" warnings.
++  static void clampFeature(VkBool32& enabled, VkBool32 supported, const char* name) {
++    if (enabled && !supported) {
++      Logger::warn(str::format("DxvkAdapter: ", name, " not supported, disabled"));
++      enabled = VK_FALSE;
 +    }
 +  }
  
@@ -624,40 +619,27 @@ index 1285c4e..15e8e3a 100644
    }
  
  #undef CHECK_FEATURE_NEED
-@@ -489,6 +511,37 @@ namespace dxvk {
+@@ -489,6 +511,24 @@ namespace dxvk {
      if (devExtensions.amdMemoryOverallocationBehaviour)
        overallocInfo.pNext = std::exchange(info.pNext, &overallocInfo);
      
-+#define CLAMP_FEATURES(m) clampFeatures(enabledFeatures.m, m_deviceFeatures.m, #m)
-+    CLAMP_FEATURES(core);
-+    CLAMP_FEATURES(vk11);
-+    CLAMP_FEATURES(vk12);
-+    CLAMP_FEATURES(vk13);
-+    CLAMP_FEATURES(extAttachmentFeedbackLoopLayout);
-+    CLAMP_FEATURES(extCustomBorderColor);
-+    CLAMP_FEATURES(extDepthClipEnable);
-+    CLAMP_FEATURES(extDepthBiasControl);
-+    CLAMP_FEATURES(extExtendedDynamicState3);
-+    CLAMP_FEATURES(extFragmentShaderInterlock);
-+    CLAMP_FEATURES(extGraphicsPipelineLibrary);
-+    CLAMP_FEATURES(extLineRasterization);
-+    CLAMP_FEATURES(extMemoryPriority);
-+    CLAMP_FEATURES(extNonSeamlessCubeMap);
-+    CLAMP_FEATURES(extPageableDeviceLocalMemory);
-+    CLAMP_FEATURES(extRobustness2);
++    // Keep the pNext chain and the feature bits in agreement. These are
++    // named explicitly: a numeric byte-offset walk cannot tell robustBufferAccess2
++    // from nullDescriptor and produced misleading #0/#2 diagnostics.
++    clampFeature(enabledFeatures.extRobustness2.robustBufferAccess2,
++      m_deviceFeatures.extRobustness2.robustBufferAccess2,
++      "extRobustness2.robustBufferAccess2");
++    clampFeature(enabledFeatures.extRobustness2.robustImageAccess2,
++      m_deviceFeatures.extRobustness2.robustImageAccess2,
++      "extRobustness2.robustImageAccess2");
++    clampFeature(enabledFeatures.extRobustness2.nullDescriptor,
++      m_deviceFeatures.extRobustness2.nullDescriptor,
++      "extRobustness2.nullDescriptor");
 +
 +    // Android port: DXVK_NO_NULL_DESCRIPTOR=1 runs the dummy-resource path (dxvk_unbound.cpp) on drivers that
 +    // have null descriptors, to test what Mali drivers without VK_EXT_robustness2 get.
 +    if (env::getEnvVar("DXVK_NO_NULL_DESCRIPTOR") == "1")
 +      enabledFeatures.extRobustness2.nullDescriptor = VK_FALSE;
-+    CLAMP_FEATURES(extShaderModuleIdentifier);
-+    CLAMP_FEATURES(extSwapchainMaintenance1);
-+    CLAMP_FEATURES(extTransformFeedback);
-+    CLAMP_FEATURES(extVertexAttributeDivisor);
-+    CLAMP_FEATURES(khrMaintenance5);
-+    CLAMP_FEATURES(khrPresentId);
-+    CLAMP_FEATURES(khrPresentWait);
-+#undef CLAMP_FEATURES
 +
      VkDevice device = VK_NULL_HANDLE;
      VkResult vr = m_vki->vkCreateDevice(m_handle, &info, nullptr, &device);
@@ -910,11 +892,17 @@ index 63e3f4d..25e17b8 100644
  #include "dxvk_device.h"
  
  namespace dxvk {
-@@ -53,6 +54,89 @@ namespace dxvk {
+@@ -53,6 +54,99 @@ namespace dxvk {
    }
  
  
 +  VkImageView DxvkUnboundResources::imageViewHandle(DxvkContext* ctx, VkImageViewType type) {
++    // SAMPLER descriptors have no image view and use MAX_ENUM as their
++    // binding type. Never use that sentinel as an array index or pass it to
++    // the driver; a 2D dummy is the safe fallback for an unspecified view.
++    if (type == VK_IMAGE_VIEW_TYPE_MAX_ENUM || type > VK_IMAGE_VIEW_TYPE_CUBE_ARRAY)
++      type = VK_IMAGE_VIEW_TYPE_2D;
++
 +    VkImageView view = m_viewHandles[type].load();
 +
 +    if (likely(view != VK_NULL_HANDLE))
@@ -965,6 +953,8 @@ index 63e3f4d..25e17b8 100644
 +    }
 +
 +    view = m_imageViews[family]->handle(type);
++    if (unlikely(view == VK_NULL_HANDLE))
++      throw DxvkError("DxvkUnboundResources: failed to create a dummy image view");
 +    m_viewHandles[type].store(view, std::memory_order_release);
 +    return view;
 +  }
@@ -992,6 +982,8 @@ index 63e3f4d..25e17b8 100644
 +    m_bufferView = m_buffer->createView(key);
 +
 +    view = m_bufferView->handle();
++    if (unlikely(view == VK_NULL_HANDLE))
++      throw DxvkError("DxvkUnboundResources: failed to create a dummy buffer view");
 +    m_bufferViewHandle.store(view, std::memory_order_release);
 +    return view;
 +  }
@@ -1112,7 +1104,13 @@ diff --git a/src/wsi/sdl2/wsi_platform_sdl2.cpp b/src/wsi/sdl2/wsi_platform_sdl2
 index 203cb6d..d8c0255 100644
 --- a/src/wsi/sdl2/wsi_platform_sdl2.cpp
 +++ b/src/wsi/sdl2/wsi_platform_sdl2.cpp
-@@ -15,6 +15,8 @@ namespace dxvk::wsi {
+@@ -3,4 +3,5 @@
+ #include "wsi_platform_sdl2.h"
++#include "../../util/log/log.h"
+ #include "../../util/util_error.h"
+ #include "../../util/util_string.h"
+ #include "../../util/util_win32_compat.h"
+@@ -15,6 +16,8 @@ namespace dxvk::wsi {
          "SDL2.dll"
  #elif defined(__APPLE__)
          "libSDL2-2.0.0.dylib"
@@ -1121,6 +1119,12 @@ index 203cb6d..d8c0255 100644
  #else
          "libSDL2-2.0.so.0"
  #endif
+@@ -54,4 +57,5 @@ namespace dxvk::wsi {
+       *driver = new Sdl2WsiDriver();
+     } catch (const DxvkError& e) {
++      Logger::err(e.message());
+       return false;
+     }
 diff --git a/src/wsi/sdl2/wsi_platform_sdl2.h b/src/wsi/sdl2/wsi_platform_sdl2.h
 index 44f8836..b1c1a99 100644
 --- a/src/wsi/sdl2/wsi_platform_sdl2.h

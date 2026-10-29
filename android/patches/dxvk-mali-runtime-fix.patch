@@ -1,0 +1,146 @@
+diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
+index 0dc0c03..46d0e99 100644
+--- a/src/dxvk/dxvk_adapter.cpp
++++ b/src/dxvk/dxvk_adapter.cpp
+@@ -315,9 +315,32 @@ namespace dxvk {
+     if (!m_deviceExtensions.supports(devExtensions.extPageableDeviceLocalMemory.name()))
+       devExtensions.amdMemoryOverallocationBehaviour.setMode(DxvkExtMode::Optional);
+ 
+-    // Android Mali-G720 MC7: disable extensions whose required features are not supported
+-    if (!m_deviceFeatures.extTransformFeedback.transformFeedback)
++    // Do not expose transform feedback when either the physical feature or
++    // the client-requested feature is absent. D3D9 leaves this feature at
++    // zero even on drivers which advertise the extension.
++    const bool enableTransformFeedback =
++      m_deviceFeatures.extTransformFeedback.transformFeedback &&
++      enabledFeatures.extTransformFeedback.transformFeedback;
++
++    if (!enableTransformFeedback) {
+       devExtensions.extTransformFeedback.setMode(DxvkExtMode::Disabled);
++      enabledFeatures.extTransformFeedback.transformFeedback = VK_FALSE;
++      enabledFeatures.extTransformFeedback.geometryStreams = VK_FALSE;
++    }
++
++    // Each extended dynamic state is independently optional. Keep the
++    // extension only when at least one of the commands DXVK can use is
++    // supported; unsupported feature bits remain disabled below.
++    const bool enableExtendedDynamicState3 =
++      m_deviceFeatures.extExtendedDynamicState3.extendedDynamicState3AlphaToCoverageEnable ||
++      m_deviceFeatures.extExtendedDynamicState3.extendedDynamicState3DepthClipEnable ||
++      m_deviceFeatures.extExtendedDynamicState3.extendedDynamicState3RasterizationSamples ||
++      m_deviceFeatures.extExtendedDynamicState3.extendedDynamicState3SampleMask ||
++      m_deviceFeatures.extExtendedDynamicState3.extendedDynamicState3LineRasterizationMode;
++
++    if (!enableExtendedDynamicState3)
++      devExtensions.extExtendedDynamicState3.setMode(DxvkExtMode::Disabled);
++
+     if (!m_deviceFeatures.extVertexAttributeDivisor.vertexAttributeInstanceRateDivisor &&
+         !m_deviceFeatures.extVertexAttributeDivisor.vertexAttributeInstanceRateZeroDivisor)
+       devExtensions.extVertexAttributeDivisor.setMode(DxvkExtMode::Disabled);
+@@ -330,8 +353,16 @@ namespace dxvk {
+           &extensionsEnabled))
+       throw DxvkError("DxvkAdapter: Failed to create device");
+     
+-    // Enable additional extensions if necessary
++    // Enable additional extensions if necessary, but never re-add an
++    // extension disabled above through an extension provider.
+     extensionsEnabled.merge(m_extraExtensions);
++
++    if (!enableTransformFeedback)
++      extensionsEnabled.disableExtension(devExtensions.extTransformFeedback);
++
++    if (!enableExtendedDynamicState3)
++      extensionsEnabled.disableExtension(devExtensions.extExtendedDynamicState3);
++
+     DxvkNameList extensionNameList = extensionsEnabled.toNameList();
+ 
+     // Always enable robust buffer access
+diff --git a/src/dxvk/dxvk_context.cpp b/src/dxvk/dxvk_context.cpp
+index 356a792..73ccb74 100644
+--- a/src/dxvk/dxvk_context.cpp
++++ b/src/dxvk/dxvk_context.cpp
+@@ -6131,7 +6131,8 @@ namespace dxvk {
+     if (m_descriptorState.hasDirtyGraphicsSets())
+       this->updateGraphicsShaderResources();
+     
+-    if (m_state.gp.flags.test(DxvkGraphicsPipelineFlag::HasTransformFeedback))
++    if (m_device->features().extTransformFeedback.transformFeedback
++     && m_state.gp.flags.test(DxvkGraphicsPipelineFlag::HasTransformFeedback))
+       this->updateTransformFeedbackState();
+     
+     this->updateDynamicState();
+@@ -6208,7 +6209,9 @@ namespace dxvk {
+     if (m_barrierControl.test(DxvkBarrierControl::IgnoreGraphicsBarriers))
+       return;
+ 
+-    constexpr auto storageBufferAccess = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFORM_FEEDBACK_WRITE_BIT_EXT;
++    const auto storageBufferAccess = VK_ACCESS_SHADER_WRITE_BIT
++      | (m_device->features().extTransformFeedback.transformFeedback
++        ? VK_ACCESS_TRANSFORM_FEEDBACK_WRITE_BIT_EXT : 0);
+     constexpr auto storageImageAccess  = VK_ACCESS_SHADER_WRITE_BIT;
+ 
+     bool requiresBarrier = false;
+@@ -6262,7 +6265,8 @@ namespace dxvk {
+ 
+     // Transform feedback buffer writes won't overlap, so we
+     // also only need to check those when they are rebound
+-    if (m_flags.test(DxvkContextFlag::GpDirtyXfbBuffers)
++    if (m_device->features().extTransformFeedback.transformFeedback
++     && m_flags.test(DxvkContextFlag::GpDirtyXfbBuffers)
+      && m_state.gp.flags.test(DxvkGraphicsPipelineFlag::HasTransformFeedback)) {
+       for (uint32_t i = 0; i < MaxNumXfbBuffers && !requiresBarrier; i++) {
+         const auto& xfbBufferSlice = m_state.xfb.buffers[i];
+diff --git a/src/dxvk/dxvk_graphics.cpp b/src/dxvk/dxvk_graphics.cpp
+index f5548ab..3e12e30 100644
+--- a/src/dxvk/dxvk_graphics.cpp
++++ b/src/dxvk/dxvk_graphics.cpp
+@@ -953,7 +953,8 @@ namespace dxvk {
+     m_specConstantMask = this->computeSpecConstantMask();
+ 
+     if (m_shaders.gs != nullptr) {
+-      if (m_shaders.gs->flags().test(DxvkShaderFlag::HasTransformFeedback)) {
++      if (m_device->features().extTransformFeedback.transformFeedback
++       && m_shaders.gs->flags().test(DxvkShaderFlag::HasTransformFeedback)) {
+         m_flags.set(DxvkGraphicsPipelineFlag::HasTransformFeedback);
+ 
+         m_barrier.stages |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
+diff --git a/src/dxvk/dxvk_presenter.cpp b/src/dxvk/dxvk_presenter.cpp
+index 8b42f69..28ed1ea 100644
+--- a/src/dxvk/dxvk_presenter.cpp
++++ b/src/dxvk/dxvk_presenter.cpp
+@@ -616,6 +616,16 @@ namespace dxvk {
+           uint32_t                  numSupported,
+     const VkPresentModeKHR*         pSupported,
+           uint32_t                  syncInterval) {
++#ifdef __ANDROID__
++    // Android/Mali swapchains have exhibited repeated MAILBOX recreation.
++    // FIFO is mandatory in Vulkan and avoids that path for both sync modes.
++    for (uint32_t i = 0; i < numSupported; i++) {
++      if (pSupported[i] == VK_PRESENT_MODE_FIFO_KHR)
++        return VK_PRESENT_MODE_FIFO_KHR;
++    }
++    return VK_PRESENT_MODE_FIFO_KHR;
++#endif
++
+     std::array<VkPresentModeKHR, 2> desired = { };
+     uint32_t numDesired = 0;
+ 
+diff --git a/src/dxvk/dxvk_swapchain_blitter.cpp b/src/dxvk/dxvk_swapchain_blitter.cpp
+index aca8718..94169a6 100644
+--- a/src/dxvk/dxvk_swapchain_blitter.cpp
++++ b/src/dxvk/dxvk_swapchain_blitter.cpp
+@@ -318,6 +318,14 @@ namespace dxvk {
+     if (m_gammaView) {
+       gammaDescriptor.imageView = m_gammaView->handle();
+       gammaDescriptor.imageLayout = m_gammaView->image()->info().layout;
++    } else if (!m_device->features().extRobustness2.nullDescriptor) {
++      // The gamma binding remains in the descriptor set even when the
++      // specialization constant disables the gamma fetch. Without
++      // nullDescriptor it still needs a valid image view. The source view is
++      // already a valid sampled image and is tracked below; binding 1 is not
++      // read by the pipeline when needsGamma is false.
++      gammaDescriptor.imageView = srcView->handle();
++      gammaDescriptor.imageLayout = srcView->image()->info().layout;
+     }
+ 
+     std::array<VkWriteDescriptorSet, 2> descriptorWrites = {{

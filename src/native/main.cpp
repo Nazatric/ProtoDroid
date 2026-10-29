@@ -22,6 +22,7 @@
 #include <atomic>
 #include <chrono>
 #include <cerrno>
+#include <cctype>
 #include <cstdarg>
 #include <cstdlib>
 #include <cstring>
@@ -46,10 +47,9 @@ std::string g_mirror_dir;
 std::string g_mirror_log_path;
 std::string g_mirror_prev_path;
 }  // namespace
+void MirrorCopyDXVKLogs();
 
 // Forward for mirroring helper
-static void MirrorInit(const char* base);
-static void MirrorCopyDXVKLogs();
 
 void Log(const char* fmt, ...) {
     std::lock_guard<std::mutex> lock(g_log_mutex);
@@ -141,8 +141,9 @@ void OnCrash(int sig, siginfo_t* info, void* context) {
     CrashWrite(line);
     DescribeAddress(line, sizeof(line), "lr", mc.regs[30]);
     CrashWrite(line);
-    // Also dump registers for Mali diagnosis
-    snprintf(line, sizeof(line), "crash: fault addr %p, pc offset 0xb0 indicates NULL handle dereference (Mali driver)", info->si_addr);
+    // Keep the report factual: the signal, fault address and register-backed
+    // PCs above are the only information available at this point.
+    snprintf(line, sizeof(line), "crash: fault addr %p", info->si_addr);
     CrashWrite(line);
 #elif defined(__x86_64__)
     DescribeAddress(line, sizeof(line), "pc", static_cast<ucontext_t*>(context)->uc_mcontext.gregs[REG_RIP]);
@@ -167,7 +168,7 @@ void OnCrash(int sig, siginfo_t* info, void* context) {
         },
         &walk);
     // Mirror DXVK logs on crash for post-mortem
-    MirrorCopyDXVKLogs();
+    ::native::MirrorCopyDXVKLogs();
     if (g_log) fflush(g_log);
     if (g_log_mirror) fflush(g_log_mirror);
     sigaction(sig, &g_old_actions[sig], nullptr);
@@ -198,7 +199,7 @@ static bool EnsureDir(const std::string& path) {
     return access(path.c_str(), W_OK) == 0;
 }
 
-static void MirrorInit(const char* base) {
+[[maybe_unused]] static void MirrorInit(const char* base) {
     // Try shared storage logs directory
     const char* candidates[] = {
         "/storage/emulated/0/Prototype/logs",
@@ -249,19 +250,20 @@ static void CopyFile(const std::string& src, const std::string& dst) {
     fclose(out);
 }
 
-static void MirrorCopyDXVKLogs() {
+}  // namespace
+
+// Defined in native (not the anonymous namespace) so the forward declaration and all callers refer to the same
+// symbol. CopyFile and the mirror state remain implementation details of the anonymous namespace above.
+void MirrorCopyDXVKLogs() {
     if (g_mirror_dir.empty() || !g_data_dir) return;
     std::string base_log = std::string(g_data_dir) + "/app_process64_d3d9.log";
     std::string mirror_dxvk = g_mirror_dir + "/app_process64_d3d9.log";
     CopyFile(base_log, mirror_dxvk);
-    // Also copy state cache if exists
+    // Also copy state cache if it exists.
     std::string base_cache = std::string(g_data_dir) + "/prototypeenginef.dll.dxvk-cache";
     std::string mirror_cache = g_mirror_dir + "/prototypeenginef.dll.dxvk-cache";
-    // Only copy if cache newer
     CopyFile(base_cache, mirror_cache);
 }
-
-}  // namespace
 
 std::string TakeIoStats();   // kernel32.cpp
 std::string ArenaUsage();    // memory.cpp
@@ -309,7 +311,7 @@ std::atomic<int> g_fps_limit{0};  // 0 = no limit (the swap interval still appli
 static long ResidentMiB() {
     long pages = 0, resident = 0;
     if (FILE* f = fopen("/proc/self/statm", "r")) {
-        if (fscanf(f, "%ld %ld\", &pages, &resident) != 2) resident = 0;
+        if (fscanf(f, "%ld %ld", &pages, &resident) != 2) resident = 0;
         fclose(f);
     }
     return resident * (sysconf(_SC_PAGESIZE) / 1024) / 1024;
@@ -317,53 +319,20 @@ static long ResidentMiB() {
 }  // namespace native
 
 #ifdef __ANDROID__
-extern "C" JNIEXPORT jfloat JNICALL Java_com_protore_game_TouchControls_nativeFps(JNIEnv*, jclass) {
+extern "C" JNIEXPORT jfloat JNICALL Java_com_protodroid_TouchControls_nativeFps(JNIEnv*, jclass) {
     return native::g_fps.load();
 }
-extern "C" JNIEXPORT jfloat JNICALL Java_com_protore_game_TouchControls_nativeFrameMs(JNIEnv*, jclass) {
+extern "C" JNIEXPORT jfloat JNICALL Java_com_protodroid_TouchControls_nativeFrameMs(JNIEnv*, jclass) {
     return native::g_frame_ms.load();
 }
-extern "C" JNIEXPORT jint JNICALL Java_com_protore_game_TouchControls_nativeMemoryMiB(JNIEnv*, jclass) {
+extern "C" JNIEXPORT jint JNICALL Java_com_protodroid_TouchControls_nativeMemoryMiB(JNIEnv*, jclass) {
     return jint(native::ResidentMiB());
 }
-extern "C" JNIEXPORT void JNICALL Java_com_protore_game_TouchControls_nativeSetFpsLimit(JNIEnv*, jclass, jint fps) {
+extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetFpsLimit(JNIEnv*, jclass, jint fps) {
     native::g_fps_limit.store(fps);
     native::PerfHintTarget(fps);
 }
 #endif
-
-// big.LITTLE: keep the engine's main thread on the fast cores (cpu_capacity >= half of the largest). The scheduler
-// usually gets there by itself, but a frame-bound thread that waits on the GPU looks idle to it now and then and
-// lands on a small core for a while. Setting big_cores (Android default 1).
-static void PinToBigCores() {
-#ifdef __ANDROID__
-    // battery_saver: the scheduler picks the cores (the biggest ones draw several times the power per clock)
-    if (!native::SettingInt("big_cores", 1) || native::SettingInt("battery_saver", 0)) return;
-    int caps[64] = {}, max_cap = 0, n = 0;
-    for (; n < 64; ++n) {
-        char path[96];
-        snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpu_capacity", n);
-        FILE* f = fopen(path, "r");
-        if (!f) break;
-        if (fscanf(f, "%d", &caps[n]) != 1) caps[n] = 0;
-        fclose(f);
-        if (caps[n] > max_cap) max_cap = caps[n];
-    }
-    if (n == 0 || max_cap == 0) return;
-    cpu_set_t set;
-    CPU_ZERO(&set);
-    int big = 0;
-    for (int i = 0; i < n; ++i) {
-        if (caps[i] * 2 >= max_cap) {
-            CPU_SET(i, &set);
-            ++big;
-        }
-    }
-    if (big == 0 || big == n) return;  // not big.LITTLE
-    int r = sched_setaffinity(0, sizeof(set), &set);
-    native::Log("main thread pinned to %d of %d cores%s\", big, n, r == 0 ? "" : " (failed)");
-#endif
-}
 
 using namespace native;
 
@@ -391,7 +360,7 @@ static void RedirectStderrToLogcat() {
 }
 #endif
 
-static std::string FindGameDir(const char* base, const char* env_game) {
+[[maybe_unused]] static std::string FindGameDir(const char* base, const char* env_game) {
     std::vector<std::string> candidates;
     if (env_game && env_game[0]) candidates.push_back(env_game);
     // Shared storage primary
@@ -431,8 +400,24 @@ int main(int argc, char** argv) {
     }
     if (chdir(base) != 0) return 1;
     g_data_dir = base;
-    setenv("DXVK_STATE_CACHE_PATH", base, 0);
-    setenv("DXVK_LOG_PATH", base, 0);
+    // DXVK opens its log lazily, after this setup. Do not point it at a
+    // path until the directory has actually been created and checked.
+    if (!native::EnsureDir(base)) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Prototype",
+                                 "The app log directory is not writable.", nullptr);
+        return 1;
+    }
+    // DXVK previously derived app_process64.dxvk-cache from /proc/self/exe. The Android patch now uses a stable game
+    // name; preserve pipelines compiled by older builds instead of starting with another empty cache.
+    std::string state_cache = std::string(base) + "/prototypeenginef.dll.dxvk-cache";
+    std::string legacy_cache = std::string(base) + "/app_process64.dxvk-cache";
+    if (access(state_cache.c_str(), F_OK) != 0 && access(legacy_cache.c_str(), R_OK) == 0) {
+        if (rename(legacy_cache.c_str(), state_cache.c_str()) == 0) Log("DXVK state cache migrated from app_process64");
+        else CopyFile(legacy_cache, state_cache);
+    }
+    setenv("DXVK_STATE_CACHE_PATH", base, 1);
+    setenv("DXVK_LOG_PATH", base, 1);
+    Log("DXVK state cache: %s", state_cache.c_str());
     // Attempt to find game dir across multiple locations (Issue 4)
     if (!g_game_dir || access((std::string(g_game_dir) + "/prototypeenginef.dll").c_str(), R_OK) != 0) {
         std::string found = FindGameDir(base, g_game_dir);
@@ -455,7 +440,7 @@ int main(int argc, char** argv) {
     rename("proto-native.log", "proto-native.prev.log");
     // Also rotate mirror logs if exists
     // MirrorInit will handle mirror rotation
-    MirrorInit(base);
+    native::MirrorInit(base);
     if (!g_mirror_dir.empty()) {
         // If mirror dir exists, rotate its previous log
         std::string shared_prev = g_mirror_dir + "/proto-native.prev.log";
@@ -496,45 +481,44 @@ int main(int argc, char** argv) {
     Log("game dir: %s", g_game_dir);
     Log("data dir: %s", g_data_dir ? g_data_dir : "(none)");
 #endif
+    // DXVK's durable pipeline diagnostics are strictly opt-in. Export this
+    // before any DXVK device can be created; PROTORE_PIPELINE_TRACE itself
+    // remains an equivalent direct environment override.
+    if (SettingInt("pipeline_trace", 0) == 1) {
+        setenv("PROTORE_PIPELINE_TRACE", "1", 0);
+        Log("DXVK pipeline trace enabled (pipeline_trace = 1)");
+    }
     InitGuestMemory();
     AttachThread(8u << 20);
     InitD3D9Bridge();
-    setenv("DXVK_WSI_DRIVER", "SDL2", 0);  // DXVK native: the HWNDs we pass are SDL windows
+    setenv("DXVK_WSI_DRIVER", "SDL2", 1);  // DXVK native: the HWNDs we pass are SDL windows
     SelectVulkanDriver();  // Adreno: the bundled Turnip driver
     // audio_driver = aaudio | openslES: SDL's audio backend (FAudio opens SDL audio later); AAudio by default.
     if (std::string ad = Setting("audio_driver", ""); !ad.empty()) setenv("SDL_AUDIODRIVER", ad.c_str(), 1);
     if (SettingInt("present_stats", 0)) setenv("DXVK_PRESENT_STATS", "1", 0);
     // Test aid: DXVK's dummy resources instead of null descriptors, as on Mali drivers without VK_EXT_robustness2.
     if (SettingInt("dxvk_no_null_descriptor", 0)) setenv("DXVK_NO_NULL_DESCRIPTOR", "1", 0);  // Present timing in the DXVK log
-    // Mali G720 workaround: default to FIFO present mode to avoid MAILBOX double-recreation race
+#ifndef __ANDROID__
+    // Desktop retains the optional present_mode/vsync configuration. Android is normalized below and in the D3D9
+    // bridge so CreateDevice and every Reset see the same FIFO interval.
     {
         std::string pm = Setting("present_mode", "");
-        // Auto-detect Mali-G720 (or generic Mali without robustBufferAccess2) via driver? Use Setting override
-        // If present_mode not set, default to fifo on Mali when requested via ini or auto
-        // Check if user requested fifo explicitly or via vsync=1
         int vsync = SettingInt("vsync", -1);
-        bool wants_fifo = false;
-        if (pm == "fifo" || pm == "vsync" || pm == "FIFO") wants_fifo = true;
-        if (vsync == 1) wants_fifo = true;
-        // Also auto-detect: if Setting present_mode is empty but we are on Mali without nullDescriptor, prefer fifo
-        // The vulkan driver log will show Mali-G720, but at this point we haven't probed yet; we can check env after SelectVulkanDriver?
-        // Instead, expose SettingInt("present_fifo", 0) as explicit override (default 0 for Adreno, 1 for Mali if needed)
-        // For now, if user set present_fifo=1, force fifo
-        if (SettingInt("present_fifo", 0) == 1) wants_fifo = true;
+        bool wants_fifo = pm == "fifo" || pm == "vsync" || pm == "FIFO" || vsync == 1 ||
+                          SettingInt("present_fifo", 0) == 1;
         if (wants_fifo) {
-            // DXVK presentInterval: 1 = vsync (FIFO), 0 = immediate (MAILBOX/IMMEDIATE)
             std::string dc = Setting("dxvk_config", "");
-            // Append or override d3d9.presentInterval = 1
             if (dc.empty()) dc = "d3d9.presentInterval = 1";
             else dc += ";d3d9.presentInterval = 1";
             for (char& ch : dc) if (ch == ',') ch = ';';
             setenv("DXVK_CONFIG", dc.c_str(), 1);
             setenv("PROTORE_PRESENT_FIFO", "1", 1);
             Log("present mode: FIFO (vsync) forced via protore.ini present_mode=%s", pm.c_str());
-        } else {
-            if (!pm.empty()) Log("present mode: %s", pm.c_str());
+        } else if (!pm.empty()) {
+            Log("present mode: %s", pm.c_str());
         }
     }
+#endif
     // dxvk_config = d3d9.presentInterval = 1, d3d9.numBackBuffers = 3  (DXVK options; ',' as ';' starts an ini
     // comment)
     if (std::string dc = Setting("dxvk_config", ""); !dc.empty()) {
@@ -545,6 +529,56 @@ int main(int argc, char** argv) {
         for (char& ch : dc) ch = ch == ',' ? ';' : ch;
         merged += dc;
         setenv("DXVK_CONFIG", merged.c_str(), 1);
+    }
+#ifdef __ANDROID__
+    // Append last so a stale dxvk_config cannot reintroduce an interval change at the post-cutscene Reset.
+    std::string present_config = getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "";
+    if (!present_config.empty()) present_config += ";";
+    present_config += "d3d9.presentInterval = 1";
+    setenv("DXVK_CONFIG", present_config.c_str(), 1);
+    setenv("PROTORE_PRESENT_FIFO", "1", 1);
+    Log("present mode: FIFO (vsync), interval 1 for CreateDevice and Reset");
+#endif
+    // Android starts at 1x for Mali-class tile GPUs. Explicit DXVK configuration wins over this convenience default;
+    // the D3D9 bridge still clamps requests to max_anisotropy and converts anisotropic filters to linear at 1x.
+    {
+#ifdef __ANDROID__
+        const bool configure_dxvk = true;
+        int max_anisotropy = SettingInt("max_anisotropy", 1);
+#else
+        const bool configure_dxvk = !Setting("max_anisotropy", "").empty();
+        int max_anisotropy = SettingInt("max_anisotropy", 16);
+#endif
+        max_anisotropy = max_anisotropy < 1 ? 1 : max_anisotropy > 16 ? 16 : max_anisotropy;
+        std::string merged = getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "";
+        auto has_aniso_option = [](std::string config) {
+            for (char& ch : config) if (ch == ',') ch = ';';
+            for (size_t begin = 0; begin <= config.size();) {
+                const size_t end = config.find(';', begin);
+                std::string key = config.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
+                const size_t equals = key.find('=');
+                if (equals != std::string::npos) key.resize(equals);
+                const size_t first = key.find_first_not_of(" \t\r\n");
+                const size_t last = key.find_last_not_of(" \t\r\n");
+                key = first == std::string::npos ? "" : key.substr(first, last - first + 1);
+                for (char& ch : key) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+                if (key == "d3d9.sampleranisotropy") return true;
+                if (end == std::string::npos) break;
+                begin = end + 1;
+            }
+            return false;
+        };
+        const char* config_file = getenv("DXVK_CONFIG_FILE");
+        if (configure_dxvk && !has_aniso_option(merged) && (!config_file || !*config_file)) {
+            if (!merged.empty()) merged += ";";
+            merged += "d3d9.samplerAnisotropy = " + std::to_string(max_anisotropy);
+            setenv("DXVK_CONFIG", merged.c_str(), 1);
+            Log("anisotropy: bridge/DXVK maximum %dx", max_anisotropy);
+        } else if (configure_dxvk) {
+            Log("anisotropy: bridge maximum %dx; explicit DXVK choice preserved", max_anisotropy);
+        } else {
+            Log("anisotropy: bridge maximum %dx; DXVK option unchanged", max_anisotropy);
+        }
     }
 
     // The game window: DXVK's native WSI takes the SDL window as HWND.
@@ -621,7 +655,6 @@ int main(int argc, char** argv) {
     }
     static std::atomic<uint64_t> frames{0};
     StartWatchdog(&frames);
-    PinToBigCores();
     int fps_limit = SettingInt("fps_limit", 0);
     if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
     g_fps_limit.store(fps_limit);
@@ -653,7 +686,7 @@ int main(int argc, char** argv) {
             if (frame) {
                 Log("perf: %.1f fps, %.1f ms, %ld MiB resident; arena %s; io: %s", g_fps.load(), g_frame_ms.load(),
                     ResidentMiB(), ArenaUsage().c_str(), TakeIoStats().c_str());
-                MirrorCopyDXVKLogs();
+                native::MirrorCopyDXVKLogs();
             }
             next_log = now + std::chrono::seconds(30);
         }
@@ -673,7 +706,7 @@ int main(int argc, char** argv) {
                 // at its checkpoints, so there is nothing to lose by ending the process here.
                 Log("quit");
                 VulkanDriverAbandon();
-                MirrorCopyDXVKLogs();
+                native::MirrorCopyDXVKLogs();
                 _exit(0);
 #endif
                 quit = true;
@@ -690,6 +723,6 @@ int main(int argc, char** argv) {
     }
     GuestCall(terminate, {});
     Log("EngineTerminate done");
-    MirrorCopyDXVKLogs();
+    native::MirrorCopyDXVKLogs();
     return 0;
 }

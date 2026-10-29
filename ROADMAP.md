@@ -82,7 +82,7 @@
 ## Этап 6. Android 🔄
 - ✅ SDL2, FAudio и DXVK собираются под `arm64-v8a` и `x86_64` (`android/build-deps.sh`, GitHub Actions).
 - 🔄 APK без Gradle (`android/build-apk.sh`): NDK, minSdk 26, `libmain.so` с перекомпилированным движком.
-- ⬜ Файлы игры копируются в `Android/data/com.protore.game/files/game/`.
+- ⬜ Файлы игры копируются в `Android/data/com.protodroid/files/game/`.
 - ⬜ Модель памяти: x86-код рассчитывает на строгий порядок записей (TSO), у ARM он слабее;
   возможны редкие гонки в многопоточном коде движка.
 - ⬜ Первый запуск до главного меню на устройстве, затем полное прохождение.

@@ -16,21 +16,28 @@ index 15e8e3a..75dbe1f 100644
      DxvkNameSet extensionsEnabled;
  
      if (!m_deviceExtensions.enableExtensions(
-diff --git a/src/dxvk/dxvk_context.cpp b/src/dxvk/dxvk_context.cpp
-index 356a792..24044fa 100644
---- a/src/dxvk/dxvk_context.cpp
-+++ b/src/dxvk/dxvk_context.cpp
-@@ -5374,8 +5374,8 @@ namespace dxvk {
-               m_cmd->track(res.sampler);
-             } else {
-               descriptorInfo.image.sampler = m_common->dummyResources().samplerHandle();
--              descriptorInfo.image.imageView = VK_NULL_HANDLE;
--              descriptorInfo.image.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-+              descriptorInfo.image.imageView = nullImageView(binding.viewType);
-+              descriptorInfo.image.imageLayout = nullImageLayout();
-             }
-           } break;
+diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
+index 15e8e3a..75dbe1f 100644
+--- a/src/dxvk/dxvk_adapter.cpp
++++ b/src/dxvk/dxvk_adapter.cpp
+@@ -431,9 +431,11 @@ namespace dxvk {
+-    // Require robustBufferAccess2 since we use the robustness alignment
+-    // info in a number of places, and require null descriptor support
+-    // since we no longer have a fallback for those in the backend
+-    enabledFeatures.extRobustness2.robustBufferAccess2 = VK_TRUE;
+-    enabledFeatures.extRobustness2.robustImageAccess2 = m_deviceFeatures.extRobustness2.robustImageAccess2;
+-    enabledFeatures.extRobustness2.nullDescriptor = VK_TRUE;
++    // Request only the robustness2 features reported by this adapter. If
++    // nullDescriptor is false, DxvkContext supplies real dummy resources.
++    enabledFeatures.extRobustness2.robustBufferAccess2 =
++      m_deviceFeatures.extRobustness2.robustBufferAccess2;
++    enabledFeatures.extRobustness2.robustImageAccess2 =
++      m_deviceFeatures.extRobustness2.robustImageAccess2;
++    enabledFeatures.extRobustness2.nullDescriptor =
++      m_deviceFeatures.extRobustness2.nullDescriptor;
  
+     // We use this to avoid decompressing SPIR-V shaders in some situations
+     enabledFeatures.extShaderModuleIdentifier.shaderModuleIdentifier =
 diff --git a/src/dxvk/dxvk_graphics.cpp b/src/dxvk/dxvk_graphics.cpp
 index ec6b214..f5548ab 100644
 --- a/src/dxvk/dxvk_graphics.cpp

@@ -41,6 +41,8 @@ extern std::condition_variable g_kernel_cv;
 uint32_t NewHandle(KObject* obj);
 KObject* HandleObject(uint32_t handle);  // null for invalid handles
 void CloseKernelHandle(uint32_t handle);
+// Duplicates a file handle's descriptor for an independent bounded decoder input; the guest keeps ownership of h.
+int DuplicateFileHandle(uint32_t handle);
 
 constexpr uint32_t kInvalidHandle = 0xffffffffu;
 constexpr uint32_t kCurrentProcess = 0xffffffffu;

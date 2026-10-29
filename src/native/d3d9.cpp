@@ -13,6 +13,7 @@
 #include <jni.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -25,6 +26,8 @@
 #include <vector>
 
 #include "win.h"
+#include "d3d9_dxt.h"
+#include "d3d9_state.h"
 
 namespace native {
 
@@ -135,7 +138,7 @@ uint32_t Wrap(IDirect3DBaseTexture9* p) {
         default: return WrapAs(p, "IDirect3DTexture9");
     }
 }
-uint32_t Wrap(IDirect3DResource9* p) {
+[[maybe_unused]] uint32_t Wrap(IDirect3DResource9* p) {
     if (!p) return 0;
     switch (p->GetType()) {
         case D3DRTYPE_SURFACE: return WrapAs(p, "IDirect3DSurface9");
@@ -261,18 +264,7 @@ D3DPRESENT_PARAMETERS ToHost(uint32_t g) {
         p.FullScreen_RefreshRateInHz = 0;
     }
 #ifdef __ANDROID__
-    // Mali G720 workaround (Issue 1): allow forcing FIFO present mode to avoid MAILBOX double-recreation race.
-    // protore.ini: present_mode = fifo | mailbox, or present_fifo = 1, or vsync = 1/0
-    {
-        std::string pm = Setting("present_mode", "");
-        int fifo = SettingInt("present_fifo", 0);
-        int vsync = SettingInt("vsync", -1);
-        if (pm == "fifo" || pm == "FIFO" || pm == "vsync" || fifo == 1 || vsync == 1) {
-            p.PresentationInterval = 1;  // D3DPRESENT_INTERVAL_ONE -> FIFO
-        } else if (pm == "mailbox" || pm == "immediate" || vsync == 0) {
-            p.PresentationInterval = 0x80000000u;  // D3DPRESENT_INTERVAL_IMMEDIATE -> MAILBOX if available
-        }
-    }
+    p.PresentationInterval = D3D9PresentationInterval(p.PresentationInterval, true);
 #endif
     return p;
 }
@@ -305,8 +297,7 @@ bool IsBlockCompressed(D3DFORMAT f) {
            f == D3DFORMAT(MAKEFOURCC('A', 'T', 'I', '1')) || f == D3DFORMAT(MAKEFOURCC('A', 'T', 'I', '2'));
 }
 
-// Maps the host's locked memory into a guest buffer: copies it in unless the lock discards or never overwrites
-// (the guest then only writes), and remembers to copy it back on unlock unless read-only.
+// Maps the host's locked memory into a guest buffer. Read-only locks never copy back; discard locks need no input.
 uint32_t ShadowLock(void* object, uint32_t sub, void* host, uint32_t size, DWORD flags) {
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
     Shadow& s = g_shadows[{object, sub}];
@@ -317,8 +308,9 @@ uint32_t ShadowLock(void* object, uint32_t sub, void* host, uint32_t size, DWORD
     }
     s.size = size;
     s.host = host;
-    s.write_back = !(flags & D3DLOCK_READONLY);
-    if (!(flags & (D3DLOCK_DISCARD | D3DLOCK_NOOVERWRITE))) memcpy(Ptr<void>(s.guest), host, size);
+    const D3D9LockPlan plan = D3D9ShadowLockPlan(flags);
+    s.write_back = plan.write_back;
+    if (plan.copy_in) memcpy(Ptr<void>(s.guest), host, size);
     return s.guest;
 }
 
@@ -450,86 +442,13 @@ TexAdapt PlanTexture(UINT w, UINT h, UINT levels, DWORD usage, D3DFORMAT format)
     return a;
 }
 
-// ---- DXT decoding into A8R8G8B8 (memory order B, G, R, A) ----
-void Rgb565(uint16_t c, uint8_t out[4]) {
-    out[2] = uint8_t(((c >> 11) & 31) * 255 / 31);
-    out[1] = uint8_t(((c >> 5) & 63) * 255 / 63);
-    out[0] = uint8_t((c & 31) * 255 / 31);
-    out[3] = 255;
-}
-
-// Colour block (DXT1 semantics when `dxt1`, else always four colours) -> 16 BGRA pixels.
-void DecodeColorBlock(const uint8_t* b, bool dxt1, uint8_t px[16][4]) {
-    uint16_t c0 = uint16_t(b[0] | b[1] << 8), c1 = uint16_t(b[2] | b[3] << 8);
-    uint8_t pal[4][4];
-    Rgb565(c0, pal[0]);
-    Rgb565(c1, pal[1]);
-    if (c0 > c1 || !dxt1) {
-        for (int k = 0; k < 4; ++k) {
-            pal[2][k] = uint8_t((2 * pal[0][k] + pal[1][k] + 1) / 3);
-            pal[3][k] = uint8_t((pal[0][k] + 2 * pal[1][k] + 1) / 3);
-        }
-    } else {
-        for (int k = 0; k < 4; ++k) pal[2][k] = uint8_t((pal[0][k] + pal[1][k]) / 2);
-        pal[3][0] = pal[3][1] = pal[3][2] = pal[3][3] = 0;  // transparent black
-    }
-    uint32_t idx = uint32_t(b[4] | b[5] << 8 | b[6] << 16 | uint32_t(b[7]) << 24);
-    for (int i = 0; i < 16; ++i) memcpy(px[i], pal[(idx >> (2 * i)) & 3], 4);
-}
-
-void DecodeBlock(D3DFORMAT f, const uint8_t* b, uint8_t px[16][4]) {
-    if (f == D3DFMT_DXT1) {
-        DecodeColorBlock(b, true, px);
-    } else if (f == D3DFMT_DXT2 || f == D3DFMT_DXT3) {
-        DecodeColorBlock(b + 8, false, px);
-        for (int i = 0; i < 16; ++i) px[i][3] = uint8_t(((b[i / 2] >> (4 * (i & 1))) & 15) * 17);
-    } else {  // DXT4/5: interpolated alpha
-        DecodeColorBlock(b + 8, false, px);
-        uint8_t a[8] = {b[0], b[1]};
-        if (a[0] > a[1]) {
-            for (int i = 1; i < 7; ++i) a[i + 1] = uint8_t(((7 - i) * a[0] + i * a[1] + 3) / 7);
-        } else {
-            for (int i = 1; i < 5; ++i) a[i + 1] = uint8_t(((5 - i) * a[0] + i * a[1] + 2) / 5);
-            a[6] = 0;
-            a[7] = 255;
-        }
-        uint64_t bits = 0;
-        for (int i = 0; i < 6; ++i) bits |= uint64_t(b[2 + i]) << (8 * i);
-        for (int i = 0; i < 16; ++i) px[i][3] = a[(bits >> (3 * i)) & 7];
-    }
-}
-
-// Guest DXT data (`rows` block rows of `pitch` bytes) -> host BGRA pixels of a w x h region.
-void DecodeDxt(D3DFORMAT f, const uint8_t* src, UINT pitch, UINT w, UINT h, uint8_t* dst, INT dst_pitch,
-               D3DFORMAT dst_format) {
-    const bool packed16 = dst_format == D3DFMT_A1R5G5B5;
-    UINT bw = (w + 3) / 4, bh = (h + 3) / 4, bytes = BlockBytes(f);
-    uint8_t px[16][4];
-    for (UINT by = 0; by < bh; ++by) {
-        for (UINT bx = 0; bx < bw; ++bx) {
-            DecodeBlock(f, src + by * pitch + bx * bytes, px);
-            for (UINT y = 0; y < 4 && by * 4 + y < h; ++y) {
-                for (UINT x = 0; x < 4 && bx * 4 + x < w; ++x) {
-                    const uint8_t* p = px[y * 4 + x];
-                    if (packed16) {  // B, G, R, A -> A1R5G5B5
-                        uint16_t v = uint16_t((p[3] >= 128 ? 0x8000 : 0) | (p[2] >> 3) << 10 | (p[1] >> 3) << 5 |
-                                              (p[0] >> 3));
-                        memcpy(dst + INT(by * 4 + y) * dst_pitch + (bx * 4 + x) * 2, &v, 2);
-                    } else {
-                        memcpy(dst + INT(by * 4 + y) * dst_pitch + (bx * 4 + x) * 4, p, 4);
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ---- locks of adapted textures ----
 struct AdaptedLock {
     uint32_t guest = 0, capacity = 0;  // guest buffer in the guest format
     UINT pitch = 0;
     D3DFORMAT format = D3DFMT_UNKNOWN, decode_format = D3DFMT_A8R8G8B8;
     UINT width = 0, height = 0;         // region being written
+    bool write_back = false;             // read-only locks must not decode into or dirty the host texture
     uint8_t* host = nullptr;            // locked host memory (decode target), null for dropped levels
     INT host_pitch = 0;
 };
@@ -567,6 +486,7 @@ HRESULT AdaptedLockRect(void* tex, uint32_t sub, const TexAdapt& a, UINT level, 
     l.decode_format = a.decode_format;
     l.width = rect ? UINT(rect->right - rect->left) : w;
     l.height = rect ? UINT(rect->bottom - rect->top) : h;
+    l.write_back = D3D9ShadowLockPlan(flags).write_back;
     l.host = dropped ? nullptr : static_cast<uint8_t*>(lr.pBits);
     l.host_pitch = lr.Pitch;
     W32(out, pitch);
@@ -582,7 +502,9 @@ bool AdaptedUnlock(void* tex, uint32_t sub, bool* host_locked) {
     AdaptedLock& l = it->second;
     *host_locked = l.host != nullptr;
     if (l.host) {
-        DecodeDxt(l.format, Ptr<uint8_t>(l.guest), l.pitch, l.width, l.height, l.host, l.host_pitch, l.decode_format);
+        if (l.write_back)
+            DecodeDxt(l.format, Ptr<uint8_t>(l.guest), l.pitch, l.width, l.height, l.host, l.host_pitch,
+                      l.decode_format);
         l.host = nullptr;
     }
     return true;
@@ -778,14 +700,19 @@ M(IDirect3DDevice9, CreateAdditionalSwapChain) {
 }
 M(IDirect3DDevice9, Reset) {
     D3DPRESENT_PARAMETERS pp = ToHost(Arg(c, 1));
+    // Matching width/height/format alone is not enough to skip Reset: D3D9 also resets device state and default-pool
+    // resources. ToHost keeps the Android interval stable, avoiding the observed cutscene presentation-mode change.
     DrainGraves(true);
     HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->Reset(&pp);
     Log("Reset %ux%u msaa %u/%u interval %u -> %08x", pp.BackBufferWidth, pp.BackBufferHeight, pp.MultiSampleType,
         pp.MultiSampleQuality, pp.PresentationInterval, uint32_t(hr));
-    if (SUCCEEDED(hr) && OverrideModes()) SetClientSize(int(pp.BackBufferWidth), int(pp.BackBufferHeight));
+    if (SUCCEEDED(hr)) {
+        if (OverrideModes()) SetClientSize(int(pp.BackBufferWidth), int(pp.BackBufferHeight));
+    }
     ToGuest(pp, Arg(c, 1));
     Return(c, uint32_t(hr), 2);
 }
+
 // Setting shot=<frame>[,<frame>...] (PROTORE_SHOT): the back buffer of those presents is saved as shot_<frame>.ppm in
 // the working directory (debugging without a desktop screenshot tool; on Android only the game's own frame).
 void MaybeScreenshot(IDirect3DDevice9* dev) {
@@ -868,11 +795,11 @@ bool WaitForWindow(int seconds) {
     return false;
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_protore_game_ProtoSurface_nativeSurfaceGone(JNIEnv*, jclass) {
+extern "C" JNIEXPORT void JNICALL Java_com_protodroid_ProtoSurface_nativeSurfaceGone(JNIEnv*, jclass) {
     std::lock_guard<std::mutex> lock(g_present_mutex);
     g_surface_gone = true;
 }
-extern "C" JNIEXPORT void JNICALL Java_com_protore_game_ProtoSurface_nativeSurfaceReady(JNIEnv*, jclass) {
+extern "C" JNIEXPORT void JNICALL Java_com_protodroid_ProtoSurface_nativeSurfaceReady(JNIEnv*, jclass) {
     std::lock_guard<std::mutex> lock(g_present_mutex);
     g_surface_gone = false;
 }
@@ -887,27 +814,30 @@ M(IDirect3DDevice9, Present) {
         GuardedPresent([&] { return dev->Present(Ptr<RECT>(Arg(c, 1)), Ptr<RECT>(Arg(c, 2)), nullptr, nullptr); });
     Return(c, uint32_t(hr), 5);
 }
-// Sampler state passes through; the first 200000 calls are tallied once to log the filtering the engine asks for
-// (anisotropy and mip filtering are what a phone GPU pays for).
+// Clamp expensive filtering at the bridge as well as in DXVK. At 1x, anisotropic filtering is exactly linear
+// filtering; using LINEAR also avoids DXVK enabling a sampler's anisotropy feature with maxAnisotropy = 1.
+int MaxAnisotropy() {
+    static const int value = [] {
+#ifdef __ANDROID__
+        const int configured = std::clamp(SettingInt("max_anisotropy", 1), 1, 16);
+#else
+        const int configured = std::clamp(SettingInt("max_anisotropy", 16), 1, 16);
+#endif
+        Log("samplers: effective DXVK forwarding maximum %dx%s", configured,
+            configured == 1 ? "; MIN/MAG anisotropic -> LINEAR" : "");
+        return configured;
+    }();
+    return value;
+}
+
 M(IDirect3DDevice9, SetSamplerState) {
-    static std::atomic<uint32_t> calls{0};
-    static std::atomic<uint32_t> aniso[17], minf[4], mipf[4];
-    const DWORD type = Arg(c, 2), value = Arg(c, 3);
-    if (uint32_t n = calls.fetch_add(1); n < 200000) {
-        if (type == D3DSAMP_MAXANISOTROPY) ++aniso[value > 16 ? 16 : value];
-        if (type == D3DSAMP_MINFILTER) ++minf[value & 3];
-        if (type == D3DSAMP_MIPFILTER) ++mipf[value & 3];
-        if (n == 199999) {
-            std::string a;
-            for (int i = 0; i <= 16; ++i)
-                if (aniso[i]) a += " " + std::to_string(i) + "x:" + std::to_string(aniso[i].load());
-            Log("samplers: max anisotropy%s | min filter none/point/linear/aniso %u/%u/%u/%u | mip %u/%u/%u/%u",
-                a.c_str(), minf[0].load(), minf[1].load(), minf[2].load(), minf[3].load(), mipf[0].load(),
-                mipf[1].load(), mipf[2].load(), mipf[3].load());
-        }
-    }
-    Return(c, uint32_t(Host<IDirect3DDevice9>(Arg(c, 0))->SetSamplerState(Arg(c, 1), D3DSAMPLERSTATETYPE(type),
-                                                                          value)), 4);
+    const DWORD stage = Arg(c, 1), type = Arg(c, 2), requested = Arg(c, 3);
+    // This is the effective value forwarded to DXVK, not a pre-clamp request statistic. No cache or atomic counter
+    // sits in the hot path; Reset and StateBlock Apply therefore cannot leave stale shadow state behind.
+    const DWORD effective = D3D9EffectiveSamplerValue(type, requested, MaxAnisotropy());
+    HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->SetSamplerState(
+        stage, D3DSAMPLERSTATETYPE(type), effective);
+    Return(c, uint32_t(hr), 4);
 }
 // The engine's worker threads poll this before every buffer lock; DXVK answers D3D_OK for a windowed device but
 // takes the device lock first, so the polls queue up behind the render thread's draws and presents.
@@ -1172,7 +1102,7 @@ void BufferLock(Ctx* c) {
         if (!size) {
             Desc d;
             b->GetDesc(&d);
-            size = d.Size - offset;
+            size = D3D9BufferLockSize(size, offset, d.Size);
         }
         W32(out, ShadowLock(b, 0, p, size, flags));
     }

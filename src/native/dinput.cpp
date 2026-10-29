@@ -7,12 +7,14 @@
 //
 // Guest objects are 16-byte blocks: [0] guest vtable (import thunks), [4] index into g_devices (0 = the
 // IDirectInput8A object itself).
+#include <algorithm>
 #include <cstring>
 #include <mutex>
 #include <string>
 #include <vector>
 
 #include "win.h"
+#include "input_state.h"
 
 namespace native {
 
@@ -20,6 +22,8 @@ std::vector<uint8_t> KeyboardDiks();  // input.cpp
 bool DikDown(uint8_t dik);
 void TakeMouseMotion(int32_t* dx, int32_t* dy, int32_t* dz);
 uint32_t MouseButtonMask();
+MenuTouchFrame PollMenuTouch();
+size_t ReadMenuTouchEvents(MenuTouchBufferedEvent* out, size_t capacity, bool peek);
 
 namespace {
 
@@ -288,8 +292,15 @@ M(GetDeviceState) {
     int32_t dx = 0, dy = 0, dz = 0;
     uint32_t buttons = 0;
     if (d->kind == Kind::Mouse) {
+        MenuTouchFrame touch = PollMenuTouch();
         TakeMouseMotion(&dx, &dy, &dz);
         buttons = MouseButtonMask();
+        if (touch.active) {
+            // Absolute WM_MOUSEMOVE has already teleported the guest cursor. Relative deltas would move it away
+            // from the finger again, so a sequenced menu touch owns all three axes and the left button this poll.
+            dx = dy = dz = 0;
+            buttons = touch.left_down ? 1u : 0u;
+        }
     }
     for (size_t i = 0; i < d->objects.size(); ++i) {
         int32_t ofs = i < d->format_ofs.size() ? d->format_ofs[i] : int32_t(d->objects[i].ofs);
@@ -308,8 +319,37 @@ M(GetDeviceState) {
     Return(c, kDI_OK, 3);
 }
 M(GetDeviceData) {
-    // Buffered input is not provided: no events.
-    if (Arg(c, 3)) W32(Arg(c, 3), 0);
+    // DIDEVICEOBJECTDATA: {dwOfs, dwData, dwTimeStamp, dwSequence}. Physical input remains unbuffered, while menu
+    // touches publish the same ordered down/up transitions as GetDeviceState (DIMOFS_BUTTON0 = 12 by default).
+    Device* d = Dev(Arg(c, 0));
+    uint32_t size = Arg(c, 1), out = Arg(c, 2), in_out = Arg(c, 3);
+    if (!in_out) {
+        Return(c, kDI_OK, 5);
+        return;
+    }
+    if (!out) {
+        W32(in_out, d->kind == Kind::Mouse ? uint32_t(ReadMenuTouchEvents(nullptr, 0, false)) : 0);
+        Return(c, kDI_OK, 5);
+        return;
+    }
+    if (d->kind != Kind::Mouse || size < 16) {
+        W32(in_out, 0);
+        Return(c, kDI_OK, 5);
+        return;
+    }
+    MenuTouchBufferedEvent events[64];
+    uint32_t capacity = std::min(R32(in_out), 64u);
+    uint32_t count = uint32_t(ReadMenuTouchEvents(events, capacity, (Arg(c, 4) & 1) != 0));
+    int32_t formatted = d->format_ofs.size() > 3 ? d->format_ofs[3] : 12;
+    uint32_t button_ofs = formatted >= 0 ? uint32_t(formatted) : 12;
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t at = out + i * size;
+        W32(at, button_ofs);
+        W32(at + 4, events[i].data);
+        W32(at + 8, events[i].timestamp);
+        W32(at + 12, events[i].sequence);
+    }
+    W32(in_out, count);
     Return(c, kDI_OK, 5);
 }
 M(SetDataFormat) {

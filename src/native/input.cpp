@@ -4,10 +4,18 @@
 //   EngineMouseService(msg, wParam = MK_* button state, lParam = y << 16 | x) for WM_MOUSEMOVE..WM_MOUSEWHEEL.
 #include <SDL2/SDL.h>
 
+#include <algorithm>
 #include <atomic>
+#include <deque>
+#include <mutex>
 #include <vector>
 
+#ifdef __ANDROID__
+#include <jni.h>
+#endif
+
 #include "guest.h"
+#include "input_state.h"
 
 namespace native {
 
@@ -113,6 +121,13 @@ bool g_injected[SDL_NUM_SCANCODES];
 // Relative mouse motion since the last DirectInput read (dinput.cpp).
 std::atomic<int32_t> g_mouse_dx{0}, g_mouse_dy{0}, g_mouse_dz{0};
 
+// Android menu touches arrive on the UI thread; only the guest's DirectInput poll advances this sequencer and calls
+// back into EngineMouseService. No guest code runs on the Android UI thread.
+std::mutex g_menu_touch_mutex;
+MenuTouchSequencer g_menu_touch;
+std::deque<MenuTouchBufferedEvent> g_menu_touch_events;
+uint32_t g_menu_touch_sequence = 0;
+
 }  // namespace
 
 // ---- state for the DirectInput devices (dinput.cpp) ----
@@ -142,6 +157,61 @@ uint32_t MouseButtonMask() {
     uint32_t b = SDL_GetMouseState(nullptr, nullptr);
     return (b & SDL_BUTTON_LMASK ? 1u : 0u) | (b & SDL_BUTTON_RMASK ? 2u : 0u) | (b & SDL_BUTTON_MMASK ? 4u : 0u) |
            (b & SDL_BUTTON_X1MASK ? 8u : 0u) | (b & SDL_BUTTON_X2MASK ? 16u : 0u);
+}
+
+// action is Android's ACTION_DOWN/MOVE/UP/CANCEL. TouchControls normalizes by the Android view; the guest poll later
+// converts this fixed-point value to the same client space as PackPoint. No client-size state is read on the UI thread.
+void QueueMenuTouch(int action, float nx, float ny) {
+    if (!(nx >= 0.0f)) nx = 0.0f;  // also handles NaN without undefined float-to-int conversion
+    if (!(ny >= 0.0f)) ny = 0.0f;
+    nx = std::min(nx, 1.0f);
+    ny = std::min(ny, 1.0f);
+    int32_t x = int(nx * kMenuTouchCoordinateScale + 0.5f);
+    int32_t y = int(ny * kMenuTouchCoordinateScale + 0.5f);
+    std::lock_guard<std::mutex> lock(g_menu_touch_mutex);
+    switch (action) {
+        case 0: g_menu_touch.Down(x, y); break;
+        case 1: g_menu_touch.Move(x, y); break;
+        case 2: g_menu_touch.Up(); break;
+        case 3: g_menu_touch.Cancel(); break;
+        default: break;
+    }
+}
+
+MenuTouchFrame PollMenuTouch() {
+    MenuTouchFrame frame;
+    {
+        std::lock_guard<std::mutex> lock(g_menu_touch_mutex);
+        frame = g_menu_touch.Next();
+        if (frame.transition != MenuTouchTransition::None) {
+            if (g_menu_touch_events.size() >= 64) g_menu_touch_events.pop_front();
+            g_menu_touch_events.push_back({frame.transition == MenuTouchTransition::Down ? 0x80u : 0u,
+                                           SDL_GetTicks(), ++g_menu_touch_sequence});
+        }
+    }
+    if (!frame.active) return frame;
+
+    int cw = 1, ch = 1;
+    ClientSize(&cw, &ch);
+    frame.x = MenuTouchClientCoordinate(frame.x, cw);
+    frame.y = MenuTouchClientCoordinate(frame.y, ch);
+
+    // EngineMouseService (original 0x1085e590) records these absolute client coordinates at 0x11315c6c/70. The
+    // first poll sends only hover; down/up follow on later DirectInput polls so GFx sees a real Over -> Down -> Up.
+    uint32_t packed = uint32_t(frame.y) << 16 | uint32_t(frame.x);
+    if (frame.moved) Mouse(kWmMouseMove, frame.left_down ? 1u : 0u, packed);
+    if (frame.transition == MenuTouchTransition::Down) Mouse(kWmLButtonDown, 1, packed);
+    if (frame.transition == MenuTouchTransition::Up) Mouse(kWmLButtonUp, 0, packed);
+    return frame;
+}
+
+size_t ReadMenuTouchEvents(MenuTouchBufferedEvent* out, size_t capacity, bool peek) {
+    std::lock_guard<std::mutex> lock(g_menu_touch_mutex);
+    if (!out) return g_menu_touch_events.size();
+    size_t count = std::min(capacity, g_menu_touch_events.size());
+    for (size_t i = 0; i < count; ++i) out[i] = g_menu_touch_events[i];
+    if (!peek) g_menu_touch_events.erase(g_menu_touch_events.begin(), g_menu_touch_events.begin() + count);
+    return count;
 }
 
 void InitInput(uint32_t keyboard_service, uint32_t mouse_service) {
@@ -209,5 +279,12 @@ void InjectKey(SDL_Scancode sc, bool down) {
     e.key.keysym.scancode = sc;
     ForwardInput(e);
 }
+
+#ifdef __ANDROID__
+extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeMenuTouch(
+        JNIEnv*, jclass, jint action, jfloat x, jfloat y) {
+    QueueMenuTouch(int(action), float(x), float(y));
+}
+#endif
 
 }  // namespace native

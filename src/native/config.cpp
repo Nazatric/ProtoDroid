@@ -2,8 +2,8 @@
 //   1) /storage/emulated/0/Prototype/protore.ini (shared storage, always accessible via MANAGE_EXTERNAL_STORAGE)
 //   2) /storage/emulated/0/Prototype/game/protore.ini (when game files are in subfolder)
 //   3) <game_dir>/protore.ini and <game_dir>/../protore.ini (detected game folder)
-//   4) ./protore.ini (working dir = app external files on Android: /sdcard/Android/data/com.protore.game/files)
-//   5) /storage/emulated/0/Android/data/com.protore.game/files/protore.ini (explicit fallback)
+//   4) ./protore.ini (working dir = app external files on Android: /sdcard/Android/data/com.protodroid/files)
+//   5) /storage/emulated/0/Android/data/com.protodroid/files/protore.ini (explicit fallback)
 // Format: `key = value` per line, `#` or `;` comment, [section] headers tolerated (ignored).
 // Environment variable PROTORE_<KEY> (upper case) overrides file.
 #include <cctype>
@@ -47,7 +47,7 @@ std::map<std::string, std::string> Load() {
     }
     // App private external files (cwd on Android after chdir(base))
     candidates.push_back("protore.ini");
-    candidates.push_back("/storage/emulated/0/Android/data/com.protore.game/files/protore.ini");
+    candidates.push_back("/storage/emulated/0/Android/data/com.protodroid/files/protore.ini");
     // Also check g_data_dir if available (external files)
     if (g_data_dir && g_data_dir[0]) {
         candidates.push_back(std::string(g_data_dir) + "/protore.ini");
