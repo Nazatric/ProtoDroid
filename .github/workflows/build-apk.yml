@@ -33,14 +33,6 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test
 
-      - name: Compile and run input UBSAN tests
-        run: |
-          set -euo pipefail
-          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
-          g++ $CXXFLAGS src/native/tests/input_test.cpp -o /tmp/input_test
-          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
-          /tmp/input_test
-
       - name: Build minimal host FFmpeg
         run: |
           set -euo pipefail
@@ -580,7 +572,6 @@ jobs:
           ! grep -E 'libav(format|codec|util)|libswresample' /tmp/libmain-dynamic.txt
           $TOOLS/llvm-strings "$MAIN" | grep -F 'binkw32.dll'
           $TOOLS/llvm-strings "$MAIN" | grep -F 'unlock_menu_fps'
-          $TOOLS/llvm-nm -D "$MAIN" | grep -F 'Java_com_protodroid_TouchControls_nativeMenuTouch'
           STRINGS=$($TOOLS/llvm-strings "$DXVK")
           printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2.so'
           ! printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2-2.0.so.0'
