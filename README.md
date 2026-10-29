@@ -38,9 +38,7 @@ The Android application ID is **`com.protodroid`**.
 
 ### Controls
 
-- Absolute 1:1 menu touch positioning through the game's existing `EngineMouseService` path.
-- Multi-frame menu clicks: absolute hover, two DirectInput button-down polls, then button-up. Buffered DirectInput button records use the same order.
-- Menu touch sequencing is separate from GAME-mode camera look, virtual joystick, action buttons, and power wheels.
+- MENU-mode absolute mouse clicks, plus separate GAME-mode camera look, virtual joystick, action buttons, and power wheels.
 - Configurable button opacity, size, positions, vibration, camera speed, invert Y, edge sprint, and optional power buttons.
 - Gamepad detection and an option to hide touch controls while a gamepad is connected.
 
@@ -173,7 +171,7 @@ android/build-apk.sh arm64-v8a
 
 ## Tests
 
-Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler/lock rules, presentation normalization, Bink input/ABI/planes/audio/pacing, and menu touch sequencing.
+Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler/lock rules, presentation normalization, and Bink input/ABI/planes/audio/pacing.
 
 ```sh
 # Graphics helpers and DXT differential tests.
@@ -183,11 +181,6 @@ g++ -std=c++17 -O1 -g -Wall -Wextra -Werror \
   -o /tmp/graphics_test
 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 /tmp/graphics_test
 
-# Menu touch sequencing.
-g++ -std=c++17 -O1 -g -Wall -Wextra -Werror \
-  -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native \
-  src/native/tests/input_test.cpp -o /tmp/input_test
-UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 /tmp/input_test
 ```
 
 The production Bink harness and its minimal FFmpeg setup are automated in `.github/workflows/build-apk.yml`. The additional hot audio/skinning differential tests use `src/native/tests/run_hot_test.sh` and require the original engine binary.

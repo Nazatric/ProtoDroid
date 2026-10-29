@@ -51,7 +51,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     static native float nativeFrameMs();
     static native int nativeMemoryMiB();
     static native void nativeSetFpsLimit(int fps);
-    private static native void nativeMenuTouch(int action, float x, float y);
 
     private static final int MOUSE_LEFT = 1, MOUSE_RIGHT = 2, MOUSE_MIDDLE = 4;
     private static final int RED = 0xffe0261e, RED_DIM = 0xff7a1410, INK = 0xff0b0b0b;
@@ -406,14 +405,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         else SDLActivity.onNativeKeyUp(keycode);
     }
 
-    private void menuTouch(int action, float x, float y) {
-        lastMouseX = x;
-        lastMouseY = y;
-        // Native code converts normalized view coordinates to the D3D client and sequences the click over guest
-        // frames. Sending Move + Down + Up to SDL here would collapse all three into the same menu frame.
-        nativeMenuTouch(action, x / Math.max(1, getWidth()), y / Math.max(1, getHeight()));
-    }
-
     private void mouseButton(int bit, boolean down, float x, float y) {
         if (down) mouseState |= bit;
         else mouseState &= ~bit;
@@ -510,7 +501,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         for (Button b : buttons) if (b.pointer >= 0) release(b);
         if (stickPointer >= 0) releaseStick();
         setRun(false, false);
-        if (lookPointer >= 0 && !gameMode) menuTouch(MotionEvent.ACTION_CANCEL, lookX, lookY);
+        if (lookPointer >= 0 && !gameMode) mouseButton(MOUSE_LEFT, false, lookX, lookY);
         lookPointer = -1;
     }
 
@@ -663,7 +654,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     lookPointer = id;
                     lookX = x;
                     lookY = y;
-                    if (!gameMode) menuTouch(MotionEvent.ACTION_DOWN, x, y);
+                    if (!gameMode) {
+                        mouseMoveTo(x, y);
+                        mouseButton(MOUSE_LEFT, true, x, y);
+                    }
                 }
                 break;
             }
@@ -682,7 +676,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     } else if (pid == lookPointer) {
                         float g = 1.5f * camGain;
                         if (gameMode) mouseMoveBy((px - lookX) * g, (py - lookY) * g * (invertY ? -1 : 1));
-                        else menuTouch(MotionEvent.ACTION_MOVE, px, py);
+                        else mouseMoveTo(px, py);
                         lookX = px;
                         lookY = py;
                     }
@@ -710,7 +704,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     releaseStick();
                 } else if (id == lookPointer) {
                     lookPointer = -1;
-                    if (!gameMode) menuTouch(MotionEvent.ACTION_UP, x, y);
+                    if (!gameMode) mouseButton(MOUSE_LEFT, false, x, y);
                 }
                 break;
             case MotionEvent.ACTION_CANCEL:
