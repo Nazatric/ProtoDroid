@@ -65,14 +65,14 @@ The application ID and app-specific directory are both `com.protodroid`. The sha
 
 ## Configuration
 
-The optional `protore.ini` file can be placed at:
+The optional `protodroid.ini` file can be placed at:
 
-- `/storage/emulated/0/Prototype/protore.ini`
-- `/storage/emulated/0/Prototype/game/protore.ini`
-- `/storage/emulated/0/Android/data/com.protodroid/files/protore.ini`
+- `/storage/emulated/0/Prototype/protodroid.ini`
+- `/storage/emulated/0/Prototype/game/protodroid.ini`
+- `/storage/emulated/0/Android/data/com.protodroid/files/protodroid.ini`
 - The detected game directory or its parent directory
 
-Start with [`android/protore.ini.example`](android/protore.ini.example). Keys use `key = value` syntax. Every key can also be supplied as `PROTORE_<KEY>` in uppercase; an environment value overrides the file.
+Start with [`android/protodroid.ini.example`](android/protodroid.ini.example). Keys use `key = value` syntax. Every key can also be supplied as `PROTODROID_<KEY>` in uppercase; an environment value overrides the file.
 
 Frequently used keys include:
 
@@ -133,24 +133,24 @@ Important files:
 - `prototypeenginef.dll.dxvk-cache`: persistent pipeline state cache
 - `turnip_failed`: present only after a Turnip initialization failure
 
-For bug reports, include the complete logs, phone model, SoC/GPU, Android version, APK commit, and exact steps that reproduce the issue. Also use `adb logcat -s protore` when logcat access is available.
+For bug reports, include the complete logs, phone model, SoC/GPU, Android version, APK commit, and exact steps that reproduce the issue. Also use `adb logcat -s protodroid` when logcat access is available.
 
 ## Building
 
 A Linux build environment needs the Android SDK/NDK, JDK, SDK build-tools, CMake, Ninja, Meson, Python 3, `capstone`, and `pefile`. Turnip additionally requires the tools listed in `android/build-turnip.sh`.
 
-Set `PROTORE_ENGINE` to the original `prototypeenginef.dll` when it is not in the default location. The engine must be generated for base `0x7c000000`, matching `src/native/guest.h`.
+Set `PROTODROID_ENGINE` to the original `prototypeenginef.dll` when it is not in the default location. The engine must be generated for base `0x7c000000`, matching `src/native/guest.h`.
 
 ```sh
 # Build SDL2, FAudio, minimal FFmpeg, and patched DXVK.
 android/build-deps.sh arm64-v8a \
-  "$HOME/proto-re-data/android-deps-src" \
-  "$HOME/proto-re-data/android-deps/arm64-v8a"
+  "$HOME/protodroid-data/android-deps-src" \
+  "$HOME/protodroid-data/android-deps/arm64-v8a"
 
 # Optional Adreno Turnip build.
 android/build-turnip.sh \
-  "$HOME/proto-re-data/android-deps-src" \
-  "$HOME/proto-re-data/android-turnip"
+  "$HOME/protodroid-data/android-deps-src" \
+  "$HOME/protodroid-data/android-turnip"
 
 # Generate ARM64-bound recompiled engine sources.
 python3 -I tools/recomp/data_entries.py
@@ -194,11 +194,13 @@ The production Bink harness and its minimal FFmpeg setup are automated in `.gith
 
 ## CI/CD
 
-- **`build-apk`**: runs host UBSAN tests, builds ARM64 dependencies, generates the real recompiled engine, compiles native libraries, packages and signs the APK, verifies embedded libraries/DXVK, and uploads `prototype-apk` plus diagnostic artifacts.
+- **`build-apk`**: runs host UBSAN tests, builds ARM64 dependencies, generates the real recompiled engine, compiles native libraries, packages and signs the APK, verifies embedded libraries/DXVK, and uploads `prototype-apk` plus diagnostic artifacts. A verified main-branch build also publishes `prototype.apk` as a GitHub release asset.
 - **`android-deps`**: independently builds the ARM64 and x86_64 dependency sets and the Adreno Turnip package.
 
 A release candidate should have an exact-commit green workflow, real native compilation rather than a dummy/prebuilt fallback, successful `apksigner verify`, and a verified `prototype.apk` artifact. Compilation and host tests do not replace on-device gameplay and visual testing.
 
 ## Credits and Legal
 
-ProtoDroid builds on the original proto-re work by VinTeRuS and contributions from the community. Prototype is a trademark of its respective owners and was developed by Radical Entertainment. This project is not affiliated with or endorsed by Activision or Radical Entertainment. Provide your own game files; no DRM bypass is included.
+Original Android port and recompilation research by **[VinTeRuS](https://github.com/VinTeRuS)**. ProtoDroid continues with contributions from the community.
+
+Prototype is a trademark of its respective owners and was developed by Radical Entertainment. This project is not affiliated with or endorsed by Activision or Radical Entertainment. Provide your own game files; no DRM bypass is included.

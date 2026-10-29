@@ -1,5 +1,5 @@
-#ifndef PROTORE_INPUT_STATE_H
-#define PROTORE_INPUT_STATE_H
+#ifndef PROTODROID_INPUT_STATE_H
+#define PROTODROID_INPUT_STATE_H
 
 #include <cstdint>
 

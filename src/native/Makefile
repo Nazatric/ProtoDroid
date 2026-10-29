@@ -6,7 +6,7 @@
 PLATFORM ?= linux
 # Generated for the rebased engine: recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native (see guest.h)
 RECOMP_DIR ?= ../../build/recomp/native
-DXVK ?= $(HOME)/proto-re-data/deps/dxvk
+DXVK ?= $(HOME)/protodroid-data/deps/dxvk
 # Guest memory: a 4 GiB window at 64 GiB (guest.h kGuestBase), clear of the low 4 GiB that Android's Java heap and
 # Qualcomm's GPU driver use.
 COMMON_FLAGS := -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -fsigned-char -I../recomp
@@ -22,7 +22,7 @@ CXXFLAGS = -std=c++17 -O2 -g -Wall -Wextra -Wno-unused-parameter $(COMMON_FLAGS)
 ifeq ($(PLATFORM),android)
 ABI ?= arm64-v8a
 NDK ?= $(HOME)/Android/Sdk/ndk/28.2.13676358
-DEPS ?= $(HOME)/proto-re-data/android-deps/$(ABI)
+DEPS ?= $(HOME)/protodroid-data/android-deps/$(ABI)
 TRIPLE := $(if $(filter x86_64,$(ABI)),x86_64,aarch64)-linux-android26
 TOOLCHAIN := $(NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin
 CXX := $(TOOLCHAIN)/$(TRIPLE)-clang++
@@ -44,11 +44,11 @@ FFMPEG_LIBS := -Wl,--start-group $(DEPS)/lib/libavformat.a $(DEPS)/lib/libavcode
 LDFLAGS := -shared -Wl,-Bsymbolic -static-libstdc++ -Wl,--no-undefined -Wl,--export-dynamic -L$(DEPS)/lib \
            -ldxvk_d3d9 -lFAudio -lSDL2 $(FFMPEG_LIBS) -llog -landroid
 # Adreno: Turnip and libadrenotools from android/build-turnip.sh (arm64 only; built without them otherwise).
-TURNIP ?= $(HOME)/proto-re-data/android-turnip
+TURNIP ?= $(HOME)/protodroid-data/android-turnip
 ifneq ($(and $(filter arm64-v8a,$(ABI)),$(wildcard $(TURNIP)/lib/libadrenotools.a)),)
-DEP_INCLUDES += -I$(TURNIP)/include -DPROTORE_ADRENOTOOLS
+DEP_INCLUDES += -I$(TURNIP)/include -DPROTODROID_ADRENOTOOLS
 LDFLAGS += -L$(TURNIP)/lib -ladrenotools -llinkernsbypass -ldl \
-           -Wl,--defsym=android_get_device_api_level=protore_device_api_level
+           -Wl,--defsym=android_get_device_api_level=protodroid_device_api_level
 # The driver probe program (turnip_probe.cpp): API 29 like libadrenotools, plain ARMv8.0 so one build runs on all.
 EXTRA := $(OUT)/libturnipprobe.so
 endif
@@ -59,9 +59,9 @@ CC ?= gcc
 OUT ?= ../../build/native
 # DXVK native (D3D9 on Vulkan) and FAudio (XAudio2 reimplementation, zlib license), built in deps.
 DXVK_LIB ?= $(DXVK)/build-native/src/d3d9
-FAUDIO ?= $(HOME)/proto-re-data/deps/FAudio
+FAUDIO ?= $(HOME)/protodroid-data/deps/FAudio
 FAUDIO_LIB ?= $(FAUDIO)/build-native
-FFMPEG ?= $(HOME)/proto-re-data/deps/ffmpeg
+FFMPEG ?= $(HOME)/protodroid-data/deps/ffmpeg
 FFMPEG_LIBS ?= -Wl,--start-group $(FFMPEG)/lib/libavformat.a $(FFMPEG)/lib/libavcodec.a \
                $(FFMPEG)/lib/libswresample.a $(FFMPEG)/lib/libavutil.a -Wl,--end-group -lz -lm
 TARGET_FLAGS :=

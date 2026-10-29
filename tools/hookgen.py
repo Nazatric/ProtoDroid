@@ -12,7 +12,7 @@ import os
 import subprocess
 import sys
 
-DLL = os.environ.get("PROTORE_ENGINE",
+DLL = os.environ.get("PROTODROID_ENGINE",
                      os.path.expanduser("~/Downloads/Prototype (2009)/Prototype/prototypeenginef.dll"))
 BASE = 0x10000000
 

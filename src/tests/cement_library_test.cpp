@@ -39,8 +39,8 @@ std::vector<uint32_t> MakeTable(uint32_t count, uint32_t stride_words, uint32_t 
     return table;
 }
 
-void TestFindEntry(protore::DiffResult* r) {
-    auto original = reinterpret_cast<FindEntryFn>(protore::OriginalFunction(kFindEntryRva));
+void TestFindEntry(protodroid::DiffResult* r) {
+    auto original = reinterpret_cast<FindEntryFn>(protodroid::OriginalFunction(kFindEntryRva));
     for (uint32_t stride_words : {3u, 5u}) {
         for (uint32_t count : {0u, 1u, 2u, 3u, 7u, 8u, 64u, 1001u}) {
             for (bool duplicates : {false, true}) {
@@ -55,7 +55,7 @@ void TestFindEntry(protore::DiffResult* r) {
                 for (uint32_t q : queries) {
                     const void* a = original(table.data(), count, q, stride_words * 4);
                     const void* b = core::CementFindEntry(table.data(), count, q, stride_words * 4);
-                    protore::Check(r, a == b, "FindEntry stride %u count %u dup %d key %08x: %p != %p",
+                    protodroid::Check(r, a == b, "FindEntry stride %u count %u dup %d key %08x: %p != %p",
                                    stride_words * 4, count, duplicates, q, a, b);
                 }
             }
@@ -95,7 +95,7 @@ public:
     }
 
 private:
-    protore::TestDetour detour_;
+    protodroid::TestDetour detour_;
 };
 
 // Minimal stand-in for the engine object: only the fields the lookup reads are meaningful.
@@ -152,15 +152,15 @@ const char* const kQueries[] = {
 
 }  // namespace
 
-void TestCementLookup(protore::DiffResult* r) {
+void TestCementLookup(protodroid::DiffResult* r) {
     TestFindEntry(r);
 
-    auto original_find = reinterpret_cast<FindAndOpenFn>(protore::OriginalFunction(kFindAndOpenRva));
-    auto original_open = reinterpret_cast<OpenByNameFn>(protore::OriginalFunction(kOpenByNameRva));
+    auto original_find = reinterpret_cast<FindAndOpenFn>(protodroid::OriginalFunction(kFindAndOpenRva));
+    auto original_open = reinterpret_cast<OpenByNameFn>(protodroid::OriginalFunction(kOpenByNameRva));
     auto* request = reinterpret_cast<core::CementOpenRequest*>(0x12340000);
     OpenRangeCapture capture;
     if (!capture.ok()) {
-        protore::Check(r, false, "OpenRange capture unavailable");
+        protodroid::Check(r, false, "OpenRange capture unavailable");
         return;
     }
     std::vector<const char*> names(std::begin(kDirectoryNames), std::end(kDirectoryNames));
@@ -173,16 +173,16 @@ void TestCementLookup(protore::DiffResult* r) {
                 auto calls_a = capture.Take();
                 bool b = core::CementLibraryFindAndOpen(lib.library(), key, request);
                 auto calls_b = capture.Take();
-                protore::Check(r, a == b, "FindAndOpen state %d compact %d \"%s\": %d != %d", state, compact, q, a, b);
-                protore::Check(r, calls_a == calls_b, "FindAndOpen state %d compact %d \"%s\": OpenRange calls differ",
+                protodroid::Check(r, a == b, "FindAndOpen state %d compact %d \"%s\": %d != %d", state, compact, q, a, b);
+                protodroid::Check(r, calls_a == calls_b, "FindAndOpen state %d compact %d \"%s\": OpenRange calls differ",
                                state, compact, q);
 
                 a = original_open(lib.library(), q, request);
                 calls_a = capture.Take();
                 b = core::CementLibraryOpenByName(lib.library(), q, request);
                 calls_b = capture.Take();
-                protore::Check(r, a == b, "OpenByName state %d compact %d \"%s\": %d != %d", state, compact, q, a, b);
-                protore::Check(r, calls_a == calls_b, "OpenByName state %d compact %d \"%s\": OpenRange calls differ",
+                protodroid::Check(r, a == b, "OpenByName state %d compact %d \"%s\": %d != %d", state, compact, q, a, b);
+                protodroid::Check(r, calls_a == calls_b, "OpenByName state %d compact %d \"%s\": OpenRange calls differ",
                                state, compact, q);
             }
         }

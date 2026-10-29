@@ -105,7 +105,7 @@ extern "C" ExitRecord* RecompEnterC(EntryFrame* frame) {
     static volatile LONG entries = 0;
     LONG n = InterlockedIncrement(&entries);
     if ((n & (n - 1)) == 0 && n >= 1024) {
-        protore::Log("recomp: %ld entries into recompiled code", n);
+        protodroid::Log("recomp: %ld entries into recompiled code", n);
     }
     // Frame counter: EngineService (rva 0x0085eb20) is called once per frame by prototypef.exe.
     static RecompFn engine_service = RecompLookup(kFrameProbeVa);
@@ -113,7 +113,7 @@ extern "C" ExitRecord* RecompEnterC(EntryFrame* frame) {
     if (frame->fn == engine_service) {
         LONG f = InterlockedIncrement(&frames);
         if ((f & (f - 1)) == 0) {
-            protore::Log("recomp: frames %ld", f);
+            protodroid::Log("recomp: frames %ld", f);
         }
     }
     Bridge* b = ThreadBridge();
@@ -138,7 +138,7 @@ extern "C" ExitRecord* RecompEnterC(EntryFrame* frame) {
     // EngineInitialize's result decides whether the exe enters its main loop or calls EngineTerminate.
     static RecompFn engine_initialize = RecompLookup(0x1085efb0u);
     if (frame->fn == engine_initialize) {
-        protore::Log("recomp: EngineInitialize returned %08x", ctx.eax);
+        protodroid::Log("recomp: EngineInitialize returned %08x", ctx.eax);
     }
 
     static thread_local ExitRecord exit_record;
@@ -255,7 +255,7 @@ int Compare(const void* key, const void* entry) {
 
 namespace {
 
-// PROTORE_RECOMP_RANGE=<lo>-<hi> (hex VAs, hi exclusive): only functions in the range run recompiled; the rest stay
+// PROTODROID_RECOMP_RANGE=<lo>-<hi> (hex VAs, hi exclusive): only functions in the range run recompiled; the rest stay
 // native. Used to bisect a misbehaving function.
 uint32_t g_range_lo = 0, g_range_hi = 0xffffffffu;
 
@@ -266,10 +266,10 @@ void LoadRange() {
     }
     loaded = true;
     char text[64] = "";
-    if (GetEnvironmentVariableA("PROTORE_RECOMP_RANGE", text, sizeof(text)) && strchr(text, '-')) {
+    if (GetEnvironmentVariableA("PROTODROID_RECOMP_RANGE", text, sizeof(text)) && strchr(text, '-')) {
         g_range_lo = strtoul(text, nullptr, 16);
         g_range_hi = strtoul(strchr(text, '-') + 1, nullptr, 16);
-        protore::Log("recomp: range %08x-%08x", g_range_lo, g_range_hi);
+        protodroid::Log("recomp: range %08x-%08x", g_range_lo, g_range_hi);
     }
     RecompRestrictLo = g_range_lo;
     RecompRestrictHi = g_range_hi;
@@ -323,7 +323,7 @@ extern "C" RecompFn RecompLookup(uint32_t target) {
 }
 
 extern "C" void RecompDispatch(Ctx* ctx, uint32_t target) {
-    if (!protore::TestDetourActive(target)) {
+    if (!protodroid::TestDetourActive(target)) {
         if (RecompFn fn = RecompLookup(target)) {
             fn(ctx);
             return;
@@ -334,18 +334,18 @@ extern "C" void RecompDispatch(Ctx* ctx, uint32_t target) {
     Ctx* saved_ctx = b->native_ctx;
     const uint32_t saved_resume = b->host_resume;
     const uint32_t saved_top = b->host_top;
-    // Diagnostics for native CRT calls that depend on FPU state (PROTORE_TRACE_FPU=1).
+    // Diagnostics for native CRT calls that depend on FPU state (PROTODROID_TRACE_FPU=1).
     static uint32_t controlfp_s = 0;
     static int trace_fpu = -1;
     if (trace_fpu < 0) {
-        trace_fpu = GetEnvironmentVariableA("PROTORE_TRACE_FPU", nullptr, 0) != 0;
+        trace_fpu = GetEnvironmentVariableA("PROTODROID_TRACE_FPU", nullptr, 0) != 0;
         controlfp_s = reinterpret_cast<uint32_t>(GetProcAddress(GetModuleHandleA("msvcr80.dll"), "_controlfp_s"));
     }
     if (trace_fpu && target == controlfp_s) {
         uint16_t x87_cw;
         uint32_t mxcsr;
         asm volatile("fnstcw %0\n\tstmxcsr %1" : "=m"(x87_cw), "=m"(mxcsr));
-        protore::Log("trace: _controlfp_s(cur=%08x, new=%08x, mask=%08x) ret=%08x host cw=%04x mxcsr=%08x guest cw=%04x",
+        protodroid::Log("trace: _controlfp_s(cur=%08x, new=%08x, mask=%08x) ret=%08x host cw=%04x mxcsr=%08x guest cw=%04x",
                      R32(ctx->esp + 4), R32(ctx->esp + 8), R32(ctx->esp + 12), R32(ctx->esp), x87_cw, mxcsr,
                      ctx->fpu_cw);
     }
@@ -462,7 +462,7 @@ extern "C" void RecompLongjmp(Ctx* ctx, uint32_t guest_buf, uint32_t value) {
 }
 
 extern "C" void RecompUnimplemented(Ctx* ctx, uint32_t va, const char* what) {
-    protore::Log("recomp: unimplemented instruction at %08x (%s), esp=%08x", va, what, ctx->esp);
+    protodroid::Log("recomp: unimplemented instruction at %08x (%s), esp=%08x", va, what, ctx->esp);
     TerminateProcess(GetCurrentProcess(), 0x7e);
 }
 
@@ -490,19 +490,19 @@ void InstallFiberBridge() {
         return;
     }
     done = true;
-    auto* base = static_cast<uint8_t*>(protore::EngineAddress(0));
-    auto* slot = reinterpret_cast<uint32_t*>(base + (kSwitchToFiberIat - protore::kEngineImageBase));
+    auto* base = static_cast<uint8_t*>(protodroid::EngineAddress(0));
+    auto* slot = reinterpret_cast<uint32_t*>(base + (kSwitchToFiberIat - protodroid::kEngineImageBase));
     DWORD old_protect;
     VirtualProtect(slot, 4, PAGE_READWRITE, &old_protect);
     g_switch_to_fiber = reinterpret_cast<SwitchToFiberFn>(*slot);
     *slot = reinterpret_cast<uint32_t>(&BridgeSwitchToFiber);
     VirtualProtect(slot, 4, old_protect, &old_protect);
-    protore::Log("recomp: SwitchToFiber wrapped (per-fiber bridge state)");
+    protodroid::Log("recomp: SwitchToFiber wrapped (per-fiber bridge state)");
 }
 
 }  // namespace
 
-namespace protore {
+namespace protodroid {
 
 int InstallAllRecompEntries() {
     // Unprotect the engine's code once, write `jmp stub` (int3-filled) at every enterable function, restore.
@@ -567,4 +567,4 @@ void* RecompEntryStub(uint32_t va) {
     return stub;
 }
 
-}  // namespace protore
+}  // namespace protodroid

@@ -30,8 +30,8 @@ void __fastcall TraceVector(const float* v) {
     float x = v[0];
     float y = v[1];
     float z = v[2];
-    auto* float_flag = static_cast<volatile char*>(protore::EngineAddress(kTraceFloatFlagRva));
-    auto* hex_flag = static_cast<volatile char*>(protore::EngineAddress(kTraceHexFlagRva));
+    auto* float_flag = static_cast<volatile char*>(protodroid::EngineAddress(kTraceFloatFlagRva));
+    auto* hex_flag = static_cast<volatile char*>(protodroid::EngineAddress(kTraceHexFlagRva));
     if (*float_flag) {
         if (core::Report(core::kReportTrace, " Pre ", kFile, 0xd5, nullptr, "[ %f, %f, %f ]", double(x), double(y),
                          double(z), 0) == core::kReportDisableSite) {

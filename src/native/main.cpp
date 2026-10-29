@@ -56,7 +56,7 @@ void Log(const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
 #ifdef __ANDROID__
-    __android_log_vprint(ANDROID_LOG_INFO, "protore", fmt, ap);
+    __android_log_vprint(ANDROID_LOG_INFO, "protodroid", fmt, ap);
 #else
     vfprintf(stderr, fmt, ap);
     fputc('\n', stderr);
@@ -90,7 +90,7 @@ struct sigaction g_old_actions[32];
 
 void CrashWrite(const char* text) {
 #ifdef __ANDROID__
-    __android_log_write(ANDROID_LOG_ERROR, "protore", text);
+    __android_log_write(ANDROID_LOG_ERROR, "protodroid", text);
 #else
     write(2, text, strlen(text));
     write(2, "\n", 1);
@@ -337,7 +337,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetFps
 using namespace native;
 
 #ifdef __ANDROID__
-// DXVK and FAudio report errors on stderr, which goes nowhere in an app: forward it to logcat (tag protore-err).
+// DXVK and FAudio report errors on stderr, which goes nowhere in an app: forward it to logcat (tag protodroid-err).
 static void RedirectStderrToLogcat() {
     static int fds[2];
     if (pipe(fds) != 0) return;
@@ -349,7 +349,7 @@ static void RedirectStderrToLogcat() {
         for (ssize_t n; (n = read(fds[0], buf, sizeof(buf))) > 0;) {
             for (ssize_t i = 0; i < n; ++i) {
                 if (buf[i] == '\n') {
-                    __android_log_write(ANDROID_LOG_WARN, "protore-err", line.c_str());
+                    __android_log_write(ANDROID_LOG_WARN, "protodroid-err", line.c_str());
                     line.clear();
                 } else {
                     line += buf[i];
@@ -387,11 +387,11 @@ int main(int argc, char** argv) {
     RedirectStderrToLogcat();
     setenv("DXVK_LOG_LEVEL", "info", 0);
 #endif
-    g_game_dir = argc > 1 ? argv[1] : getenv("PROTORE_GAME");
+    g_game_dir = argc > 1 ? argv[1] : getenv("PROTODROID_GAME");
 #ifdef __ANDROID__
-    // Logs, protore.ini, saves (native_c) and the DXVK caches live in the app's external files folder
+    // Logs, protodroid.ini, saves (native_c) and the DXVK caches live in the app's external files folder
     // (/sdcard/Android/data/<package>/files). The game is <that folder>/game, or wherever SetupActivity found it
-    // (PROTORE_GAME, e.g. /sdcard/Prototype with all files access); SetupActivity checks it before starting us.
+    // (PROTODROID_GAME, e.g. /sdcard/Prototype with all files access); SetupActivity checks it before starting us.
     static std::string android_game;
     const char* base = SDL_AndroidGetExternalStoragePath();
     if (!base) {
@@ -461,13 +461,13 @@ int main(int argc, char** argv) {
 #endif
     if (!g_log) g_log = fopen("proto-native.log", "w");
     InstallCrashHandler();
-    Log("proto-re build %s %s", __DATE__, __TIME__);
+    Log("protodroid build %s %s", __DATE__, __TIME__);
 #ifdef __ANDROID__
     if (!g_mirror_dir.empty()) {
         Log("logs mirrored to %s", g_mirror_dir.c_str());
         if (g_log_mirror) {
             // Ensure mirror has header too
-            fprintf(g_log_mirror, "proto-re build %s %s\n", __DATE__, __TIME__);
+            fprintf(g_log_mirror, "protodroid build %s %s\n", __DATE__, __TIME__);
             fflush(g_log_mirror);
         }
         // Also set DXVK log path to mirror for immediate visibility, but keep state cache in base
@@ -482,10 +482,10 @@ int main(int argc, char** argv) {
     Log("data dir: %s", g_data_dir ? g_data_dir : "(none)");
 #endif
     // DXVK's durable pipeline diagnostics are strictly opt-in. Export this
-    // before any DXVK device can be created; PROTORE_PIPELINE_TRACE itself
+    // before any DXVK device can be created; PROTODROID_PIPELINE_TRACE itself
     // remains an equivalent direct environment override.
     if (SettingInt("pipeline_trace", 0) == 1) {
-        setenv("PROTORE_PIPELINE_TRACE", "1", 0);
+        setenv("PROTODROID_PIPELINE_TRACE", "1", 0);
         Log("DXVK pipeline trace enabled (pipeline_trace = 1)");
     }
     InitGuestMemory();
@@ -512,8 +512,8 @@ int main(int argc, char** argv) {
             else dc += ";d3d9.presentInterval = 1";
             for (char& ch : dc) if (ch == ',') ch = ';';
             setenv("DXVK_CONFIG", dc.c_str(), 1);
-            setenv("PROTORE_PRESENT_FIFO", "1", 1);
-            Log("present mode: FIFO (vsync) forced via protore.ini present_mode=%s", pm.c_str());
+            setenv("PROTODROID_PRESENT_FIFO", "1", 1);
+            Log("present mode: FIFO (vsync) forced via protodroid.ini present_mode=%s", pm.c_str());
         } else if (!pm.empty()) {
             Log("present mode: %s", pm.c_str());
         }
@@ -536,7 +536,7 @@ int main(int argc, char** argv) {
     if (!present_config.empty()) present_config += ";";
     present_config += "d3d9.presentInterval = 1";
     setenv("DXVK_CONFIG", present_config.c_str(), 1);
-    setenv("PROTORE_PRESENT_FIFO", "1", 1);
+    setenv("PROTODROID_PRESENT_FIFO", "1", 1);
     Log("present mode: FIFO (vsync), interval 1 for CreateDevice and Reset");
 #endif
     // Android starts at 1x for Mali-class tile GPUs. Explicit DXVK configuration wins over this convenience default;
@@ -635,13 +635,13 @@ int main(int argc, char** argv) {
     InitInput(FindExport(g_engine, "EngineKeyboardService"), FindExport(g_engine, "EngineMouseService"));
     bool focused = true;
     const bool ignore_focus = SettingInt("ignore_focus", 0) != 0;  // tests: an unfocused window keeps full speed
-    // PROTORE_INPUT="<frame>:<SDL key name>,...": taps a key at that frame (held for 5 frames), for scripted tests.
+    // PROTODROID_INPUT="<frame>:<SDL key name>,...": taps a key at that frame (held for 5 frames), for scripted tests.
     struct Tap {
         uint64_t frame;
         SDL_Scancode key;
     };
     std::vector<Tap> taps;
-    if (const char* spec = getenv("PROTORE_INPUT")) {
+    if (const char* spec = getenv("PROTODROID_INPUT")) {
         std::string all(spec);
         for (size_t pos = 0; pos < all.size();) {
             size_t end = all.find(',', pos);

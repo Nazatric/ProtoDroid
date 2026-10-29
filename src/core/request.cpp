@@ -82,12 +82,12 @@ constexpr uint32_t kStatusNotFound = 1;
 
 template <typename Fn>
 Fn Engine(uint32_t rva) {
-    return reinterpret_cast<Fn>(protore::EngineAddress(rva));
+    return reinterpret_cast<Fn>(protodroid::EngineAddress(rva));
 }
 
 template <typename T>
 T& Global(uint32_t rva) {
-    return *static_cast<T*>(protore::EngineAddress(rva));
+    return *static_cast<T*>(protodroid::EngineAddress(rva));
 }
 
 template <typename Fn>
@@ -96,7 +96,7 @@ Fn Slot(void* object, int index) {
 }
 
 void SetVtable(Request* r, uint32_t rva) {
-    r->vtable = protore::EngineAddress(rva);
+    r->vtable = protodroid::EngineAddress(rva);
 }
 
 using CdeclVoid = void(__cdecl*)();
@@ -193,7 +193,7 @@ bool SearchLibraries(File* file, IoBufferHolder* holder, uint32_t list) {
 // ---- pool ---------------------------------------------------------------------------------------------------
 
 void* RequestAllocate(uint32_t) {
-    void* mutex = protore::EngineAddress(kRequestMutexRva);
+    void* mutex = protodroid::EngineAddress(kRequestMutexRva);
     Engine<CdeclPtr>(kMutexLockRva)(mutex);
     void* pool = Global<void*>(kRequestPoolRva);
     void* request = reinterpret_cast<void*>(static_cast<uintptr_t>(Call(pool, 18)));
@@ -202,7 +202,7 @@ void* RequestAllocate(uint32_t) {
 }
 
 void RequestFree(void* request) {
-    void* mutex = protore::EngineAddress(kRequestMutexRva);
+    void* mutex = protodroid::EngineAddress(kRequestMutexRva);
     Engine<CdeclPtr>(kMutexLockRva)(mutex);
     void* pool = Global<void*>(kRequestPoolRva);
     Slot<Method1>(pool, 4)(pool, P(request));
@@ -210,7 +210,7 @@ void RequestFree(void* request) {
 }
 
 void RequestPoolShutdown() {
-    Engine<CdeclPtr>(kMutexDestroyRva)(protore::EngineAddress(kRequestMutexRva));
+    Engine<CdeclPtr>(kMutexDestroyRva)(protodroid::EngineAddress(kRequestMutexRva));
     uint32_t enumerated = 0;
     void* pool = Global<void*>(kRequestPoolRva);
     Slot<Method2>(pool, 11)(pool, 0, P(&enumerated));

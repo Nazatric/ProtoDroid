@@ -3,7 +3,7 @@
 #include <windows.h>
 #include <tlhelp32.h>
 
-namespace protore {
+namespace protodroid {
 
 WorldStop::WorldStop() {
     const DWORD self_process = GetCurrentProcessId();
@@ -39,4 +39,4 @@ WorldStop::~WorldStop() {
     }
 }
 
-}  // namespace protore
+}  // namespace protodroid

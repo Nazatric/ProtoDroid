@@ -33,9 +33,9 @@ import java.io.OutputStream;
  * Also supports /sdcard/Prototype/game subfolder.
  */
 public class SetupActivity extends Activity {
-    /** Shown on the setup screen only; the in-game Settings header intentionally has empty corners. */
-    static final String CREDIT = "Android port by VinTeRuS";
-    static final String CREDIT_URL = "github.com/VinTeRuS/proto-re";
+    /** Shown on the setup screen and at the bottom of the in-game Settings panel. */
+    static final String CREDIT = "Original Android port by VinTeRuS";
+    static final String CREDIT_URL = "github.com/VinTeRuS";
 
     private static final String DLL = "prototypeenginef.dll";
     private static final int REQUEST_STORAGE = 1;
@@ -101,15 +101,15 @@ public class SetupActivity extends Activity {
 
     private void launch(File gameDir) {
         try {
-            if (gameDir == null) Os.unsetenv("PROTORE_GAME");
-            else Os.setenv("PROTORE_GAME", gameDir.getAbsolutePath(), true);
+            if (gameDir == null) Os.unsetenv("PROTODROID_GAME");
+            else Os.setenv("PROTODROID_GAME", gameDir.getAbsolutePath(), true);
         } catch (ErrnoException ignored) {
             // the native side falls back to the app folder
         }
         File driver = installCustomDriver();
         try {
-            if (driver == null) Os.unsetenv("PROTORE_CUSTOM_DRIVER");
-            else Os.setenv("PROTORE_CUSTOM_DRIVER", driver.getAbsolutePath(), true);
+            if (driver == null) Os.unsetenv("PROTODROID_CUSTOM_DRIVER");
+            else Os.setenv("PROTODROID_CUSTOM_DRIVER", driver.getAbsolutePath(), true);
         } catch (ErrnoException ignored) {
             // the bundled drivers are used
         }

@@ -1,8 +1,8 @@
-# Prototype port settings. Copy to protore.ini next to the game/ folder
-# (Android: /sdcard/Android/data/com.protodroid/files/protore.ini or
-#  /storage/emulated/0/Prototype/protore.ini which works on Android 11+ without ADB;
+# ProtoDroid settings. Copy to protodroid.ini next to the game/ folder
+# (Android: /sdcard/Android/data/com.protodroid/files/protodroid.ini or
+#  /storage/emulated/0/Prototype/protodroid.ini which works on Android 11+ without ADB;
 #  desktop: the working directory).
-# Any key can also be set as an environment variable PROTORE_<KEY>, e.g. PROTORE_RENDER_HEIGHT=540.
+# Any key can also be set as an environment variable PROTODROID_<KEY>, e.g. PROTODROID_RENDER_HEIGHT=540.
 # Supports both flat key = value and [section] headers ([graphics], [audio], etc.)
 
 # Render resolution height; the width follows the screen's aspect ratio and the frame is scaled to the screen.
@@ -36,7 +36,7 @@ texture_skip_min_size = 512
 
 # Low-level Mali pipeline diagnostics. Disabled by default because every traced pipeline performs
 # SPIR-V analysis plus durable file/fsync writes. Enables pipeline_trace.log and last_vs/last_fs.spv.
-# The PROTORE_PIPELINE_TRACE=1 environment variable is an equivalent override.
+# The PROTODROID_PIPELINE_TRACE=1 environment variable is an equivalent override.
 #pipeline_trace = 1
 
 # Menu presentation: keep silent/ambient Bink video at its normal rate without making BinkWait

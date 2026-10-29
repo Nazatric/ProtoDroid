@@ -1,5 +1,5 @@
-#ifndef PROTORE_BINK_PACING_H
-#define PROTORE_BINK_PACING_H
+#ifndef PROTODROID_BINK_PACING_H
+#define PROTODROID_BINK_PACING_H
 
 #include <cstddef>
 #include <cstdint>

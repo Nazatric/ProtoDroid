@@ -12,7 +12,7 @@ constexpr uint32_t kHashObserverRva = 0x010bc59c;
 using HashObserverFn = void(__cdecl*)(uint32_t hash, const char* s);
 
 HashObserverFn Observer() {
-    return *static_cast<HashObserverFn*>(protore::EngineAddress(kHashObserverRva));
+    return *static_cast<HashObserverFn*>(protodroid::EngineAddress(kHashObserverRva));
 }
 
 }  // namespace

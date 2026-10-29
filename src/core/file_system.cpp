@@ -31,7 +31,7 @@ using ReleaseFn = void(__thiscall*)(CementLibrary*);
 
 template <typename Fn>
 Fn Engine(uint32_t rva) {
-    return reinterpret_cast<Fn>(protore::EngineAddress(rva));
+    return reinterpret_cast<Fn>(protodroid::EngineAddress(rva));
 }
 
 CementLibrary*& Next(CementLibrary* library) {
@@ -53,7 +53,7 @@ void Unlock(IoBufferHolder* h) {
 }  // namespace
 
 uint32_t FileSystemIoBufferSize() {
-    return *static_cast<uint32_t*>(protore::EngineAddress(kIoBufferSizeRva));
+    return *static_cast<uint32_t*>(protodroid::EngineAddress(kIoBufferSizeRva));
 }
 
 void __thiscall IoBufferHolderAcquire(IoBufferHolder* self, uint32_t heap, uint32_t alignment, uint32_t granularity) {

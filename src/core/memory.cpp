@@ -21,7 +21,7 @@ using OomHandlerFn = void(__cdecl*)(uint32_t context, uint32_t heap, uint32_t si
 
 template <typename T>
 T Global(uint32_t rva) {
-    return *static_cast<T*>(protore::EngineAddress(rva));
+    return *static_cast<T*>(protodroid::EngineAddress(rva));
 }
 
 }  // namespace

@@ -21,7 +21,7 @@ import pefile
 import re
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-DLL = os.environ.get("PROTORE_ENGINE",
+DLL = os.environ.get("PROTODROID_ENGINE",
                      os.path.expanduser("~/Downloads/Prototype (2009)/Prototype/prototypeenginef.dll"))
 BASE = 0x10000000  # the DLL's preferred base; --base rebases everything (rebase())
 ORIG_BASE = 0x10000000

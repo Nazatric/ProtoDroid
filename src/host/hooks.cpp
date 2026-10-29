@@ -8,7 +8,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace protore {
+namespace protodroid {
 
 namespace {
 
@@ -71,7 +71,7 @@ bool WriteCode(uint8_t* target, const uint8_t* bytes, size_t len) {
 void Log(const char* fmt, ...) {
     if (!g_log) {
         // Append, and tag every line with the process id: the game may run more than one process.
-        g_log = fopen("proto-re.log", "a");
+        g_log = fopen("protodroid.log", "a");
         if (!g_log) {
             return;
         }
@@ -127,11 +127,11 @@ bool DetourAttach(Detour* d, uint32_t rva, size_t stolen_len, const uint8_t* exp
     }
     WriteJump(tramp + stolen_len, tramp + stolen_len, target + stolen_len);
 
-    // PROTORE_NULLPATCH=1 performs the same protect/write/restore sequence but writes back the original
+    // PROTODROID_NULLPATCH=1 performs the same protect/write/restore sequence but writes back the original
     // bytes, to separate effects of touching the code page from effects of the redirected function.
     uint8_t patch[16];
     memcpy(patch, target, stolen_len);
-    if (GetEnvironmentVariableA("PROTORE_NULLPATCH", nullptr, 0) == 0) {
+    if (GetEnvironmentVariableA("PROTODROID_NULLPATCH", nullptr, 0) == 0) {
         WriteJump(patch, target, replacement);
         for (size_t i = 5; i < stolen_len; ++i) {
             patch[i] = 0xCC;  // int3 over the tail of a split instruction: jumping there must fault loudly
@@ -163,11 +163,11 @@ size_t g_test_detour_count = 0;
 
 }  // namespace
 
-}  // namespace protore
+}  // namespace protodroid
 
 extern "C" volatile uint32_t RecompTestDetours;
 
-namespace protore {
+namespace protodroid {
 
 bool TestDetourActive(uint32_t va) {
     for (size_t i = 0; i < g_test_detour_count; ++i) {
@@ -230,12 +230,12 @@ bool RedirectHandFunction(void* from, void* to) {
 int InstallHooks(Hook* hooks, size_t count) {
     g_hooks = hooks;
     g_hook_count = count;
-    // PROTORE_ONLY=<name> installs just that hook, for bisecting behaviour changes to one function.
+    // PROTODROID_ONLY=<name> installs just that hook, for bisecting behaviour changes to one function.
     char only[128] = "";
-    GetEnvironmentVariableA("PROTORE_ONLY", only, sizeof(only));
-    // PROTORE_SKIP=<prefix>[,<prefix>...] leaves every hook whose name starts with one of the prefixes uninstalled.
+    GetEnvironmentVariableA("PROTODROID_ONLY", only, sizeof(only));
+    // PROTODROID_SKIP=<prefix>[,<prefix>...] leaves every hook whose name starts with one of the prefixes uninstalled.
     char skip[512] = "";
-    GetEnvironmentVariableA("PROTORE_SKIP", skip, sizeof(skip));
+    GetEnvironmentVariableA("PROTODROID_SKIP", skip, sizeof(skip));
     auto skipped = [&skip](const char* name) {
         for (const char* p = skip; *p;) {
             const char* end = strchr(p, ',');
@@ -247,8 +247,8 @@ int InstallHooks(Hook* hooks, size_t count) {
         }
         return false;
     };
-    const bool redirect_hand = GetEnvironmentVariableA("PROTORE_DIFFTEST_RECOMP", nullptr, 0) != 0;
-    const bool recomp = redirect_hand || GetEnvironmentVariableA("PROTORE_RECOMP", nullptr, 0) != 0;
+    const bool redirect_hand = GetEnvironmentVariableA("PROTODROID_DIFFTEST_RECOMP", nullptr, 0) != 0;
+    const bool recomp = redirect_hand || GetEnvironmentVariableA("PROTODROID_RECOMP", nullptr, 0) != 0;
     int recompiled = 0;
     int redirected = 0;
     int installed = 0;
@@ -257,14 +257,14 @@ int InstallHooks(Hook* hooks, size_t count) {
         if ((only[0] && strcmp(only, h.name) != 0) || skipped(h.name)) {
             continue;
         }
-        // PROTORE_RECOMP=1 runs the statically recompiled version instead of the hand reconstruction when one
+        // PROTODROID_RECOMP=1 runs the statically recompiled version instead of the hand reconstruction when one
         // exists for this function (also for hand reconstructions that are still disabled).
         void* stub = recomp ? RecompEntryStub(static_cast<uint32_t>(kEngineImageBase) + h.rva) : nullptr;
         if (!h.enabled && !stub) {
             continue;
         }
         if (stub) {
-            // PROTORE_DIFFTEST_RECOMP=1: the hand reconstruction itself jumps to the recompiled code, so every
+            // PROTODROID_DIFFTEST_RECOMP=1: the hand reconstruction itself jumps to the recompiled code, so every
             // differential test compares the original against the recompiled version.
             if (redirect_hand && h.replacement) {
                 if (RedirectHandFunction(h.replacement, stub)) {
@@ -292,4 +292,4 @@ int InstallHooks(Hook* hooks, size_t count) {
     return installed;
 }
 
-}  // namespace protore
+}  // namespace protodroid

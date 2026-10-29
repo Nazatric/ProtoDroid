@@ -24,7 +24,7 @@ struct Flags {
 };
 
 volatile char* Flag(uint32_t rva) {
-    return static_cast<volatile char*>(protore::EngineAddress(rva));
+    return static_cast<volatile char*>(protodroid::EngineAddress(rva));
 }
 
 Flags ReadFlags() {
@@ -38,8 +38,8 @@ void WriteFlags(Flags f) {
 
 }  // namespace
 
-void TestTraceVector(protore::DiffResult* r) {
-    auto original = reinterpret_cast<TraceVectorFn>(protore::OriginalFunction(kTraceVectorRva));
+void TestTraceVector(protodroid::DiffResult* r) {
+    auto original = reinterpret_cast<TraceVectorFn>(protodroid::OriginalFunction(kTraceVectorRva));
     const Flags saved = ReadFlags();
     const float inputs[][3] = {
         {0.0f, 0.0f, 0.0f},
@@ -53,7 +53,7 @@ void TestTraceVector(protore::DiffResult* r) {
             for (const auto& v : inputs) {
                 ReportCapture capture(scripted);
                 if (!capture.active()) {
-                    protore::Check(r, false, "VReport capture unavailable");
+                    protodroid::Check(r, false, "VReport capture unavailable");
                     WriteFlags(saved);
                     return;
                 }
@@ -67,12 +67,12 @@ void TestTraceVector(protore::DiffResult* r) {
                 Flags reconstructed_flags = ReadFlags();
                 std::vector<ReportCall> reconstructed_calls = capture.Take();
 
-                protore::Check(r, original_calls == reconstructed_calls,
+                protodroid::Check(r, original_calls == reconstructed_calls,
                                "flags %d/%d scripted %d v=(%g,%g,%g): %u vs %u report calls differ", flags.float_flag,
                                flags.hex_flag, scripted, v[0], v[1], v[2],
                                static_cast<unsigned>(original_calls.size()),
                                static_cast<unsigned>(reconstructed_calls.size()));
-                protore::Check(r,
+                protodroid::Check(r,
                                original_flags.float_flag == reconstructed_flags.float_flag &&
                                    original_flags.hex_flag == reconstructed_flags.hex_flag,
                                "flags %d/%d scripted %d: flag state after call differs", flags.float_flag,

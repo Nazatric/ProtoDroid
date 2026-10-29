@@ -2,7 +2,7 @@
 # Builds and runs the native-replacement difftest (hot_audio_test.cpp) on the host. Small: one generated file.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
-DLL=${PROTORE_ENGINE:-$HOME/Downloads/Prototype (2009)/Prototype/prototypeenginef.dll}
+DLL=${PROTODROID_ENGINE:-$HOME/Downloads/Prototype (2009)/Prototype/prototypeenginef.dll}
 OUT=$ROOT/build/hot_test
 mkdir -p "$OUT"
 printf '105e8860\n105e85b0\n105c62e0\n105eb280\n1071b610\n' > "$OUT/functions.txt"

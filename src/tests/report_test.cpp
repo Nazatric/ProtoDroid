@@ -31,25 +31,25 @@ int CallCase(ReportFn fn, int which) {
 
 }  // namespace
 
-void TestReport(protore::DiffResult* r) {
-    auto original = reinterpret_cast<ReportFn>(protore::OriginalFunction(kReportRva));
+void TestReport(protodroid::DiffResult* r) {
+    auto original = reinterpret_cast<ReportFn>(protodroid::OriginalFunction(kReportRva));
     auto reconstructed = static_cast<ReportFn>(&core::Report);
     for (int scripted : {0, 1, core::kReportDisableSite}) {
         for (int which = 0; which < 4; ++which) {
             ReportCapture capture(scripted);
             if (!capture.active()) {
-                protore::Check(r, false, "VReport capture unavailable");
+                protodroid::Check(r, false, "VReport capture unavailable");
                 return;
             }
             int original_result = CallCase(original, which);
             std::vector<ReportCall> original_calls = capture.Take();
             int reconstructed_result = CallCase(reconstructed, which);
             std::vector<ReportCall> reconstructed_calls = capture.Take();
-            protore::Check(r, original_result == reconstructed_result, "case %d scripted %d: result %d != %d", which,
+            protodroid::Check(r, original_result == reconstructed_result, "case %d scripted %d: result %d != %d", which,
                            scripted, original_result, reconstructed_result);
-            protore::Check(r, original_calls == reconstructed_calls, "case %d scripted %d: VReport calls differ",
+            protodroid::Check(r, original_calls == reconstructed_calls, "case %d scripted %d: VReport calls differ",
                            which, scripted);
-            protore::Check(r, original_calls.size() == 1, "case %d: original made %u VReport calls", which,
+            protodroid::Check(r, original_calls.size() == 1, "case %d: original made %u VReport calls", which,
                            static_cast<unsigned>(original_calls.size()));
         }
     }

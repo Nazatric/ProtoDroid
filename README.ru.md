@@ -1,4 +1,4 @@
-# proto-re
+# ProtoDroid
 
 Русский | [English](README.md)
 
@@ -45,12 +45,12 @@ Android 10+, arm64 и купленная игра (PC, Steam app 10150, сбор
    `/sdcard/Android/data/com.protodroid/files/game/` (на Android 11+ файловые менеджеры туда обычно не пускают,
    проще скопировать с ПК по USB), либо в `/sdcard/Prototype/` (любой файловый менеджер; на экране запуска нажать
    "Allow file access"). Для русского нужны `.rcf` с наложенным переводом.
-3. По желанию положить `protore.ini` в `/sdcard/Android/data/com.protodroid/files/`
-   (пример: [android/protore.ini.example](android/protore.ini.example)). Нужны права на чтение, `chmod 666`.
+3. По желанию положить `protodroid.ini` в `/sdcard/Android/data/com.protodroid/files/`
+   (пример: [android/protodroid.ini.example](android/protodroid.ini.example)). Нужны права на чтение, `chmod 666`.
 
-Логи там же (`proto-native.log`, `app_process64_d3d9.log`) и в `adb logcat -s protore`.
+Логи там же (`proto-native.log`, `app_process64_d3d9.log`) и в `adb logcat -s protodroid`.
 
-Ключи `protore.ini`:
+Ключи `protodroid.ini`:
 
 | ключ | |
 |---|---|
@@ -64,7 +64,7 @@ Android 10+, arm64 и купленная игра (PC, Steam app 10150, сбор
 | `present_stats` | статистика DXVK в лог |
 | `import_profile`, `watchdog` | профилирование, отладка зависаний |
 
-Любой ключ можно задать переменной окружения `PROTORE_<KEY>`.
+Любой ключ можно задать переменной окружения `PROTODROID_<KEY>`.
 
 Драйверы на Adreno: игра пробует Turnip 26.2, потом Turnip 26.3 (для Adreno 710/720), потом драйвер телефона (нужен
 Vulkan 1.3). На Adreno 8xx сразу драйвер телефона. Чтобы использовать свой драйвер (`.so` Vulkan-драйвера для Adreno,
@@ -89,12 +89,12 @@ Vulkan 1.3). На Adreno 8xx сразу драйвер телефона. Что�
 ## Сборка
 
 Linux, Android NDK, JDK, SDK build-tools, python3 с `capstone` и `pefile`, cmake, ninja и meson >= 1.4 (для Turnip
-ещё mako, pyyaml, bison, flex, glslangValidator). `PROTORE_ENGINE` указывает на оригинальный DLL
+ещё mako, pyyaml, bison, flex, glslangValidator). `PROTODROID_ENGINE` указывает на оригинальный DLL
 (по умолчанию `~/Downloads/Prototype (2009)/Prototype/prototypeenginef.dll`).
 
 ```sh
-android/build-deps.sh arm64-v8a ~/proto-re-data/android-deps-src ~/proto-re-data/android-deps/arm64-v8a
-android/build-turnip.sh ~/proto-re-data/android-deps-src ~/proto-re-data/android-turnip
+android/build-deps.sh arm64-v8a ~/protodroid-data/android-deps-src ~/protodroid-data/android-deps/arm64-v8a
+android/build-turnip.sh ~/protodroid-data/android-deps-src ~/protodroid-data/android-turnip
 python3 -I tools/recomp/data_entries.py
 python3 -I tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native
 tools/cool_make.sh -C src/native PLATFORM=android ABI=arm64-v8a
@@ -112,7 +112,7 @@ android/build-apk.sh arm64-v8a
 ## Авторство
 
 Если вы делитесь этим портом, выкладываете его сборки или используете его код, **обязательно укажите автора и дайте
-ссылку на этот репозиторий:** https://github.com/VinTeRuS/proto-re
+ссылку на автора:** https://github.com/VinTeRuS
 
 Русский текст: фанатский перевод от ElArchibald.
 

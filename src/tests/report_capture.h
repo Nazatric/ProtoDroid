@@ -32,7 +32,7 @@ public:
     std::vector<ReportCall> Take();
 
 private:
-    std::unique_ptr<protore::TestDetour> detour_;
+    std::unique_ptr<protodroid::TestDetour> detour_;
 };
 
 }  // namespace tests

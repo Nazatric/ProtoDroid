@@ -8,7 +8,7 @@
 
 #include "hooks.h"
 
-namespace protore {
+namespace protodroid {
 
 namespace {
 
@@ -150,4 +150,4 @@ void StartRcfDirectoryWatch() {
     StartMemoryWatch(pattern, sizeof(pattern), dir_size);
 }
 
-}  // namespace protore
+}  // namespace protodroid

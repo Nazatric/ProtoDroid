@@ -72,7 +72,7 @@ void CountedEventWait(CountedEvent* e) {
 }
 
 void* ThreadLocalValue() {
-    return TlsGetValue(*static_cast<DWORD*>(protore::EngineAddress(kTlsIndexRva)));
+    return TlsGetValue(*static_cast<DWORD*>(protodroid::EngineAddress(kTlsIndexRva)));
 }
 
 }  // namespace core

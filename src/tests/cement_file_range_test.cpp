@@ -59,9 +59,9 @@ void InitVtable() {
 
 }  // namespace
 
-void TestCementFileRange(protore::DiffResult* r) {
+void TestCementFileRange(protodroid::DiffResult* r) {
     InitVtable();
-    auto original = reinterpret_cast<InitFn>(protore::OriginalFunction(kFileRangeInitRva));
+    auto original = reinterpret_cast<InitFn>(protodroid::OriginalFunction(kFileRangeInitRva));
 
     const uint32_t base_offsets[] = {0x10, 0x800, 0xfffffff0u, 0x12345678};
     for (int depth = 1; depth <= 4; ++depth) {
@@ -86,10 +86,10 @@ void TestCementFileRange(protore::DiffResult* r) {
                                           0x7a970000);
                 std::vector<VirtualCall> calls_b;
                 calls_b.swap(g_calls);
-                protore::Check(r, memcmp(&a, &b, sizeof(a)) == 0,
+                protodroid::Check(r, memcmp(&a, &b, sizeof(a)) == 0,
                                "depth %d offset %08x extra %x: range differs (offset %08x vs %08x)", depth, offset,
                                extra, a.offset, b.offset);
-                protore::Check(r, calls_a == calls_b, "depth %d offset %08x: drive call sequences differ (%u vs %u)",
+                protodroid::Check(r, calls_a == calls_b, "depth %d offset %08x: drive call sequences differ (%u vs %u)",
                                depth, offset, static_cast<unsigned>(calls_a.size()),
                                static_cast<unsigned>(calls_b.size()));
             }

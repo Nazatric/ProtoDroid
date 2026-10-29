@@ -257,7 +257,7 @@ D3DPRESENT_PARAMETERS ToHost(uint32_t g) {
 #ifdef __ANDROID__
     const bool windowed = true;
 #else
-    const bool windowed = getenv("PROTORE_WINDOWED") != nullptr;
+    const bool windowed = getenv("PROTODROID_WINDOWED") != nullptr;
 #endif
     if (windowed) {
         p.Windowed = TRUE;
@@ -713,10 +713,10 @@ M(IDirect3DDevice9, Reset) {
     Return(c, uint32_t(hr), 2);
 }
 
-// Setting shot=<frame>[,<frame>...] (PROTORE_SHOT): the back buffer of those presents is saved as shot_<frame>.ppm in
+// Setting shot=<frame>[,<frame>...] (PROTODROID_SHOT): the back buffer of those presents is saved as shot_<frame>.ppm in
 // the working directory (debugging without a desktop screenshot tool; on Android only the game's own frame).
 void MaybeScreenshot(IDirect3DDevice9* dev) {
-    static const std::string spec_setting = Setting("shot", "");  // protore.ini `shot = ...` works on Android
+    static const std::string spec_setting = Setting("shot", "");  // protodroid.ini `shot = ...` works on Android
     static const char* spec = spec_setting.empty() ? nullptr : spec_setting.c_str();
     static uint32_t frame = 0;
     ++frame;

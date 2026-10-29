@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace protore {
+namespace protodroid {
 
 // Engine build this table was made for (PE TimeDateStamp of prototypeenginef.dll, Steam build 19788432).
 constexpr uint32_t kEngineTimeDateStamp = 0x689E2026;
@@ -76,4 +76,4 @@ private:
 
 void Log(const char* fmt, ...);
 
-}  // namespace protore
+}  // namespace protodroid

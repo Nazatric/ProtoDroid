@@ -13,7 +13,7 @@ import sys
 import pefile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DLL = os.environ.get("PROTORE_ENGINE",
+DLL = os.environ.get("PROTODROID_ENGINE",
                      os.path.expanduser("~/Downloads/Prototype (2009)/Prototype/prototypeenginef.dll"))
 
 

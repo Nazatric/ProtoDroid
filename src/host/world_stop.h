@@ -5,7 +5,7 @@
 
 #include <cstddef>
 
-namespace protore {
+namespace protodroid {
 
 class WorldStop {
 public:
@@ -21,4 +21,4 @@ private:
     size_t count_ = 0;
 };
 
-}  // namespace protore
+}  // namespace protodroid
