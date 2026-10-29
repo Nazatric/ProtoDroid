@@ -40,12 +40,21 @@ jobs:
           /tmp/graphics_test
 
       - name: Compile and run shared-save path tests
+        id: save
         run: |
           set -euo pipefail
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
-          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/tests/save_path_test.cpp -o /tmp/save_path_test
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/tests/save_path_test.cpp -o /tmp/save_path_test 2>&1 | tee /tmp/protodroid-save-test.log
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
-          /tmp/save_path_test
+          /tmp/save_path_test 2>&1 | tee -a /tmp/protodroid-save-test.log
+
+      - name: Report shared-save test failure
+        if: failure() && steps.save.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/6/comments \
+            --raw-field body="Shared-save test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-save-test.log 2>/dev/null || echo 'no save-test log')\n\`\`\`" || true
 
       - name: Compile and run performance-hint session tests
         run: |
@@ -141,12 +150,21 @@ jobs:
           /tmp/graphics_test_arm64
 
       - name: Compile and run native ARM64 shared-save path tests
+        id: save
         run: |
           set -euo pipefail
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
-          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/tests/save_path_test.cpp -o /tmp/save_path_test_arm64
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/tests/save_path_test.cpp -o /tmp/save_path_test_arm64 2>&1 | tee /tmp/protodroid-save-test.log
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
-          /tmp/save_path_test_arm64
+          /tmp/save_path_test_arm64 2>&1 | tee -a /tmp/protodroid-save-test.log
+
+      - name: Report native ARM64 shared-save test failure
+        if: failure() && steps.save.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/6/comments \
+            --raw-field body="Native ARM64 shared-save test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-save-test.log 2>/dev/null || echo 'no save-test log')\n\`\`\`" || true
 
       - name: Compile and run native ARM64 hot-replacement differential tests
         id: hot
