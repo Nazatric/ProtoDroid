@@ -265,12 +265,14 @@ void MirrorCopyDXVKLogs() {
     // existing periodic mirror so an external-files wipe does not discard all compiled pipeline state.
     std::string base_cache = std::string(g_data_dir) + "/prototypeenginef.dll.dxvk-cache";
     std::string mirror_cache = g_mirror_dir + "/prototypeenginef.dll.dxvk-cache";
-    if (native::InspectStateCache(base_cache) == native::StateCacheStatus::Populated)
-        CopyFile(base_cache, mirror_cache);
+    // Replace the backup atomically. A process kill or failed write must not truncate the last usable cache, and
+    // the live DXVK writer remains in app-private storage instead of doing shader-cache I/O through shared FUSE.
+    native::BackupStateCache(base_cache, mirror_cache);
 }
 
-std::string TakeIoStats();   // kernel32.cpp
-std::string ArenaUsage();    // memory.cpp
+std::string TakeIoStats();           // kernel32.cpp
+std::string ArenaUsage();            // memory.cpp
+std::string TakeTextureTimingStats();  // d3d9.cpp
 
 void Fatal(const char* fmt, ...) {
     char buf[1024];
@@ -692,6 +694,7 @@ int main(int argc, char** argv) {
                 Log("perf: %.1f present fps, avg %.2f ms, p99 %.2f ms, max %.2f ms, %ld MiB resident; arena %s; io: %s",
                     present.fps, present.average_ms, present.p99_ms, present.max_ms, ResidentMiB(),
                     ArenaUsage().c_str(), TakeIoStats().c_str());
+                Log("texture timing (calls / total ms / max ms): %s", native::TakeTextureTimingStats().c_str());
                 native::MirrorCopyDXVKLogs();
             }
             next_log = now + std::chrono::seconds(30);

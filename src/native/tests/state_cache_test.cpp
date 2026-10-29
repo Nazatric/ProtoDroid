@@ -193,6 +193,34 @@ void TestSharedRestoreAndTargetPreservation() {
     Check(ReadFile(target).find("BAD!") == 0, "invalid target changed despite the no-migration plan");
 }
 
+void TestAtomicBackupPreservesLastGoodCopy() {
+    TempDirectory temp;
+    fs::path source = temp.path / "private" / native::kStateCacheFilename;
+    fs::path target = temp.path / "shared" / native::kStateCacheFilename;
+    fs::create_directories(target.parent_path());
+    WriteCache(target, 18, "last-known-good");
+    const std::string previous = ReadFile(target);
+
+    Check(!native::BackupStateCache(source.string(), target.string()), "missing source unexpectedly replaced a backup");
+    Check(ReadFile(target) == previous, "missing source changed the last good backup");
+
+    WriteCache(source, 18, "");
+    Check(!native::BackupStateCache(source.string(), target.string()), "header-only source replaced a populated backup");
+    Check(ReadFile(target) == previous, "empty source changed the last good backup");
+
+    WriteCache(source, 18, "invalid", "NOPE");
+    Check(!native::BackupStateCache(source.string(), target.string()), "invalid source replaced a valid backup");
+    Check(ReadFile(target) == previous, "invalid source changed the last good backup");
+
+    WriteCache(source, 18, "new-cache-payload");
+    Check(native::BackupStateCache(source.string(), target.string()), "populated cache backup failed");
+    Check(ReadFile(target) == ReadFile(source), "atomic backup did not copy the populated source exactly");
+    Check(fs::exists(source), "backup consumed the live private cache");
+    for (const fs::directory_entry& entry : fs::directory_iterator(target.parent_path()))
+        Check(entry.path().filename().string().find(".migrate.") == std::string::npos,
+              "successful backup left a temporary file behind");
+}
+
 void TestEmptyAndInvalidCandidatesIgnored() {
     TempDirectory temp;
     fs::path base = temp.path / "base", shared = temp.path / "shared";
@@ -217,7 +245,8 @@ int main() {
     TestCacheHeaderInspection();
     TestLegacyMigration();
     TestSharedRestoreAndTargetPreservation();
+    TestAtomicBackupPreservesLastGoodCopy();
     TestEmptyAndInvalidCandidatesIgnored();
-    std::puts("state-cache tests passed (resolution, migration, entry layout, per-entry flush, drain)");
+    std::puts("state-cache tests passed (resolution, migration, atomic backup, entry layout, flush, drain)");
     return 0;
 }

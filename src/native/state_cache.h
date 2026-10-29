@@ -37,6 +37,10 @@ StateCacheMigration PlanStateCacheMigration(const std::string& directory,
                                             const std::vector<std::string>& shared_directories);
 StateCacheMigrationResult MigrateStateCache(const StateCacheMigration& migration);
 
+// Atomically replace a shared backup from a populated live cache. Missing, empty, or invalid sources return false
+// without touching the target. The live writer remains in app-private storage.
+bool BackupStateCache(const std::string& source, const std::string& target);
+
 }  // namespace native
 
 #endif

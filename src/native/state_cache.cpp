@@ -15,7 +15,7 @@ uint32_t ReadLe32(const unsigned char* p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
 }
 
-bool CopyAtomically(const std::string& source, const std::string& target) {
+bool CopyAtomically(const std::string& source, const std::string& target, bool durable) {
     FILE* in = fopen(source.c_str(), "rb");
     if (!in) return false;
 
@@ -45,7 +45,7 @@ bool CopyAtomically(const std::string& source, const std::string& target) {
             break;
         }
     }
-    if (fflush(out) != 0 || fsync(fileno(out)) != 0) ok = false;
+    if (fflush(out) != 0 || (durable && fsync(fileno(out)) != 0)) ok = false;
     if (fclose(out) != 0) ok = false;
     fclose(in);
     if (ok && rename(name.data(), target.c_str()) != 0) ok = false;
@@ -113,8 +113,15 @@ StateCacheMigrationResult MigrateStateCache(const StateCacheMigration& migration
         if (rename(migration.source.c_str(), migration.target.c_str()) == 0) return StateCacheMigrationResult::Migrated;
         // Cross-device or restricted renames fall back to an atomic copy. Keep the legacy source if this succeeds.
     }
-    return CopyAtomically(migration.source, migration.target) ? StateCacheMigrationResult::Migrated
-                                                              : StateCacheMigrationResult::Failed;
+    return CopyAtomically(migration.source, migration.target, true) ? StateCacheMigrationResult::Migrated
+                                                                     : StateCacheMigrationResult::Failed;
+}
+
+bool BackupStateCache(const std::string& source, const std::string& target) {
+    if (InspectStateCache(source) != StateCacheStatus::Populated) return false;
+    // Periodic backups run on the engine thread. Atomic replacement protects the last good backup from process
+    // interruption without adding an fsync stall to gameplay; startup migration above remains durable.
+    return CopyAtomically(source, target, false);
 }
 
 }  // namespace native

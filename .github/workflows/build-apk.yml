@@ -119,6 +119,19 @@ jobs:
           /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures
           BINK_TEST_AUDIO_RATE=44100 /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures-44100
 
+  arm64-graphics-tests:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile and run native ARM64 graphics UBSAN tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/d3d9_dxt.cpp src/native/tests/graphics_test.cpp -o /tmp/graphics_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/graphics_test_arm64
+
   build-deps:
     runs-on: ubuntu-24.04
     strategy:
@@ -174,7 +187,7 @@ jobs:
 
   build-apk:
     runs-on: ubuntu-24.04
-    needs: [build-deps, bink-tests]
+    needs: [build-deps, bink-tests, arm64-graphics-tests]
     steps:
       - uses: actions/checkout@v4
 

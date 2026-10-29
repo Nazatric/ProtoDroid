@@ -3,8 +3,8 @@
      copied by the user to /sdcard/Android/data/com.protodroid/files/game or /sdcard/Prototype (SetupActivity). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.protodroid"
-    android:versionCode="2"
-    android:versionName="0.2"
+    android:versionCode="3"
+    android:versionName="0.3"
     android:installLocation="auto">
 
     <uses-feature android:glEsVersion="0x00020000" />

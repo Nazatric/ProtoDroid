@@ -30,10 +30,12 @@ void Rgb565(uint16_t c, uint8_t out[4]) {
     out[3] = 255;
 }
 
-// Colour block (DXT1 semantics when `dxt1`, else always four colours) -> 16 BGRA pixels.
-void DecodeColorBlock(const uint8_t* b, bool dxt1, uint8_t px[16][4]) {
+uint16_t PackA1R5G5B5(const uint8_t p[4]) {
+    return uint16_t((p[3] >= 128 ? 0x8000 : 0) | (p[2] >> 3) << 10 | (p[1] >> 3) << 5 | (p[0] >> 3));
+}
+
+void DecodeColorPalette(const uint8_t* b, bool dxt1, uint8_t pal[4][4]) {
     uint16_t c0 = uint16_t(b[0] | b[1] << 8), c1 = uint16_t(b[2] | b[3] << 8);
-    uint8_t pal[4][4];
     Rgb565(c0, pal[0]);
     Rgb565(c1, pal[1]);
     if (c0 > c1 || !dxt1) {
@@ -45,6 +47,12 @@ void DecodeColorBlock(const uint8_t* b, bool dxt1, uint8_t px[16][4]) {
         for (int k = 0; k < 4; ++k) pal[2][k] = uint8_t((pal[0][k] + pal[1][k]) / 2);
         pal[3][0] = pal[3][1] = pal[3][2] = pal[3][3] = 0;  // transparent black
     }
+}
+
+// Colour block (DXT1 semantics when `dxt1`, else always four colours) -> 16 BGRA pixels.
+void DecodeColorBlock(const uint8_t* b, bool dxt1, uint8_t px[16][4]) {
+    uint8_t pal[4][4];
+    DecodeColorPalette(b, dxt1, pal);
     uint32_t idx = uint32_t(b[4] | b[5] << 8 | b[6] << 16 | uint32_t(b[7]) << 24);
     for (int i = 0; i < 16; ++i) memcpy(px[i], pal[(idx >> (2 * i)) & 3], 4);
 }
@@ -91,10 +99,45 @@ inline void StoreFullTile(const uint8_t px[16][4], uint8_t* dst, int32_t dst_pit
 }
 #endif
 
+// Mali uses A1R5G5B5 for DXT1 to reduce upload bandwidth. Decode directly to that representation instead of
+// materializing 16 BGRA pixels and narrowing every pixel afterwards. The palette still goes through the same
+// 8-bit expansion and interpolation as the generic decoder, so rounding and transparent black remain identical.
+void DecodeDxt1To16(const uint8_t* src, uint32_t pitch, uint32_t w, uint32_t h, uint8_t* dst, int32_t dst_pitch) {
+    const uint32_t bw = (w + 3) / 4, bh = (h + 3) / 4;
+    uint16_t px[16];
+    for (uint32_t by = 0; by < bh; ++by) {
+        for (uint32_t bx = 0; bx < bw; ++bx) {
+            const uint8_t* block = src + by * pitch + bx * 8;
+            uint8_t palette[4][4];
+            DecodeColorPalette(block, true, palette);
+            uint16_t colors[4];
+            for (int i = 0; i < 4; ++i) colors[i] = PackA1R5G5B5(palette[i]);
+            const uint32_t idx = uint32_t(block[4] | block[5] << 8 | block[6] << 16 | uint32_t(block[7]) << 24);
+            for (int i = 0; i < 16; ++i) px[i] = colors[(idx >> (2 * i)) & 3];
+#ifdef PROTODROID_DXT_NEON
+            if (bx * 4 + 4 <= w && by * 4 + 4 <= h) {
+                uint8_t* out = dst + int32_t(by * 4) * dst_pitch + bx * 8;
+                for (uint32_t y = 0; y < 4; ++y)
+                    vst1_u8(out + int32_t(y) * dst_pitch, vreinterpret_u8_u16(vld1_u16(px + y * 4)));
+                continue;
+            }
+#endif
+            for (uint32_t y = 0; y < 4 && by * 4 + y < h; ++y) {
+                for (uint32_t x = 0; x < 4 && bx * 4 + x < w; ++x)
+                    memcpy(dst + int32_t(by * 4 + y) * dst_pitch + (bx * 4 + x) * 2, &px[y * 4 + x], 2);
+            }
+        }
+    }
+}
+
 }  // namespace
 
 void DecodeDxt(uint32_t f, const uint8_t* src, uint32_t pitch, uint32_t w, uint32_t h, uint8_t* dst,
                int32_t dst_pitch, uint32_t dst_format) {
+    if (f == kDxt1 && dst_format == kA1R5G5B5) {
+        DecodeDxt1To16(src, pitch, w, h, dst, dst_pitch);
+        return;
+    }
     const bool packed16 = dst_format == kA1R5G5B5;
     uint32_t bw = (w + 3) / 4, bh = (h + 3) / 4, bytes = BlockBytes(f);
     uint8_t px[16][4];
@@ -112,8 +155,7 @@ void DecodeDxt(uint32_t f, const uint8_t* src, uint32_t pitch, uint32_t w, uint3
                 for (uint32_t x = 0; x < 4 && bx * 4 + x < w; ++x) {
                     const uint8_t* p = px[y * 4 + x];
                     if (packed16) {  // B, G, R, A -> A1R5G5B5
-                        uint16_t v = uint16_t((p[3] >= 128 ? 0x8000 : 0) | (p[2] >> 3) << 10 |
-                                              (p[1] >> 3) << 5 | (p[0] >> 3));
+                        uint16_t v = PackA1R5G5B5(p);
                         memcpy(dst + int32_t(by * 4 + y) * dst_pitch + (bx * 4 + x) * 2, &v, 2);
                     } else {
                         memcpy(dst + int32_t(by * 4 + y) * dst_pitch + (bx * 4 + x) * 4, p, 4);

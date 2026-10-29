@@ -23,6 +23,7 @@
 #include <thread>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "win.h"
@@ -50,6 +51,33 @@ struct InterfaceDef {
 };
 
 std::recursive_mutex g_mutex;
+
+// Lightweight interval diagnostics. The bookkeeping mutex is acquired only after the measured operation returns,
+// never around decoding or a driver call, and lets the periodic reader take one consistent count/total/max snapshot.
+struct TextureTiming {
+    uint64_t calls = 0;
+    uint64_t total_ns = 0;
+    uint64_t max_ns = 0;
+};
+TextureTiming g_decode_timing, g_create_timing, g_upload_timing;
+std::mutex g_texture_timing_mutex;
+
+void RecordTextureTiming(TextureTiming& timing, std::chrono::steady_clock::duration elapsed) {
+    const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
+    std::lock_guard<std::mutex> lock(g_texture_timing_mutex);
+    ++timing.calls;
+    timing.total_ns += ns;
+    timing.max_ns = std::max(timing.max_ns, ns);
+}
+
+template <typename Upload>
+HRESULT TimedTextureUpload(Upload upload) {
+    const auto start = std::chrono::steady_clock::now();
+    HRESULT hr = upload();
+    RecordTextureTiming(g_upload_timing, std::chrono::steady_clock::now() - start);
+    return hr;
+}
+
 // index -> host object, read without a lock by every bridged call: fixed chunks that never move, appended to
 // under g_mutex.
 class HostTable {
@@ -503,9 +531,12 @@ bool AdaptedUnlock(void* tex, uint32_t sub, bool* host_locked) {
     AdaptedLock& l = it->second;
     *host_locked = l.host != nullptr;
     if (l.host) {
-        if (l.write_back)
+        if (l.write_back) {
+            const auto start = std::chrono::steady_clock::now();
             DecodeDxt(l.format, Ptr<uint8_t>(l.guest), l.pitch, l.width, l.height, l.host, l.host_pitch,
                       l.decode_format);
+            RecordTextureTiming(g_decode_timing, std::chrono::steady_clock::now() - start);
+        }
         l.host = nullptr;
     }
     return true;
@@ -586,6 +617,26 @@ void x_Direct3DCreate9(Ctx* c) {
 }
 
 }  // namespace
+
+std::string TakeTextureTimingStats() {
+    uint64_t calls[3], total[3], maximum[3];
+    TextureTiming* timings[] = {&g_decode_timing, &g_create_timing, &g_upload_timing};
+    {
+        std::lock_guard<std::mutex> lock(g_texture_timing_mutex);
+        for (int i = 0; i < 3; ++i) {
+            calls[i] = std::exchange(timings[i]->calls, 0);
+            total[i] = std::exchange(timings[i]->total_ns, 0);
+            maximum[i] = std::exchange(timings[i]->max_ns, 0);
+        }
+    }
+    char out[320];
+    snprintf(out, sizeof(out),
+             "dxt %llu calls / %.2f total / %.2f max; create %llu / %.2f / %.2f; upload %llu / %.2f / %.2f",
+             (unsigned long long)calls[0], total[0] / 1.0e6, maximum[0] / 1.0e6,
+             (unsigned long long)calls[1], total[1] / 1.0e6, maximum[1] / 1.0e6,
+             (unsigned long long)calls[2], total[2] / 1.0e6, maximum[2] / 1.0e6);
+    return out;
+}
 
 // ---------------- manual methods ----------------
 #define M(iface, method) void Manual_##iface##_##method(Ctx* c)
@@ -896,7 +947,7 @@ M(IDirect3DSurface9, LockRect) {
 M(IDirect3DSurface9, UnlockRect) {
     auto* s = Host<IDirect3DSurface9>(Arg(c, 0));
     ShadowUnlock(s, 0);
-    Return(c, uint32_t(s->UnlockRect()), 1);
+    Return(c, uint32_t(TimedTextureUpload([&] { return s->UnlockRect(); })), 1);
 }
 M(IDirect3DSurface9, GetDC) { Return(c, uint32_t(D3DERR_INVALIDCALL), 2); }
 M(IDirect3DSurface9, ReleaseDC) { Return(c, uint32_t(D3DERR_INVALIDCALL), 2); }
@@ -908,9 +959,11 @@ M(IDirect3DDevice9, CreateTexture) {
     D3DFORMAT format = D3DFORMAT(Arg(c, 5));
     TexAdapt a = PlanTexture(w, h, levels, usage, format);
     IDirect3DTexture9* tex = nullptr;
+    const auto create_start = std::chrono::steady_clock::now();
     HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->CreateTexture(
         w >> a.skip, h >> a.skip, levels ? levels - a.skip : 0, usage, a.decode ? a.decode_format : format,
         D3DPOOL(Arg(c, 6)), &tex, nullptr);
+    RecordTextureTiming(g_create_timing, std::chrono::steady_clock::now() - create_start);
     if (SUCCEEDED(hr) && (a.skip || a.decode)) {
         std::lock_guard<std::recursive_mutex> lock(g_mutex);
         g_adapt[tex] = a;
@@ -925,9 +978,11 @@ M(IDirect3DDevice9, CreateCubeTexture) {
     D3DFORMAT format = D3DFORMAT(Arg(c, 4));
     TexAdapt a = PlanTexture(edge, edge, levels, usage, format);
     IDirect3DCubeTexture9* tex = nullptr;
+    const auto create_start = std::chrono::steady_clock::now();
     HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->CreateCubeTexture(
         edge >> a.skip, levels ? levels - a.skip : 0, usage, a.decode ? a.decode_format : format, D3DPOOL(Arg(c, 5)),
         &tex, nullptr);
+    RecordTextureTiming(g_create_timing, std::chrono::steady_clock::now() - create_start);
     if (SUCCEEDED(hr) && (a.skip || a.decode)) {
         std::lock_guard<std::recursive_mutex> lock(g_mutex);
         g_adapt[tex] = a;
@@ -1020,11 +1075,11 @@ M(IDirect3DTexture9, UnlockRect) {
     const TexAdapt* a = AdaptOf(t);
     bool host_locked = true;
     if (a && AdaptedUnlock(t, level, &host_locked)) {
-        Return(c, host_locked ? uint32_t(t->UnlockRect(level - a->skip)) : 0u, 2);
+        Return(c, host_locked ? uint32_t(TimedTextureUpload([&] { return t->UnlockRect(level - a->skip); })) : 0u, 2);
         return;
     }
     ShadowUnlock(t, level);
-    Return(c, uint32_t(t->UnlockRect(a ? level - a->skip : level)), 2);
+    Return(c, uint32_t(TimedTextureUpload([&] { return t->UnlockRect(a ? level - a->skip : level); })), 2);
 }
 M(IDirect3DCubeTexture9, LockRect) {
     // (this, FaceType, Level, pLockedRect, pRect, Flags)
@@ -1052,11 +1107,18 @@ M(IDirect3DCubeTexture9, UnlockRect) {
     const TexAdapt* a = AdaptOf(t);
     bool host_locked = true;
     if (a && AdaptedUnlock(t, face * 64 + level, &host_locked)) {
-        Return(c, host_locked ? uint32_t(t->UnlockRect(D3DCUBEMAP_FACES(face), level - a->skip)) : 0u, 3);
+        Return(c,
+               host_locked ? uint32_t(TimedTextureUpload(
+                                 [&] { return t->UnlockRect(D3DCUBEMAP_FACES(face), level - a->skip); }))
+                           : 0u,
+               3);
         return;
     }
     ShadowUnlock(t, face * 64 + level);
-    Return(c, uint32_t(t->UnlockRect(D3DCUBEMAP_FACES(face), a ? level - a->skip : level)), 3);
+    Return(c,
+           uint32_t(TimedTextureUpload(
+               [&] { return t->UnlockRect(D3DCUBEMAP_FACES(face), a ? level - a->skip : level); })),
+           3);
 }
 
 // D3DLOCKED_BOX in guest memory: {INT RowPitch; INT SlicePitch; void* pBits} (12 bytes).
