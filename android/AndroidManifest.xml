@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Prototype native port. The APK contains only the port's code and open-source libraries; the game files are
-     copied by the user to /sdcard/Android/data/com.protore.game/files/game or /sdcard/Prototype (SetupActivity). -->
+     copied by the user to /sdcard/Android/data/com.protodroid/files/game or /sdcard/Prototype (SetupActivity). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.protore.game"
+    package="com.protodroid"
     android:versionCode="1"
     android:versionName="0.1"
     android:installLocation="auto">
@@ -35,7 +35,7 @@
         <profileable android:shell="true" />
 
         <activity
-            android:name="com.protore.game.SetupActivity"
+            android:name="com.protodroid.SetupActivity"
             android:label="Prototype"
             android:exported="true"
             android:screenOrientation="sensorLandscape"
@@ -47,7 +47,7 @@
         </activity>
 
         <activity
-            android:name="com.protore.game.ProtoActivity"
+            android:name="com.protodroid.ProtoActivity"
             android:label="Prototype"
             android:exported="false"
             android:screenOrientation="sensorLandscape"

@@ -1,4 +1,4 @@
-package com.protore.game;
+package com.protodroid;
 
 import android.app.Activity;
 import android.app.AlarmManager;
@@ -51,6 +51,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     static native float nativeFrameMs();
     static native int nativeMemoryMiB();
     static native void nativeSetFpsLimit(int fps);
+    private static native void nativeMenuTouch(int action, float x, float y);
 
     private static final int MOUSE_LEFT = 1, MOUSE_RIGHT = 2, MOUSE_MIDDLE = 4;
     private static final int RED = 0xffe0261e, RED_DIM = 0xff7a1410, INK = 0xff0b0b0b;
@@ -172,8 +173,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         new Setting("Power buttons", "ui_power_buttons", new String[] {"Off", "On"}, new int[] {0, 1}, false),
         new Setting("Anisotropy", "max_anisotropy", new String[] {"1x", "2x", "4x", "8x"},
                 new int[] {1, 2, 4, 8}, true),
+        new Setting("Unlock menu FPS", "unlock_menu_fps", new String[] {"Off", "On"}, new int[] {0, 1}, true),
     };
-    private static final int[] DEFAULTS = {1, 1, 0, 0, 2, 1, 1, 0, 0, 0, 2, 0, 0, 0};
+    private static final int[] DEFAULTS = {1, 1, 0, 0, 2, 1, 1, 0, 0, 0, 2, 0, 0, 0, 1};
     private boolean panelOpen = false, restartNeeded = false;
     private final RectF panel = new RectF(), restartRect = new RectF(), closeRect = new RectF(),
             layoutRect = new RectF();
@@ -404,6 +406,14 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         else SDLActivity.onNativeKeyUp(keycode);
     }
 
+    private void menuTouch(int action, float x, float y) {
+        lastMouseX = x;
+        lastMouseY = y;
+        // Native code converts normalized view coordinates to the D3D client and sequences the click over guest
+        // frames. Sending Move + Down + Up to SDL here would collapse all three into the same menu frame.
+        nativeMenuTouch(action, x / Math.max(1, getWidth()), y / Math.max(1, getHeight()));
+    }
+
     private void mouseButton(int bit, boolean down, float x, float y) {
         if (down) mouseState |= bit;
         else mouseState &= ~bit;
@@ -500,7 +510,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         for (Button b : buttons) if (b.pointer >= 0) release(b);
         if (stickPointer >= 0) releaseStick();
         setRun(false, false);
-        if (lookPointer >= 0 && !gameMode) mouseButton(MOUSE_LEFT, false, lookX, lookY);
+        if (lookPointer >= 0 && !gameMode) menuTouch(MotionEvent.ACTION_CANCEL, lookX, lookY);
         lookPointer = -1;
     }
 
@@ -653,10 +663,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     lookPointer = id;
                     lookX = x;
                     lookY = y;
-                    if (!gameMode) {
-                        mouseMoveTo(x, y);
-                        mouseButton(MOUSE_LEFT, true, x, y);
-                    }
+                    if (!gameMode) menuTouch(MotionEvent.ACTION_DOWN, x, y);
                 }
                 break;
             }
@@ -675,7 +682,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     } else if (pid == lookPointer) {
                         float g = 1.5f * camGain;
                         if (gameMode) mouseMoveBy((px - lookX) * g, (py - lookY) * g * (invertY ? -1 : 1));
-                        else mouseMoveTo(px, py);
+                        else menuTouch(MotionEvent.ACTION_MOVE, px, py);
                         lookX = px;
                         lookY = py;
                     }
@@ -703,7 +710,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     releaseStick();
                 } else if (id == lookPointer) {
                     lookPointer = -1;
-                    if (!gameMode) mouseButton(MOUSE_LEFT, false, x, y);
+                    if (!gameMode) menuTouch(MotionEvent.ACTION_UP, x, y);
                 }
                 break;
             case MotionEvent.ACTION_CANCEL:
@@ -939,14 +946,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         text.setTextSize(20 * density);
         text.setColor(RED);
         c.drawText("SETTINGS", panel.centerX(), panel.top + 36 * density, text);
-        // Credit, in the corners beside the title.
-        text.setTextSize(11 * density);
-        text.setColor(0xff9a8a88);
-        text.setTextAlign(Paint.Align.LEFT);
-        c.drawText(SetupActivity.CREDIT, panel.left + pad, panel.top + 34 * density, text);
-        text.setTextAlign(Paint.Align.RIGHT);
-        c.drawText(SetupActivity.CREDIT_URL, panel.right - pad, panel.top + 34 * density, text);
-        text.setTextAlign(Paint.Align.CENTER);
+        // Keep the corners empty: the centered title is the only header text.
         // two columns of settings
         int rows = (settings.length + 1) / 2;
         float rowH = (panel.height() - 116 * density) / rows;

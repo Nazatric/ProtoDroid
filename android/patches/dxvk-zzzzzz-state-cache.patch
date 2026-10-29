@@ -1,0 +1,63 @@
+diff --git a/src/dxvk/dxvk_state_cache.cpp b/src/dxvk/dxvk_state_cache.cpp
+index 5bf9a7e..b0497c0 100644
+--- a/src/dxvk/dxvk_state_cache.cpp
++++ b/src/dxvk/dxvk_state_cache.cpp
+@@ -278,6 +278,11 @@ namespace dxvk {
+       // case we're recovering a corrupted cache file
+       for (auto& e : m_entries)
+         writeCacheEntry(file, e);
++#ifdef __ANDROID__
++      // Android may terminate the process without a C++ destructor. Make even an empty cache header durable before
++      // the first pipeline arrives; writeCacheEntry already flushes every subsequent entry individually.
++      file.flush();
++#endif
+     }
+   }
+   
+@@ -797,7 +802,7 @@ namespace dxvk {
+ 
+     std::ofstream file;
+ 
+-    while (!m_stopThreads.load()) {
++    while (true) {
+       DxvkStateCacheEntry entry;
+ 
+       { std::unique_lock<dxvk::mutex> lock(m_writerLock);
+@@ -807,8 +812,11 @@ namespace dxvk {
+               || m_stopThreads.load();
+         });
+ 
+-        if (m_writerQueue.size() == 0)
+-          break;
++        if (m_writerQueue.size() == 0) {
++          if (m_stopThreads.load())
++            break;
++          continue;
++        }
+ 
+         entry = m_writerQueue.front();
+         m_writerQueue.pop();
+@@ -840,7 +848,13 @@ namespace dxvk {
+     if (!path.empty() && *path.rbegin() != '/')
+       path += '/';
+     
++#ifdef __ANDROID__
++    // /proc/self/exe is app_process64, not the game. Use a stable, meaningful name shared with the native log mirror
++    // instead of tying persistence to Android's launcher process name.
++    std::string exeName = "prototypeenginef.dll";
++#else
+     std::string exeName = env::getExeBaseName();
++#endif
+     path += exeName + ".dxvk-cache";
+     return str::topath(path.c_str());
+   }
+@@ -889,6 +903,9 @@ namespace dxvk {
+       auto size = sizeof(header);
+ 
+       file.write(data, size);
++#ifdef __ANDROID__
++      file.flush();
++#endif
+     }
+ 
+     return file;

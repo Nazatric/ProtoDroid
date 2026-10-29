@@ -1,4 +1,4 @@
-package com.protore.game;
+package com.protodroid;
 
 import android.content.Context;
 import android.os.Bundle;

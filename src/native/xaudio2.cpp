@@ -14,6 +14,7 @@
 #include <dlfcn.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <mutex>
@@ -51,6 +52,8 @@ struct Object {
     VoiceCallback* callback = nullptr;
     std::vector<EngineCallback*> engine_callbacks;
     uint32_t refs = 1;
+    Object* owner = nullptr;      // engine for source/submix/mastering wrappers; null on the engine itself
+    uint32_t guest = 0;
 
     // IXAudio2 is a singleton in this engine, but its driver recreates the default mastering/source voice pair.
     // Keep the real mastering voice (and its real-time output thread) for the lifetime of the FAudio engine.
@@ -78,6 +81,7 @@ uint32_t NewGuest(Object* o) {
     uint32_t g = HeapAlloc(16);
     W32(g, g_vtables[o->kind]);
     W32(g + 4, uint32_t(g_objects.size()));
+    o->guest = g;
     g_objects.push_back(o);
     return g;
 }
@@ -247,8 +251,26 @@ M(EngineRelease) {
     Object* o = Obj(g);
     uint32_t r = --o->refs;
     if (!r) {
-        // FAudio_Release tears down the retained master together with any remaining voices, preserving its normal
-        // destruction ordering. Destroying the master first could leave a live source connected to a dead output.
+        // Normally the guest destroys every voice first. If it does not, reclaim the wrappers as well as FAudio's
+        // real voices instead of leaking callbacks/objects for the rest of the process. Sources and ordinary voices
+        // are destroyed before their output; the retained real master remains for FAudio_Release below.
+        std::vector<Object*> orphaned;
+        {
+            std::lock_guard<std::recursive_mutex> lock(g_mutex);
+            for (Object* voice : g_objects)
+                if (voice && voice->owner == o) orphaned.push_back(voice);
+        }
+        std::stable_sort(orphaned.begin(), orphaned.end(), [](const Object* a, const Object* b) {
+            return a->kind < b->kind;  // kSource, kSubmix, kMastering
+        });
+        for (Object* voice : orphaned) {
+            if (!voice->uses_retained_master && voice->voice) FAudioVoice_DestroyVoice(voice->voice);
+            delete voice->callback;
+            uint32_t voice_guest = voice->guest;
+            delete voice;
+            Forget(voice_guest);
+        }
+        if (!orphaned.empty()) Log("xaudio2: engine release reclaimed %zu voice wrapper(s)", orphaned.size());
         o->retained_master = nullptr;
         FAudio_Release(o->audio);
         for (EngineCallback* cb : o->engine_callbacks) delete cb;
@@ -325,6 +347,7 @@ M(CreateSourceVoice) {
         return;
     }
     o->voice = v;
+    o->owner = e;
     W32(Arg(c, 1), NewGuest(o));
     Return(c, 0, 8);
 }
@@ -335,7 +358,9 @@ M(CreateSubmixVoice) {
     FAudioSubmixVoice* v = nullptr;
     uint32_t hr = FAudio_CreateSubmixVoice(e->audio, &v, Arg(c, 2), Arg(c, 3), Arg(c, 4), Arg(c, 5),
                                            sends.Get(Arg(c, 6)), Effects(Arg(c, 7)));
-    W32(Arg(c, 1), hr == 0 ? NewGuest(new Object(kSubmix, nullptr, v)) : 0);
+    Object* wrapper = hr == 0 ? new Object(kSubmix, nullptr, v) : nullptr;
+    if (wrapper) wrapper->owner = e;
+    W32(Arg(c, 1), wrapper ? NewGuest(wrapper) : 0);
     Return(c, hr, 8);
 }
 M(CreateMasteringVoice) {
@@ -388,6 +413,7 @@ M(CreateMasteringVoice) {
         hr = FAudio_CreateMasteringVoice(e->audio, &v, channels, rate, flags, device, effects);
     }
     Object* wrapper = hr == 0 ? new Object(kMastering, nullptr, v) : nullptr;
+    if (wrapper) wrapper->owner = e;
     if (wrapper && retained) {
         wrapper->uses_retained_master = true;
         wrapper->master_owner = e;

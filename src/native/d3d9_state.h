@@ -5,6 +5,12 @@
 
 namespace native {
 
+// Android's Vulkan WSI path uses FIFO. Keeping the D3D interval stable across CreateDevice and Reset avoids turning
+// a cutscene transition into a presentation-mode/swapchain rebuild. Desktop requests remain unchanged.
+constexpr uint32_t D3D9PresentationInterval(uint32_t requested, bool android) {
+    return android ? 1u : requested;
+}
+
 // Numeric D3D9 values keep these helpers independent of the DXVK headers in host tests.
 // D3DSAMP_MIN/MAG/MIPFILTER = 5/6/7, MAXANISOTROPY = 10; D3DTEXF_LINEAR/ANISOTROPIC = 2/3.
 constexpr uint32_t D3D9EffectiveSamplerValue(uint32_t type, uint32_t requested, int maximum) {

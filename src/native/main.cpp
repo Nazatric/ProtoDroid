@@ -319,16 +319,16 @@ static long ResidentMiB() {
 }  // namespace native
 
 #ifdef __ANDROID__
-extern "C" JNIEXPORT jfloat JNICALL Java_com_protore_game_TouchControls_nativeFps(JNIEnv*, jclass) {
+extern "C" JNIEXPORT jfloat JNICALL Java_com_protodroid_TouchControls_nativeFps(JNIEnv*, jclass) {
     return native::g_fps.load();
 }
-extern "C" JNIEXPORT jfloat JNICALL Java_com_protore_game_TouchControls_nativeFrameMs(JNIEnv*, jclass) {
+extern "C" JNIEXPORT jfloat JNICALL Java_com_protodroid_TouchControls_nativeFrameMs(JNIEnv*, jclass) {
     return native::g_frame_ms.load();
 }
-extern "C" JNIEXPORT jint JNICALL Java_com_protore_game_TouchControls_nativeMemoryMiB(JNIEnv*, jclass) {
+extern "C" JNIEXPORT jint JNICALL Java_com_protodroid_TouchControls_nativeMemoryMiB(JNIEnv*, jclass) {
     return jint(native::ResidentMiB());
 }
-extern "C" JNIEXPORT void JNICALL Java_com_protore_game_TouchControls_nativeSetFpsLimit(JNIEnv*, jclass, jint fps) {
+extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetFpsLimit(JNIEnv*, jclass, jint fps) {
     native::g_fps_limit.store(fps);
     native::PerfHintTarget(fps);
 }
@@ -407,8 +407,17 @@ int main(int argc, char** argv) {
                                  "The app log directory is not writable.", nullptr);
         return 1;
     }
+    // DXVK previously derived app_process64.dxvk-cache from /proc/self/exe. The Android patch now uses a stable game
+    // name; preserve pipelines compiled by older builds instead of starting with another empty cache.
+    std::string state_cache = std::string(base) + "/prototypeenginef.dll.dxvk-cache";
+    std::string legacy_cache = std::string(base) + "/app_process64.dxvk-cache";
+    if (access(state_cache.c_str(), F_OK) != 0 && access(legacy_cache.c_str(), R_OK) == 0) {
+        if (rename(legacy_cache.c_str(), state_cache.c_str()) == 0) Log("DXVK state cache migrated from app_process64");
+        else CopyFile(legacy_cache, state_cache);
+    }
     setenv("DXVK_STATE_CACHE_PATH", base, 1);
     setenv("DXVK_LOG_PATH", base, 1);
+    Log("DXVK state cache: %s", state_cache.c_str());
     // Attempt to find game dir across multiple locations (Issue 4)
     if (!g_game_dir || access((std::string(g_game_dir) + "/prototypeenginef.dll").c_str(), R_OK) != 0) {
         std::string found = FindGameDir(base, g_game_dir);
@@ -489,35 +498,27 @@ int main(int argc, char** argv) {
     if (SettingInt("present_stats", 0)) setenv("DXVK_PRESENT_STATS", "1", 0);
     // Test aid: DXVK's dummy resources instead of null descriptors, as on Mali drivers without VK_EXT_robustness2.
     if (SettingInt("dxvk_no_null_descriptor", 0)) setenv("DXVK_NO_NULL_DESCRIPTOR", "1", 0);  // Present timing in the DXVK log
-    // Mali G720 workaround: default to FIFO present mode to avoid MAILBOX double-recreation race
+#ifndef __ANDROID__
+    // Desktop retains the optional present_mode/vsync configuration. Android is normalized below and in the D3D9
+    // bridge so CreateDevice and every Reset see the same FIFO interval.
     {
         std::string pm = Setting("present_mode", "");
-        // Auto-detect Mali-G720 (or generic Mali without robustBufferAccess2) via driver? Use Setting override
-        // If present_mode not set, default to fifo on Mali when requested via ini or auto
-        // Check if user requested fifo explicitly or via vsync=1
         int vsync = SettingInt("vsync", -1);
-        bool wants_fifo = false;
-        if (pm == "fifo" || pm == "vsync" || pm == "FIFO") wants_fifo = true;
-        if (vsync == 1) wants_fifo = true;
-        // Also auto-detect: if Setting present_mode is empty but we are on Mali without nullDescriptor, prefer fifo
-        // The vulkan driver log will show Mali-G720, but at this point we haven't probed yet; we can check env after SelectVulkanDriver?
-        // Instead, expose SettingInt("present_fifo", 0) as explicit override (default 0 for Adreno, 1 for Mali if needed)
-        // For now, if user set present_fifo=1, force fifo
-        if (SettingInt("present_fifo", 0) == 1) wants_fifo = true;
+        bool wants_fifo = pm == "fifo" || pm == "vsync" || pm == "FIFO" || vsync == 1 ||
+                          SettingInt("present_fifo", 0) == 1;
         if (wants_fifo) {
-            // DXVK presentInterval: 1 = vsync (FIFO), 0 = immediate (MAILBOX/IMMEDIATE)
             std::string dc = Setting("dxvk_config", "");
-            // Append or override d3d9.presentInterval = 1
             if (dc.empty()) dc = "d3d9.presentInterval = 1";
             else dc += ";d3d9.presentInterval = 1";
             for (char& ch : dc) if (ch == ',') ch = ';';
             setenv("DXVK_CONFIG", dc.c_str(), 1);
             setenv("PROTORE_PRESENT_FIFO", "1", 1);
             Log("present mode: FIFO (vsync) forced via protore.ini present_mode=%s", pm.c_str());
-        } else {
-            if (!pm.empty()) Log("present mode: %s", pm.c_str());
+        } else if (!pm.empty()) {
+            Log("present mode: %s", pm.c_str());
         }
     }
+#endif
     // dxvk_config = d3d9.presentInterval = 1, d3d9.numBackBuffers = 3  (DXVK options; ',' as ';' starts an ini
     // comment)
     if (std::string dc = Setting("dxvk_config", ""); !dc.empty()) {
@@ -529,6 +530,15 @@ int main(int argc, char** argv) {
         merged += dc;
         setenv("DXVK_CONFIG", merged.c_str(), 1);
     }
+#ifdef __ANDROID__
+    // Append last so a stale dxvk_config cannot reintroduce an interval change at the post-cutscene Reset.
+    std::string present_config = getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "";
+    if (!present_config.empty()) present_config += ";";
+    present_config += "d3d9.presentInterval = 1";
+    setenv("DXVK_CONFIG", present_config.c_str(), 1);
+    setenv("PROTORE_PRESENT_FIFO", "1", 1);
+    Log("present mode: FIFO (vsync), interval 1 for CreateDevice and Reset");
+#endif
     // Android starts at 1x for Mali-class tile GPUs. Explicit DXVK configuration wins over this convenience default;
     // the D3D9 bridge still clamps requests to max_anisotropy and converts anisotropic filters to linear at 1x.
     {

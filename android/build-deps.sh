@@ -153,9 +153,10 @@ for marker in \
     'pre-created dummy sampler, buffer, and all 14 image views' \
     'dummy image GPU initialization complete' \
     'Disabling maintenance5, EDS3' \
-    'Unmapped descriptor binding'; do
+    'Unmapped descriptor binding' \
+    'prototypeenginef.dll'; do
     printf '%s\n' "$DXVK_STRINGS" | grep -F "$marker" >/dev/null || {
-        echo "DXVK is missing required Mali diagnostic marker: $marker" >&2
+        echo "DXVK is missing required compatibility/cache marker: $marker" >&2
         exit 1
     }
 done

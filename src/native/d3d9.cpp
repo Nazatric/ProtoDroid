@@ -264,18 +264,7 @@ D3DPRESENT_PARAMETERS ToHost(uint32_t g) {
         p.FullScreen_RefreshRateInHz = 0;
     }
 #ifdef __ANDROID__
-    // Mali G720 workaround (Issue 1): allow forcing FIFO present mode to avoid MAILBOX double-recreation race.
-    // protore.ini: present_mode = fifo | mailbox, or present_fifo = 1, or vsync = 1/0
-    {
-        std::string pm = Setting("present_mode", "");
-        int fifo = SettingInt("present_fifo", 0);
-        int vsync = SettingInt("vsync", -1);
-        if (pm == "fifo" || pm == "FIFO" || pm == "vsync" || fifo == 1 || vsync == 1) {
-            p.PresentationInterval = 1;  // D3DPRESENT_INTERVAL_ONE -> FIFO
-        } else if (pm == "mailbox" || pm == "immediate" || vsync == 0) {
-            p.PresentationInterval = 0x80000000u;  // D3DPRESENT_INTERVAL_IMMEDIATE -> MAILBOX if available
-        }
-    }
+    p.PresentationInterval = D3D9PresentationInterval(p.PresentationInterval, true);
 #endif
     return p;
 }
@@ -711,6 +700,8 @@ M(IDirect3DDevice9, CreateAdditionalSwapChain) {
 }
 M(IDirect3DDevice9, Reset) {
     D3DPRESENT_PARAMETERS pp = ToHost(Arg(c, 1));
+    // Matching width/height/format alone is not enough to skip Reset: D3D9 also resets device state and default-pool
+    // resources. ToHost keeps the Android interval stable, avoiding the observed cutscene presentation-mode change.
     DrainGraves(true);
     HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->Reset(&pp);
     Log("Reset %ux%u msaa %u/%u interval %u -> %08x", pp.BackBufferWidth, pp.BackBufferHeight, pp.MultiSampleType,
@@ -804,11 +795,11 @@ bool WaitForWindow(int seconds) {
     return false;
 }
 
-extern "C" JNIEXPORT void JNICALL Java_com_protore_game_ProtoSurface_nativeSurfaceGone(JNIEnv*, jclass) {
+extern "C" JNIEXPORT void JNICALL Java_com_protodroid_ProtoSurface_nativeSurfaceGone(JNIEnv*, jclass) {
     std::lock_guard<std::mutex> lock(g_present_mutex);
     g_surface_gone = true;
 }
-extern "C" JNIEXPORT void JNICALL Java_com_protore_game_ProtoSurface_nativeSurfaceReady(JNIEnv*, jclass) {
+extern "C" JNIEXPORT void JNICALL Java_com_protodroid_ProtoSurface_nativeSurfaceReady(JNIEnv*, jclass) {
     std::lock_guard<std::mutex> lock(g_present_mutex);
     g_surface_gone = false;
 }

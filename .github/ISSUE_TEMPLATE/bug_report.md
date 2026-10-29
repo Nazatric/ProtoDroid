@@ -15,7 +15,7 @@ labels: bug
 
 **What happens and when** (at start, in the menu, in the game):
 
-**Logs (required).** Attach these files from `Android/data/com.protore.game/files/` as they are:
+**Logs (required).** Attach these files from `Android/data/com.protodroid/files/` as they are:
 - [ ] `proto-native.log`
 - [ ] `proto-native.prev.log`
 - [ ] `app_process64_d3d9.log`

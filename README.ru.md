@@ -42,10 +42,10 @@ Android 10+, arm64 и купленная игра (PC, Steam app 10150, сбор
 
 1. Поставить `prototype.apk` и запустить. Без файлов игры он покажет, куда их класть, и сам создаст папку.
 2. Скопировать `prototypeenginef.dll`, все `.rcf` и `.p3d` и папки `art`, `audio`, `scripts` либо в
-   `/sdcard/Android/data/com.protore.game/files/game/` (на Android 11+ файловые менеджеры туда обычно не пускают,
+   `/sdcard/Android/data/com.protodroid/files/game/` (на Android 11+ файловые менеджеры туда обычно не пускают,
    проще скопировать с ПК по USB), либо в `/sdcard/Prototype/` (любой файловый менеджер; на экране запуска нажать
    "Allow file access"). Для русского нужны `.rcf` с наложенным переводом.
-3. По желанию положить `protore.ini` в `/sdcard/Android/data/com.protore.game/files/`
+3. По желанию положить `protore.ini` в `/sdcard/Android/data/com.protodroid/files/`
    (пример: [android/protore.ini.example](android/protore.ini.example)). Нужны права на чтение, `chmod 666`.
 
 Логи там же (`proto-native.log`, `app_process64_d3d9.log`) и в `adb logcat -s protore`.
@@ -68,14 +68,14 @@ Android 10+, arm64 и купленная игра (PC, Steam app 10150, сбор
 
 Драйверы на Adreno: игра пробует Turnip 26.2, потом Turnip 26.3 (для Adreno 710/720), потом драйвер телефона (нужен
 Vulkan 1.3). На Adreno 8xx сразу драйвер телефона. Чтобы использовать свой драйвер (`.so` Vulkan-драйвера для Adreno,
-например сборку Turnip для эмуляторов), положите его в `Android/data/com.protore.game/files/driver/`, игра попробует
+например сборку Turnip для эмуляторов), положите его в `Android/data/com.protodroid/files/driver/`, игра попробует
 его первым. Удалите оттуда, чтобы вернуть как было.
 
 ## Если что-то не работает
 
 **К каждому issue прикладывайте логи.** Без них краш не исправить, одно «вылетает» ничего не говорит.
 
-Логи лежат в `Android/data/com.protore.game/files/` (на Android 11+ их удобнее забрать с ПК по USB или файловым
+Логи лежат в `Android/data/com.protodroid/files/` (на Android 11+ их удобнее забрать с ПК по USB или файловым
 менеджером, который открывает Android/data). Прикладывайте сами файлы целиком, а не куски:
 
 - `proto-native.log`: лог движка за последний запуск

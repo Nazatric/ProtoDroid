@@ -41,6 +41,7 @@ extern "C" {
 #include "bink_abi.h"
 #include "bink_blit.h"
 #include "bink_media.h"
+#include "bink_pacing.h"
 #include "guest.h"
 
 namespace native {
@@ -198,6 +199,7 @@ struct Movie {
     bool paused = false;
     bool audio_anchored = false;
     bool background_io = true;
+    bool nonblocking_menu_wait = false;
     uint32_t pending_snd_size = 0;
     uint32_t current_packet_size = 0;
     uint32_t largest_packet = 0;
@@ -772,9 +774,11 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
         if (!movie->video_frame || !movie->presentation_frame || !movie->read_packet) r = AVERROR(ENOMEM);
     }
     if (r >= 0) {
+        size_t audio_streams = 0;
         for (unsigned i = 0; i < movie->format->nb_streams && movie->tracks.size() < kMaxTracks; ++i) {
             AVStream* stream = movie->format->streams[i];
             if (stream->codecpar->codec_type != AVMEDIA_TYPE_AUDIO) continue;
+            ++audio_streams;  // an unsupported/failed audio decoder must not turn an audio movie into a menu poll
             const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
             if (!codec) continue;
             auto track = std::make_unique<Track>();
@@ -795,6 +799,7 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
             track->ring.Reset(OutputRate());
             movie->tracks.push_back(std::move(track));
         }
+        movie->nonblocking_menu_wait = BinkMenuWaitUnlocked(SettingInt("unlock_menu_fps", 1), audio_streams);
         FillPublic(*movie);
         movie->paused = false;
         movie->start = Clock::now();
@@ -821,9 +826,10 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
         g_movies[movie->guest] = movie;
     }
     UpdateDeviceState();
-    Log("[bink] opened %s: %ux%u, %u frames, %zu audio tracks, video threads=%d type=0x%x active=0x%x\n",
+    Log("[bink] opened %s: %ux%u, %u frames, %zu audio tracks, video threads=%d type=0x%x active=0x%x, wait=%s\n",
         movie->description.c_str(), movie->width, movie->height, movie->frames, movie->tracks.size(),
-        movie->video_codec->thread_count, movie->video_codec->thread_type, movie->video_codec->active_thread_type);
+        movie->video_codec->thread_count, movie->video_codec->thread_type, movie->video_codec->active_thread_type,
+        movie->nonblocking_menu_wait ? "non-blocking menu" : "paced");
     return movie->guest;
 }
 
@@ -970,20 +976,23 @@ int RunDoFrame(Movie& movie) {
     return result;
 }
 
-void SleepUntilFrame(Movie& movie) {
+uint32_t WaitForFrame(Movie& movie) {
     Clock::time_point due;
     {
         std::unique_lock<std::timed_mutex> lock(movie.mutex, std::defer_lock);
-        if (!lock.try_lock_for(kLockBudget) || movie.paused || movie.closed) return;
+        if (!lock.try_lock_for(kLockBudget) || movie.paused || movie.closed) return 0;
         double seconds = movie.Pub()->frame_num * movie.FrameSeconds();
         double delay = seconds - movie.MediaSeconds(Clock::now());
-        if (delay <= 0) return;
-        // With zero audio tracks, no selected track, or no audio device, MediaSeconds uses the monotonic clock. Pace
-        // those movies too, and avoid sub-millisecond early-return spins around a frame boundary.
+        if (movie.nonblocking_menu_wait)
+            return BinkWaitPollResult(delay, true, 0);
+        if (delay <= 0) return 0;
+        // With no selected track or no audio device, MediaSeconds uses the monotonic clock. Preserve the original
+        // blocking mode for audio-backed movies and for unlock_menu_fps=0.
         double bounded = std::clamp(delay, 0.001, 0.1);
         due = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(bounded));
     }
     if (due > Clock::now()) std::this_thread::sleep_until(due);
+    return 0;
 }
 
 #define B(name) void b_##name(Ctx* c)
@@ -1052,8 +1061,9 @@ B(BinkNextFrame) {
 }
 B(BinkWait) {
     auto movie = FindMovie(Arg(c, 0));
-    if (movie) SleepUntilFrame(*movie);
-    Return(c, 0, 1);
+    // f_7c5a01b0 (original call 0x105a01d7) returns early on nonzero and decodes only on zero. Unlocked silent
+    // movies therefore render the menu on every poll without advancing their video before the next frame is due.
+    Return(c, movie ? WaitForFrame(*movie) : 0, 1);
 }
 B(BinkPause) {
     auto movie = FindMovie(Arg(c, 0));

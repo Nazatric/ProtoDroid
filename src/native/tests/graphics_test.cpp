@@ -141,6 +141,14 @@ void TestSamplerTransform() {
     Check(D3D9EffectiveSamplerValue(10, 2, 8) == 2, "lower anisotropy request was raised");
 }
 
+void TestPresentationInterval() {
+    Check(D3D9PresentationInterval(0x80000000u, true) == 1, "Android immediate interval survived CreateDevice/Reset");
+    Check(D3D9PresentationInterval(0, true) == 1, "Android default interval was not normalized");
+    Check(D3D9PresentationInterval(1, true) == 1, "Android FIFO interval changed");
+    Check(D3D9PresentationInterval(0x80000000u, false) == 0x80000000u,
+          "desktop presentation interval was overwritten");
+}
+
 void TestLockSemantics() {
     constexpr uint32_t read_only = 0x10, no_overwrite = 0x1000, discard = 0x2000;
     D3D9LockPlan plan = D3D9ShadowLockPlan(0);
@@ -166,8 +174,9 @@ int main() {
     try {
         TestDxt();
         TestSamplerTransform();
+        TestPresentationInterval();
         TestLockSemantics();
-        std::puts("graphics tests passed (DXT, samplers, read-only and ranged locks)");
+        std::puts("graphics tests passed (DXT, samplers, presentation interval, read-only and ranged locks)");
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "graphics test failed: %s\n", e.what());

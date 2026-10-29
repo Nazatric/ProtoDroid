@@ -1,119 +1,204 @@
-# proto-re
+# ProtoDroid
 
-[Русский](README.ru.md) | English
+ProtoDroid is a native Android port of **Prototype (2009)**. It runs the original game engine as ARM64 code rather than using Wine or a full x86 emulator. The APK contains the port and its open-source dependencies; you must provide your own legally obtained game files.
 
-Native Android port of Prototype (2009). Not an emulator and not Wine: `prototypeenginef.dll` is statically
-recompiled from x86 to C, built for arm64 and run on top of my own Win32/D3D9 layer (SDL2, DXVK, FAudio).
-The APK has no game data in it, you copy the files from your own copy of the game.
+The Android application ID is **`com.protodroid`**.
 
-Roadmap (Russian): [ROADMAP.md](ROADMAP.md).
+## Architecture
 
-## Status
+- **Static ARM64 recompilation:** `prototypeenginef.dll` is translated from 32-bit x86 into C, generated for the engine's rebased address, and compiled for Android. The runtime provides guest memory, x86-like memory ordering, threads, fibers, and the required Microsoft CRT behavior.
+- **Custom Win32 and input bridge:** native implementations cover the Win32, DirectInput 8, XAudio2 2.3, Bink 1.9, and launcher interfaces used by the game.
+- **Direct3D 9 on Vulkan:** a generated D3D9 bridge forwards drawing directly to DXVK. Android patches address Mali and Adreno driver behavior, descriptor compatibility, pipeline compilation, presentation, and persistent shader caching.
+- **Bink through FFmpeg:** loose files and RCF-resident movies are decoded by a minimal FFmpeg build. Registered YUV planes are copied directly into the textures supplied by the game.
+- **XAudio2 through FAudio:** FAudio provides the audio engine and voice processing, with SDL audio output and an Android-friendly pacing/mixing configuration.
+- **SDL2 and Android UI:** SDL owns the window and platform events. A native Android touch layer provides menu controls, gameplay controls, gamepad support, a layout editor, and performance settings.
 
-Runs on the phone: menus, videos, sound, missions, saves. A full playthrough is not tested yet. Russian text works (fan translation).
+## Current Features and Optimization Work
 
-- touch controls with a layout editor, camera sensitivity, invert Y, vibration
-- gamepad
-- Mali uses the system Vulkan driver, Adreno uses Turnip (Mesa) through libadrenotools
-- settings in game: render resolution, textures, FPS limit, battery saver
-- ADPF hints so the phone doesn't run the CPU at max all the time
+### Graphics and performance
 
-Pixel 6 (Mali-G78): menus 60 fps, gameplay 38-46 at 720p and 33-42 at 1080p. Gameplay is CPU bound right now.
-A phone with Adreno 735: about 40 fps on average at 720p.
+- Direct DXVK draw dispatch without minimap relocation, draw inspection, or manual per-draw wrappers.
+- Read-only locks never copy back or dirty DXVK resources. Ranged vertex/index buffer locks upload only the requested range.
+- Optimized DXT1/DXT3/DXT5 decoding, including ARM64 NEON paths and randomized differential tests against the scalar decoder.
+- Texture mip reduction, optional 16-bit DXT1 output, effective 1x sampler handling, and configurable anisotropy.
+- Stable FIFO presentation on Android. `CreateDevice` and every `Reset` use interval `1`, preventing post-cutscene presentation-mode changes.
+- Persistent DXVK state caching with a stable filename, migration from the former `app_process64` filename, flushed headers/entries, and writer-queue draining during shutdown.
+- Mali-specific descriptor and pipeline workarounds, including support for GPUs without BC texture compression or robust null descriptors.
+- Turnip support for Adreno through libadrenotools, with system-driver fallback and an optional user-supplied driver.
+- ADPF performance hints, unrestricted CPU scheduling, hot-function ARM64 replacements, I/O timing, and optional frame/audio diagnostics.
 
-## TODO
+### Movies and audio
 
-- 60 fps at 1080p. Mostly CPU work: rewrite the hot functions of the main/render threads by hand, cut down
-  D3D9 buffer locking, try LTO/PGO. Later maybe 30 Hz sim with interpolated 60 Hz rendering and FSR/ASR upscaling.
-- auto quality presets on first launch, built-in benchmark
-- ASTC/ETC2 textures, less heat and battery drain
-- controls: context buttons in fights (grab/throw, consume, shield), swipe wheel for powers and disguises,
-  target lock on the nearest enemy, separate layouts for helicopter/tank, stick dead zone
-- test on real Adreno phones and weaker Mali (G57/G68)
-- GLES 3.0 fallback for phones with bad Vulkan drivers
-- first launch screen to pick the game folder and check files
-- language switch in settings, audio overlay support in case a Russian dub ever shows up
-- save backups
+- Full-screen Bink playback, including NIS cutscenes and ambient menu movies.
+- Neutral black initialization for unused movie planes without clearing valid decoded frames during close or re-registration.
+- Direct host `pread64` streaming for loose files and RCF slices, without holding a global mutex during disk reads.
+- Bounded decode work, retained presentation frames, contiguous plane copies, negative-pitch support, and correct Bink ABI behavior.
+- **Unlock menu FPS**, enabled by default: silent/ambient movies keep their normal video timing while `BinkWait` uses the guest's non-blocking poll branch instead of sleeping the menu render thread.
+- Retained-master audio output to avoid unnecessary output-thread recreation, plus source-voice and engine-shutdown cleanup.
 
-## Installing
+### Controls
 
-Android 10+, arm64, and a bought copy of the game (PC, Steam app 10150, build 19788432).
+- Absolute 1:1 menu touch positioning through the game's existing `EngineMouseService` path.
+- Multi-frame menu clicks: absolute hover, two DirectInput button-down polls, then button-up. Buffered DirectInput button records use the same order.
+- Menu touch sequencing is separate from GAME-mode camera look, virtual joystick, action buttons, and power wheels.
+- Configurable button opacity, size, positions, vibration, camera speed, invert Y, edge sprint, and optional power buttons.
+- Gamepad detection and an option to hide touch controls while a gamepad is connected.
 
-1. Install `prototype.apk` and start it. Without the game files it shows where to put them and creates the folder.
-2. Copy `prototypeenginef.dll`, all `.rcf` and `.p3d` files and the `art`, `audio`, `scripts` folders to either
-   `/sdcard/Android/data/com.protore.game/files/game/` (file managers often can't open it on Android 11+, copy from a
-   PC over USB) or `/sdcard/Prototype/` (any file manager; tap "Allow file access" on the setup screen).
-   For Russian, use the `.rcf` files with the translation applied.
-3. Optionally put `protore.ini` in `/sdcard/Android/data/com.protore.game/files/`
-   (see [android/protore.ini.example](android/protore.ini.example)). It has to be readable, `chmod 666`.
+## Requirements
 
-Logs go to the same folder (`proto-native.log`, `app_process64_d3d9.log`) and to `adb logcat -s protore`.
+- An ARM64 Android device with working Vulkan support. Android 10 or newer is recommended.
+- A PC copy of **Prototype (2009)**, Steam app 10150, build 19788432, for the game data and rebuild inputs.
+- Enough free storage for the game files, shader cache, and logs.
 
-`protore.ini` keys:
+## Installation
 
-| key | |
-|---|---|
-| `render_height` | 720, 900, 1080, 0 = screen |
-| `texture_skip_mips` | 0 original, 1 half, 2 quarter |
-| `fps_limit` | 30 / 45 / 60 |
-| `battery_saver` | 30 fps cap; CPU scheduling remains unrestricted |
-| `perf_hint` | ADPF on/off |
-| `vulkan_driver` | `auto` / `system` / `turnip` |
-| `audio_driver` | `aaudio` (default) / `openslES`, try it if the sound stutters |
-| `present_stats` | DXVK stats in the log |
-| `import_profile`, `watchdog` | profiling, hang diagnostics |
+1. Install the signed `prototype.apk` and launch **Prototype**.
+2. Copy the game files to one of these locations:
+   - **Recommended shared-storage location:** `/storage/emulated/0/Prototype/`
+   - A supported subdirectory: `/storage/emulated/0/Prototype/game/`
+   - App-specific storage: `/storage/emulated/0/Android/data/com.protodroid/files/game/`
+3. The game directory must include `prototypeenginef.dll` and the original archives, folders, and other data from your copy of the game. The APK does not supply those files.
+4. When using shared storage, grant file access on the setup screen. On recent Android versions, a PC/USB connection may be the easiest way to access `Android/data`.
+5. Launch the app again after copying the files.
 
-Every key also works as an env var `PROTORE_<KEY>`.
+The application ID and app-specific directory are both `com.protodroid`. The shared game directory remains `/storage/emulated/0/Prototype`, so game files do not need to be duplicated.
 
-GPU drivers on Adreno: the game tries Turnip 26.2, then Turnip 26.3 (for Adreno 710/720), then the phone's own driver
-(needs Vulkan 1.3). On Adreno 8xx it uses the phone's driver. To use your own driver (an Adreno Vulkan driver `.so`,
-for example a Turnip build made for emulators), put it in `Android/data/com.protore.game/files/driver/`; the game
-tries it first. Delete it from there to go back.
+## Configuration
 
-## Reporting a problem
+The optional `protore.ini` file can be placed at:
 
-**Attach the logs to every issue.** Without them a crash can't be fixed, "it crashes" alone tells nothing.
+- `/storage/emulated/0/Prototype/protore.ini`
+- `/storage/emulated/0/Prototype/game/protore.ini`
+- `/storage/emulated/0/Android/data/com.protodroid/files/protore.ini`
+- The detected game directory or its parent directory
 
-The logs are in `Android/data/com.protore.game/files/` (on Android 11+ copy them with a PC over USB or a file
-manager that can open Android/data). Attach these files as they are, don't paste parts of them:
+Start with [`android/protore.ini.example`](android/protore.ini.example). Keys use `key = value` syntax. Every key can also be supplied as `PROTORE_<KEY>` in uppercase; an environment value overrides the file.
 
-- `proto-native.log`: the engine log of the last run
-- `proto-native.prev.log`: the run before it (it shows a crash that happened on the previous start)
-- `app_process64_d3d9.log`: the DXVK (graphics) log
-- `turnip_failed`, if that file exists
+Frequently used keys include:
 
-Also write the phone model, the chip (for example Snapdragon 8 Gen 2 / Dimensity 9000 / Exynos 1380), the Android
-version, the version of the APK and when the problem happens (at start, in the menu, in the game).
+| Key | Purpose |
+| --- | --- |
+| `render_height` | Internal render height; Android defaults to 720. Width follows the display aspect ratio. |
+| `texture_skip_mips` | `0` full textures, `1` half resolution, `2` quarter resolution. |
+| `texture_skip_min_size` | Minimum texture size eligible for mip reduction. |
+| `max_anisotropy` | Texture anisotropy limit: 1, 2, 4, 8, or another supported value. |
+| `fps_limit` | Host frame limit: 0/off, 30, 45, or 60. |
+| `battery_saver` | Enables the battery-saving frame policy. |
+| `unlock_menu_fps` | `1` enables non-blocking silent/ambient movie polls; `0` restores blocking waits. Default: `1`. |
+| `audio_driver` | `aaudio` or `openslES`. |
+| `audio_master_reuse` | Reuses the retained mastering output when the game recreates voices. |
+| `vulkan_driver` | `auto`, `system`, or `turnip`. |
+| `present_stats` | Enables detailed presentation diagnostics. |
+| `audio_stats` | Controls audio starvation and underrun diagnostics. |
+| `pipeline_trace` | Enables expensive Mali pipeline tracing for debugging only. |
+| `dxvk_config` | Additional DXVK options; separate entries with commas in this file. |
+| `watchdog`, `import_profile` | Hang and import profiling diagnostics. |
+
+Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds retain the optional presentation-mode settings.
+
+## In-Game Settings
+
+Open the gear icon to access the Settings overlay. Settings marked with `*` apply after restart; the FPS limit applies immediately.
+
+- Resolution
+- Textures
+- FPS limit
+- Battery saver
+- Opacity
+- Button size
+- Vibration
+- Show FPS
+- Hide with gamepad
+- Stick edge sprint
+- Camera speed
+- Invert Y
+- Power buttons
+- Anisotropy
+- Unlock menu FPS, default **On**
+
+The **LAYOUT** button opens the control-layout editor. Drag controls to reposition them, select a control to resize it, or reset the layout.
+
+## Logs and Shader Cache
+
+Depending on storage access, logs are available in the app-specific directory and mirrored to shared storage:
+
+- `/storage/emulated/0/Android/data/com.protodroid/files/`
+- `/storage/emulated/0/Prototype/logs/`
+
+Important files:
+
+- `proto-native.log`: current native/engine run
+- `proto-native.prev.log`: previous run
+- `app_process64_d3d9.log`: DXVK and Vulkan diagnostics
+- `prototypeenginef.dll.dxvk-cache`: persistent pipeline state cache
+- `turnip_failed`: present only after a Turnip initialization failure
+
+For bug reports, include the complete logs, phone model, SoC/GPU, Android version, APK commit, and exact steps that reproduce the issue. Also use `adb logcat -s protore` when logcat access is available.
 
 ## Building
 
-Linux with the Android NDK, JDK, SDK build-tools, python3 with `capstone` and `pefile`, cmake, ninja and
-meson >= 1.4 (Turnip also needs mako, pyyaml, bison, flex, glslangValidator). `PROTORE_ENGINE` points to the
-original DLL (default `~/Downloads/Prototype (2009)/Prototype/prototypeenginef.dll`).
+A Linux build environment needs the Android SDK/NDK, JDK, SDK build-tools, CMake, Ninja, Meson, Python 3, `capstone`, and `pefile`. Turnip additionally requires the tools listed in `android/build-turnip.sh`.
+
+Set `PROTORE_ENGINE` to the original `prototypeenginef.dll` when it is not in the default location. The engine must be generated for base `0x7c000000`, matching `src/native/guest.h`.
 
 ```sh
-android/build-deps.sh arm64-v8a ~/proto-re-data/android-deps-src ~/proto-re-data/android-deps/arm64-v8a
-android/build-turnip.sh ~/proto-re-data/android-deps-src ~/proto-re-data/android-turnip
+# Build SDL2, FAudio, minimal FFmpeg, and patched DXVK.
+android/build-deps.sh arm64-v8a \
+  "$HOME/proto-re-data/android-deps-src" \
+  "$HOME/proto-re-data/android-deps/arm64-v8a"
+
+# Optional Adreno Turnip build.
+android/build-turnip.sh \
+  "$HOME/proto-re-data/android-deps-src" \
+  "$HOME/proto-re-data/android-turnip"
+
+# Generate ARM64-bound recompiled engine sources.
 python3 -I tools/recomp/data_entries.py
-python3 -I tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native
+python3 -I tools/recomp/recomp.py \
+  --functions all --base 0x7c000000 --split 400 \
+  --out build/recomp/native
+
+# Build the primary ARMv8.2 native library.
 tools/cool_make.sh -C src/native PLATFORM=android ABI=arm64-v8a
-# for ARMv8.0 phones (Snapdragon 6xx and older); the APK picks the right build at launch
-tools/cool_make.sh -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80
+
+# Build the ARMv8.0 compatibility library used on older cores.
+tools/cool_make.sh -C src/native PLATFORM=android ABI=arm64-v8a \
+  ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80
+
+# Package, zipalign, sign, and verify build/apk/prototype.apk.
 android/build-apk.sh arm64-v8a
 ```
 
-`cool_make.sh` is make on all cores that pauses at 93°C.
+`tools/cool_make.sh` runs a parallel build and pauses when the host temperature reaches its configured limit. Ordinary `make` with the same variables also works.
 
-## Testing
+## Tests
 
-Thanks to Copyright-1 for testing on Adreno.
+Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler/lock rules, presentation normalization, Bink input/ABI/planes/audio/pacing, and menu touch sequencing.
 
-## Credits
+```sh
+# Graphics helpers and DXT differential tests.
+g++ -std=c++17 -O1 -g -Wall -Wextra -Werror \
+  -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native \
+  src/native/d3d9_dxt.cpp src/native/tests/graphics_test.cpp \
+  -o /tmp/graphics_test
+UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 /tmp/graphics_test
 
-If you share this port, publish a build of it, or use its code, **credit the author and link this repository:**
-https://github.com/VinTeRuS/proto-re
+# Menu touch sequencing.
+g++ -std=c++17 -O1 -g -Wall -Wextra -Werror \
+  -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native \
+  src/native/tests/input_test.cpp -o /tmp/input_test
+UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 /tmp/input_test
+```
 
-Russian text: ElArchibald's fan translation.
+The production Bink harness and its minimal FFmpeg setup are automated in `.github/workflows/build-apk.yml`. The additional hot audio/skinning differential tests use `src/native/tests/run_hot_test.sh` and require the original engine binary.
 
-The repository has no game files, original DLL or code generated from it, and the port does not bypass any DRM:
-you need your own copy of the game. Prototype belongs to Activision / Radical Entertainment.
+## CI/CD
+
+- **`build-apk`**: runs host UBSAN tests, builds ARM64 dependencies, generates the real recompiled engine, compiles native libraries, packages and signs the APK, verifies embedded libraries/DXVK, and uploads `prototype-apk` plus diagnostic artifacts.
+- **`android-deps`**: independently builds the ARM64 and x86_64 dependency sets and the Adreno Turnip package.
+
+A release candidate should have an exact-commit green workflow, real native compilation rather than a dummy/prebuilt fallback, successful `apksigner verify`, and a verified `prototype.apk` artifact. Compilation and host tests do not replace on-device gameplay and visual testing.
+
+## Credits and Legal
+
+ProtoDroid builds on the original proto-re work by VinTeRuS and contributions from the community. Prototype is a trademark of its respective owners and was developed by Radical Entertainment. This project is not affiliated with or endorsed by Activision or Radical Entertainment. Provide your own game files; no DRM bypass is included.

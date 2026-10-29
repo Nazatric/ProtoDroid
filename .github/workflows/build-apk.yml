@@ -33,6 +33,14 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test
 
+      - name: Compile and run input UBSAN tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/input_test.cpp -o /tmp/input_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/input_test
+
       - name: Build minimal host FFmpeg
         run: |
           set -euo pipefail
@@ -128,7 +136,7 @@ jobs:
 
   build-apk:
     runs-on: ubuntu-24.04
-    needs: build-deps
+    needs: [build-deps, bink-tests]
     steps:
       - uses: actions/checkout@v4
 
@@ -571,6 +579,8 @@ jobs:
           $TOOLS/llvm-readelf -d "$MAIN" | tee /tmp/libmain-dynamic.txt
           ! grep -E 'libav(format|codec|util)|libswresample' /tmp/libmain-dynamic.txt
           $TOOLS/llvm-strings "$MAIN" | grep -F 'binkw32.dll'
+          $TOOLS/llvm-strings "$MAIN" | grep -F 'unlock_menu_fps'
+          $TOOLS/llvm-nm -D "$MAIN" | grep -F 'Java_com_protodroid_TouchControls_nativeMenuTouch'
           STRINGS=$($TOOLS/llvm-strings "$DXVK")
           printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2.so'
           ! printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2-2.0.so.0'
@@ -583,13 +593,16 @@ jobs:
             'pre-created dummy sampler, buffer, and all 14 image views' \
             'dummy image GPU initialization complete' \
             'Disabling maintenance5, EDS3' \
-            'Unmapped descriptor binding'; do
+            'Unmapped descriptor binding' \
+            'prototypeenginef.dll'; do
             printf '%s\n' "$STRINGS" | grep -F "$marker"
           done
           for sym in SDL_GetWindowWMInfo SDL_Vulkan_LoadLibrary SDL_Vulkan_GetInstanceExtensions SDL_Vulkan_CreateSurface SDL_GetError; do
             $TOOLS/llvm-nm -D "$SDL" | grep -E " [A-Za-z] ${sym}$"
           done
-          $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging "$APK" | head -n 20
+          $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging "$APK" > /tmp/protodroid-badging.txt
+          head -n 20 /tmp/protodroid-badging.txt
+          grep -F "package: name='com.protodroid'" /tmp/protodroid-badging.txt
 
       - name: Upload APK artifact
         if: always()

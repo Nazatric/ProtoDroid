@@ -1,5 +1,5 @@
 # Prototype port settings. Copy to protore.ini next to the game/ folder
-# (Android: /sdcard/Android/data/com.protore.game/files/protore.ini or
+# (Android: /sdcard/Android/data/com.protodroid/files/protore.ini or
 #  /storage/emulated/0/Prototype/protore.ini which works on Android 11+ without ADB;
 #  desktop: the working directory).
 # Any key can also be set as an environment variable PROTORE_<KEY>, e.g. PROTORE_RENDER_HEIGHT=540.
@@ -27,14 +27,9 @@ texture_skip_min_size = 512
 # Reuse the default mastering voice/output thread when the engine recreates its audio voices (Android default 1).
 #audio_master_reuse = 1
 
-# Present mode for Mali-G720 MC7 (Xiaomi POCO X7 Pro) crash fix:
-# Mali driver crashes with VK_PRESENT_MODE_MAILBOX_KHR (addr 0xb0 NULL deref) during initial
-# swapchain recreation (6 -> 7 images). Force FIFO (vsync) on Mali.
-# Options: fifo (vsync, stable), mailbox (immediate, lower latency), immediate
-# Default: auto (mailbox on Adreno, fifo on Mali when detected via driver)
-#present_mode = fifo
-#present_fifo = 1
-#vsync = 1
+# Android presentation is fixed to D3DPRESENT_INTERVAL_ONE (FIFO) during CreateDevice and every Reset.
+# This avoids the Mali mailbox crash and presentation-interval changes that caused post-cutscene stalls.
+# Desktop builds may still use present_mode = fifo, present_fifo = 1, or vsync = 1.
 
 # DXVK extra config: d3d9.presentInterval, d3d9.numBackBuffers etc. Comma as separator (semicolon in DXVK).
 #dxvk_config = d3d9.presentInterval = 1
@@ -43,6 +38,10 @@ texture_skip_min_size = 512
 # SPIR-V analysis plus durable file/fsync writes. Enables pipeline_trace.log and last_vs/last_fs.spv.
 # The PROTORE_PIPELINE_TRACE=1 environment variable is an equivalent override.
 #pipeline_trace = 1
+
+# Menu presentation: keep silent/ambient Bink video at its normal rate without making BinkWait
+# sleep the main menu render thread. 1 (default) unlocks menu UI rendering; 0 restores blocking waits.
+unlock_menu_fps = 1
 
 # Audio mixer and vsync debugging
 #present_stats = 1

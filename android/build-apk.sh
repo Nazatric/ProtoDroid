@@ -23,7 +23,7 @@ mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/pkg"
 
 # Java: SDL's activity classes plus ProtoActivity.
 javac --release 11 -nowarn -cp "$PLATFORM_JAR" -d "$OUT/classes" \
-    "$SDL_SRC"/android-project/app/src/main/java/org/libsdl/app/*.java "$ROOT"/android/java/com/protore/game/*.java
+    "$SDL_SRC"/android-project/app/src/main/java/org/libsdl/app/*.java "$ROOT"/android/java/com/protodroid/*.java
 "$BUILD_TOOLS/d8" --release --min-api 26 --lib "$PLATFORM_JAR" --output "$OUT/dex" \
     $(find "$OUT/classes" -name '*.class')
 

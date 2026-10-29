@@ -1,4 +1,4 @@
-package com.protore.game;
+package com.protodroid;
 
 import android.Manifest;
 import android.app.Activity;
@@ -28,12 +28,12 @@ import java.io.OutputStream;
 
 /**
  * Launcher: finds the game files and starts ProtoActivity, or explains where to put them. The game can live in the
- * app's own folder (Android/data/com.protore.game/files/game, which file managers often cannot open on Android 11+)
+ * app's own folder (Android/data/com.protodroid/files/game, which file managers often cannot open on Android 11+)
  * or in /sdcard/Prototype, which needs "all files access" (storage permission before Android 11).
  * Also supports /sdcard/Prototype/game subfolder.
  */
 public class SetupActivity extends Activity {
-    /** Shown on the setup screen and in the in-game settings panel. */
+    /** Shown on the setup screen only; the in-game Settings header intentionally has empty corners. */
     static final String CREDIT = "Android port by VinTeRuS";
     static final String CREDIT_URL = "github.com/VinTeRuS/proto-re";
 
@@ -82,7 +82,7 @@ public class SetupActivity extends Activity {
         if (hasGame(app)) found = app;
         else if (hasSharedAccess() && hasGame(shared)) found = shared;
         else if (hasSharedAccess() && hasGame(sharedSub)) found = sharedSub;
-        // Also check direct /storage/emulated/0/Android/data/com.protore.game/files/game (same as app)
+        // Also check direct /storage/emulated/0/Android/data/com.protodroid/files/game (same as app)
         // and allow launching with found dir, or with null to use default app dir logic in native
         if (found != null || (app != null && hasGame(app))) {
             // If found in app, launch with null (native defaults to app/game)
@@ -119,7 +119,7 @@ public class SetupActivity extends Activity {
 
     /**
      * A user-supplied Vulkan driver (an Adreno driver .so, e.g. a Turnip build made for emulators) in
-     * Android/data/com.protore.game/files/driver/: copied into the app's private storage, where the linker may load
+     * Android/data/com.protodroid/files/driver/: copied into the app's private storage, where the linker may load
      * it from (not from shared storage). Returns the private copy, or null when there is none (the copy is removed
      * when the user removes the driver).
      */
@@ -203,7 +203,7 @@ public class SetupActivity extends Activity {
         String access = hasSharedAccess() ? "access granted" : "needs file access: tap the button below";
         col.addView(text("2. " + shared.getAbsolutePath() + "\n   Any file manager can open it (" + access + ").\n"
                 + "   Also accepted: " + sharedSub.getAbsolutePath(), 14, false));
-        col.addView(text("3. " + "/storage/emulated/0/Android/data/com.protore.game/files/game"
+        col.addView(text("3. " + "/storage/emulated/0/Android/data/com.protodroid/files/game"
                 + "\n   Alternative private location on Android 11+ via USB.", 14, false));
         col.addView(text("Then tap Check again.", 15, false));
 

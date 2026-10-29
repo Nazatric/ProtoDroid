@@ -23,6 +23,7 @@
 
 #include "bink_abi.h"
 #include "bink_blit.h"
+#include "bink_pacing.h"
 #include "guest.h"
 #include "sdl_stub.h"
 
@@ -444,7 +445,17 @@ void CheckRegisteredAndCopies() {
 }
 
 void CheckMonotonicWaitPacing() {
-    Call("BinkSetSoundTrack", 2, {0, 0});  // no selected/audio clock: the zero-audio-track timing path
+    Check(BinkMenuWaitUnlocked(1, 0), "default-on setting did not unlock a literal zero-track movie");
+    Check(!BinkMenuWaitUnlocked(0, 0), "unlock_menu_fps=0 still unlocked a zero-track movie");
+    Check(!BinkMenuWaitUnlocked(1, 1), "an audio-track movie was treated as a silent menu movie");
+    Check(BinkMenuWaitUnlocked(-1, 0), "a nonzero enabled setting was treated as disabled");
+    Check(BinkWaitPollResult(1.0 / 30.0, true, 0) == 1, "unlocked silent movie did not skip an early menu poll");
+    Check(BinkWaitPollResult(0.0, true, 0) == 0, "unlocked silent movie blocked a due video frame");
+    Check(BinkWaitPollResult(-0.001, true, 0) == 0, "overdue unlocked movie did not run its video frame");
+    Check(BinkWaitPollResult(1.0 / 30.0, false, 0) == 0, "disabled menu unlock changed the blocking ABI result");
+    Check(BinkWaitPollResult(1.0 / 30.0, true, 1) == 0, "audio-backed movie entered the menu-only fast path");
+
+    Call("BinkSetSoundTrack", 2, {0, 0});  // no selected/audio clock: monotonic timing with an audio-track movie
     uint32_t h = OpenName("movies\\intro.bik");
     Check(h != 0, "monotonic-wait movie open failed");
     auto before = std::chrono::steady_clock::now();
