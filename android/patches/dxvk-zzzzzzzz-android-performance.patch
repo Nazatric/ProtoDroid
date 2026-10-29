@@ -147,6 +147,23 @@ index 0000000..80d5fc3
 +  }
 +
 +}
+diff --git a/src/wsi/meson.build b/src/wsi/meson.build
+index d72c221..679a8c6 100644
+--- a/src/wsi/meson.build
++++ b/src/wsi/meson.build
+@@ -17,6 +17,12 @@ wsi_src = [
+ 
+ wsi_deps = [ dep_displayinfo ]
+ 
++if platform == 'android'
++  # SDL2 WSI queries ANativeWindow buffer dimensions directly. Propagate the NDK library through the static WSI/DXVK
++  # archives to the final shared-library link instead of leaving these symbols for the host executable to satisfy.
++  wsi_deps += [ cpp.find_library('android') ]
++endif
++
+ if platform != 'windows'
+   wsi_deps += [
+     lib_sdl3.partial_dependency(compile_args: true, includes: true),
 diff --git a/src/wsi/sdl2/wsi_window_sdl2.cpp b/src/wsi/sdl2/wsi_window_sdl2.cpp
 index a1999dd..50d9ce3 100644
 --- a/src/wsi/sdl2/wsi_window_sdl2.cpp
