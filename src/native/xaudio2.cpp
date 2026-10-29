@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <mutex>
@@ -104,16 +105,17 @@ void EnsureGuestThread() {
 
 uint32_t Method(uint32_t obj, int index) { return R32(R32(obj) + 4 * uint32_t(index)); }
 
-// Diagnostics (setting audio_stats; by default only when something starved): per 5 s, the mixing passes, the
-// longest gap between passes, the time spent in guest callbacks (on FAudio's mixing thread, so it delays the
-// device), the passes where the engine's source voice was short of data (BytesRequired > 0: audible as a dropout),
-// and on Android the device reads that found FAudio's ring short (underruns: the mixer fell behind the device).
+// Diagnostics (setting audio_stats): per 5 s, the mixing passes, the longest gap between passes, the time spent in
+// guest callbacks (on FAudio's mixing thread, so it delays the device), refill requests from the source voice, and
+// on Android device reads that found FAudio's ring short. BytesRequired > 0 is a refill request, not by itself an
+// audible dropout; the device-ring underrun counter is the reliable dropout signal and drives default logging.
 struct AudioStats {
     using Clock = std::chrono::steady_clock;
-    int level = SettingInt("audio_stats", 1);  // 1: only windows where the engine's voice starved, 2: all, 0: off
+    int level = SettingInt("audio_stats", 1);  // 1: real output underruns only, 2: all windows, 0: off
     bool on = level != 0;
     Clock::time_point window = Clock::now(), last_pass{};
-    uint32_t passes = 0, starved = 0, submits = 0;
+    uint32_t passes = 0, refill_requests = 0;
+    std::atomic<uint32_t> submits{0};  // SubmitSourceBuffer runs on the engine feeder thread, not the mixing thread.
     double max_gap_ms = 0, guest_ms = 0, max_guest_ms = 0;
 };
 AudioStats& Stats() {
@@ -121,10 +123,14 @@ AudioStats& Stats() {
     return s;
 }
 struct GuestTimer {
-    AudioStats::Clock::time_point t0 = AudioStats::Clock::now();
+    bool on = Stats().on;
+    AudioStats::Clock::time_point t0;
+    GuestTimer() {
+        if (on) t0 = AudioStats::Clock::now();  // audio_stats=0 must not leave clock reads in every callback
+    }
     ~GuestTimer() {
+        if (!on) return;
         AudioStats& s = Stats();
-        if (!s.on) return;
         double ms = std::chrono::duration<double, std::milli>(AudioStats::Clock::now() - t0).count();
         s.guest_ms += ms;
         if (ms > s.max_guest_ms) s.max_guest_ms = ms;
@@ -152,11 +158,13 @@ void StatsPass() {
     s.last_pass = now;
     if (now - s.window >= std::chrono::seconds(5)) {
         uint32_t underruns = RingUnderruns();
-        if (s.level >= 2 || s.starved || underruns)
-            Log("audio: %u passes, max gap %.1f ms, guest %.1f ms (max %.2f), starved %u, underruns %u, submits %u",
-                s.passes, s.max_gap_ms, s.guest_ms, s.max_guest_ms, s.starved, underruns, s.submits);
+        uint32_t submits = s.submits.exchange(0, std::memory_order_relaxed);
+        if (s.level >= 2 || underruns)
+            Log("audio: %u passes, max gap %.1f ms, guest %.1f ms (max %.2f), refill requests %u, underruns %u, "
+                "submits %u",
+                s.passes, s.max_gap_ms, s.guest_ms, s.max_guest_ms, s.refill_requests, underruns, submits);
         s.window = now;
-        s.passes = s.starved = s.submits = 0;
+        s.passes = s.refill_requests = 0;
         s.max_gap_ms = s.guest_ms = s.max_guest_ms = 0;
     }
 }
@@ -167,7 +175,7 @@ VoiceCallback* Vcb(FAudioVoiceCallback* cb) { return reinterpret_cast<VoiceCallb
 void OnPassStart(FAudioVoiceCallback* cb, uint32_t bytes) {
     EnsureGuestThread();
     StatsPass();
-    if (bytes) ++Stats().starved;
+    if (bytes) ++Stats().refill_requests;
     GuestTimer t;
     GuestCall(Method(Vcb(cb)->guest, 0), {Vcb(cb)->guest, bytes});
 }
@@ -530,7 +538,7 @@ M(SubmitSourceBuffer) {
         wma.PacketCount = R32(w + 4);
         pwma = &wma;
     }
-    ++Stats().submits;
+    Stats().submits.fetch_add(1, std::memory_order_relaxed);
     Return(c, FAudioSourceVoice_SubmitSourceBuffer(VoiceOf(Arg(c, 0)), &buf, pwma), 3);
 }
 M(FlushSourceBuffers) { Return(c, FAudioSourceVoice_FlushSourceBuffers(VoiceOf(Arg(c, 0))), 1); }

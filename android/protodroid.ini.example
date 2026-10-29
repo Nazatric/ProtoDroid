@@ -43,7 +43,9 @@ texture_skip_min_size = 512
 # sleep the main menu render thread. 1 (default) unlocks menu UI rendering; 0 restores blocking waits.
 unlock_menu_fps = 1
 
-# Audio mixer and vsync debugging
+# Audio mixer and vsync debugging. audio_stats=1 (default) logs real output underruns only;
+# 2 logs every five-second timing window, and 0 disables the diagnostics and their callback timers.
 #present_stats = 1
+#audio_stats = 2
 #fps_limit = 30
 #battery_saver = 1

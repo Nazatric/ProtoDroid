@@ -90,6 +90,8 @@ $(OUT)/$(BINARY): $(OBJS)
 # The BC1-3 decoder is a self-contained hot loop; keep this final flag after the shared -O2 on every platform.
 $(OUT)/d3d9_dxt.o: CXXFLAGS += -O3
 
+$(OUT)/perf_hint.o: perf_hint_session.h
+
 $(OUT)/%.o: %.cpp guest.h win.h turnip_load.h ../recomp/runtime.h d3d9_gen.inc
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<

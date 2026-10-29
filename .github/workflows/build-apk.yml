@@ -33,6 +33,14 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test
 
+      - name: Compile and run performance-hint session tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/perf_hint_test.cpp -o /tmp/perf_hint_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/perf_hint_test
+
       - name: Build minimal host FFmpeg
         run: |
           set -euo pipefail

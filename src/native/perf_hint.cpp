@@ -1,8 +1,9 @@
-// Android Dynamic Performance Framework (APerformanceHint, Android 13+): the main and render threads report how
+// Android Dynamic Performance Framework (APerformanceHint, Android 12+): the main and worker threads report how
 // long each frame's work took against the frame budget, so the system raises CPU clocks only when a frame would
 // miss it and lowers them when there is headroom - most of the battery a game burns goes to clocks above what it
 // needs. Loaded at run time (libmain targets API 26); a no-op where unavailable. Setting perf_hint=0 disables it.
 #include "guest.h"
+#include "perf_hint_session.h"
 
 #ifdef __ANDROID__
 #include <dlfcn.h>
@@ -31,6 +32,12 @@ APerformanceHintSession* g_session = nullptr;
 std::vector<int32_t> g_tids;
 int64_t g_target_ns = 16666667;
 
+bool ThreadAlive(int32_t tid) {
+    char path[64];
+    snprintf(path, sizeof(path), "/proc/self/task/%d", tid);
+    return access(path, F_OK) == 0;
+}
+
 }  // namespace
 
 void PerfHintStart(int fps_target) {
@@ -47,12 +54,25 @@ void PerfHintStart(int fps_target) {
     if (!g_api.getManager || !g_api.createSession || !g_api.updateTarget || !g_api.reportActual) return;
     APerformanceHintManager* manager = g_api.getManager();
     if (!manager) return;
+
     std::lock_guard<std::mutex> lock(g_mutex);
+    const int32_t current = int32_t(gettid());
+    detail::AddHintThread(g_tids, current);
     g_target_ns = 1000000000ll / (fps_target > 0 ? fps_target : 60);
-    g_tids.push_back(int32_t(gettid()));
-    g_session = g_api.createSession(manager, g_tids.data(), g_tids.size(), g_target_ns);
-    Log("perf hint: %s (target %.1f ms, %zu threads)", g_session ? "session" : "unavailable",
-        double(g_target_ns) / 1e6, g_tids.size());
+
+    // A worker can exit between SetThreadPriority and session creation. Android rejects the complete session when an
+    // initial tid is stale, so prune first and retain a useful main-thread fallback instead of disabling all hints.
+    g_tids = detail::LiveHintThreads(g_tids, current, ThreadAlive);
+    auto create = [&](const std::vector<int32_t>& tids) {
+        return g_api.createSession(manager, tids.data(), tids.size(), g_target_ns);
+    };
+    auto set_threads = [&](APerformanceHintSession* session, const std::vector<int32_t>& tids) {
+        return g_api.setThreads ? g_api.setThreads(session, tids.data(), tids.size()) : -1;
+    };
+    bool retried = false;
+    g_session = detail::CreateHintSession(g_tids, current, create, set_threads, retried);
+    Log("perf hint: %s%s (target %.1f ms, %zu threads)", g_session ? "session" : "unavailable",
+        retried ? " after retry" : "", double(g_target_ns) / 1e6, g_tids.size());
 }
 
 // A thread that works on every frame (the engine's render thread, the audio threads): part of the session
@@ -64,7 +84,8 @@ void PerfHintAddThread(int tid) {
     for (int32_t t : g_tids)
         if (t == tid) return;
     g_tids.push_back(int32_t(tid));
-    if (g_session && g_api.setThreads) g_api.setThreads(g_session, g_tids.data(), g_tids.size());
+    if (g_session && g_api.setThreads && g_api.setThreads(g_session, g_tids.data(), g_tids.size()) != 0)
+        g_tids.pop_back();
 }
 
 void PerfHintTarget(int fps_target) {
@@ -74,7 +95,11 @@ void PerfHintTarget(int fps_target) {
 }
 
 void PerfHintFrame(int64_t work_ns) {
-    if (g_session && work_ns > 0) g_api.reportActual(g_session, work_ns);
+    if (work_ns <= 0) return;
+    // NDK session methods are not thread-safe: worker registration can arrive from the audio thread while the
+    // engine reports a frame, so reportActual must use the same lock as setThreads/updateTarget.
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_session) g_api.reportActual(g_session, work_ns);
 }
 
 }  // namespace native
