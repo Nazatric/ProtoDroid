@@ -166,6 +166,21 @@ void TestLockSemantics() {
     Check(D3D9BufferLockSize(1, 1023, 1024) == 1, "one-byte ranged lock changed size");
     Check(D3D9BufferLockSize(0, 128, 1024) == 896, "whole-buffer lock did not use the remainder");
     Check(D3D9BufferLockSize(0, 0, 1024) == 1024, "full buffer lock changed size");
+
+    for (uint32_t flags : {0u, read_only, no_overwrite, discard, read_only | no_overwrite | discard, 0xffffffffu})
+        Check(D3D9NativeBufferLockFlags(flags) == flags, "guest flags changed before the single DXVK buffer lock");
+
+    uint8_t host[16], guest[16], expected[16];
+    for (uint8_t i = 0; i < 16; ++i) {
+        host[i] = uint8_t(0xa0 + i);
+        guest[i] = uint8_t(0x30 + i);
+    }
+    memcpy(expected, host, sizeof(expected));
+    memcpy(expected + 3, guest + 5, 7);
+    D3D9ShadowCopyBack(host + 3, guest + 5, 7, true);
+    Check(memcmp(host, expected, sizeof(host)) == 0, "shadow copyback left the original mapped range");
+    D3D9ShadowCopyBack(host, guest, sizeof(host), false);
+    Check(memcmp(host, expected, sizeof(host)) == 0, "read-only shadow copyback dirtied the DXVK mapping");
 }
 
 }  // namespace

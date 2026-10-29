@@ -66,7 +66,7 @@ jobs:
             git -C /tmp/protodroid-dxvk-test apply "$patch"
           done
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-test/src/dxvk"
-          g++ $CXXFLAGS src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
+          g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/state_cache_test
 

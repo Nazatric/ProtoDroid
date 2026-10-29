@@ -1,0 +1,173 @@
+diff --git a/src/d3d9/d3d9_swapchain.cpp b/src/d3d9/d3d9_swapchain.cpp
+index 7101c4b..d44589c 100644
+--- a/src/d3d9/d3d9_swapchain.cpp
++++ b/src/d3d9/d3d9_swapchain.cpp
+@@ -1357,7 +1357,15 @@ namespace dxvk {
+   uint32_t D3D9SwapChainEx::PickImageCount(
+           UINT                      Preferred) {
+     int32_t option = m_parent->GetOptions()->numBackBuffers;
+-    return option > 0 ? uint32_t(option) : uint32_t(Preferred);
++    if (option > 0)
++      return uint32_t(option);
++#ifdef __ANDROID__
++    // Avoid extra full-size images on mobile by default. The presenter clamps this request to surface capabilities.
++    (void)Preferred;
++    return 3;
++#else
++    return uint32_t(Preferred);
++#endif
+   }
+ 
+ 
+diff --git a/src/dxvk/dxvk_presenter.cpp b/src/dxvk/dxvk_presenter.cpp
+index 28ed1ea..78ae7b1 100644
+--- a/src/dxvk/dxvk_presenter.cpp
++++ b/src/dxvk/dxvk_presenter.cpp
+@@ -5,6 +5,7 @@
+ 
+ #include "dxvk_device.h"
+ #include "dxvk_presenter.h"
++#include "dxvk_swapchain_math.h"
+ 
+ #include "../wsi/wsi_window.h"
+ 
+@@ -670,15 +671,11 @@ namespace dxvk {
+           uint32_t                  minImageCount,
+           uint32_t                  maxImageCount,
+           uint32_t                  desired) {
+-    uint32_t count = minImageCount + 1;
+-    
+-    if (count < desired)
+-      count = desired;
+-    
+-    if (count > maxImageCount && maxImageCount != 0)
+-      count = maxImageCount;
+-    
+-    return count;
++#ifdef __ANDROID__
++    return pickSwapchainImageCount(minImageCount, maxImageCount, desired, false);
++#else
++    return pickSwapchainImageCount(minImageCount, maxImageCount, desired, true);
++#endif
+   }
+ 
+ 
+diff --git a/src/dxvk/dxvk_state_cache.cpp b/src/dxvk/dxvk_state_cache.cpp
+index a0fe8b4..e3c8c12 100644
+--- a/src/dxvk/dxvk_state_cache.cpp
++++ b/src/dxvk/dxvk_state_cache.cpp
+@@ -840,19 +840,14 @@ namespace dxvk {
+ 
+ 
+   str::path_string DxvkStateCache::getCacheFileName() const {
+-    std::string path = getCacheDir();
+-
+-    if (!path.empty() && *path.rbegin() != '/')
+-      path += '/';
+-    
+ #ifdef __ANDROID__
+     // /proc/self/exe is app_process64, not the game. Use a stable, meaningful name shared with the native log mirror
+     // instead of tying persistence to Android's launcher process name.
+-    std::string exeName = "prototypeenginef.dll";
++    std::string exeName = androidStateCacheExecutableName();
+ #else
+     std::string exeName = env::getExeBaseName();
+ #endif
+-    path += exeName + ".dxvk-cache";
++    std::string path = stateCacheFileName(getCacheDir(), exeName);
+     return str::topath(path.c_str());
+   }
+ 
+@@ -910,7 +905,7 @@ namespace dxvk {
+ 
+ 
+   std::string DxvkStateCache::getCacheDir() const {
+-    return env::getEnvVar("DXVK_STATE_CACHE_PATH");
++    return env::getEnvVar(stateCachePathEnvironmentVariable());
+   }
+ 
+ }
+diff --git a/src/dxvk/dxvk_state_cache_io.h b/src/dxvk/dxvk_state_cache_io.h
+index f76e16b..c0b1608 100644
+--- a/src/dxvk/dxvk_state_cache_io.h
++++ b/src/dxvk/dxvk_state_cache_io.h
+@@ -1,9 +1,28 @@
+ #pragma once
+ 
+ #include <cstddef>
++#include <string>
+ 
+ namespace dxvk {
+ 
++  constexpr const char* stateCachePathEnvironmentVariable() {
++    return "DXVK_STATE_CACHE_PATH";
++  }
++
++
++  constexpr const char* androidStateCacheExecutableName() {
++    return "prototypeenginef.dll";
++  }
++
++
++  inline std::string stateCacheFileName(const std::string& directory, const std::string& executableName) {
++    std::string path = directory;
++    if (!path.empty() && path.back() != '/')
++      path += '/';
++    path += executableName + ".dxvk-cache";
++    return path;
++  }
++
+   // Keep the cache entry layout and incremental flush in one small, host-testable operation. Android can be killed
+   // without running C++ destructors, so buffering an entry until the next one or until shutdown loses useful work.
+   template<typename Stream, typename Header, typename Hash>
+diff --git a/src/dxvk/dxvk_swapchain_math.h b/src/dxvk/dxvk_swapchain_math.h
+new file mode 100644
+index 0000000..80d5fc3
+--- /dev/null
++++ b/src/dxvk/dxvk_swapchain_math.h
+@@ -0,0 +1,21 @@
++#pragma once
++
++#include <cstdint>
++
++namespace dxvk {
++
++  // Desktop keeps DXVK's historical min+1 preference. Android supplies its desired count directly (three by default)
++  // and both paths clamp to the actual surface limits. A zero maximum means that the surface has no fixed upper bound.
++  constexpr uint32_t pickSwapchainImageCount(uint32_t minImageCount, uint32_t maxImageCount,
++      uint32_t desired, bool desktopExtraImage) {
++    uint32_t count = desired;
++    if (desktopExtraImage && count < minImageCount + 1)
++      count = minImageCount + 1;
++    if (count < minImageCount)
++      count = minImageCount;
++    if (maxImageCount && count > maxImageCount)
++      count = maxImageCount;
++    return count;
++  }
++
++}
+diff --git a/src/wsi/sdl2/wsi_window_sdl2.cpp b/src/wsi/sdl2/wsi_window_sdl2.cpp
+index a1999dd..50d9ce3 100644
+--- a/src/wsi/sdl2/wsi_window_sdl2.cpp
++++ b/src/wsi/sdl2/wsi_window_sdl2.cpp
+@@ -23,7 +23,18 @@ namespace dxvk::wsi {
+         uint32_t* pHeight) {
+     SDL_Window* window = fromHwnd(hWindow);
+ 
+-    int32_t w, h;
++    int32_t w = 0, h = 0;
++#ifdef __ANDROID__
++    // The native buffer can deliberately be smaller than the full-screen SDL window. Query it so present extents and
++    // AndroidWindowResized compare like with like; SDL's own input path continues to use the untouched window size.
++    SDL_SysWMinfo info;
++    SDL_VERSION(&info.version);
++    if (SDL_GetWindowWMInfo(window, &info) && info.info.android.window) {
++      w = ANativeWindow_getWidth(info.info.android.window);
++      h = ANativeWindow_getHeight(info.info.android.window);
++    }
++    if (w <= 0 || h <= 0)
++#endif
+     SDL_GetWindowSize(window, &w, &h);
+ 
+     if (pWidth)

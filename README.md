@@ -131,6 +131,8 @@ Important files:
 - `prototypeenginef.dll.dxvk-cache`: persistent pipeline state cache
 - `turnip_failed`: present only after a Turnip initialization failure
 
+No state-cache seed is bundled. If the app-private cache is missing or header-only, startup can restore a populated `prototypeenginef.dll.dxvk-cache` (or legacy `app_process64.dxvk-cache`) from the app-specific directory or the shared locations above. Existing populated or invalid private caches are not overwritten by recovery; DXVK performs the final entry validation and reports the actual count read.
+
 For bug reports, include the complete logs, phone model, SoC/GPU, Android version, APK commit, and exact steps that reproduce the issue. Also use `adb logcat -s protodroid` when logcat access is available.
 
 ## Building
@@ -171,7 +173,7 @@ android/build-apk.sh arm64-v8a
 
 ## Tests
 
-Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler/lock rules, presentation normalization, and Bink input/ABI/planes/audio/pacing.
+Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler/lock rules, presentation normalization, state-cache resolution/migration, swapchain image-count clamping, and Bink input/ABI/planes/audio/pacing.
 
 ```sh
 # Graphics helpers and DXT differential tests.

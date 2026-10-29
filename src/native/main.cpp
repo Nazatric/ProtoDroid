@@ -33,6 +33,7 @@
 
 #include "guest.h"
 #include "present_stats.h"
+#include "state_cache.h"
 #include "win.h"
 
 namespace native {
@@ -260,10 +261,12 @@ void MirrorCopyDXVKLogs() {
     std::string base_log = std::string(g_data_dir) + "/app_process64_d3d9.log";
     std::string mirror_dxvk = g_mirror_dir + "/app_process64_d3d9.log";
     CopyFile(base_log, mirror_dxvk);
-    // Also copy state cache if it exists.
+    // Do not replace a useful shared backup with an empty or invalid private file. Once DXVK has entries, retain the
+    // existing periodic mirror so an external-files wipe does not discard all compiled pipeline state.
     std::string base_cache = std::string(g_data_dir) + "/prototypeenginef.dll.dxvk-cache";
     std::string mirror_cache = g_mirror_dir + "/prototypeenginef.dll.dxvk-cache";
-    CopyFile(base_cache, mirror_cache);
+    if (native::InspectStateCache(base_cache) == native::StateCacheStatus::Populated)
+        CopyFile(base_cache, mirror_cache);
 }
 
 std::string TakeIoStats();   // kernel32.cpp
@@ -292,6 +295,8 @@ void Fatal(const char* fmt, ...) {
 
 uint32_t HostWindow();  // user32.cpp
 void InitClientSize(int window_w, int window_h);
+void ClientSize(int* w, int* h);
+void ApplyNativeWindowGeometry(int width, int height);  // d3d9.cpp
 void StartWatchdog(std::atomic<uint64_t>* frames);  // watchdog.cpp
 void InitD3D9Bridge();  // d3d9.cpp
 void SelectVulkanDriver();  // vulkan_driver.cpp
@@ -410,13 +415,18 @@ int main(int argc, char** argv) {
                                  "The app log directory is not writable.", nullptr);
         return 1;
     }
-    // DXVK previously derived app_process64.dxvk-cache from /proc/self/exe. The Android patch now uses a stable game
-    // name; preserve pipelines compiled by older builds instead of starting with another empty cache.
-    std::string state_cache = std::string(base) + "/prototypeenginef.dll.dxvk-cache";
-    std::string legacy_cache = std::string(base) + "/app_process64.dxvk-cache";
-    if (access(state_cache.c_str(), F_OK) != 0 && access(legacy_cache.c_str(), R_OK) == 0) {
-        if (rename(legacy_cache.c_str(), state_cache.c_str()) == 0) Log("DXVK state cache migrated from app_process64");
-        else CopyFile(legacy_cache, state_cache);
+    // DXVK v2.5.3 reads DXVK_STATE_CACHE_PATH and the Android patch resolves prototypeenginef.dll.dxvk-cache within
+    // it. Recover a populated cache from the old app_process64 name or shared storage, but never invent a seed or
+    // overwrite a populated/invalid target. DXVK remains responsible for validating every entry and reporting counts.
+    std::string state_cache = native::StateCacheFile(base, native::kStateCacheFilename);
+    native::StateCacheMigration cache_migration = native::PlanStateCacheMigration(
+        base, {"/storage/emulated/0/Prototype/logs", "/storage/emulated/0/Prototype"});
+    if (!cache_migration.source.empty()) {
+        native::StateCacheMigrationResult migrated = native::MigrateStateCache(cache_migration);
+        if (migrated == native::StateCacheMigrationResult::Migrated)
+            Log("DXVK state cache restored from %s", cache_migration.source.c_str());
+        else
+            Log("DXVK state cache migration from %s failed: %s", cache_migration.source.c_str(), strerror(errno));
     }
     setenv("DXVK_STATE_CACHE_PATH", base, 1);
     setenv("DXVK_LOG_PATH", base, 1);
@@ -608,6 +618,9 @@ int main(int argc, char** argv) {
     }
 #endif
     InitClientSize(window_w, window_h);
+    int client_w, client_h;
+    ClientSize(&client_w, &client_h);
+    ApplyNativeWindowGeometry(client_w, client_h);
 
     std::string dll = std::string(g_game_dir) + "/prototypeenginef.dll";
     if (!LoadImage(dll.c_str(), &g_engine, kEngineBase)) StartupFailure("Cannot load prototypeenginef.dll.");

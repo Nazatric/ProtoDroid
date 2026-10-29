@@ -1,13 +1,21 @@
 #include "dxvk_state_cache_io.h"
+#include "dxvk_swapchain_math.h"
+#include "state_cache.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 namespace {
+
+namespace fs = std::filesystem;
 
 void Check(bool condition, const char* message) {
     if (!condition) {
@@ -32,9 +40,41 @@ struct FakeStream {
     void flush() { ++flushes; }
 };
 
+struct TempDirectory {
+    fs::path path;
+
+    TempDirectory() {
+        char pattern[] = "/tmp/protodroid-state-cache-XXXXXX";
+        char* created = mkdtemp(pattern);
+        Check(created != nullptr, "could not create temporary test directory");
+        path = created;
+    }
+    ~TempDirectory() {
+        std::error_code error;
+        fs::remove_all(path, error);
+    }
+};
+
 template<typename T>
 std::string Bytes(const T& value) {
     return std::string(reinterpret_cast<const char*>(&value), sizeof(value));
+}
+
+void WriteCache(const fs::path& path, uint32_t version, const std::string& payload, const char* magic = "DXVK") {
+    fs::create_directories(path.parent_path());
+    unsigned char header[12] = {0};
+    memcpy(header, magic, 4);
+    for (int i = 0; i < 4; ++i) header[4 + i] = static_cast<unsigned char>(version >> (8 * i));
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file.write(reinterpret_cast<const char*>(header), sizeof(header));
+    file.write(payload.data(), static_cast<std::streamsize>(payload.size()));
+    file.close();
+    Check(file.good(), "could not write cache fixture");
+}
+
+std::string ReadFile(const fs::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 }
 
 void TestIncrementalEntryFlushAndLayout() {
@@ -62,11 +102,135 @@ void TestWriterDrainPolicy() {
     Check(!dxvk::stateCacheWriterShouldStop(false, false), "active writer exited unexpectedly");
 }
 
+void TestExactDxvkResolution() {
+    Check(std::string(dxvk::stateCachePathEnvironmentVariable()) == "DXVK_STATE_CACHE_PATH",
+          "DXVK cache directory environment variable changed");
+    Check(std::string(dxvk::androidStateCacheExecutableName()) == "prototypeenginef.dll",
+          "Android executable name no longer matches the game DLL");
+    Check(dxvk::stateCacheFileName("/data/cache", "prototypeenginef.dll") ==
+              "/data/cache/prototypeenginef.dll.dxvk-cache",
+          "DXVK resolved an unexpected Android cache filename");
+    Check(dxvk::stateCacheFileName("/data/cache/", "prototypeenginef.dll") ==
+              "/data/cache/prototypeenginef.dll.dxvk-cache",
+          "DXVK added a duplicate cache-path separator");
+    Check(dxvk::stateCacheFileName("", "prototypeenginef.dll") == "prototypeenginef.dll.dxvk-cache",
+          "DXVK empty-directory resolution changed");
+    Check(native::StateCacheFile("/data/cache", native::kStateCacheFilename) ==
+              "/data/cache/prototypeenginef.dll.dxvk-cache",
+          "native and DXVK cache paths disagree");
+}
+
+void TestSwapchainImageCount() {
+    // Android requests exactly three by default, without upstream's desktop min+1 extra image.
+    Check(dxvk::pickSwapchainImageCount(1, 0, 3, false) == 3, "Android added an image above the three-image request");
+    Check(dxvk::pickSwapchainImageCount(3, 4, 3, false) == 3, "Android turned three surface images into four");
+    Check(dxvk::pickSwapchainImageCount(5, 0, 3, false) == 5, "Android violated the surface minimum image count");
+    Check(dxvk::pickSwapchainImageCount(1, 2, 3, false) == 2, "Android violated the surface maximum image count");
+    Check(dxvk::pickSwapchainImageCount(2, 0, 6, false) == 6, "explicit larger DXVK image-count override was lost");
+    Check(dxvk::pickSwapchainImageCount(3, 0, 3, true) == 4, "desktop lost DXVK's min+1 image preference");
+    Check(dxvk::pickSwapchainImageCount(3, 3, 3, true) == 3, "desktop image count exceeded the surface maximum");
+}
+
+void TestCacheHeaderInspection() {
+    TempDirectory temp;
+    fs::path cache = temp.path / "cache.dxvk-cache";
+    Check(native::InspectStateCache(cache.string()) == native::StateCacheStatus::Missing,
+          "missing cache was not reported as missing");
+    WriteCache(cache, 18, "");
+    Check(native::InspectStateCache(cache.string()) == native::StateCacheStatus::Empty,
+          "valid header-only cache was not recognized");
+    WriteCache(cache, 18, "payload");
+    Check(native::InspectStateCache(cache.string()) == native::StateCacheStatus::Populated,
+          "valid populated cache candidate was rejected");
+    WriteCache(cache, 17, "payload");
+    Check(native::InspectStateCache(cache.string()) == native::StateCacheStatus::Populated,
+          "supported older DXVK cache was rejected");
+    for (uint32_t version : {7u, 16u, 19u}) {
+        WriteCache(cache, version, "payload");
+        Check(native::InspectStateCache(cache.string()) == native::StateCacheStatus::Invalid,
+              "unsupported DXVK cache version was accepted");
+    }
+    WriteCache(cache, 18, "payload", "NOPE");
+    Check(native::InspectStateCache(cache.string()) == native::StateCacheStatus::Invalid,
+          "arbitrary file with a non-DXVK header was accepted");
+    std::ofstream(cache, std::ios::binary | std::ios::trunc).write("DXVK", 4);
+    Check(native::InspectStateCache(cache.string()) == native::StateCacheStatus::Invalid,
+          "truncated DXVK header was accepted");
+}
+
+void TestLegacyMigration() {
+    TempDirectory temp;
+    fs::path base = temp.path / "base";
+    fs::create_directories(base);
+    fs::path legacy = base / native::kLegacyStateCacheFilename;
+    WriteCache(legacy, 18, "legacy-cache-payload");
+
+    native::StateCacheMigration plan = native::PlanStateCacheMigration(base.string(), {});
+    Check(plan.source == legacy.string() && !plan.copy, "readable legacy cache was not selected for migration");
+    Check(native::MigrateStateCache(plan) == native::StateCacheMigrationResult::Migrated,
+          "legacy cache migration failed");
+    Check(!fs::exists(legacy), "same-directory legacy migration did not rename the source");
+    Check(native::InspectStateCache(plan.target) == native::StateCacheStatus::Populated,
+          "migrated legacy cache is not readable at DXVK's resolved path");
+    Check(ReadFile(plan.target).find("legacy-cache-payload") != std::string::npos,
+          "legacy cache payload changed during migration");
+}
+
+void TestSharedRestoreAndTargetPreservation() {
+    TempDirectory temp;
+    fs::path base = temp.path / "base", shared = temp.path / "shared";
+    fs::path target = base / native::kStateCacheFilename;
+    fs::path shared_cache = shared / native::kStateCacheFilename;
+    std::vector<std::string> shared_dirs = {shared.string()};
+
+    WriteCache(target, 18, "");
+    WriteCache(shared_cache, 18, "shared-cache-payload");
+    native::StateCacheMigration plan = native::PlanStateCacheMigration(base.string(), shared_dirs);
+    Check(plan.source == shared_cache.string() && plan.copy, "populated shared cache did not replace an empty target");
+    Check(native::MigrateStateCache(plan) == native::StateCacheMigrationResult::Migrated,
+          "shared cache restore failed");
+    Check(ReadFile(target) == ReadFile(shared_cache), "atomic shared cache copy changed its bytes");
+    Check(fs::exists(shared_cache), "shared cache backup was consumed by a copy migration");
+
+    WriteCache(target, 18, "private-cache-payload");
+    WriteCache(shared_cache, 18, "different-shared-payload");
+    plan = native::PlanStateCacheMigration(base.string(), shared_dirs);
+    Check(plan.source.empty(), "shared cache displaced an already populated private cache");
+    Check(ReadFile(target).find("private-cache-payload") != std::string::npos,
+          "populated private cache was not preserved");
+
+    WriteCache(target, 18, "payload", "BAD!");
+    plan = native::PlanStateCacheMigration(base.string(), shared_dirs);
+    Check(plan.source.empty(), "invalid private cache was silently overwritten instead of left for DXVK diagnosis");
+    Check(ReadFile(target).find("BAD!") == 0, "invalid target changed despite the no-migration plan");
+}
+
+void TestEmptyAndInvalidCandidatesIgnored() {
+    TempDirectory temp;
+    fs::path base = temp.path / "base", shared = temp.path / "shared";
+    WriteCache(shared / native::kLegacyStateCacheFilename, 18, "");
+    native::StateCacheMigration plan = native::PlanStateCacheMigration(base.string(), {shared.string()});
+    Check(plan.source.empty(), "empty cache was treated as a useful migration seed");
+    Check(native::MigrateStateCache(plan) == native::StateCacheMigrationResult::NoCandidate,
+          "empty migration plan attempted an operation");
+
+    WriteCache(shared / native::kStateCacheFilename, 16, "unsupported");
+    plan = native::PlanStateCacheMigration(base.string(), {shared.string()});
+    Check(plan.source.empty(), "unsupported cache was selected as a migration seed");
+    Check(!fs::exists(base / native::kStateCacheFilename), "test fabricated a cache without a valid populated source");
+}
+
 }  // namespace
 
 int main() {
     TestIncrementalEntryFlushAndLayout();
     TestWriterDrainPolicy();
-    std::puts("state-cache tests passed (entry layout, per-entry flush, shutdown drain)");
+    TestExactDxvkResolution();
+    TestSwapchainImageCount();
+    TestCacheHeaderInspection();
+    TestLegacyMigration();
+    TestSharedRestoreAndTargetPreservation();
+    TestEmptyAndInvalidCandidatesIgnored();
+    std::puts("state-cache tests passed (resolution, migration, image counts, entry layout, per-entry flush, drain)");
     return 0;
 }
