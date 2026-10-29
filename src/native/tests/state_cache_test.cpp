@@ -1,5 +1,4 @@
 #include "dxvk_state_cache_io.h"
-#include "dxvk_swapchain_math.h"
 #include "state_cache.h"
 
 #include <cstdint>
@@ -120,17 +119,6 @@ void TestExactDxvkResolution() {
           "native and DXVK cache paths disagree");
 }
 
-void TestSwapchainImageCount() {
-    // Android requests exactly three by default, without upstream's desktop min+1 extra image.
-    Check(dxvk::pickSwapchainImageCount(1, 0, 3, false) == 3, "Android added an image above the three-image request");
-    Check(dxvk::pickSwapchainImageCount(3, 4, 3, false) == 3, "Android turned three surface images into four");
-    Check(dxvk::pickSwapchainImageCount(5, 0, 3, false) == 5, "Android violated the surface minimum image count");
-    Check(dxvk::pickSwapchainImageCount(1, 2, 3, false) == 2, "Android violated the surface maximum image count");
-    Check(dxvk::pickSwapchainImageCount(2, 0, 6, false) == 6, "explicit larger DXVK image-count override was lost");
-    Check(dxvk::pickSwapchainImageCount(3, 0, 3, true) == 4, "desktop lost DXVK's min+1 image preference");
-    Check(dxvk::pickSwapchainImageCount(3, 3, 3, true) == 3, "desktop image count exceeded the surface maximum");
-}
-
 void TestCacheHeaderInspection() {
     TempDirectory temp;
     fs::path cache = temp.path / "cache.dxvk-cache";
@@ -226,11 +214,10 @@ int main() {
     TestIncrementalEntryFlushAndLayout();
     TestWriterDrainPolicy();
     TestExactDxvkResolution();
-    TestSwapchainImageCount();
     TestCacheHeaderInspection();
     TestLegacyMigration();
     TestSharedRestoreAndTargetPreservation();
     TestEmptyAndInvalidCandidatesIgnored();
-    std::puts("state-cache tests passed (resolution, migration, image counts, entry layout, per-entry flush, drain)");
+    std::puts("state-cache tests passed (resolution, migration, entry layout, per-entry flush, drain)");
     return 0;
 }

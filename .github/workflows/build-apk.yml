@@ -13,6 +13,12 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish a new versioned GitHub release from main (explicit approval)
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   bink-tests:
@@ -69,6 +75,9 @@ jobs:
           g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/state_cache_test
+
+      - name: Test Android version increments
+        run: python3 tools/test_bump_version.py
 
       - name: Build minimal host FFmpeg
         run: |
@@ -630,7 +639,10 @@ jobs:
           done
           $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging "$APK" > /tmp/protodroid-badging.txt
           head -n 20 /tmp/protodroid-badging.txt
-          grep -F "package: name='com.protodroid'" /tmp/protodroid-badging.txt
+          source build/apk/version.txt
+          grep -F "package: name='com.protodroid' versionCode='$versionCode' versionName='$versionName'" \
+            /tmp/protodroid-badging.txt
+          echo "Verified signed package: com.protodroid $versionName (versionCode $versionCode)"
 
       - name: Upload APK artifact
         if: always()
@@ -639,6 +651,7 @@ jobs:
           name: prototype-apk
           path: |
             build/apk/prototype.apk
+            build/apk/version.txt
           retention-days: 30
           if-no-files-found: warn
 
@@ -653,12 +666,12 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
-  # Publish only after a verified main-branch build. Feature branches and pull requests upload artifacts but never
-  # create or replace a GitHub release.
+  # Ordinary pushes (including log-only uploads to main) never publish. A release requires an explicitly approved
+  # workflow dispatch on main after all host tests and the real ARM64 build have passed for this exact commit.
   release:
     runs-on: ubuntu-24.04
     needs: build-apk
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
     steps:
       - name: Download verified APK
         uses: actions/download-artifact@v4
@@ -666,18 +679,61 @@ jobs:
           name: prototype-apk
           path: release-apk
 
-      - name: Publish GitHub release
+      - name: Verify this is a new sequential release version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           test -s release-apk/prototype.apk
-          TAG="protodroid-${GITHUB_SHA::7}"
-          TITLE="ProtoDroid ${GITHUB_SHA::7}"
-          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "$TITLE" \
-              --notes "Verified ARM64 build from commit $GITHUB_SHA. Use protodroid.ini for configuration. Original Android port by VinTeRuS."
+          source release-apk/version.txt
+          python3 - "$versionName" "$versionCode" <<'PY'
+          import re
+          import sys
+          if not re.fullmatch(r"[0-9]+\.[0-9]+", sys.argv[1]) or int(sys.argv[2]) < 1:
+              raise SystemExit("invalid verified APK version metadata")
+          PY
+          TAG="protodroid-v$versionName"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists. Run python3 tools/bump_version.py before the next approved release."
+            exit 1
           fi
-          gh release upload "$TAG" release-apk/prototype.apk --repo "$GITHUB_REPOSITORY" --clobber
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,tagName,assets
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/protodroid-releases.json
+          python3 - "$versionName" "$versionCode" /tmp/protodroid-releases.json <<'PY'
+          import json
+          import re
+          import sys
+          current = tuple(map(int, sys.argv[1].split(".")))
+          current_code = int(sys.argv[2])
+          with open(sys.argv[3], encoding="utf-8") as source:
+              releases = json.load(source)
+          versions = []
+          codes = []
+          for release in releases:
+              match = re.fullmatch(r"protodroid-v([0-9]+)\.([0-9]+)", release.get("tag_name", ""))
+              if match:
+                  versions.append(tuple(map(int, match.groups())))
+              code = re.search(r"versionCode[ =]([0-9]+)", release.get("body") or "")
+              if code:
+                  codes.append(int(code.group(1)))
+          if versions and current <= max(versions):
+              raise SystemExit("APK version is not newer than the latest release; run tools/bump_version.py")
+          if codes and current_code <= max(codes):
+              raise SystemExit("APK versionCode is not newer than the latest release; run tools/bump_version.py")
+          print(f"Release version accepted: {sys.argv[1]} (versionCode {current_code})")
+          PY
+          {
+            echo "RELEASE_TAG=$TAG"
+            echo "RELEASE_VERSION=$versionName"
+            echo "RELEASE_CODE=$versionCode"
+          } >> "$GITHUB_ENV"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "ProtoDroid v$RELEASE_VERSION" \
+            --notes "Verified ARM64 build from commit $GITHUB_SHA. Version $RELEASE_VERSION (versionCode $RELEASE_CODE). Use protodroid.ini for configuration. Original Android port by VinTeRuS." \
+            release-apk/prototype.apk
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url,tagName,assets

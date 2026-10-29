@@ -69,7 +69,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         final boolean gameOnly;
         float customX = -1, customY = -1;
         float size = 1;  // the layout editor's per-button size factor
-        boolean quickPower;  // DISGUISE / ATK PWR / DEFENSE / SENSE: shown only with the "Power buttons" setting
+        boolean quickPower;  // the extra buttons: shown only with the "Extra buttons" setting
         // POWERS and DISGUISE hold a selection wheel open: sliding the finger that holds the button moves the mouse,
         // which is how the game picks an entry, so one thumb is enough. fx/fy: where that finger is.
         final boolean wheel;
@@ -89,7 +89,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             this.sizeDp = sizeDp;
             this.gameOnly = gameOnly;
             this.quickPower = keycode == KeyEvent.KEYCODE_F || keycode == KeyEvent.KEYCODE_1
-                    || keycode == KeyEvent.KEYCODE_3 || keycode == KeyEvent.KEYCODE_4;
+                    || keycode == KeyEvent.KEYCODE_2 || keycode == KeyEvent.KEYCODE_3 || keycode == KeyEvent.KEYCODE_4
+                    || keycode == KeyEvent.KEYCODE_DPAD_DOWN || keycode == KeyEvent.KEYCODE_F1
+                    || keycode == KeyEvent.KEYCODE_F2;
             this.wheel = keycode == KeyEvent.KEYCODE_R || keycode == KeyEvent.KEYCODE_F;
         }
 
@@ -112,12 +114,17 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         new Button("TARGET", KeyEvent.KEYCODE_TAB, 0, true, 258, true, 140, 27, true),  // lock-on is Tab on PC
         new Button("SPRINT", KeyEvent.KEYCODE_SHIFT_LEFT, 0, true, 168, true, 245, 27, true),
         new Button("POWERS", KeyEvent.KEYCODE_R, 0, true, 190, false, 33, 24, true),  // Power Select Menu: R
-        // Quick powers (PC keys from the game's Keyboard Setup): last disguise power menu, last attack, defense and
-        // sensory power. Appended, so the saved positions of the buttons above keep their indices.
-        new Button("DISGUISE", KeyEvent.KEYCODE_F, 0, true, 370, false, 33, 24, true),
+        // Extra buttons from VinTeRuS's v0.2.0 port (PC Keyboard Setup keys): disguise powers menu, last attack,
+        // defense and sensory power; then last disguise power, Web of Intrigue, take a disguise and back to Alex.
+        // Appended so every saved position above keeps its index. All remain hidden unless Extra buttons is enabled.
+        new Button("DSG MENU", KeyEvent.KEYCODE_F, 0, true, 370, false, 33, 24, true),
         new Button("ATK PWR", KeyEvent.KEYCODE_1, 0, true, 280, false, 95, 22, true),
         new Button("DEFENSE", KeyEvent.KEYCODE_3, 0, true, 190, false, 95, 22, true),
         new Button("SENSE", KeyEvent.KEYCODE_4, 0, true, 100, false, 95, 22, true),
+        new Button("DSG PWR", KeyEvent.KEYCODE_2, 0, true, 370, false, 95, 22, true),
+        new Button("WEB", KeyEvent.KEYCODE_DPAD_DOWN, 0, true, 460, false, 33, 22, true),
+        new Button("DISGUISE", KeyEvent.KEYCODE_F1, 0, true, 460, false, 95, 22, true),
+        new Button("ALEX", KeyEvent.KEYCODE_F2, 0, true, 550, false, 95, 22, true),
     };
 
     // ---- settings ----
@@ -170,7 +177,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         new Setting("Camera speed", "ui_cam", new String[] {"50%", "75%", "100%", "150%", "200%"},
                 new int[] {50, 75, 100, 150, 200}, false),
         new Setting("Invert Y", "ui_invert", new String[] {"Off", "On"}, new int[] {0, 1}, false),
-        new Setting("Power buttons", "ui_power_buttons", new String[] {"Off", "On"}, new int[] {0, 1}, false),
+        new Setting("Extra buttons", "ui_power_buttons", new String[] {"Off", "On"}, new int[] {0, 1}, false),
         new Setting("Anisotropy", "max_anisotropy", new String[] {"1x", "2x", "4x", "8x"},
                 new int[] {1, 2, 4, 8}, true),
         new Setting("Unlock menu FPS", "unlock_menu_fps", new String[] {"Off", "On"}, new int[] {0, 1}, true),

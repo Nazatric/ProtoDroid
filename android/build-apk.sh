@@ -20,6 +20,9 @@ ABIS=("${@:-arm64-v8a}")
 OUT=$ROOT/build/apk
 rm -rf "$OUT"
 mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/pkg"
+VERSION_INFO=$(python3 "$ROOT/tools/bump_version.py" --show "$ROOT/android/AndroidManifest.xml")
+read -r VERSION_NAME VERSION_CODE <<< "$VERSION_INFO"
+echo "=== Package version: $VERSION_NAME (versionCode $VERSION_CODE) ==="
 
 # Java: SDL's activity classes plus ProtoActivity.
 javac --release 11 -nowarn -cp "$PLATFORM_JAR" -d "$OUT/classes" \
@@ -80,6 +83,16 @@ du -sh "$OUT/pkg"/lib/*/* 2>&1 | head -n 20
     --out "$OUT/prototype.apk" "$OUT/aligned.apk"
 "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT/prototype.apk"
 "$BUILD_TOOLS/zipalign" -c -P 16 4 "$OUT/prototype.apk"
+# Verify the metadata in the signed APK, not just the source manifest. The release job consumes this only after the
+# exact package assertion succeeds. versionName is visible metadata; versionCode is Android's monotonic update ID.
+"$BUILD_TOOLS/aapt2" dump badging "$OUT/prototype.apk" > "$OUT/badging.txt"
+head -n 5 "$OUT/badging.txt"
+EXPECTED_PACKAGE="package: name='com.protodroid' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'"
+if ! grep -F -- "$EXPECTED_PACKAGE" "$OUT/badging.txt"; then
+    echo "ERROR: signed APK package/version mismatch; expected $EXPECTED_PACKAGE"
+    exit 1
+fi
+printf 'versionName=%s\nversionCode=%s\n' "$VERSION_NAME" "$VERSION_CODE" > "$OUT/version.txt"
 echo "=== Final APK ==="
 ls -lh "$OUT/prototype.apk"
 stat -c%s "$OUT/prototype.apk" | awk '{printf "APK size bytes: %d (MB %.2f)\n", $1, $1/1024/1024}'

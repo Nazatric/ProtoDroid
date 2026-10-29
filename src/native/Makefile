@@ -10,10 +10,9 @@ DXVK ?= $(HOME)/protodroid-data/deps/dxvk
 # Guest memory: a 4 GiB window at 64 GiB (guest.h kGuestBase), clear of the low 4 GiB that Android's Java heap and
 # Qualcomm's GPU driver use.
 COMMON_FLAGS := -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -fsigned-char -I../recomp
-# Generated code: flat memory turns G() into plain pointers. -O1 on the desktop keeps rebuilds quick. Android and the
-# small native hot bridges use the requested optimization set without fast-math, reassociation, or finite-math
-# assumptions; strict IEEE/x87 conversion helpers elsewhere stay at the shared -O2 setting.
-HOT_OPT := -O3 -fno-math-errno -fno-trapping-math -fomit-frame-pointer
+# Generated code: flat memory turns G() into plain pointers. -O1 on the desktop keeps rebuilds quick; Android gets
+# -O2, matching the upstream port and avoiding the code-size/register-pressure regression of globally optimizing the
+# recompiled engine at -O3. Keep the established TSO ordering flags unchanged.
 RECOMP_OPT ?= -O1
 RECOMP_CFLAGS = -std=c11 $(RECOMP_OPT) $(RECOMP_EXTRA) -g0 -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -w $(COMMON_FLAGS) \
                 $(TARGET_FLAGS)
@@ -35,7 +34,7 @@ OUT ?= ../../build/android/$(ABI)
 ARM_ARCH ?= armv8.2-a+rcpc
 TARGET_FLAGS := -fPIC $(if $(filter arm64-v8a,$(ABI)),-march=$(ARM_ARCH) -mtune=cortex-a76 \
                 $(if $(filter armv8-a,$(ARM_ARCH)),-moutline-atomics))
-RECOMP_OPT := $(HOT_OPT)
+RECOMP_OPT := -O2
 # arm64 is weakly ordered: guest memory accesses get x86-like ordering (runtime.h RECOMP_TSO); tso=0 to measure.
 TSO ?= 1
 RECOMP_EXTRA := $(if $(filter 1,$(TSO)),-DRECOMP_TSO)
@@ -89,9 +88,8 @@ $(OUT)/libturnipprobe.so: turnip_probe.cpp turnip_load.h gpu_profile.h
 $(OUT)/$(BINARY): $(OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
-# Self-contained decode/upload, skinning, audio, and Bink blit loops benefit from the same scoped optimization set.
-# Keep these flags after shared -O2; do not apply them globally to timing, IEEE conversion, or media-control code.
-$(OUT)/d3d9_dxt.o $(OUT)/hot_audio.o $(OUT)/hot_skin.o $(OUT)/bink_blit.o: CXXFLAGS += $(HOT_OPT)
+# The BC1-3 decoder is a self-contained hot loop; keep this final flag after the shared -O2 on every platform.
+$(OUT)/d3d9_dxt.o: CXXFLAGS += -O3
 
 $(OUT)/perf_hint.o: perf_hint_session.h
 $(OUT)/main.o $(OUT)/state_cache.o: state_cache.h
