@@ -23,10 +23,24 @@ constexpr uint32_t kA1R5G5B5 = 25;
 
 uint32_t BlockBytes(uint32_t f) { return f == kDxt1 ? 8 : 16; }
 
+// The complete 5/6-bit expansion tables take only 96 bytes and stay hot in L1. This removes six constant-division
+// sequences per colour block without changing the established floor(v * 255 / max) rounding.
+struct ExpandTables {
+    uint8_t five[32];
+    uint8_t six[64];
+};
+constexpr ExpandTables MakeExpandTables() {
+    ExpandTables tables{};
+    for (uint32_t i = 0; i < 32; ++i) tables.five[i] = uint8_t(i * 255 / 31);
+    for (uint32_t i = 0; i < 64; ++i) tables.six[i] = uint8_t(i * 255 / 63);
+    return tables;
+}
+constexpr ExpandTables kExpand = MakeExpandTables();
+
 void Rgb565(uint16_t c, uint8_t out[4]) {
-    out[2] = uint8_t(((c >> 11) & 31) * 255 / 31);
-    out[1] = uint8_t(((c >> 5) & 63) * 255 / 63);
-    out[0] = uint8_t((c & 31) * 255 / 31);
+    out[2] = kExpand.five[(c >> 11) & 31];
+    out[1] = kExpand.six[(c >> 5) & 63];
+    out[0] = kExpand.five[c & 31];
     out[3] = 255;
 }
 
