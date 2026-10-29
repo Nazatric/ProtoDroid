@@ -24,9 +24,10 @@ inline V4 Load(uint32_t a) {
 }
 inline V4 Mul(V4 a, float s) { return a * V4{s, s, s, s}; }
 inline V4 Add(V4 a, V4 b) { return a + b; }
-// maxps/minps: the second operand wins unless the first compares greater/less (NaN -> second).
-inline float MaxPs(float a, float b) { return a > b ? a : b; }
-inline float MinPs(float a, float b) { return a < b ? a : b; }
+// maxps/minps: the second operand wins unless the first compares greater/less (NaN -> second). A vector
+// comparison is false for an unordered lane, so this select has the same rule without scalarizing the bounds.
+inline V4 MaxPs(V4 a, V4 b) { return (a > b) ? a : b; }
+inline V4 MinPs(V4 a, V4 b) { return (a < b) ? a : b; }
 
 }  // namespace
 
@@ -74,8 +75,8 @@ extern "C" void Native_1071b610(Ctx* c) {
             memcpy(Ptr<void>(out), &r0, 16);
             memcpy(Ptr<void>(out + 0x10), &r1, 16);
             memcpy(Ptr<void>(out + 0x20), &r2, 16);
-            vmax = V4{MaxPs(vmax[0], r0[0]), MaxPs(vmax[1], r0[1]), MaxPs(vmax[2], r0[2]), MaxPs(vmax[3], r0[3])};
-            vmin = V4{MinPs(vmin[0], r0[0]), MinPs(vmin[1], r0[1]), MinPs(vmin[2], r0[2]), MinPs(vmin[3], r0[3])};
+            vmax = MaxPs(vmax, r0);
+            vmin = MinPs(vmin, r0);
         }
         WF32(self + 0x2c4, vmin[0]);
         WF32(self + 0x2c8, vmin[1]);

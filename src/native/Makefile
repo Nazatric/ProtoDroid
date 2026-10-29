@@ -90,6 +90,9 @@ $(OUT)/$(BINARY): $(OBJS)
 
 # The BC1-3 decoder is a self-contained hot loop; keep this final flag after the shared -O2 on every platform.
 $(OUT)/d3d9_dxt.o: CXXFLAGS += -O3
+# Native replacements preserve the original arithmetic association on GCC as well as Clang; do not fuse a multiply
+# with a following add on targets with FMA. This is explicit rather than relying only on source-level pragmas.
+$(OUT)/hot_audio.o $(OUT)/hot_skin.o: CXXFLAGS += -ffp-contract=off
 
 $(OUT)/perf_hint.o: perf_hint_session.h
 $(OUT)/main.o $(OUT)/state_cache.o: state_cache.h

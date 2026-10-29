@@ -17,7 +17,7 @@ with open(sys.argv[2], "wb") as f:
         f.write(struct.pack("<I", page) + pe.get_data(page - 0x10000000, 0x1000).ljust(0x1000, b"\0"))
 EOF
 # Match the production native optimization level; the generated reference remains small (five functions).
-FLAGS="-O2 -DRECOMP_FLAT_MEMORY -fsigned-char -fno-strict-aliasing -fwrapv -I$ROOT/src/recomp -I$ROOT/src/native"
+FLAGS="-O2 -ffp-contract=off -DRECOMP_FLAT_MEMORY -fsigned-char -fno-strict-aliasing -fwrapv -I$ROOT/src/recomp -I$ROOT/src/native"
 gcc -std=c11 $FLAGS -w -include math.h -c "$OUT/ref.c" -o "$OUT/ref.o"
 g++ -std=c++17 $FLAGS -c "$ROOT/src/native/hot_audio.cpp" -o "$OUT/hot_audio.o"
 g++ -std=c++17 $FLAGS -c "$ROOT/src/native/hot_skin.cpp" -o "$OUT/hot_skin.o"

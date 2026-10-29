@@ -133,6 +133,7 @@ jobs:
           /tmp/graphics_test_arm64
 
       - name: Compile and run native ARM64 hot-replacement differential tests
+        id: hot
         run: |
           set -euo pipefail
           git fetch --depth 1 origin TestingFiles
@@ -142,7 +143,15 @@ jobs:
           /tmp/protodroid-hot-venv/bin/pip install -q capstone pefile
           export PATH=/tmp/protodroid-hot-venv/bin:$PATH
           export PROTODROID_ENGINE=/tmp/protodroid-hot-engine.dll
-          src/native/tests/run_hot_test.sh
+          src/native/tests/run_hot_test.sh 2>&1 | tee /tmp/protodroid-arm-hot-test.log
+
+      - name: Report native ARM64 hot-test failure
+        if: failure() && steps.hot.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/1/comments \
+            --raw-field body="ARM64 hot-test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-arm-hot-test.log 2>/dev/null || echo 'no hot-test log')\n\`\`\`" || true
 
   build-deps:
     runs-on: ubuntu-24.04
