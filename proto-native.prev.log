@@ -1,0 +1,68 @@
+protodroid build Oct 29 2026 11:31:33
+logs mirrored to /storage/emulated/0/Prototype/logs
+protodroid build Oct 29 2026 11:31:33
+DXVK logs mirrored to /storage/emulated/0/Prototype/logs
+game dir: /storage/emulated/0/Prototype
+data dir: /storage/emulated/0/Android/data/com.protodroid/files
+config: loaded protodroid.ini
+config: render_height = 900
+config: texture_skip_mips = 1
+config: fps_limit = 0
+config: battery_saver = 0
+config: max_anisotropy = 1
+config: unlock_menu_fps = 1
+memory: guest window at 1000000000, arena 2000 MiB
+present mode: FIFO (vsync), interval 1 for CreateDevice and Reset
+anisotropy: bridge/DXVK maximum 1x
+render size 2000x900 (window 2712x1220)
+native buffer geometry 2712x1220 -> 2712x1220 (SDL window unchanged)
+loader: rebased to 7c000000 (418563 fixups)
+loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
+DllMain(PROCESS_ATTACH)
+DllMain returned 1
+EngineInitialize
+SetThreadPriority(0) -> nice 0 on tid 23585
+SetThreadPriority(2) -> nice -4 on tid 23594
+SetThreadPriority(0) -> nice 0 on tid 23595
+SetThreadPriority(0) -> nice 0 on tid 23596
+SetThreadPriority(0) -> nice 0 on tid 23597
+SetThreadPriority(15) -> nice -10 on tid 23598
+SetThreadPriority(1) -> nice -2 on tid 23599
+SetThreadPriority(1) -> nice -2 on tid 23600
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+Direct3DCreate9(32) -> 0xb40000717de54af0
+GPU BC (DXT) textures: not supported, decoding on (DXT1 as 16-bit)
+native buffer geometry 2712x1220 -> 2712x1220 (SDL window unchanged)
+CreateDevice 2000x900 fmt 22 windowed 1 msaa 0/0 interval 1 -> 00000000
+textures: skip 1 mip level(s) of textures >= 512, decode DXT on
+SetThreadPriority(0) -> nice 0 on tid 23610
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Keyboard)
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Mouse)
+xaudio2: Initialize(flags 0) -> 0
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) created retained output -> 0 in 32.298 ms
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 23617
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.001 ms
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 23618
+SetThreadPriority(15) -> nice -10 on tid 23621
+SetThreadPriority(1) -> nice -2 on tid 23625
+SetThreadPriority(1) -> nice -2 on tid 23626
+EngineInitialize returned 1
+perf hint: session (target 16.7 ms, 6 threads)
+frame 0
+native buffer geometry 2712x1220 -> 2712x1220 (SDL window unchanged)
+Reset 2000x900 msaa 0/0 interval 1 -> 00000000
+samplers: effective DXVK forwarding maximum 1x; MIN/MAG anisotropic -> LINEAR
+frame 1
+frame 2
+frame 4
+frame 8
+frame 16
+frame 32
+frame 64
+frame 128
+audio: 240 passes, max gap 24.0 ms, guest 16.7 ms (max 2.38), refill requests 238, underruns 3, submits 975
+frame 256
