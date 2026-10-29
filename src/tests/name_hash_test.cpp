@@ -33,7 +33,7 @@ void __cdecl RecordObserver(uint32_t hash, const char* s) {
 // Swaps the engine's hash observer for a recorder for the lifetime of the object.
 class ObserverCapture {
 public:
-    ObserverCapture() : slot_(static_cast<ObserverFn*>(protore::EngineAddress(kHashObserverRva))), saved_(*slot_) {
+    ObserverCapture() : slot_(static_cast<ObserverFn*>(protodroid::EngineAddress(kHashObserverRva))), saved_(*slot_) {
         *slot_ = &RecordObserver;
         g_observed.clear();
     }
@@ -64,22 +64,22 @@ const char* const kInputs[] = {
 
 }  // namespace
 
-void TestNameHash(protore::DiffResult* r) {
-    auto original_string = reinterpret_cast<HashStringFn>(protore::OriginalFunction(kHashStringRva));
-    auto original_file = reinterpret_cast<HashFileNameFn>(protore::OriginalFunction(kHashFileNameRva));
+void TestNameHash(protodroid::DiffResult* r) {
+    auto original_string = reinterpret_cast<HashStringFn>(protodroid::OriginalFunction(kHashStringRva));
+    auto original_file = reinterpret_cast<HashFileNameFn>(protodroid::OriginalFunction(kHashFileNameRva));
     ObserverCapture capture;
 
     for (uint32_t seed : {0u, 1u, 0xdeadbeefu, 0xffffffffu}) {
         uint32_t a = original_string(nullptr, seed);
         uint32_t b = core::HashString(nullptr, seed);
-        protore::Check(r, a == b, "HashString(null, %08x): %08x != %08x", seed, a, b);
+        protodroid::Check(r, a == b, "HashString(null, %08x): %08x != %08x", seed, a, b);
         for (const char* s : kInputs) {
             a = original_string(s, seed);
             auto observed_a = capture.Take();
             b = core::HashString(s, seed);
             auto observed_b = capture.Take();
-            protore::Check(r, a == b, "HashString(\"%s\", %08x): %08x != %08x", s, seed, a, b);
-            protore::Check(r, observed_a == observed_b, "HashString(\"%s\", %08x): observer calls differ", s, seed);
+            protodroid::Check(r, a == b, "HashString(\"%s\", %08x): %08x != %08x", s, seed, a, b);
+            protodroid::Check(r, observed_a == observed_b, "HashString(\"%s\", %08x): observer calls differ", s, seed);
         }
     }
     for (const char* s : kInputs) {
@@ -87,8 +87,8 @@ void TestNameHash(protore::DiffResult* r) {
         auto observed_a = capture.Take();
         uint32_t b = core::HashFileName(s);
         auto observed_b = capture.Take();
-        protore::Check(r, a == b, "HashFileName(\"%s\"): %08x != %08x", s, a, b);
-        protore::Check(r, observed_a == observed_b, "HashFileName(\"%s\"): observer calls differ", s);
+        protodroid::Check(r, a == b, "HashFileName(\"%s\"): %08x != %08x", s, a, b);
+        protodroid::Check(r, observed_a == observed_b, "HashFileName(\"%s\"): observer calls differ", s);
     }
 }
 

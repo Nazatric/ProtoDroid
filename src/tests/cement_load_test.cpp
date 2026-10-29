@@ -175,7 +175,7 @@ World g_after_original;
 
 }  // namespace
 
-void TestCementLoad(protore::DiffResult* r) {
+void TestCementLoad(protodroid::DiffResult* r) {
     for (void*& slot : g_stream_vtable) slot = reinterpret_cast<void*>(&StreamUnexpected);
     g_stream_vtable[3] = reinterpret_cast<void*>(&StreamRead);
     g_stream_vtable[5] = reinterpret_cast<void*>(&StreamSeek);
@@ -185,18 +185,18 @@ void TestCementLoad(protore::DiffResult* r) {
     g_stream_vtable[24] = reinterpret_cast<void*>(&StreamIsOpen);
     g_stream_vtable[31] = reinterpret_cast<void*>(&StreamSetLoading);
 
-    auto original = reinterpret_cast<LoadStepFn>(protore::OriginalFunction(kLoadStepRva));
-    auto* assert_flag = static_cast<volatile uint8_t*>(protore::EngineAddress(kAssertFlagRva));
+    auto original = reinterpret_cast<LoadStepFn>(protodroid::OriginalFunction(kLoadStepRva));
+    auto* assert_flag = static_cast<volatile uint8_t*>(protodroid::EngineAddress(kAssertFlagRva));
 
     int cases = 0, state_mismatch = 0, event_mismatch = 0, first_state_bad = -1, first_event_bad = -1;
     bool detours_ok = false;
     {
-        protore::WorldStop stop;
-        protore::TestDetour alloc(kAllocRva, sizeof(kAllocBytes), kAllocBytes, sizeof(kAllocBytes),
+        protodroid::WorldStop stop;
+        protodroid::TestDetour alloc(kAllocRva, sizeof(kAllocBytes), kAllocBytes, sizeof(kAllocBytes),
                                   reinterpret_cast<void*>(&RecordAlloc));
-        protore::TestDetour reg(kRegisterRva, sizeof(kRegisterBytes), kRegisterBytes, sizeof(kRegisterBytes),
+        protodroid::TestDetour reg(kRegisterRva, sizeof(kRegisterBytes), kRegisterBytes, sizeof(kRegisterBytes),
                                 reinterpret_cast<void*>(&RecordRegister));
-        protore::TestDetour vreport(kVReportRva, sizeof(kVReportBytes), kVReportBytes, sizeof(kVReportBytes),
+        protodroid::TestDetour vreport(kVReportRva, sizeof(kVReportBytes), kVReportBytes, sizeof(kVReportBytes),
                                     reinterpret_cast<void*>(&RecordVReport));
         detours_ok = alloc.ok() && reg.ok() && vreport.ok();
         const uint8_t saved_flag = *assert_flag;
@@ -234,12 +234,12 @@ void TestCementLoad(protore::DiffResult* r) {
         }
         *assert_flag = saved_flag;
     }
-    protore::Check(r, detours_ok, "test detours unavailable");
-    protore::Check(r, cases > 0, "no cases ran");
-    protore::Log("difftest core::CementLibraryLoadStep: %d scenarios compared", cases);
-    protore::Check(r, state_mismatch == 0, "%d of %d cases leave different object/flag state (first #%d)",
+    protodroid::Check(r, detours_ok, "test detours unavailable");
+    protodroid::Check(r, cases > 0, "no cases ran");
+    protodroid::Log("difftest core::CementLibraryLoadStep: %d scenarios compared", cases);
+    protodroid::Check(r, state_mismatch == 0, "%d of %d cases leave different object/flag state (first #%d)",
                    state_mismatch, cases, first_state_bad);
-    protore::Check(r, event_mismatch == 0, "%d of %d cases make different calls (first #%d)", event_mismatch, cases,
+    protodroid::Check(r, event_mismatch == 0, "%d of %d cases make different calls (first #%d)", event_mismatch, cases,
                    first_event_bad);
 }
 

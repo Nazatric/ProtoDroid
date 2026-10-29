@@ -94,12 +94,12 @@ using PoolEnumerateFn = void(__thiscall*)(void*, uint32_t, uint32_t*);
 
 template <typename Fn>
 Fn Engine(uint32_t rva) {
-    return reinterpret_cast<Fn>(protore::EngineAddress(rva));
+    return reinterpret_cast<Fn>(protodroid::EngineAddress(rva));
 }
 
 template <typename T>
 T& Global(uint32_t rva) {
-    return *static_cast<T*>(protore::EngineAddress(rva));
+    return *static_cast<T*>(protodroid::EngineAddress(rva));
 }
 
 template <typename Fn>
@@ -108,7 +108,7 @@ Fn Slot(void* object, int index) {
 }
 
 void* FsMutex() {
-    return protore::EngineAddress(kFileSystemMutexRva);
+    return protodroid::EngineAddress(kFileSystemMutexRva);
 }
 
 void* Pool() {
@@ -162,17 +162,17 @@ using Ctor5 = void*(__thiscall*)(void*, File*, uint32_t, uint32_t, uint32_t, uin
 
 void CopyName(File* f, const char* name) {
     if (Engine<SafeCopyFn>(kSafeCopyRva)(f->name, name, sizeof(f->name)) < 0) {
-        (*static_cast<StrncpyFn*>(protore::EngineAddress(kStrncpyImportRva)))(f->name, name, sizeof(f->name));
+        (*static_cast<StrncpyFn*>(protodroid::EngineAddress(kStrncpyImportRva)))(f->name, name, sizeof(f->name));
         f->name_terminator = 0;
     }
 }
 
 // Common part of both constructors up to the open request.
 void ConstructCommon(File* f, Drive* drive, const char* name, uint32_t flag, uint32_t priority, uint8_t flag_16c) {
-    f->lock_vtable = protore::EngineAddress(kVtableFileBase);
+    f->lock_vtable = protodroid::EngineAddress(kVtableFileBase);
     f->priority = priority;
-    f->vtable = protore::EngineAddress(kVtableFile);
-    f->lock_vtable = protore::EngineAddress(kVtableFileLock);
+    f->vtable = protodroid::EngineAddress(kVtableFile);
+    f->lock_vtable = protodroid::EngineAddress(kVtableFileLock);
     f->references = 1;
     f->drive = drive;
     f->status = 0;
@@ -263,15 +263,15 @@ File* __thiscall FileConstructOpening(File* self, Drive* drive, const char* name
 }
 
 void __thiscall FileDestruct(File* self) {
-    self->vtable = protore::EngineAddress(kVtableFile);
-    self->lock_vtable = protore::EngineAddress(kVtableFileLock);
+    self->vtable = protodroid::EngineAddress(kVtableFile);
+    self->lock_vtable = protodroid::EngineAddress(kVtableFileLock);
     if (self->event_created) {
         Engine<EventFn>(kEventDestroyRva)(&self->event);
         self->event_created = 0;
     }
     DriveCall(self, kDriveSlotRelease);
     Engine<SubObjectFn>(kSubObjectDestroyRva)(self->sub_138);
-    self->vtable = protore::EngineAddress(kVtableDestroyed);
+    self->vtable = protodroid::EngineAddress(kVtableDestroyed);
 }
 
 File* __thiscall FileDeletingDestruct(File* self, uint32_t flags) {

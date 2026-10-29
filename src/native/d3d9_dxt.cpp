@@ -6,7 +6,7 @@
 
 #if defined(__aarch64__) && defined(__ORDER_LITTLE_ENDIAN__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #include <arm_neon.h>
-#define PROTORE_DXT_NEON 1
+#define PROTODROID_DXT_NEON 1
 #endif
 
 namespace native {
@@ -71,7 +71,7 @@ void DecodeBlock(uint32_t f, const uint8_t* b, uint8_t px[16][4]) {
     }
 }
 
-#ifdef PROTORE_DXT_NEON
+#ifdef PROTODROID_DXT_NEON
 inline void StoreFullTile(const uint8_t px[16][4], uint8_t* dst, int32_t dst_pitch, bool packed16) {
     if (!packed16) {
         for (uint32_t y = 0; y < 4; ++y)
@@ -101,7 +101,7 @@ void DecodeDxt(uint32_t f, const uint8_t* src, uint32_t pitch, uint32_t w, uint3
     for (uint32_t by = 0; by < bh; ++by) {
         for (uint32_t bx = 0; bx < bw; ++bx) {
             DecodeBlock(f, src + by * pitch + bx * bytes, px);
-#ifdef PROTORE_DXT_NEON
+#ifdef PROTODROID_DXT_NEON
             if (bx * 4 + 4 <= w && by * 4 + 4 <= h) {
                 uint8_t* out = dst + int32_t(by * 4) * dst_pitch + bx * (packed16 ? 8 : 16);
                 StoreFullTile(px, out, dst_pitch, packed16);

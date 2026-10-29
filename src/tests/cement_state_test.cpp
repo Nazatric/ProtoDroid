@@ -52,9 +52,9 @@ void* g_completion_vtable[8];
 
 }  // namespace
 
-void TestCementState(protore::DiffResult* r) {
-    auto original_validate = reinterpret_cast<ValidateFn>(protore::OriginalFunction(kValidateHeaderRva));
-    auto original_set_state = reinterpret_cast<SetStateFn>(protore::OriginalFunction(kSetStateRva));
+void TestCementState(protodroid::DiffResult* r) {
+    auto original_validate = reinterpret_cast<ValidateFn>(protodroid::OriginalFunction(kValidateHeaderRva));
+    auto original_set_state = reinterpret_cast<SetStateFn>(protodroid::OriginalFunction(kSetStateRva));
 
     // ValidateHeader over every combination of the checked bytes and a few magic corruptions.
     const int magic_variants = 4;  // 0 = valid, 1 = first byte, 2 = last char, 3 = terminating NUL
@@ -79,7 +79,7 @@ void TestCementState(protore::DiffResult* r) {
                             memcpy(blob.bytes + 0x1c, &b, 4);
                             bool x = original_validate(blob.library());
                             bool y = core::CementLibraryValidateHeader(blob.library());
-                            protore::Check(r, x == y,
+                            protodroid::Check(r, x == y,
                                            "ValidateHeader magic %d ver %u.%u.%u.%u wide_equal %d: %d != %d", magic,
                                            major, minor, reserved, flag, wide_equal, x, y);
                         }
@@ -113,9 +113,9 @@ void TestCementState(protore::DiffResult* r) {
             core::CementLibrarySetState(b.library(), state);
             std::vector<CompletionCall> calls_b;
             calls_b.swap(g_calls);
-            protore::Check(r, memcmp(a.bytes, b.bytes, sizeof(a.bytes)) == 0, "SetState pending %d state %d: object differs",
+            protodroid::Check(r, memcmp(a.bytes, b.bytes, sizeof(a.bytes)) == 0, "SetState pending %d state %d: object differs",
                            pending, state);
-            protore::Check(r, calls_a == calls_b, "SetState pending %d state %d: completion calls differ (%u vs %u)",
+            protodroid::Check(r, calls_a == calls_b, "SetState pending %d state %d: completion calls differ (%u vs %u)",
                            pending, state, static_cast<unsigned>(calls_a.size()), static_cast<unsigned>(calls_b.size()));
         }
     }

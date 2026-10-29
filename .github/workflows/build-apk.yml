@@ -69,7 +69,7 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/bink-test-obj
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -Wno-unused-parameter \
-            -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTORE_BINK_TEST -fsigned-char \
+            -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_BINK_TEST -fsigned-char \
             -fsanitize=undefined -fno-sanitize-recover=all -I. -Isrc/recomp -Isrc/native -I/tmp/bink-ffmpeg/include"
           for src in src/native/bink_media.cpp src/native/bink_blit.cpp src/native/bink.cpp src/native/tests/bink_test.cpp; do
             g++ $CXXFLAGS -c "$src" -o "/tmp/bink-test-obj/$(basename "${src%.cpp}").o"
@@ -168,22 +168,22 @@ jobs:
 
       - name: Prepare deps layout
         run: |
-          mkdir -p $HOME/proto-re-data/android-deps/arm64-v8a
-          cp -r deps-out/arm64-v8a/* $HOME/proto-re-data/android-deps/arm64-v8a/ || true
+          mkdir -p $HOME/protodroid-data/android-deps/arm64-v8a
+          cp -r deps-out/arm64-v8a/* $HOME/protodroid-data/android-deps/arm64-v8a/ || true
           for archive in libavformat.a libavcodec.a libavutil.a libswresample.a; do
-            test -s "$HOME/proto-re-data/android-deps/arm64-v8a/lib/$archive"
+            test -s "$HOME/protodroid-data/android-deps/arm64-v8a/lib/$archive"
           done
-          mkdir -p $HOME/proto-re-data/android-deps-src/SDL2
+          mkdir -p $HOME/protodroid-data/android-deps-src/SDL2
           # SDL src was used in build-apk.sh for Java, we keep minimal
           ls -R deps-out || true
-          ls -R $HOME/proto-re-data/android-deps || true
+          ls -R $HOME/protodroid-data/android-deps || true
 
       - name: Fetch SDL2 source for Java
         run: |
           mkdir -p /tmp/deps-src
           git clone --depth 1 --branch release-2.30.9 https://github.com/libsdl-org/SDL.git /tmp/deps-src/SDL2 || true
-          mkdir -p $HOME/proto-re-data/android-deps-src
-          cp -r /tmp/deps-src/SDL2 $HOME/proto-re-data/android-deps-src/ || true
+          mkdir -p $HOME/protodroid-data/android-deps-src
+          cp -r /tmp/deps-src/SDL2 $HOME/protodroid-data/android-deps-src/ || true
 
       - name: Discover binary assets and prepare libmain.so
         id: discover
@@ -289,7 +289,7 @@ jobs:
           mkdir -p build/recomp/native
           ls -lh re/functions.csv re/extra_functions.txt || true
           python3 -c "import capstone, pefile; print('capstone', capstone.__version__)"
-          timeout 600 bash -c 'PROTORE_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
+          timeout 600 bash -c 'PROTODROID_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
           cat /tmp/recomp.log | tail -n 100
           test -f /tmp/recomp_exit && cat /tmp/recomp_exit
           if [ "$(cat /tmp/recomp_exit | awk '\''{print $2}'\'')" != "0" ]; then
@@ -317,7 +317,7 @@ jobs:
         if: env.HAS_DLL == '1'
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
-          DEPS: ${{ env.HOME }}/proto-re-data/android-deps/arm64-v8a
+          DEPS: ${{ env.HOME }}/protodroid-data/android-deps/arm64-v8a
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -348,8 +348,8 @@ jobs:
           $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++ --version 2>&1 | head || true
           echo "Effective NDK for make: ${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
           echo "=== DEPS ==="
-          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/lib/" 2>&1 | head -n 20 || true
-          ls -lh "$HOME/proto-re-data/android-deps/arm64-v8a/include/SDL2/SDL.h" 2>&1 | head || true
+          ls -lh "$HOME/protodroid-data/android-deps/arm64-v8a/lib/" 2>&1 | head -n 20 || true
+          ls -lh "$HOME/protodroid-data/android-deps/arm64-v8a/include/SDL2/SDL.h" 2>&1 | head || true
           echo "=== RECOMP ==="
           ls -lh build/recomp/native/table.c 2>&1 | head || true
           echo "recomp files: $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
@@ -368,7 +368,7 @@ jobs:
           echo "::group::Make libmain.so (single job for memory)"
           # Do not use pipefail for this block - capture exit code manually
           set +e
-          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 V=1 > /tmp/make.log 2>&1
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/protodroid-data/android-deps/arm64-v8a" -j1 V=1 > /tmp/make.log 2>&1
           MAKE_EXIT=$?
           set -e
           echo "make exit $MAKE_EXIT"
@@ -410,7 +410,7 @@ jobs:
           fi
           echo "::group::Make v80 variant"
           set +e
-          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/proto-re-data/android-deps/arm64-v8a" -j1 > /tmp/make_v80.log 2>&1
+          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/protodroid-data/android-deps/arm64-v8a" -j1 > /tmp/make_v80.log 2>&1
           V80_EXIT=$?
           set -e
           echo "v80 make exit $V80_EXIT"
@@ -421,9 +421,9 @@ jobs:
           mkdir -p build/symbols
           cp build/android/arm64-v8a/libmain.so build/symbols/libmain.so.unstripped || true
           cp build/android/arm64-v8a-v80/libmain.so build/symbols/libmain_v80.so.unstripped || true
-          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libdxvk_d3d9.so build/symbols/libdxvk_d3d9.so.unstripped || true
-          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libSDL2.so build/symbols/libSDL2.so.unstripped || true
-          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
+          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libdxvk_d3d9.so build/symbols/libdxvk_d3d9.so.unstripped || true
+          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libSDL2.so build/symbols/libSDL2.so.unstripped || true
+          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
           ls -lh build/symbols/
           du -sh build/symbols/
 
@@ -483,9 +483,9 @@ jobs:
           fi
           ls -lh build/android/arm64-v8a/libmain.so
           cp build/android/arm64-v8a/libmain.so build/symbols/libmain.so.unstripped || true
-          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libdxvk_d3d9.so build/symbols/libdxvk_d3d9.so.unstripped || true
-          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libSDL2.so build/symbols/libSDL2.so.unstripped || true
-          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
+          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libdxvk_d3d9.so build/symbols/libdxvk_d3d9.so.unstripped || true
+          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libSDL2.so build/symbols/libSDL2.so.unstripped || true
+          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
           ls -lh build/symbols/ || true
 
       - name: Prepare prebuilt libmain.so symbols if DLL not present
@@ -495,7 +495,7 @@ jobs:
           mkdir -p build/symbols
           cp build/android/arm64-v8a/libmain.so build/symbols/libmain.so.unstripped || true
           # For DXVK etc, we already have deps-out symbols
-          cp $HOME/proto-re-data/android-deps/arm64-v8a/lib/*.so build/symbols/ || true
+          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/*.so build/symbols/ || true
           ls -lh build/symbols/
           # Now rebuild libmain.so with patched DXVK? Actually we will still need to rebuild libdxvk_d3d9.so with patch
           # But we already have deps built with patched DXVK (via build-deps)
@@ -535,19 +535,19 @@ jobs:
           set -euo pipefail
           echo "Building APK..."
           # Ensure deps are in expected location for build-apk.sh
-          mkdir -p $HOME/proto-re-data/android-deps/arm64-v8a
+          mkdir -p $HOME/protodroid-data/android-deps/arm64-v8a
           # build-apk.sh expects DEPS_ROOT/$ABI/lib/*.so
           # We already have deps-out/arm64-v8a -> copy to DEPS_ROOT if needed
           if [ -d "deps-out/arm64-v8a" ]; then
-            mkdir -p $HOME/proto-re-data/android-deps/arm64-v8a/lib
-            cp deps-out/arm64-v8a/lib/*.so $HOME/proto-re-data/android-deps/arm64-v8a/lib/ || true
+            mkdir -p $HOME/protodroid-data/android-deps/arm64-v8a/lib
+            cp deps-out/arm64-v8a/lib/*.so $HOME/protodroid-data/android-deps/arm64-v8a/lib/ || true
           fi
-          ls -lh $HOME/proto-re-data/android-deps/arm64-v8a/lib/ || true
+          ls -lh $HOME/protodroid-data/android-deps/arm64-v8a/lib/ || true
           ls -lh build/android/arm64-v8a/libmain.so || true
 
           # Use SDL src from earlier
-          export SDL_SRC=$HOME/proto-re-data/android-deps-src/SDL2
-          export DEPS_ROOT=$HOME/proto-re-data/android-deps
+          export SDL_SRC=$HOME/protodroid-data/android-deps-src/SDL2
+          export DEPS_ROOT=$HOME/protodroid-data/android-deps
           export ANDROID_HOME=$ANDROID_SDK_ROOT
           export BUILD_TOOLS=$ANDROID_SDK_ROOT/build-tools/36.0.0
           export PLATFORM_JAR=$ANDROID_SDK_ROOT/platforms/android-35/android.jar
@@ -589,7 +589,7 @@ jobs:
             '/storage/emulated/0/Prototype/logs/pipeline_trace.log' \
             'last_vs.spv' \
             'last_fs.spv' \
-            'PROTORE_PIPELINE_TRACE' \
+            'PROTODROID_PIPELINE_TRACE' \
             'pre-created dummy sampler, buffer, and all 14 image views' \
             'dummy image GPU initialization complete' \
             'Disabling maintenance5, EDS3' \
@@ -625,4 +625,31 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
-  # Optional: keep deps workflow compatible (existing android-deps.yml remains)
+  # Publish only after a verified main-branch build. Feature branches and pull requests upload artifacts but never
+  # create or replace a GitHub release.
+  release:
+    runs-on: ubuntu-24.04
+    needs: build-apk
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Download verified APK
+        uses: actions/download-artifact@v4
+        with:
+          name: prototype-apk
+          path: release-apk
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -s release-apk/prototype.apk
+          TAG="protodroid-${GITHUB_SHA::7}"
+          TITLE="ProtoDroid ${GITHUB_SHA::7}"
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "$TITLE" \
+              --notes "Verified ARM64 build from commit $GITHUB_SHA. Use protodroid.ini for configuration. Original Android port by VinTeRuS."
+          fi
+          gh release upload "$TAG" release-apk/prototype.apk --repo "$GITHUB_REPOSITORY" --clobber
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,tagName,assets

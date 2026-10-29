@@ -1,12 +1,12 @@
 #!/bin/sh
-# Bisects the first engine function whose recompiled version breaks the game (PROTORE_RECOMP=all + RANGE).
+# Bisects the first engine function whose recompiled version breaks the game (PROTODROID_RECOMP=all + RANGE).
 # A run passes when the game is still running after $RUN_SECONDS without traps. Assumes the failure is caused by a
 # single function and that recompiling more functions never fixes it (the smallest failing prefix is found).
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-GAME=${PROTORE_GAME:-$HOME/proto-re-data/game}
+GAME=${PROTODROID_GAME:-$HOME/protodroid-data/game}
 RUN_SECONDS=${RUN_SECONDS:-70}
-export WINEPREFIX=${WINEPREFIX:-$HOME/proto-re-data/wineprefix} WINEDEBUG=-all DXVK_LOG_LEVEL=none
+export WINEPREFIX=${WINEPREFIX:-$HOME/protodroid-data/wineprefix} WINEDEBUG=-all DXVK_LOG_LEVEL=none
 LIST=$(mktemp)
 awk -F, 'NR>1 && $3=="false" {print $1}' "$ROOT/re/functions.csv" | sort > "$LIST"
 N=$(wc -l < "$LIST")
@@ -17,13 +17,13 @@ MIN_FRAMES=${MIN_FRAMES:-64}
 # once <hi>: one run with functions below <hi> recompiled. Passes when the game is still running after
 # $RUN_SECONDS, hit no trap, and the engine ran at least $MIN_FRAMES frames (EngineService calls).
 once() {
-    rm -f "$GAME/proto-re.log"
-    (cd "$GAME" && PROTORE_RECOMP=all PROTORE_RECOMP_RANGE="0-$1" timeout "$RUN_SECONDS" wine prototypef.exe >/dev/null 2>&1)
+    rm -f "$GAME/protodroid.log"
+    (cd "$GAME" && PROTODROID_RECOMP=all PROTODROID_RECOMP_RANGE="0-$1" timeout "$RUN_SECONDS" wine prototypef.exe >/dev/null 2>&1)
     code=$?
     wineserver -k 2>/dev/null
-    frames=$(grep -oE "recomp: frames [0-9]+" "$GAME/proto-re.log" 2>/dev/null | tail -1 | awk '{print $3}')
+    frames=$(grep -oE "recomp: frames [0-9]+" "$GAME/protodroid.log" 2>/dev/null | tail -1 | awk '{print $3}')
     frames=${frames:-0}
-    if [ $code -eq 124 ] && [ "$frames" -ge "$MIN_FRAMES" ] && ! grep -q "unimplemented" "$GAME/proto-re.log"; then
+    if [ $code -eq 124 ] && [ "$frames" -ge "$MIN_FRAMES" ] && ! grep -q "unimplemented" "$GAME/protodroid.log"; then
         echo pass
     else
         echo "fail(exit $code, frames $frames)"

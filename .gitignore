@@ -11,3 +11,6 @@ build/
 !build/recomp/
 !build/recomp/**
 re/decomp/
+
+# Generated runtime logs
+/*.log

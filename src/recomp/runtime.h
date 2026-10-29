@@ -5,8 +5,8 @@
  * original 32-bit process (prototype, hooked into the engine). The native host (src/native) builds with
  * RECOMP_FLAT_MEMORY and keeps guest memory in a 4 GiB window of its own address space at the compile-time constant
  * RECOMP_GUEST_BASE. */
-#ifndef PROTORE_RECOMP_RUNTIME_H
-#define PROTORE_RECOMP_RUNTIME_H
+#ifndef PROTODROID_RECOMP_RUNTIME_H
+#define PROTODROID_RECOMP_RUNTIME_H
 
 #include <stdint.h>
 #include <string.h>

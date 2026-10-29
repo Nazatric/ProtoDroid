@@ -8,7 +8,7 @@
 #include "hooks.h"
 #include "memwatch.h"
 
-namespace protore {
+namespace protodroid {
 
 namespace {
 
@@ -44,7 +44,7 @@ extern "C" __attribute__((naked)) void OpenByKeyProbe() {
 
 void InstallProbes() {
     char probe[64] = "";
-    if (GetEnvironmentVariableA("PROTORE_PROBE", probe, sizeof(probe)) == 0) {
+    if (GetEnvironmentVariableA("PROTODROID_PROBE", probe, sizeof(probe)) == 0) {
         return;
     }
     if (strcmp(probe, "openbykey") == 0) {
@@ -60,4 +60,4 @@ void InstallProbes() {
     }
 }
 
-}  // namespace protore
+}  // namespace protodroid

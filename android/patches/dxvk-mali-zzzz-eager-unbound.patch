@@ -7,10 +7,10 @@ index 1f36dd7..a99ec29 100644
    static std::atomic<uint64_t> g_maliTraceSequence = { 0 };
  
 +  static bool maliPipelineTraceEnabled() {
-+    // The native launcher maps protore.ini pipeline_trace = 1 to this
++    // The native launcher maps protodroid.ini pipeline_trace = 1 to this
 +    // environment variable before creating the DXVK device. Keep the default
 +    // path free of SPIR-V analysis, disk writes, and fsync calls.
-+    static const bool enabled = env::getEnvVar("PROTORE_PIPELINE_TRACE") == "1";
++    static const bool enabled = env::getEnvVar("PROTODROID_PIPELINE_TRACE") == "1";
 +    return enabled;
 +  }
 +
@@ -34,7 +34,7 @@ index 1f36dd7..a99ec29 100644
 +      if (maliPipelineTraceEnabled()) {
 +        Logger::info("DXVK: ARM pipeline trace: /storage/emulated/0/Prototype/logs/pipeline_trace.log");
 +      } else {
-+        Logger::info("DXVK: ARM pipeline trace disabled; set PROTORE_PIPELINE_TRACE=1 or pipeline_trace = 1 to enable");
++        Logger::info("DXVK: ARM pipeline trace disabled; set PROTODROID_PIPELINE_TRACE=1 or pipeline_trace = 1 to enable");
 +      }
      }
  #endif

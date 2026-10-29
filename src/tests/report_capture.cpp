@@ -41,7 +41,7 @@ bool operator==(const ReportCall& a, const ReportCall& b) {
 ReportCapture::ReportCapture(int scripted_result) {
     g_calls.clear();
     g_scripted_result = scripted_result;
-    detour_ = std::make_unique<protore::TestDetour>(kVReportRva, sizeof(kVReportBytes), kVReportBytes,
+    detour_ = std::make_unique<protodroid::TestDetour>(kVReportRva, sizeof(kVReportBytes), kVReportBytes,
                                                     sizeof(kVReportBytes), reinterpret_cast<void*>(&RecordVReport));
 }
 

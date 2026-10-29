@@ -6,7 +6,7 @@
 // Setting vulkan_driver: auto (default) | system | turnip.
 #include "guest.h"
 
-#if defined(__ANDROID__) && defined(PROTORE_ADRENOTOOLS)
+#if defined(__ANDROID__) && defined(PROTODROID_ADRENOTOOLS)
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -28,7 +28,7 @@
 
 // libadrenotools is built for API 29, where libc exports android_get_device_api_level; libmain targets API 26,
 // whose headers only have an inline version, so the Makefile points the symbol here (--defsym).
-extern "C" int protore_device_api_level() {
+extern "C" int protodroid_device_api_level() {
     char value[PROP_VALUE_MAX] = {};
     __system_property_get("ro.build.version.sdk", value);
     return atoi(value);
@@ -282,7 +282,7 @@ void SelectVulkanDriver() {
     const std::string model = GpuModel();
     if (!model.empty()) Log("vulkan: GPU %s", model.c_str());
     const bool skip_bundled = mode == "auto" && model.compare(0, 7, "Adreno8") == 0;
-    const char* libdir = getenv("PROTORE_NATIVE_LIB_DIR");  // set by ProtoActivity: the APK's extracted libraries
+    const char* libdir = getenv("PROTODROID_NATIVE_LIB_DIR");  // set by ProtoActivity: the APK's extracted libraries
     if (!libdir) {
         LogSystemDevice();
         return;
@@ -291,7 +291,7 @@ void SelectVulkanDriver() {
     // The user's own driver (SetupActivity copies it from files/driver/), then the tested Turnip release, then the
     // newer Mesa for the GPUs the release does not know (Adreno 710/720).
     std::vector<Driver> drivers;
-    if (const char* custom = getenv("PROTORE_CUSTOM_DRIVER"); custom && access(custom, R_OK) == 0) {
+    if (const char* custom = getenv("PROTODROID_CUSTOM_DRIVER"); custom && access(custom, R_OK) == 0) {
         std::string path = custom;
         size_t slash = path.rfind('/');
         drivers.push_back({hooks, path.substr(0, slash + 1), path.substr(slash + 1), true});

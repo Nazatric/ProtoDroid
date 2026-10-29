@@ -59,7 +59,7 @@ std::string Lower(std::string s) {
 }
 
 void Log(const char* fmt, ...) {
-    if (!getenv("PROTORE_BINK_TEST_VERBOSE")) return;
+    if (!getenv("PROTODROID_BINK_TEST_VERBOSE")) return;
     va_list ap; va_start(ap, fmt); vfprintf(stderr, fmt, ap); va_end(ap);
 }
 [[noreturn]] void Fatal(const char* fmt, ...) {

@@ -1,5 +1,5 @@
-#ifndef PROTORE_D3D9_STATE_H
-#define PROTORE_D3D9_STATE_H
+#ifndef PROTODROID_D3D9_STATE_H
+#define PROTODROID_D3D9_STATE_H
 
 #include <cstdint>
 

@@ -7,17 +7,17 @@
 
 namespace tests {
 
-const protore::DiffTest* All(size_t* count);
+const protodroid::DiffTest* All(size_t* count);
 
-void TestReport(protore::DiffResult* r);
-void TestTraceVector(protore::DiffResult* r);
-void TestNameHash(protore::DiffResult* r);
-void TestCementLookup(protore::DiffResult* r);
-void TestCementFileRange(protore::DiffResult* r);
-void TestCementState(protore::DiffResult* r);
-void TestMemory(protore::DiffResult* r);
-void TestCementLoad(protore::DiffResult* r);
-void TestCementLifetime(protore::DiffResult* r);
-void TestFile(protore::DiffResult* r);
+void TestReport(protodroid::DiffResult* r);
+void TestTraceVector(protodroid::DiffResult* r);
+void TestNameHash(protodroid::DiffResult* r);
+void TestCementLookup(protodroid::DiffResult* r);
+void TestCementFileRange(protodroid::DiffResult* r);
+void TestCementState(protodroid::DiffResult* r);
+void TestMemory(protodroid::DiffResult* r);
+void TestCementLoad(protodroid::DiffResult* r);
+void TestCementLifetime(protodroid::DiffResult* r);
+void TestFile(protodroid::DiffResult* r);
 
 }  // namespace tests

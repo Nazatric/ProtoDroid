@@ -3,8 +3,8 @@
 
 #include "hooks.h"
 
-namespace protore {
+namespace protodroid {
 
 Hook* Registry(size_t* count);
 
-}  // namespace protore
+}  // namespace protodroid

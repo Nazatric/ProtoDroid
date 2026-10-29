@@ -32,7 +32,7 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 
-#ifdef PROTORE_BINK_TEST
+#ifdef PROTODROID_BINK_TEST
 #include "tests/sdl_stub.h"
 #else
 #include <SDL2/SDL.h>

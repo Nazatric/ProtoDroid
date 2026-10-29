@@ -4,7 +4,7 @@ namespace tests {
 
 namespace {
 
-const protore::DiffTest g_tests[] = {
+const protodroid::DiffTest g_tests[] = {
     {"core::Report", &TestReport},
     {"math::TraceVector", &TestTraceVector},
     {"core::HashString/HashFileName", &TestNameHash},
@@ -19,7 +19,7 @@ const protore::DiffTest g_tests[] = {
 
 }  // namespace
 
-const protore::DiffTest* All(size_t* count) {
+const protodroid::DiffTest* All(size_t* count) {
     *count = sizeof(g_tests) / sizeof(g_tests[0]);
     return g_tests;
 }

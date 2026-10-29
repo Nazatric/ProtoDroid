@@ -11,9 +11,9 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SDK=${ANDROID_HOME:-$HOME/Android/Sdk}
 BUILD_TOOLS=${BUILD_TOOLS:-$SDK/build-tools/36.0.0}
 PLATFORM_JAR=${PLATFORM_JAR:-$SDK/platforms/android-35/android.jar}
-DEPS_ROOT=${DEPS_ROOT:-$HOME/proto-re-data/android-deps}
-TURNIP_ROOT=${TURNIP_ROOT:-$HOME/proto-re-data/android-turnip}
-SDL_SRC=${SDL_SRC:-$HOME/proto-re-data/android-deps-src/SDL2}
+DEPS_ROOT=${DEPS_ROOT:-$HOME/protodroid-data/android-deps}
+TURNIP_ROOT=${TURNIP_ROOT:-$HOME/protodroid-data/android-turnip}
+SDL_SRC=${SDL_SRC:-$HOME/protodroid-data/android-deps-src/SDL2}
 KEYSTORE=${KEYSTORE:-$HOME/.android/debug.keystore}
 ABIS=("${@:-arm64-v8a}")
 

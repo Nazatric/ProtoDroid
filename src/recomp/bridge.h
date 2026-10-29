@@ -3,12 +3,12 @@
 
 #include <cstdint>
 
-namespace protore {
+namespace protodroid {
 
 // Entry stub that runs the recompiled version of the engine function at `va`, or null when it was not recompiled.
 void* RecompEntryStub(uint32_t va);
 
-// PROTORE_RECOMP=all: redirect every enterable engine function to its recompiled version. Returns the count.
+// PROTODROID_RECOMP=all: redirect every enterable engine function to its recompiled version. Returns the count.
 int InstallAllRecompEntries();
 
-}  // namespace protore
+}  // namespace protodroid

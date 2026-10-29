@@ -1,11 +1,11 @@
-// Port settings: protore.ini search priority (Android 11+ scoped storage aware):
-//   1) /storage/emulated/0/Prototype/protore.ini (shared storage, always accessible via MANAGE_EXTERNAL_STORAGE)
-//   2) /storage/emulated/0/Prototype/game/protore.ini (when game files are in subfolder)
-//   3) <game_dir>/protore.ini and <game_dir>/../protore.ini (detected game folder)
-//   4) ./protore.ini (working dir = app external files on Android: /sdcard/Android/data/com.protodroid/files)
-//   5) /storage/emulated/0/Android/data/com.protodroid/files/protore.ini (explicit fallback)
+// Port settings: protodroid.ini search priority (Android 11+ scoped storage aware):
+//   1) /storage/emulated/0/Prototype/protodroid.ini (shared storage, always accessible via MANAGE_EXTERNAL_STORAGE)
+//   2) /storage/emulated/0/Prototype/game/protodroid.ini (when game files are in subfolder)
+//   3) <game_dir>/protodroid.ini and <game_dir>/../protodroid.ini (detected game folder)
+//   4) ./protodroid.ini (working dir = app external files on Android: /sdcard/Android/data/com.protodroid/files)
+//   5) /storage/emulated/0/Android/data/com.protodroid/files/protodroid.ini (explicit fallback)
 // Format: `key = value` per line, `#` or `;` comment, [section] headers tolerated (ignored).
-// Environment variable PROTORE_<KEY> (upper case) overrides file.
+// Environment variable PROTODROID_<KEY> (upper case) overrides file.
 #include <cctype>
 #include <cstdlib>
 #include <map>
@@ -32,25 +32,25 @@ std::map<std::string, std::string> Load() {
 
     std::vector<std::string> candidates;
     // Shared storage (primary on Android 11+)
-    candidates.push_back("/storage/emulated/0/Prototype/protore.ini");
-    candidates.push_back("/storage/emulated/0/Prototype/game/protore.ini");
+    candidates.push_back("/storage/emulated/0/Prototype/protodroid.ini");
+    candidates.push_back("/storage/emulated/0/Prototype/game/protodroid.ini");
     // Detected game directory (if set before first Setting() call, after main sets g_game_dir)
     if (g_game_dir && g_game_dir[0]) {
-        candidates.push_back(std::string(g_game_dir) + "/protore.ini");
-        candidates.push_back(std::string(g_game_dir) + "/../protore.ini");
+        candidates.push_back(std::string(g_game_dir) + "/protodroid.ini");
+        candidates.push_back(std::string(g_game_dir) + "/../protodroid.ini");
         // Also try upper directory when game_dir is .../Prototype/game -> ini in .../Prototype
         std::string gd(g_game_dir);
         size_t slash = gd.rfind('/');
         if (slash != std::string::npos) {
-            candidates.push_back(gd.substr(0, slash) + "/protore.ini");
+            candidates.push_back(gd.substr(0, slash) + "/protodroid.ini");
         }
     }
     // App private external files (cwd on Android after chdir(base))
-    candidates.push_back("protore.ini");
-    candidates.push_back("/storage/emulated/0/Android/data/com.protodroid/files/protore.ini");
+    candidates.push_back("protodroid.ini");
+    candidates.push_back("/storage/emulated/0/Android/data/com.protodroid/files/protodroid.ini");
     // Also check g_data_dir if available (external files)
     if (g_data_dir && g_data_dir[0]) {
-        candidates.push_back(std::string(g_data_dir) + "/protore.ini");
+        candidates.push_back(std::string(g_data_dir) + "/protodroid.ini");
     }
 
     std::string loaded_path;
@@ -102,7 +102,7 @@ std::map<std::string, std::string> Load() {
 }  // namespace
 
 std::string Setting(const char* key, const char* def) {
-    std::string env = "PROTORE_";
+    std::string env = "PROTODROID_";
     for (const char* k = key; *k; ++k) env += char(toupper((unsigned char)*k));
     if (const char* v = getenv(env.c_str())) return v;
     static std::once_flag once;

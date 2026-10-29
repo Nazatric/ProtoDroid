@@ -67,26 +67,26 @@ void* __cdecl RecordAlloc(uint32_t heap, uint32_t size, uint32_t alignment) {
 
 template <typename T>
 T& Global(uint32_t rva) {
-    return *static_cast<T*>(protore::EngineAddress(rva));
+    return *static_cast<T*>(protodroid::EngineAddress(rva));
 }
 
 }  // namespace
 
-void TestMemory(protore::DiffResult* r) {
+void TestMemory(protodroid::DiffResult* r) {
     // RoundUp and FileSystemIoBufferSize are pure.
-    auto original_round = reinterpret_cast<RoundUpFn>(protore::OriginalFunction(kRoundUpRva));
+    auto original_round = reinterpret_cast<RoundUpFn>(protodroid::OriginalFunction(kRoundUpRva));
     for (uint32_t value : {0u, 1u, 3u, 4u, 511u, 512u, 513u, 0x7fffffffu, 0xfffffff0u, 0xffffffffu}) {
         for (uint32_t granularity : {0u, 1u, 3u, 4u, 512u, 0x8000u, 0x80000000u, 0xffffffffu}) {
             uint32_t a = original_round(value, granularity);
             uint32_t b = core::RoundUp(value, granularity);
-            protore::Check(r, a == b, "RoundUp(%08x, %08x): %08x != %08x", value, granularity, a, b);
+            protodroid::Check(r, a == b, "RoundUp(%08x, %08x): %08x != %08x", value, granularity, a, b);
         }
     }
-    auto original_size = reinterpret_cast<IoBufferSizeFn>(protore::OriginalFunction(kIoBufferSizeFnRva));
-    protore::Check(r, original_size() == core::FileSystemIoBufferSize(), "FileSystemIoBufferSize differs");
+    auto original_size = reinterpret_cast<IoBufferSizeFn>(protodroid::OriginalFunction(kIoBufferSizeFnRva));
+    protodroid::Check(r, original_size() == core::FileSystemIoBufferSize(), "FileSystemIoBufferSize differs");
 
     // Alloc against a fake heap table and OOM handler, with every other thread suspended.
-    auto original_alloc = reinterpret_cast<AllocFn>(protore::OriginalFunction(kAllocRva));
+    auto original_alloc = reinterpret_cast<AllocFn>(protodroid::OriginalFunction(kAllocRva));
     static void* vtable[8];
     for (void*& slot : vtable) slot = nullptr;
     vtable[5] = reinterpret_cast<void*>(&FakeAllocate);
@@ -107,7 +107,7 @@ void TestMemory(protore::DiffResult* r) {
     void* results_a[kCases];
     void* results_b[kCases];
     {
-        protore::WorldStop stop;
+        protodroid::WorldStop stop;
         auto& table_ptr = Global<core::HeapRecord*>(kHeapTableRva);
         auto& handler = Global<void*>(kOomHandlerRva);
         auto& context = Global<uint32_t>(kOomContextRva);
@@ -130,12 +130,12 @@ void TestMemory(protore::DiffResult* r) {
         context = saved_context;
     }
     for (int i = 0; i < kCases; ++i) {
-        protore::Check(r, results_a[i] == results_b[i], "Alloc case %d: %p != %p", i, results_a[i], results_b[i]);
-        protore::Check(r, logs_a[i] == logs_b[i], "Alloc case %d: allocator/handler calls differ", i);
+        protodroid::Check(r, results_a[i] == results_b[i], "Alloc case %d: %p != %p", i, results_a[i], results_b[i]);
+        protodroid::Check(r, logs_a[i] == logs_b[i], "Alloc case %d: allocator/handler calls differ", i);
     }
 
     // IoBufferHolderAcquire with Alloc replaced by a recorder (world stopped: every thread allocates).
-    auto original_acquire = reinterpret_cast<AcquireFn>(protore::OriginalFunction(kAcquireRva));
+    auto original_acquire = reinterpret_cast<AcquireFn>(protodroid::OriginalFunction(kAcquireRva));
     struct AcquireCase { int32_t references; uint32_t heap, alignment, granularity; };
     const AcquireCase acquire_cases[] = {
         {0, 0, 16, 0}, {0, 3, 4, 512}, {0, 1, 0x1000, 0x8000}, {2, 3, 4, 512}, {-1, 0, 16, 7},
@@ -144,8 +144,8 @@ void TestMemory(protore::DiffResult* r) {
     core::IoBufferHolder holders_a[kAcquireCases], holders_b[kAcquireCases];
     CallLog acquire_logs_a[kAcquireCases], acquire_logs_b[kAcquireCases];
     {
-        protore::WorldStop stop;
-        protore::TestDetour detour(kAllocRva, sizeof(kAllocBytes), kAllocBytes, sizeof(kAllocBytes),
+        protodroid::WorldStop stop;
+        protodroid::TestDetour detour(kAllocRva, sizeof(kAllocBytes), kAllocBytes, sizeof(kAllocBytes),
                                    reinterpret_cast<void*>(&RecordAlloc));
         for (int i = 0; i < kAcquireCases; ++i) {
             const AcquireCase& c = acquire_cases[i];
@@ -159,12 +159,12 @@ void TestMemory(protore::DiffResult* r) {
             core::IoBufferHolderAcquire(&holders_b[i], c.heap, c.alignment, c.granularity);
             acquire_logs_b[i] = g_log;
         }
-        protore::Check(r, detour.ok(), "Alloc detour unavailable");
+        protodroid::Check(r, detour.ok(), "Alloc detour unavailable");
     }
     for (int i = 0; i < kAcquireCases; ++i) {
-        protore::Check(r, memcmp(&holders_a[i], &holders_b[i], sizeof(holders_a[i])) == 0,
+        protodroid::Check(r, memcmp(&holders_a[i], &holders_b[i], sizeof(holders_a[i])) == 0,
                        "Acquire case %d: holder differs", i);
-        protore::Check(r, acquire_logs_a[i] == acquire_logs_b[i], "Acquire case %d: Alloc calls differ", i);
+        protodroid::Check(r, acquire_logs_a[i] == acquire_logs_b[i], "Acquire case %d: Alloc calls differ", i);
     }
 }
 

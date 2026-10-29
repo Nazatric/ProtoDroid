@@ -57,12 +57,12 @@ uint32_t Fingerprint(const char* s) {
 
 template <typename Fn>
 Fn Original(uint32_t rva) {
-    return reinterpret_cast<Fn>(protore::OriginalFunction(rva));
+    return reinterpret_cast<Fn>(protodroid::OriginalFunction(rva));
 }
 
 template <typename T>
 T& Global(uint32_t rva) {
-    return *static_cast<T*>(protore::EngineAddress(rva));
+    return *static_cast<T*>(protodroid::EngineAddress(rva));
 }
 
 // Generic recording object: every vtable slot records (id, slot) and returns id ^ slot.
@@ -113,7 +113,7 @@ int __cdecl RecordVReport(int kind, const char* tag, const char* file, int line,
 
 // ---- part 1: mutex and sleep wrappers -----------------------------------------------------------------------
 
-void TestPlatformWrappers(protore::DiffResult* r) {
+void TestPlatformWrappers(protodroid::DiffResult* r) {
     using MutexFn = void(__cdecl*)(core::Mutex*);
     using SleepFn = void(__cdecl*)(uint32_t);
     CRITICAL_SECTION a, b;
@@ -124,14 +124,14 @@ void TestPlatformWrappers(protore::DiffResult* r) {
     for (int depth = 1; depth <= 3; ++depth) {
         Original<MutexFn>(0x0063d290)(ma);
         core::MutexLock(mb);
-        protore::Check(r, a.RecursionCount == b.RecursionCount && a.LockCount == b.LockCount,
+        protodroid::Check(r, a.RecursionCount == b.RecursionCount && a.LockCount == b.LockCount,
                        "lock depth %d: recursion %ld/%ld lock %ld/%ld", depth, a.RecursionCount, b.RecursionCount,
                        a.LockCount, b.LockCount);
     }
     for (int depth = 3; depth >= 1; --depth) {
         Original<MutexFn>(0x0063d280)(ma);
         core::MutexUnlock(mb);
-        protore::Check(r, a.RecursionCount == b.RecursionCount && a.OwningThread == b.OwningThread,
+        protodroid::Check(r, a.RecursionCount == b.RecursionCount && a.OwningThread == b.OwningThread,
                        "unlock to depth %d differs", depth - 1);
     }
     Original<MutexFn>(0x0063d270)(ma);
@@ -154,7 +154,7 @@ void __thiscall AllocatorFree(FakeAllocator* a, void* p) {
     g_log.Add('6', a->id, U(p));
 }
 
-void TestFree(protore::DiffResult* r) {
+void TestFree(protodroid::DiffResult* r) {
     using FreeFn = void(__cdecl*)(uint32_t, void*);
     static void* vtable[8];
     for (void*& s : vtable) s = nullptr;
@@ -164,7 +164,7 @@ void TestFree(protore::DiffResult* r) {
     static core::HeapRecord table[2] = {{&allocators[0], {}}, {&allocators[1], {}}};
     EventLog a, b;
     {
-        protore::WorldStop stop;
+        protodroid::WorldStop stop;
         auto& table_ptr = Global<core::HeapRecord*>(0x010bc5a4);
         core::HeapRecord* saved = table_ptr;
         table_ptr = table;
@@ -183,7 +183,7 @@ void TestFree(protore::DiffResult* r) {
         }
         table_ptr = saved;
     }
-    protore::Check(r, a == b && a.count == 2, "Free/FreeObject allocator calls differ");
+    protodroid::Check(r, a == b && a.count == 2, "Free/FreeObject allocator calls differ");
 }
 
 // ---- part 3: IoBufferHolder -----------------------------------------------------------------------------------
@@ -300,7 +300,7 @@ void RunHolderScript(const HolderApi& api, HolderWorld* w, int script) {
     }
 }
 
-void TestHolder(protore::DiffResult* r) {
+void TestHolder(protodroid::DiffResult* r) {
     const HolderApi original = {
         Original<decltype(HolderApi::reg)>(0x00650580), Original<decltype(HolderApi::unreg)>(0x006505d0),
         Original<decltype(HolderApi::begin)>(0x00650640), Original<decltype(HolderApi::next)>(0x00650660),
@@ -314,8 +314,8 @@ void TestHolder(protore::DiffResult* r) {
     constexpr int kScripts = 6;
     bool state_ok[kScripts], events_ok[kScripts], lock_ok[kScripts];
     {
-        protore::WorldStop stop;
-        protore::TestDetour free(0x0063a9c0, sizeof(kFreeBytes), kFreeBytes, sizeof(kFreeBytes),
+        protodroid::WorldStop stop;
+        protodroid::TestDetour free(0x0063a9c0, sizeof(kFreeBytes), kFreeBytes, sizeof(kFreeBytes),
                                  reinterpret_cast<void*>(&RecordFree));
         for (int script = 0; script < kScripts; ++script) {
             BuildHolderWorld(w);
@@ -335,9 +335,9 @@ void TestHolder(protore::DiffResult* r) {
         }
     }
     for (int script = 0; script < kScripts; ++script) {
-        protore::Check(r, state_ok[script], "holder script %d: holder/link state differs", script);
-        protore::Check(r, events_ok[script], "holder script %d: iteration/free events differ", script);
-        protore::Check(r, lock_ok[script], "holder script %d: lock left held", script);
+        protodroid::Check(r, state_ok[script], "holder script %d: holder/link state differs", script);
+        protodroid::Check(r, events_ok[script], "holder script %d: iteration/free events differ", script);
+        protodroid::Check(r, lock_ok[script], "holder script %d: lock left held", script);
     }
     core::MutexDestroy(reinterpret_cast<core::Mutex*>(w->holder.lock));
 
@@ -351,8 +351,8 @@ void TestHolder(protore::DiffResult* r) {
     memset(&wb.holder, 0x77, sizeof(wb.holder));
     core::IoBufferHolder* ra = Original<InitFn>(0x00650b60)(&wa.holder);
     core::IoBufferHolder* rb = core::IoBufferHolderInit(&wb.holder);
-    protore::Check(r, ra == &wa.holder && rb == &wb.holder, "Init return value");
-    protore::Check(r, Snapshot(wa) == Snapshot(wb), "Init: fields differ");
+    protodroid::Check(r, ra == &wa.holder && rb == &wb.holder, "Init return value");
+    protodroid::Check(r, Snapshot(wa) == Snapshot(wb), "Init: fields differ");
     for (int i = 0; i < kLibraries; ++i) {
         reconstructed.reg(&wa.holder, Lib(&wa, i));
         reconstructed.reg(&wb.holder, Lib(&wb, i));
@@ -363,7 +363,7 @@ void TestHolder(protore::DiffResult* r) {
     g_log = EventLog();
     core::IoBufferHolderReleaseLibraries(&wb.holder);
     // Both worlds use the same library ids, so the (id, slot) sequences are directly comparable.
-    protore::Check(r, log_a == g_log && log_a.count == kLibraries, "ReleaseLibraries: release calls differ (%d vs %d)",
+    protodroid::Check(r, log_a == g_log && log_a.count == kLibraries, "ReleaseLibraries: release calls differ (%d vs %d)",
                    log_a.count, g_log.count);
 }
 
@@ -407,7 +407,7 @@ uint32_t __thiscall ForwardTarget1(void* self, uint32_t arg) {
 }
 void* g_forward_vtable[2] = {reinterpret_cast<void*>(&ForwardTarget0), reinterpret_cast<void*>(&ForwardTarget1)};
 
-void TestSmallMethods(protore::DiffResult* r) {
+void TestSmallMethods(protodroid::DiffResult* r) {
     alignas(16) static uint8_t lib_a[0x90], lib_b[0x90];
     auto* la = reinterpret_cast<core::CementLibrary*>(lib_a);
     auto* lb = reinterpret_cast<core::CementLibrary*>(lib_b);
@@ -428,7 +428,7 @@ void TestSmallMethods(protore::DiffResult* r) {
         reset(state, 1);
         uint32_t a = Original<IsLoadedFn>(0x00650390)(la);
         uint32_t b = core::CementLibraryIsLoaded(lb);
-        protore::Check(r, a == b, "IsLoaded state %d: %u != %u", state, a, b);
+        protodroid::Check(r, a == b, "IsLoaded state %d: %u != %u", state, a, b);
     }
 
     // SetCompletion
@@ -440,7 +440,7 @@ void TestSmallMethods(protore::DiffResult* r) {
     EventLog log_a = g_log;
     g_log = EventLog();
     core::CementLibrarySetCompletion(lb, &completion, 0x1234);
-    protore::Check(r, log_a == g_log && same_objects(), "SetCompletion differs");
+    protodroid::Check(r, log_a == g_log && same_objects(), "SetCompletion differs");
 
     // AddRef / Release, including the release that reaches zero
     using RefFn = uint32_t(__thiscall*)(core::CementLibrary*);
@@ -452,7 +452,7 @@ void TestSmallMethods(protore::DiffResult* r) {
             log_a = g_log;
             g_log = EventLog();
             uint32_t b = add ? core::CementLibraryAddRef(lb) : core::CementLibraryRelease(lb);
-            protore::Check(r, a == b && log_a == g_log && same_objects(), "%s with count %d differs",
+            protodroid::Check(r, a == b && log_a == g_log && same_objects(), "%s with count %d differs",
                            add ? "AddRef" : "Release", refs);
         }
     }
@@ -475,7 +475,7 @@ void TestSmallMethods(protore::DiffResult* r) {
         auto reconstructed = reinterpret_cast<ForwardFn>(slot ? &core::CementLibraryForwardSlot1
                                                               : &core::CementLibraryForwardSlot0);
         uint32_t b = reconstructed(lib_a, 0xabcd0000 + slot);
-        protore::Check(r, a == b && log_a == g_log, "ForwardSlot%d differs", slot);
+        protodroid::Check(r, a == b && log_a == g_log, "ForwardSlot%d differs", slot);
     }
 
     // WaitUntilSettled: already settled, and settling after three polls.
@@ -483,7 +483,7 @@ void TestSmallMethods(protore::DiffResult* r) {
     for (int polls : {0, 3}) {
         EventLog logs[2];
         for (int impl = 0; impl < 2; ++impl) {
-            protore::TestDetour pump(0x0064a030, sizeof(kPumpBytes), kPumpBytes, sizeof(kPumpBytes),
+            protodroid::TestDetour pump(0x0064a030, sizeof(kPumpBytes), kPumpBytes, sizeof(kPumpBytes),
                                      reinterpret_cast<void*>(&RecordPump), 1);
             reset(polls ? 0 : 1, 1);
             g_pump_state = (impl ? lib_b : lib_a) + 0x24;
@@ -496,7 +496,7 @@ void TestSmallMethods(protore::DiffResult* r) {
             }
             logs[impl] = g_log;
         }
-        protore::Check(r, logs[0] == logs[1] && logs[0].count == polls, "WaitUntilSettled after %d polls differs",
+        protodroid::Check(r, logs[0] == logs[1] && logs[0].count == polls, "WaitUntilSettled after %d polls differs",
                        polls);
     }
 }
@@ -548,7 +548,7 @@ void __thiscall RecordSlot7(core::CementLibrary* self, core::File** out, uint32_
     *out = g_open_returns_file ? reinterpret_cast<core::File*>(&g_opened_file) : nullptr;
 }
 
-void TestOpenByKey(protore::DiffResult* r) {
+void TestOpenByKey(protodroid::DiffResult* r) {
     alignas(16) static uint8_t lib[0x90];
     memset(lib, 0x5a, sizeof(lib));
     void* drive = reinterpret_cast<void*>(0xd51e0000);
@@ -557,16 +557,16 @@ void TestOpenByKey(protore::DiffResult* r) {
 
     bool open_ok = true, out_ok = true;
     {
-        protore::WorldStop stop;
-        protore::TestDetour d1(0x0064e050, sizeof(kNewFileBytes), kNewFileBytes, sizeof(kNewFileBytes),
+        protodroid::WorldStop stop;
+        protodroid::TestDetour d1(0x0064e050, sizeof(kNewFileBytes), kNewFileBytes, sizeof(kNewFileBytes),
                                reinterpret_cast<void*>(&RecordNewFile));
-        protore::TestDetour d2(0x0064e9e0, sizeof(kFileCtorBytes), kFileCtorBytes, sizeof(kFileCtorBytes),
+        protodroid::TestDetour d2(0x0064e9e0, sizeof(kFileCtorBytes), kFileCtorBytes, sizeof(kFileCtorBytes),
                                reinterpret_cast<void*>(&RecordFileCtor));
-        protore::TestDetour d3(0x0064c4e0, sizeof(kNewRequestBytes), kNewRequestBytes, sizeof(kNewRequestBytes),
+        protodroid::TestDetour d3(0x0064c4e0, sizeof(kNewRequestBytes), kNewRequestBytes, sizeof(kNewRequestBytes),
                                reinterpret_cast<void*>(&RecordNewRequest));
-        protore::TestDetour d4(0x0064d810, 5, kRequestCtorBytes, sizeof(kRequestCtorBytes),
+        protodroid::TestDetour d4(0x0064d810, 5, kRequestCtorBytes, sizeof(kRequestCtorBytes),
                                reinterpret_cast<void*>(&RecordRequestCtor));
-        protore::TestDetour d5(0x0064feb0, sizeof(kQueueBytes), kQueueBytes, sizeof(kQueueBytes),
+        protodroid::TestDetour d5(0x0064feb0, sizeof(kQueueBytes), kQueueBytes, sizeof(kQueueBytes),
                                reinterpret_cast<void*>(&RecordQueueRequest));
         open_ok = d1.ok() && d2.ok() && d3.ok() && d4.ok() && d5.ok();
         for (bool file_fails : {false, true}) {
@@ -587,8 +587,8 @@ void TestOpenByKey(protore::DiffResult* r) {
             }
         }
     }
-    protore::Check(r, open_ok, "OpenByKey: allocation/construction/queue calls differ");
-    protore::Check(r, out_ok, "OpenByKey: *out differs");
+    protodroid::Check(r, open_ok, "OpenByKey: allocation/construction/queue calls differ");
+    protodroid::Check(r, out_ok, "OpenByKey: *out differs");
 
     // AndWait: fake vtable whose slot 7 is the recorder.
     static void* vtable[32];
@@ -605,7 +605,7 @@ void TestOpenByKey(protore::DiffResult* r) {
         EventLog log_a = g_log;
         g_log = EventLog();
         core::CementLibraryOpenByKeyAndWait(library, &out_b, 0x77, 1, 2, 3, 4);
-        protore::Check(r, log_a == g_log && out_a == out_b, "OpenByKeyAndWait (file %d) differs", returns_file);
+        protodroid::Check(r, log_a == g_log && out_a == out_b, "OpenByKeyAndWait (file %d) differs", returns_file);
     }
 }
 
@@ -684,7 +684,7 @@ struct DestroyCase {
 void SetUpLoadedLibrary(LifetimeWorld* w, const DestroyCase& c) {
     BuildLifetime(w);
     uint8_t* lib = w->library;
-    Put<void*>(lib, 0x00, protore::EngineAddress(0x00e48000));
+    Put<void*>(lib, 0x00, protodroid::EngineAddress(0x00e48000));
     Put<int32_t>(lib, 0x0c, c.object_heap);
     Put<void*>(lib, 0x18, c.drives_equal ? &w->registration : &w->drive);
     Put<void*>(lib, 0x1c, &w->registration);
@@ -735,7 +735,7 @@ void Describe(Difference* d, const char* what, const LifetimeSnapshot& a, const 
 
 Difference g_construct_diff, g_destruct_diff, g_deleting_diff;
 
-void TestLifetime(protore::DiffResult* r) {
+void TestLifetime(protodroid::DiffResult* r) {
     for (void*& s : g_stream_vtable) s = g_object_vtable.slots[0];
     for (int slot : {0, 1, 17}) g_stream_vtable[slot] = g_object_vtable.slots[slot];
     g_stream_vtable[18] = reinterpret_cast<void*>(&RecordQueue);
@@ -750,12 +750,12 @@ void TestLifetime(protore::DiffResult* r) {
     int construct_cases = 0, construct_bad = 0, destruct_cases = 0, destruct_bad = 0, deleting_bad = 0;
     bool detours_ok = false;
     {
-        protore::WorldStop stop;
-        protore::TestDetour free(0x0063a9c0, sizeof(kFreeBytes), kFreeBytes, sizeof(kFreeBytes),
+        protodroid::WorldStop stop;
+        protodroid::TestDetour free(0x0063a9c0, sizeof(kFreeBytes), kFreeBytes, sizeof(kFreeBytes),
                                  reinterpret_cast<void*>(&RecordFree));
-        protore::TestDetour free_object(0x0063a9a0, sizeof(kFreeBytes), kFreeBytes, sizeof(kFreeBytes),
+        protodroid::TestDetour free_object(0x0063a9a0, sizeof(kFreeBytes), kFreeBytes, sizeof(kFreeBytes),
                                         reinterpret_cast<void*>(&RecordFreeObject));
-        protore::TestDetour vreport(0x0063c340, sizeof(kVReportBytes), kVReportBytes, sizeof(kVReportBytes),
+        protodroid::TestDetour vreport(0x0063c340, sizeof(kVReportBytes), kVReportBytes, sizeof(kVReportBytes),
                                     reinterpret_cast<void*>(&RecordVReport));
         detours_ok = free.ok() && free_object.ok() && vreport.ok();
         int32_t& current_heap = Global<int32_t>(0x010bccbc);
@@ -837,21 +837,21 @@ void TestLifetime(protore::DiffResult* r) {
         assert_flag = saved_flag;
     }
     for (FakeDrive* d : {&w->drive, &w->registration}) core::MutexDestroy(reinterpret_cast<core::Mutex*>(d->holder.lock));
-    protore::Log("difftest CementLibrary lifetime: %d constructor and %d destructor scenarios", construct_cases,
+    protodroid::Log("difftest CementLibrary lifetime: %d constructor and %d destructor scenarios", construct_cases,
                  destruct_cases);
     for (Difference* d : {&g_construct_diff, &g_destruct_diff, &g_deleting_diff}) {
-        if (d->recorded) protore::Log("difftest lifetime detail: %s", d->text);
+        if (d->recorded) protodroid::Log("difftest lifetime detail: %s", d->text);
     }
-    protore::Check(r, detours_ok, "lifetime detours unavailable");
-    protore::Check(r, construct_bad == 0, "%d of %d constructor scenarios differ", construct_bad, construct_cases);
-    protore::Check(r, destruct_bad == 0, "%d of %d destructor scenarios differ", destruct_bad, destruct_cases);
-    protore::Check(r, deleting_bad == 0, "%d of %d deleting-destructor scenarios differ", deleting_bad,
+    protodroid::Check(r, detours_ok, "lifetime detours unavailable");
+    protodroid::Check(r, construct_bad == 0, "%d of %d constructor scenarios differ", construct_bad, construct_cases);
+    protodroid::Check(r, destruct_bad == 0, "%d of %d destructor scenarios differ", destruct_bad, destruct_cases);
+    protodroid::Check(r, deleting_bad == 0, "%d of %d deleting-destructor scenarios differ", deleting_bad,
                    destruct_cases * 2);
 }
 
 }  // namespace
 
-void TestCementLifetime(protore::DiffResult* r) {
+void TestCementLifetime(protodroid::DiffResult* r) {
     TestPlatformWrappers(r);
     TestFree(r);
     TestHolder(r);

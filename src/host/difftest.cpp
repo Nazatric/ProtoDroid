@@ -9,7 +9,7 @@
 #include "../tests/tests.h"
 #include "hooks.h"
 
-namespace protore {
+namespace protodroid {
 
 namespace {
 
@@ -30,7 +30,7 @@ int __cdecl EngineInitializeWrapper(void* a, void* b, void* c, void* d) {
     Log("difftest: EngineInitialize returned %d", result);
     int failures = RunDiffTests();
     char mode[16] = "";
-    GetEnvironmentVariableA("PROTORE_DIFFTEST", mode, sizeof(mode));
+    GetEnvironmentVariableA("PROTODROID_DIFFTEST", mode, sizeof(mode));
     if (strcmp(mode, "exit") == 0) {
         ExitProcess(failures ? 1 : 0);
     }
@@ -82,4 +82,4 @@ void InstallDiffTestTrigger() {
     Log("difftest: armed, tests run after EngineInitialize");
 }
 
-}  // namespace protore
+}  // namespace protodroid

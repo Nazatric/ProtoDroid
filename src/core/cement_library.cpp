@@ -161,7 +161,7 @@ using ReportFn = int(__cdecl*)(int, const char*, const char*, int, const char*, 
 
 template <typename Fn>
 Fn Engine(uint32_t rva) {
-    return reinterpret_cast<Fn>(protore::EngineAddress(rva));
+    return reinterpret_cast<Fn>(protodroid::EngineAddress(rva));
 }
 
 // The stream's interface pointer for a library, as the original converts it: null stays null.
@@ -237,7 +237,7 @@ void __thiscall CementLibraryLoadStep(void* load_interface, int32_t phase) {
 
     void* registration_drive = Field<void*>(library, kRegistrationDriveOffset);
     if (Field<uint32_t>(library, kNeedsIoBufferOffset) != 0) {
-        auto* assert_enabled = static_cast<volatile uint8_t*>(protore::EngineAddress(kRegistrationAssertFlagRva));
+        auto* assert_enabled = static_cast<volatile uint8_t*>(protodroid::EngineAddress(kRegistrationAssertFlagRva));
         if (*assert_enabled && registration_drive != Field<void*>(library, kOwnerOffset)) {
             if (Engine<ReportFn>(kReportRva)(kReportAssert, " oldassert ",
                                              "..\\..\\..\\code\\core\\src\\file\\common\\cementer.cpp",
@@ -300,12 +300,12 @@ using PumpFn = void(__cdecl*)();
 using SleepFn = void(__cdecl*)(uint32_t);
 
 int32_t& CurrentHeap() {
-    return *static_cast<int32_t*>(protore::EngineAddress(kCurrentHeapRva));
+    return *static_cast<int32_t*>(protodroid::EngineAddress(kCurrentHeapRva));
 }
 
 void WriteVtables(CementLibrary* self, const uint32_t (&rvas)[4]) {
     for (int i = 0; i < 4; ++i) {
-        SetField<void*>(self, kVtableOffsets[i], protore::EngineAddress(rvas[i]));
+        SetField<void*>(self, kVtableOffsets[i], protodroid::EngineAddress(rvas[i]));
     }
 }
 
@@ -318,11 +318,11 @@ void CallSlot(void* object, int slot) {
 CementLibrary* __thiscall CementLibraryConstruct(CementLibrary* self, void* drive, void* stream, uint32_t list_index,
                                                  const CementPreloaded* preloaded, void* registration_drive) {
     for (int i = 0; i < 3; ++i) {
-        SetField<void*>(self, kVtableOffsets[i], protore::EngineAddress(kVtablesBase[i]));
+        SetField<void*>(self, kVtableOffsets[i], protodroid::EngineAddress(kVtablesBase[i]));
     }
     SetField<int32_t>(self, kObjectHeapOffset, CurrentHeap());
     CurrentHeap() = -1;
-    SetField<void*>(self, kVtableOffsets[3], protore::EngineAddress(kVtablesBase[3]));
+    SetField<void*>(self, kVtableOffsets[3], protodroid::EngineAddress(kVtablesBase[3]));
     SetField<int32_t>(self, kRefCountOffset, 1);
     SetField<void*>(self, kOwnerOffset, drive);
     SetField<void*>(self, kRegistrationDriveOffset, registration_drive);
@@ -362,7 +362,7 @@ void __thiscall CementLibraryDestruct(CementLibrary* self) {
         CallSlot(Field<void*>(self, kStreamOffset), kStreamSlotCancel);
     } else if (state == kCementStateLoaded) {
         if (Field<uint32_t>(self, kNeedsIoBufferOffset) != 0) {
-            auto* assert_enabled = static_cast<volatile uint8_t*>(protore::EngineAddress(kDestructorAssertFlagRva));
+            auto* assert_enabled = static_cast<volatile uint8_t*>(protodroid::EngineAddress(kDestructorAssertFlagRva));
             if (*assert_enabled &&
                 Field<void*>(self, kRegistrationDriveOffset) != Field<void*>(self, kOwnerOffset)) {
                 if (Engine<ReportFn>(kReportRva)(kReportAssert, " oldassert ",
@@ -390,12 +390,12 @@ void __thiscall CementLibraryDestruct(CementLibrary* self) {
     if (entries) {
         Engine<HeapFreeFn>(kFreeRva)(Field<uint32_t>(self, kDirectoryHeapOffset), entries);
     }
-    SetField<void*>(self, kVtableOffsets[3], protore::EngineAddress(kVtablesDestroyed[3]));
+    SetField<void*>(self, kVtableOffsets[3], protodroid::EngineAddress(kVtablesDestroyed[3]));
     const int32_t heap = Field<int32_t>(self, kObjectHeapOffset);
-    SetField<void*>(self, kVtableOffsets[2], protore::EngineAddress(kVtablesDestroyed[2]));
+    SetField<void*>(self, kVtableOffsets[2], protodroid::EngineAddress(kVtablesDestroyed[2]));
     CurrentHeap() = heap;
-    SetField<void*>(self, kVtableOffsets[1], protore::EngineAddress(kVtablesDestroyed[1]));
-    SetField<void*>(self, kVtableOffsets[0], protore::EngineAddress(kVtablesDestroyed[0]));
+    SetField<void*>(self, kVtableOffsets[1], protodroid::EngineAddress(kVtablesDestroyed[1]));
+    SetField<void*>(self, kVtableOffsets[0], protodroid::EngineAddress(kVtablesDestroyed[0]));
 }
 
 CementLibrary* __thiscall CementLibraryDeletingDestruct(CementLibrary* self, uint32_t flags) {
@@ -494,7 +494,7 @@ using OpenByKeyFn = void(__thiscall*)(CementLibrary*, File**, uint32_t, uint32_t
 void __thiscall CementLibraryOpenByKey(CementLibrary* self, File** out, uint32_t key, uint32_t a3, uint32_t a4,
                                        uint32_t a5, uint32_t a6) {
     char name[16];
-    (*static_cast<SprintfFn*>(protore::EngineAddress(kSprintfImportRva)))(name, "0x%X", key);
+    (*static_cast<SprintfFn*>(protodroid::EngineAddress(kSprintfImportRva)))(name, "0x%X", key);
     File* file = nullptr;
     if (void* memory = Engine<NewFn>(kNewFileRva)(kFileSize)) {
         file = Engine<FileConstructFn>(kFileConstructRva)(memory, Field<void*>(self, kOwnerOffset), name, 0, 0, a3,
@@ -567,7 +567,7 @@ bool __thiscall CementLibraryFindAndOpen(CementLibrary* self, uint32_t key, Ceme
     const uint32_t word_a = Field<uint32_t>(owner_sub, kOwnerWordAOffset);
     const uint32_t word_b = Field<uint32_t>(owner_sub, kOwnerWordBOffset);
 
-    auto open_range = reinterpret_cast<OpenRangeFn>(protore::EngineAddress(kOpenRangeRva));
+    auto open_range = reinterpret_cast<OpenRangeFn>(protodroid::EngineAddress(kOpenRangeRva));
     open_range(request, Field<void*>(self, kDriveOffset), entry->offset, size_arg, entry->size, extra, word_a, word_b,
                Field<uint32_t>(self, kRequestTagOffset));
     return true;

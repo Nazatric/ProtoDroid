@@ -50,12 +50,12 @@ uint32_t U(const void* p) {
 
 template <typename Fn>
 Fn Original(uint32_t rva) {
-    return reinterpret_cast<Fn>(protore::OriginalFunction(rva));
+    return reinterpret_cast<Fn>(protodroid::OriginalFunction(rva));
 }
 
 template <typename T>
 T& Global(uint32_t rva) {
-    return *static_cast<T*>(protore::EngineAddress(rva));
+    return *static_cast<T*>(protodroid::EngineAddress(rva));
 }
 
 // ---- fake objects ----------------------------------------------------------------------------------------------
@@ -187,7 +187,7 @@ constexpr uint8_t kFreeTableBytes[] = {0x56, 0x8b, 0x74, 0x24, 0x08};
 constexpr uint8_t kReportOpenFilesBytes[] = {0x56, 0x68, 0x60, 0xca, 0x27, 0x11};
 
 #define DETOUR(var, rva, bytes, fn, ...) \
-    protore::TestDetour var(rva, sizeof(bytes), bytes, sizeof(bytes), reinterpret_cast<void*>(fn), ##__VA_ARGS__)
+    protodroid::TestDetour var(rva, sizeof(bytes), bytes, sizeof(bytes), reinterpret_cast<void*>(fn), ##__VA_ARGS__)
 
 // Runs `body(impl)` for impl 0 (original) and 1 (reconstruction) on a freshly built file, comparing the logs and
 // the file bytes. Returns true when both match.
@@ -215,7 +215,7 @@ core::File g_file;
 
 }  // namespace
 
-void TestFile(protore::DiffResult* r) {
+void TestFile(protodroid::DiffResult* r) {
     InitVtables();
     core::File* f = &g_file;
     auto build = [](core::File* x) { BuildFile(x); };
@@ -244,9 +244,9 @@ void TestFile(protore::DiffResult* r) {
             Original<OneFn>(0x0063d350)(&a);  // signalled: destroy does not block
             core::CountedEventDestroy(&b);
         }
-        protore::Check(r, ok, "counted event create/signal/wait/reset differ");
+        protodroid::Check(r, ok, "counted event create/signal/wait/reset differ");
         using TlsFn = void*(__cdecl*)();
-        protore::Check(r, Original<TlsFn>(0x00644dc0)() == core::ThreadLocalValue(), "ThreadLocalValue differs");
+        protodroid::Check(r, Original<TlsFn>(0x00644dc0)() == core::ThreadLocalValue(), "ThreadLocalValue differs");
     }
 
     bool pool_ok = true, lifetime_ok = true, ref_ok = true, accounting_ok = true, wait_ok = true, async_ok = true,
@@ -257,7 +257,7 @@ void TestFile(protore::DiffResult* r) {
         if (!first_failure[0]) snprintf(first_failure, sizeof(first_failure), "%s", what);
     };
     {
-        protore::WorldStop stop;
+        protodroid::WorldStop stop;
         DETOUR(new_request, 0x0064c4e0, kNewRequestBytes, &RecNewRequest);
         DETOUR(queue, 0x0064feb0, kQueueBytes, &RecQueue);
         DETOUR(c7b0, 0x0064d7b0, kCtorBytes, &RecCtor4<0x7b0>);
@@ -491,7 +491,7 @@ void TestFile(protore::DiffResult* r) {
         EventLog logs[2];
         core::File* table_after[2][8];
         uint32_t globals_after[2][3];
-        protore::WorldStop stop;
+        protodroid::WorldStop stop;
         DETOUR(report, 0x0064df50, kReportOpenFilesBytes, &RecReportOpenFiles);
         DETOUR(mutex_destroy, 0x0063d270, kMutexDestroyBytes, &RecMutexDestroy);
         DETOUR(free_table, 0x0063ac00, kFreeTableBytes, &RecFreeTable);
@@ -531,16 +531,16 @@ void TestFile(protore::DiffResult* r) {
         }
     }
 
-    if (first_failure[0]) protore::Log("difftest core::File first failure: %s", first_failure);
-    protore::Check(r, detours_ok, "file test detours unavailable");
-    protore::Check(r, pool_ok, "pool functions differ");
-    protore::Check(r, lifetime_ok, "construction/destruction differs");
-    protore::Check(r, ref_ok, "reference counting differs");
-    protore::Check(r, accounting_ok, "request accounting / idle / drive change differs");
-    protore::Check(r, wait_ok, "waiting differs");
-    protore::Check(r, async_ok, "asynchronous operations differ");
-    protore::Check(r, wrappers_ok, "synchronous wrappers differ");
-    protore::Check(r, accessors_ok, "accessors differ");
+    if (first_failure[0]) protodroid::Log("difftest core::File first failure: %s", first_failure);
+    protodroid::Check(r, detours_ok, "file test detours unavailable");
+    protodroid::Check(r, pool_ok, "pool functions differ");
+    protodroid::Check(r, lifetime_ok, "construction/destruction differs");
+    protodroid::Check(r, ref_ok, "reference counting differs");
+    protodroid::Check(r, accounting_ok, "request accounting / idle / drive change differs");
+    protodroid::Check(r, wait_ok, "waiting differs");
+    protodroid::Check(r, async_ok, "asynchronous operations differ");
+    protodroid::Check(r, wrappers_ok, "synchronous wrappers differ");
+    protodroid::Check(r, accessors_ok, "accessors differ");
 }
 
 }  // namespace tests

@@ -128,7 +128,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private boolean padConnected;
 
     private static final class Setting {
-        final String label, key;     // key: preference name; engine settings also go to protore.ini
+        final String label, key;     // key: preference name; engine settings also go to protodroid.ini
         final String[] names;
         final int[] values;
         final boolean engine;        // read by the engine at start: needs a restart
@@ -753,11 +753,11 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         }
     }
 
-    /** Rewrites the engine keys in protore.ini (next to game/), keeping every other line. */
+    /** Rewrites the engine keys in protodroid.ini (next to game/), keeping every other line. */
     private void writeEngineSettings() {
         File dir = getContext().getExternalFilesDir(null);
         if (dir == null) return;
-        File ini = new File(dir, "protore.ini");
+        File ini = new File(dir, "protodroid.ini");
         StringBuilder out = new StringBuilder();
         try {
             if (ini.exists()) {
@@ -949,7 +949,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         // Keep the corners empty: the centered title is the only header text.
         // two columns of settings
         int rows = (settings.length + 1) / 2;
-        float rowH = (panel.height() - 116 * density) / rows;
+        float rowH = (panel.height() - 128 * density) / rows;
         float colW = (panel.width() - pad * 3) / 2;
         float top = panel.top + 54 * density;
         leftArrows.clear();
@@ -979,7 +979,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             c.drawLine(colLeft, y + rowH / 2, colRight, y + rowH / 2, edge);
         }
         text.setTextAlign(Paint.Align.CENTER);
-        float by = panel.bottom - 36 * density, pillW = 150 * density, gap = 12 * density;
+        float by = panel.bottom - 48 * density, pillW = 150 * density, gap = 12 * density;
         float cx = panel.centerX();
         layoutRect.set(cx - pillW * 1.5f - gap, by - 18 * density, cx - pillW * 0.5f - gap, by + 18 * density);
         drawPill(c, layoutRect, "LAYOUT", false);
@@ -993,6 +993,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             text.setColor(0xff9a8a88);
             c.drawText("* applies after restart", restartRect.centerX(), by + 4 * density, text);
         }
+        // Keep author credit at the bottom, away from the empty header corners and the settings controls.
+        text.setTextSize(10 * density);
+        text.setColor(0xff9a8a88);
+        c.drawText(SetupActivity.CREDIT, cx, panel.bottom - 9 * density, text);
     }
 
     private void drawEditor(Canvas c) {

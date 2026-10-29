@@ -1,7 +1,7 @@
 /* Floating point conversions with x86 semantics (out-of-range results produce the "integer indefinite" value
  * 0x80000000 as the hardware does, instead of C undefined behaviour). */
-#ifndef PROTORE_RECOMP_RUNTIME_FP_H
-#define PROTORE_RECOMP_RUNTIME_FP_H
+#ifndef PROTODROID_RECOMP_RUNTIME_FP_H
+#define PROTODROID_RECOMP_RUNTIME_FP_H
 
 #include <math.h>
 #include <stdint.h>
