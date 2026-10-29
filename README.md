@@ -61,6 +61,12 @@ The Android application ID is **`com.protodroid`**.
 
 The application ID and app-specific directory are both `com.protodroid`. The shared game directory remains `/storage/emulated/0/Prototype`, so game files do not need to be duplicated.
 
+## Saves and Profiles
+
+With shared file access granted, profiles and saves such as `profile.bin` and `slot-*.bin` are read and written directly in `/storage/emulated/0/Prototype/`. Files added, replaced, or deleted there by a file manager are used by the game.
+
+On the first run with shared access, existing saves are copied from `/storage/emulated/0/Android/data/com.protodroid/files/native_c/Users/Player/Documents/Prototype/` without overwriting files already in shared storage. This migration runs only once, so later deletion of a shared save does not restore the old copy. The legacy files remain as a backup. Without shared access, the legacy app-specific save directory continues to be used.
+
 ## Configuration
 
 The optional `protodroid.ini` file can be placed at:

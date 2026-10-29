@@ -33,13 +33,14 @@
 
 #include "guest.h"
 #include "present_stats.h"
+#include "save_path.h"
 #include "state_cache.h"
 #include "win.h"
 
 namespace native {
 
 const char* g_game_dir = nullptr;
-const char* g_data_dir = nullptr;  // Android: the app's external files folder (logs, ini, saves)
+const char* g_data_dir = nullptr;  // Android: the app's external files folder (logs, ini, legacy saves)
 
 namespace {
 std::mutex g_log_mutex;
@@ -397,9 +398,9 @@ int main(int argc, char** argv) {
 #endif
     g_game_dir = argc > 1 ? argv[1] : getenv("PROTODROID_GAME");
 #ifdef __ANDROID__
-    // Logs, protodroid.ini, saves (native_c) and the DXVK caches live in the app's external files folder
-    // (/sdcard/Android/data/<package>/files). The game is <that folder>/game, or wherever SetupActivity found it
-    // (PROTODROID_GAME, e.g. /sdcard/Prototype with all files access); SetupActivity checks it before starting us.
+    // Logs, protodroid.ini and DXVK caches live in the app's external files folder. Saves use the shared Prototype
+    // folder when it is writable, with the legacy app-specific native_c directory as a no-permission fallback.
+    // The game is <that folder>/game, or wherever SetupActivity found it (PROTODROID_GAME, e.g. /sdcard/Prototype).
     static std::string android_game;
     const char* base = SDL_AndroidGetExternalStoragePath();
     if (!base) {
@@ -493,6 +494,8 @@ int main(int argc, char** argv) {
     // Log game dir detection
     Log("game dir: %s", g_game_dir);
     Log("data dir: %s", g_data_dir ? g_data_dir : "(none)");
+    native::ConfigureSaveDirectory(base, native::kAndroidSharedSaveDir);
+    Log("save dir: %s", native::HostPath(native::kGuestSaveDir).c_str());
 #endif
     // DXVK's durable pipeline diagnostics are strictly opt-in. Export this
     // before any DXVK device can be created; PROTODROID_PIPELINE_TRACE itself
