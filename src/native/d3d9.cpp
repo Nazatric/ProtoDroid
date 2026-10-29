@@ -28,6 +28,7 @@
 #include "win.h"
 #include "d3d9_dxt.h"
 #include "d3d9_state.h"
+#include "present_stats.h"
 
 namespace native {
 
@@ -779,7 +780,14 @@ HRESULT GuardedPresent(F present) {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return D3D_OK;
     }
-    return present();
+    HRESULT hr = present();
+    if (SUCCEEDED(hr)) {
+        // Both IDirect3DDevice9 and IDirect3DSwapChain9 presents converge here. A real Present contributes one
+        // complete end-to-end interval; empty guest pump iterations and skipped surface-less presents do not.
+        const int64_t duration_ns = RecordPresent();
+        if (duration_ns > 0) PerfHintFrame(duration_ns);
+    }
+    return hr;
 }
 
 #ifdef __ANDROID__

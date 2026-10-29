@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "guest.h"
+#include "present_stats.h"
 #include "win.h"
 
 namespace native {
@@ -303,9 +304,8 @@ extern SDL_Window* g_sdl_window;
 }  // namespace native
 
 
-// ---- performance counters and frame limiter (read by the on-screen overlay through JNI) ----
+// ---- frame limiter and presented-frame counters (read by the on-screen overlay through JNI) ----
 namespace native {
-std::atomic<float> g_fps{0}, g_frame_ms{0};
 std::atomic<int> g_fps_limit{0};  // 0 = no limit (the swap interval still applies)
 
 static long ResidentMiB() {
@@ -320,10 +320,13 @@ static long ResidentMiB() {
 
 #ifdef __ANDROID__
 extern "C" JNIEXPORT jfloat JNICALL Java_com_protodroid_TouchControls_nativeFps(JNIEnv*, jclass) {
-    return native::g_fps.load();
+    return jfloat(native::GetPresentStats().fps);
 }
 extern "C" JNIEXPORT jfloat JNICALL Java_com_protodroid_TouchControls_nativeFrameMs(JNIEnv*, jclass) {
-    return native::g_frame_ms.load();
+    return jfloat(native::GetPresentStats().average_ms);
+}
+extern "C" JNIEXPORT jfloat JNICALL Java_com_protodroid_TouchControls_nativeFrameP99Ms(JNIEnv*, jclass) {
+    return jfloat(native::GetPresentStats().p99_ms);
 }
 extern "C" JNIEXPORT jint JNICALL Java_com_protodroid_TouchControls_nativeMemoryMiB(JNIEnv*, jclass) {
     return jint(native::ResidentMiB());
@@ -660,14 +663,13 @@ int main(int argc, char** argv) {
     g_fps_limit.store(fps_limit);
     PerfHintStart(fps_limit);
     using Clock = std::chrono::steady_clock;
-    Clock::time_point stats_start = Clock::now(), frame_start = stats_start, next_log = stats_start;
-    uint64_t stats_frames = 0;
+    Clock::time_point frame_start = Clock::now(), next_log = frame_start;
     for (uint64_t frame = 0;; ++frame) {
         frames.store(frame, std::memory_order_relaxed);
         if (frame == 900) VulkanDriverConfirm();  // well past the intro movies: the driver survived startup
-        // Frame time, FPS over the last second, a perf line in the log every 30 s, and the optional limiter.
+        // The limiter remains anchored to the engine loop. FPS, frame statistics, and ADPF are anchored only to real
+        // D3D9 presents, so thousands of empty message-pump iterations cannot inflate them or skew CPU clocking.
         Clock::time_point now = Clock::now();
-        PerfHintFrame(std::chrono::duration_cast<std::chrono::nanoseconds>(now - frame_start).count());
         if (int limit = g_fps_limit.load(); limit > 0) {
             Clock::time_point due = frame_start + std::chrono::microseconds(1000000 / limit);
             if (now < due) {
@@ -675,17 +677,13 @@ int main(int argc, char** argv) {
                 now = Clock::now();
             }
         }
-        g_frame_ms.store(std::chrono::duration<float, std::milli>(now - frame_start).count());
         frame_start = now;
-        if (++stats_frames, now - stats_start >= std::chrono::seconds(1)) {
-            g_fps.store(float(stats_frames) / std::chrono::duration<float>(now - stats_start).count());
-            stats_frames = 0;
-            stats_start = now;
-        }
         if (now >= next_log) {
             if (frame) {
-                Log("perf: %.1f fps, %.1f ms, %ld MiB resident; arena %s; io: %s", g_fps.load(), g_frame_ms.load(),
-                    ResidentMiB(), ArenaUsage().c_str(), TakeIoStats().c_str());
+                const PresentStatsSnapshot present = GetPresentStats();
+                Log("perf: %.1f present fps, avg %.2f ms, p99 %.2f ms, max %.2f ms, %ld MiB resident; arena %s; io: %s",
+                    present.fps, present.average_ms, present.p99_ms, present.max_ms, ResidentMiB(),
+                    ArenaUsage().c_str(), TakeIoStats().c_str());
                 native::MirrorCopyDXVKLogs();
             }
             next_log = now + std::chrono::seconds(30);

@@ -49,6 +49,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     // Performance counters and the frame limiter of the native host (main.cpp).
     static native float nativeFps();
     static native float nativeFrameMs();
+    static native float nativeFrameP99Ms();
     static native int nativeMemoryMiB();
     static native void nativeSetFpsLimit(int fps);
 
@@ -908,16 +909,17 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     }
 
     private void drawPerf(Canvas c) {
-        float fps, ms;
+        float fps, ms, p99;
         int mem;
         try {
             fps = nativeFps();
             ms = nativeFrameMs();
+            p99 = nativeFrameP99Ms();
             mem = nativeMemoryMiB();
         } catch (UnsatisfiedLinkError e) {
             return;
         }
-        String line = String.format("%.0f FPS  %.1f MS  %d MB", fps, ms, mem);
+        String line = String.format("%.0f FPS  AVG %.1f  P99 %.1f MS  %d MB", fps, ms, p99, mem);
         text.setTextSize(13 * density);
         text.setTextAlign(Paint.Align.LEFT);
         text.setColor(fps >= 50 ? 0xff7dff7a : fps >= 28 ? 0xffffd060 : 0xffff5a4a);

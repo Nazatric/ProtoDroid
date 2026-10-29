@@ -8,53 +8,103 @@
 #include <adrenotools/driver.h>
 #include <vulkan/vulkan.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 
+#include "gpu_profile.h"
+
 namespace native {
 
+struct ProbeInfo {
+    uint32_t api_version = 0;   // physical device's advertised API, for diagnostics
+    uint32_t usable_api = 0;    // instance/device intersection, capped at the tested 1.3 path
+    uint32_t instance_api = 0;
+    uint32_t vendor_id = 0;
+    uint32_t driver_id = 0;
+};
+
 // Creates a throwaway instance to see which GPU the driver drives; returns the device name ("" if none) and puts a
-// line for the log in `report`.
+// line for the log in `report`. Vulkan 1.3 remains preferred, but a 1.2 loader/device gets a real negotiated instance
+// so DXVK can use its extension-equivalent compatibility path instead of failing during instance creation.
 inline std::string ProbeDevice(PFN_vkGetInstanceProcAddr gipa, const char* driver, std::string& report,
-                        uint32_t* api_version = nullptr) {
-    char line[256];
+                               ProbeInfo* probe_info = nullptr) {
+    char line[1024];
+    ProbeInfo info;
     auto create = reinterpret_cast<PFN_vkCreateInstance>(gipa(nullptr, "vkCreateInstance"));
     if (!create) {
         snprintf(line, sizeof(line), "vulkan: %s has no vkCreateInstance", driver);
         report = line;
         return "";
     }
+
+    uint32_t loader_api = VK_API_VERSION_1_0;
+    auto instance_version = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(gipa(nullptr, "vkEnumerateInstanceVersion"));
+    if (instance_version && instance_version(&loader_api) != VK_SUCCESS) loader_api = VK_API_VERSION_1_0;
+    const uint32_t requested_api = std::min(loader_api, kVulkanApi13);
+    info.instance_api = requested_api;
+    if (requested_api < kVulkanApi12) {
+        snprintf(line, sizeof(line), "vulkan: %s loader supports only Vulkan %u.%u (1.2 or newer is required)", driver,
+                 VK_API_VERSION_MAJOR(loader_api), VK_API_VERSION_MINOR(loader_api));
+        report = line;
+        return "";
+    }
+
     VkApplicationInfo app{};
     app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app.apiVersion = VK_API_VERSION_1_3;
+    app.apiVersion = requested_api;
     VkInstanceCreateInfo ci{};
     ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     ci.pApplicationInfo = &app;
     VkInstance instance = VK_NULL_HANDLE;
     if (VkResult r = create(&ci, nullptr, &instance); r != VK_SUCCESS) {
-        snprintf(line, sizeof(line), "vulkan: %s vkCreateInstance -> %d", driver, r);
+        snprintf(line, sizeof(line), "vulkan: %s vkCreateInstance(%u.%u) -> %d", driver,
+                 VK_API_VERSION_MAJOR(requested_api), VK_API_VERSION_MINOR(requested_api), r);
         report = line;
         return "";
     }
     auto enumerate = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(gipa(instance, "vkEnumeratePhysicalDevices"));
     auto props = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(gipa(instance, "vkGetPhysicalDeviceProperties"));
+    auto props2 = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(gipa(instance, "vkGetPhysicalDeviceProperties2"));
     auto destroy = reinterpret_cast<PFN_vkDestroyInstance>(gipa(instance, "vkDestroyInstance"));
     std::string name;
     uint32_t count = 1;
     VkPhysicalDevice device = VK_NULL_HANDLE;
     VkResult r = enumerate ? enumerate(instance, &count, &device) : VK_ERROR_INITIALIZATION_FAILED;
     if (props && r >= 0 && count && device) {
-        VkPhysicalDeviceProperties p;
+        VkPhysicalDeviceProperties p{};
         props(device, &p);
+        info.api_version = p.apiVersion;
+        info.usable_api = NegotiateVulkanApi(requested_api, p.apiVersion);
+        info.vendor_id = p.vendorID;
+
+        // Driver properties are core in Vulkan 1.2. Query the base properties first so an older physical device never
+        // receives a structure chain it does not support.
+        if (props2 && p.apiVersion >= kVulkanApi12) {
+            VkPhysicalDeviceDriverProperties driver_properties{};
+            driver_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+            VkPhysicalDeviceProperties2 properties2{};
+            properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+            properties2.pNext = &driver_properties;
+            props2(device, &properties2);
+            p = properties2.properties;
+            info.driver_id = driver_properties.driverID;
+        }
+
         name = p.deviceName;
-        if (api_version) *api_version = p.apiVersion;
-        snprintf(line, sizeof(line), "vulkan: %s sees %s (Vulkan %u.%u.%u, driver %08x, vendor %04x device %08x)",
-                 driver, p.deviceName, VK_API_VERSION_MAJOR(p.apiVersion), VK_API_VERSION_MINOR(p.apiVersion),
-                 VK_API_VERSION_PATCH(p.apiVersion), p.driverVersion, p.vendorID, p.deviceID);
+        const GpuProfile profile = GetGpuProfile(p.vendorID);
+        snprintf(line, sizeof(line),
+                 "vulkan: %s sees %s (profile %s, device Vulkan %u.%u.%u, instance %u.%u, usable %u.%u, driver %08x, driverID %u, vendor %04x device %08x)",
+                 driver, p.deviceName, profile.name, VK_API_VERSION_MAJOR(p.apiVersion),
+                 VK_API_VERSION_MINOR(p.apiVersion), VK_API_VERSION_PATCH(p.apiVersion),
+                 VK_API_VERSION_MAJOR(requested_api), VK_API_VERSION_MINOR(requested_api),
+                 VK_API_VERSION_MAJOR(info.usable_api), VK_API_VERSION_MINOR(info.usable_api), p.driverVersion,
+                 info.driver_id, p.vendorID, p.deviceID);
     } else {
         snprintf(line, sizeof(line), "vulkan: %s vkEnumeratePhysicalDevices -> %d, %u device(s)", driver, r, count);
     }
     report = line;
+    if (probe_info) *probe_info = info;
     if (destroy) destroy(instance, nullptr);
     return name;
 }
@@ -79,15 +129,14 @@ inline PFN_vkGetInstanceProcAddr LoadTurnip(const Driver& d, std::string& device
         report = "vulkan: the adrenotools loader has no vkGetInstanceProcAddr";
         return nullptr;
     }
-    uint32_t api = 0;
-    device = ProbeDevice(gipa, d.file.c_str(), report, &api);
-    // DXVK needs Vulkan 1.3; Turnip 26.2 offers only 1.0 on an Adreno 610, where 26.3 runs the game.
-    if (!device.empty() && api < VK_API_VERSION_1_3) {
-        report += " (needs Vulkan 1.3)";
+    ProbeInfo info;
+    device = ProbeDevice(gipa, d.file.c_str(), report, &info);
+    if (!device.empty() && !info.usable_api) {
+        report += " (needs Vulkan 1.2 with required extensions, or 1.3)";
         device.clear();
         return nullptr;
     }
-    if (device.empty() || (!d.custom && device.find("Turnip") == std::string::npos)) {
+    if (device.empty() || (!d.custom && !IsTurnipIdentity(info.driver_id, device.c_str()))) {
         report += device.empty() ? "" : " (not Turnip: the driver did not load)";
         device.clear();
         return nullptr;

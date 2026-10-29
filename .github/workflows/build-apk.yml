@@ -41,6 +41,35 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/perf_hint_test
 
+      - name: Compile and run presented-frame statistics tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/present_stats.cpp src/native/tests/present_stats_test.cpp -o /tmp/present_stats_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/present_stats_test
+
+      - name: Compile and run GPU profile and API negotiation tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/gpu_profile_test.cpp -o /tmp/gpu_profile_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/gpu_profile_test
+
+      - name: Compile and run DXVK state-cache behavior tests
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/protodroid-dxvk-test
+          for patch in android/patches/dxvk-*.patch; do
+            git -C /tmp/protodroid-dxvk-test apply --check "$patch"
+            git -C /tmp/protodroid-dxvk-test apply "$patch"
+          done
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-test/src/dxvk"
+          g++ $CXXFLAGS src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/state_cache_test
+
       - name: Build minimal host FFmpeg
         run: |
           set -euo pipefail

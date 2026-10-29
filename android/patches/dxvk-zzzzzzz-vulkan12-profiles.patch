@@ -1,0 +1,682 @@
+diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
+index f80a19f..5f0e02f 100644
+--- a/src/dxvk/dxvk_adapter.cpp
++++ b/src/dxvk/dxvk_adapter.cpp
+@@ -490,6 +490,61 @@ namespace dxvk {
+     return g_createComputePipelines(device, pipelineCache,
+       createInfoCount, pCreateInfos, pAllocator, pPipelines);
+   }
++
++  static bool aliasVulkan12Commands(const Rc<vk::DeviceFn>& vkd, bool maintenance4) {
++    bool result = true;
++
++#define DXVK_ALIAS_COMMAND(coreName, extensionName) \
++    do { \
++      vkd->coreName = reinterpret_cast<decltype(vkd->coreName)>(vkd->sym(#extensionName)); \
++      if (!vkd->coreName) { \
++        Logger::err(str::format("DXVK: Vulkan 1.2 missing required command ", #extensionName, \
++          " (for ", #coreName, ")")); \
++        result = false; \
++      } \
++    } while (false)
++
++    DXVK_ALIAS_COMMAND(vkQueueSubmit2, vkQueueSubmit2KHR);
++    DXVK_ALIAS_COMMAND(vkCmdSetEvent2, vkCmdSetEvent2KHR);
++    DXVK_ALIAS_COMMAND(vkCmdResetEvent2, vkCmdResetEvent2KHR);
++    DXVK_ALIAS_COMMAND(vkCmdWaitEvents2, vkCmdWaitEvents2KHR);
++    DXVK_ALIAS_COMMAND(vkCmdPipelineBarrier2, vkCmdPipelineBarrier2KHR);
++    DXVK_ALIAS_COMMAND(vkCmdWriteTimestamp2, vkCmdWriteTimestamp2KHR);
++
++    DXVK_ALIAS_COMMAND(vkCmdBeginRendering, vkCmdBeginRenderingKHR);
++    DXVK_ALIAS_COMMAND(vkCmdEndRendering, vkCmdEndRenderingKHR);
++
++    DXVK_ALIAS_COMMAND(vkCmdCopyBuffer2, vkCmdCopyBuffer2KHR);
++    DXVK_ALIAS_COMMAND(vkCmdCopyImage2, vkCmdCopyImage2KHR);
++    DXVK_ALIAS_COMMAND(vkCmdBlitImage2, vkCmdBlitImage2KHR);
++    DXVK_ALIAS_COMMAND(vkCmdCopyBufferToImage2, vkCmdCopyBufferToImage2KHR);
++    DXVK_ALIAS_COMMAND(vkCmdCopyImageToBuffer2, vkCmdCopyImageToBuffer2KHR);
++    DXVK_ALIAS_COMMAND(vkCmdResolveImage2, vkCmdResolveImage2KHR);
++
++    DXVK_ALIAS_COMMAND(vkCmdBindVertexBuffers2, vkCmdBindVertexBuffers2EXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetCullMode, vkCmdSetCullModeEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetFrontFace, vkCmdSetFrontFaceEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetPrimitiveTopology, vkCmdSetPrimitiveTopologyEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetViewportWithCount, vkCmdSetViewportWithCountEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetScissorWithCount, vkCmdSetScissorWithCountEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetDepthTestEnable, vkCmdSetDepthTestEnableEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetDepthWriteEnable, vkCmdSetDepthWriteEnableEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetDepthCompareOp, vkCmdSetDepthCompareOpEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetDepthBoundsTestEnable, vkCmdSetDepthBoundsTestEnableEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetStencilTestEnable, vkCmdSetStencilTestEnableEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetStencilOp, vkCmdSetStencilOpEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetRasterizerDiscardEnable, vkCmdSetRasterizerDiscardEnableEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetDepthBiasEnable, vkCmdSetDepthBiasEnableEXT);
++    DXVK_ALIAS_COMMAND(vkCmdSetPrimitiveRestartEnable, vkCmdSetPrimitiveRestartEnableEXT);
++
++    if (maintenance4) {
++      DXVK_ALIAS_COMMAND(vkGetDeviceBufferMemoryRequirements, vkGetDeviceBufferMemoryRequirementsKHR);
++      DXVK_ALIAS_COMMAND(vkGetDeviceImageMemoryRequirements, vkGetDeviceImageMemoryRequirementsKHR);
++    }
++
++#undef DXVK_ALIAS_COMMAND
++    return result;
++  }
+ #endif
+ 
+   DxvkDeviceQueue getDeviceQueue(const Rc<vk::DeviceFn>& vkd, uint32_t family, uint32_t index) {
+@@ -506,9 +561,11 @@ namespace dxvk {
+ 
+   DxvkAdapter::DxvkAdapter(
+     const Rc<vk::InstanceFn>& vki,
+-          VkPhysicalDevice    handle)
++          VkPhysicalDevice    handle,
++          uint32_t            apiVersion)
+   : m_vki           (vki),
+-    m_handle        (handle) {
++    m_handle        (handle),
++    m_apiVersion    (apiVersion) {
+     this->queryExtensions();
+     this->queryDeviceInfo();
+     this->queryDeviceFeatures();
+@@ -563,14 +620,28 @@ namespace dxvk {
+   
+   
+   DxvkFormatFeatures DxvkAdapter::getFormatFeatures(VkFormat format) const {
++    bool useFormatProperties3 = true;
++#ifdef __ANDROID__
++    useFormatProperties3 = !useVulkan12Compatibility()
++      || m_deviceExtensions.supports(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
++#endif
+     VkFormatProperties3 properties3 = { VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_3 };
+-    VkFormatProperties2 properties2 = { VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2, &properties3 };
++    VkFormatProperties2 properties2 = { VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2,
++      useFormatProperties3 ? &properties3 : nullptr };
+     m_vki->vkGetPhysicalDeviceFormatProperties2(m_handle, format, &properties2);
+ 
+     DxvkFormatFeatures result;
+-    result.optimal = properties3.optimalTilingFeatures;
+-    result.linear  = properties3.linearTilingFeatures;
+-    result.buffer  = properties3.bufferFeatures;
++    if (useFormatProperties3) {
++      result.optimal = properties3.optimalTilingFeatures;
++      result.linear  = properties3.linearTilingFeatures;
++      result.buffer  = properties3.bufferFeatures;
++    } else {
++      // KHR_format_feature_flags2 is optional on the 1.2 path. The base query still provides every Vulkan 1.0 bit;
++      // do not chain VkFormatProperties3 where it is not supported merely to obtain flags DXVK may not need.
++      result.optimal = properties2.formatProperties.optimalTilingFeatures;
++      result.linear  = properties2.formatProperties.linearTilingFeatures;
++      result.buffer  = properties2.formatProperties.bufferFeatures;
++    }
+     return result;
+   }
+ 
+@@ -729,6 +800,7 @@ namespace dxvk {
+         & CHECK_FEATURE_NEED(core.features.inheritedQueries)
+         & CHECK_FEATURE_NEED(vk11.shaderDrawParameters)
+         & CHECK_FEATURE_NEED(vk12.samplerMirrorClampToEdge)
++        & CHECK_FEATURE_NEED(vk12.vulkanMemoryModel)
+         & CHECK_FEATURE_NEED(vk12.drawIndirectCount)
+         & CHECK_FEATURE_NEED(vk12.hostQueryReset)
+         & CHECK_FEATURE_NEED(vk12.timelineSemaphore)
+@@ -780,6 +852,27 @@ namespace dxvk {
+     DxvkDeviceExtensions devExtensions;
+     auto devExtensionList = getExtensionList(devExtensions);
+ 
++#ifdef __ANDROID__
++    if (useVulkan12Compatibility()) {
++      // These four extensions provide commands DXVK cannot omit without a separate renderer. Fail with the exact
++      // missing extension name rather than dispatching a null core-1.3 function pointer.
++      devExtensions.khrDynamicRendering.setMode(DxvkExtMode::Required);
++      devExtensions.khrSynchronization2.setMode(DxvkExtMode::Required);
++      devExtensions.khrCopyCommands2.setMode(DxvkExtMode::Required);
++      devExtensions.extExtendedDynamicState.setMode(DxvkExtMode::Required);
++
++      // Optional capabilities retain their existing fallbacks. Their feature bits are copied into vk13 only when
++      // both the extension and physical feature are present.
++      devExtensions.khrMaintenance4.setMode(DxvkExtMode::Optional);
++      devExtensions.khrFormatFeatureFlags2.setMode(DxvkExtMode::Optional);
++      devExtensions.khrZeroInitializeWorkgroupMemory.setMode(DxvkExtMode::Optional);
++      devExtensions.extImageRobustness.setMode(DxvkExtMode::Optional);
++      devExtensions.extPipelineCreationCacheControl.setMode(DxvkExtMode::Optional);
++      devExtensions.extShaderDemoteToHelperInvocation.setMode(DxvkExtMode::Optional);
++      Logger::info("DXVK: Using Vulkan 1.2 KHR/EXT compatibility path");
++    }
++#endif
++
+     // Only enable Cuda interop extensions in 64-bit builds in
+     // order to avoid potential driver or address space issues.
+     // VK_KHR_buffer_device_address is expensive on some drivers.
+@@ -917,14 +1010,21 @@ namespace dxvk {
+     enabledFeatures.vk13.pipelineCreationCacheControl =
+       m_deviceFeatures.vk13.pipelineCreationCacheControl;
+ 
+-    // Core features that we're relying on in various places
+-    enabledFeatures.vk13.synchronization2 = VK_TRUE;
+-    enabledFeatures.vk13.dynamicRendering = VK_TRUE;
++    // Core features that we're relying on in various places. On 1.2 these bits came from the KHR feature structs.
++    if (useVulkan12Compatibility()) {
++      enabledFeatures.vk13.synchronization2 = m_deviceFeatures.vk13.synchronization2;
++      enabledFeatures.vk13.dynamicRendering = m_deviceFeatures.vk13.dynamicRendering;
++    } else {
++      enabledFeatures.vk13.synchronization2 = VK_TRUE;
++      enabledFeatures.vk13.dynamicRendering = VK_TRUE;
++    }
+ 
+-    // Maintenance4 may cause performance problems on amdvlk in some cases
++    // Maintenance4 may cause performance problems on amdvlk in some cases. It is optional on the 1.2 path.
+     if (m_deviceInfo.vk12.driverID != VK_DRIVER_ID_AMD_OPEN_SOURCE
+-     && m_deviceInfo.vk12.driverID != VK_DRIVER_ID_AMD_PROPRIETARY)
+-      enabledFeatures.vk13.maintenance4 = VK_TRUE;
++     && m_deviceInfo.vk12.driverID != VK_DRIVER_ID_AMD_PROPRIETARY) {
++      enabledFeatures.vk13.maintenance4 = useVulkan12Compatibility()
++        ? m_deviceFeatures.vk13.maintenance4 : VK_TRUE;
++    }
+ 
+     // We expose depth clip rather than depth clamp to client APIs
+     enabledFeatures.extDepthClipEnable.depthClipEnable =
+@@ -1021,6 +1121,19 @@ namespace dxvk {
+       Logger::info("DXVK: Disabling maintenance5, EDS3, line/conservative rasterization, depth-clip and custom-border-color on ARM");
+     }
+ 
++#ifdef __ANDROID__
++    if (useVulkan12Compatibility()) {
++      enabledFeatures.extExtendedDynamicState.extendedDynamicState =
++        m_deviceFeatures.extExtendedDynamicState.extendedDynamicState;
++      if (!enabledFeatures.extExtendedDynamicState.extendedDynamicState) {
++        Logger::err("DxvkAdapter: missing required feature extExtendedDynamicState.extendedDynamicState");
++        throw DxvkError("DxvkAdapter: Vulkan 1.2 extendedDynamicState feature is required");
++      }
++      if (!checkFeatureSupport(enabledFeatures))
++        throw DxvkError("DxvkAdapter: required Vulkan 1.2/D3D9 features are not supported");
++    }
++#endif
++
+     // Create pNext chain for additional device features
+     initFeatureChain(enabledFeatures, devExtensions, instance->extensions());
+ 
+@@ -1115,6 +1228,12 @@ namespace dxvk {
+     Rc<vk::DeviceFn> vkd = new vk::DeviceFn(m_vki, true, device);
+ 
+ #ifdef __ANDROID__
++    if (useVulkan12Compatibility()) {
++      if (!aliasVulkan12Commands(vkd, enabledFeatures.vk13.maintenance4))
++        throw DxvkError("DxvkAdapter: Vulkan 1.2 command alias resolution failed");
++      Logger::info("DXVK: Vulkan 1.2 command aliases resolved successfully");
++    }
++
+     // Match the ARM vendor rather than a device-name string. The lock and
+     // diagnostics cover Mali-G720 without assuming a device-name substring.
+     if (m_deviceInfo.core.properties.vendorID == 0x13B5) {
+@@ -1358,6 +1477,16 @@ namespace dxvk {
+   }
+   
+   
++  bool DxvkAdapter::useVulkan12Compatibility() const {
++#ifdef __ANDROID__
++    return std::min(m_apiVersion, m_deviceInfo.core.properties.apiVersion)
++      < VK_MAKE_API_VERSION(0, 1, 3, 0);
++#else
++    return false;
++#endif
++  }
++
++
+   void DxvkAdapter::queryExtensions() {
+     m_deviceExtensions = DxvkNameSet::enumDeviceExtensions(m_vki, m_handle);
+   }
+@@ -1377,8 +1506,10 @@ namespace dxvk {
+     m_deviceInfo.vk12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
+     m_deviceInfo.vk12.pNext = std::exchange(m_deviceInfo.core.pNext, &m_deviceInfo.vk12);
+ 
+-    m_deviceInfo.vk13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES;
+-    m_deviceInfo.vk13.pNext = std::exchange(m_deviceInfo.core.pNext, &m_deviceInfo.vk13);
++    if (!useVulkan12Compatibility()) {
++      m_deviceInfo.vk13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES;
++      m_deviceInfo.vk13.pNext = std::exchange(m_deviceInfo.core.pNext, &m_deviceInfo.vk13);
++    }
+ 
+     if (m_deviceExtensions.supports(VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME)) {
+       m_deviceInfo.extConservativeRasterization.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONSERVATIVE_RASTERIZATION_PROPERTIES_EXT;
+@@ -1445,8 +1576,46 @@ namespace dxvk {
+     m_deviceFeatures.vk12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+     m_deviceFeatures.vk12.pNext = std::exchange(m_deviceFeatures.core.pNext, &m_deviceFeatures.vk12);
+ 
+-    m_deviceFeatures.vk13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+-    m_deviceFeatures.vk13.pNext = std::exchange(m_deviceFeatures.core.pNext, &m_deviceFeatures.vk13);
++#ifdef __ANDROID__
++    if (useVulkan12Compatibility()) {
++      if (m_deviceExtensions.supports(VK_EXT_IMAGE_ROBUSTNESS_EXTENSION_NAME)) {
++        m_deviceFeatures.extImageRobustness.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ROBUSTNESS_FEATURES_EXT;
++        m_deviceFeatures.extImageRobustness.pNext = std::exchange(m_deviceFeatures.core.pNext, &m_deviceFeatures.extImageRobustness);
++      }
++      if (m_deviceExtensions.supports(VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME)) {
++        m_deviceFeatures.extPipelineCreationCacheControl.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES_EXT;
++        m_deviceFeatures.extPipelineCreationCacheControl.pNext = std::exchange(m_deviceFeatures.core.pNext, &m_deviceFeatures.extPipelineCreationCacheControl);
++      }
++      if (m_deviceExtensions.supports(VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME)) {
++        m_deviceFeatures.extShaderDemoteToHelperInvocation.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES_EXT;
++        m_deviceFeatures.extShaderDemoteToHelperInvocation.pNext = std::exchange(m_deviceFeatures.core.pNext, &m_deviceFeatures.extShaderDemoteToHelperInvocation);
++      }
++      if (m_deviceExtensions.supports(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME)) {
++        m_deviceFeatures.extExtendedDynamicState.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
++        m_deviceFeatures.extExtendedDynamicState.pNext = std::exchange(m_deviceFeatures.core.pNext, &m_deviceFeatures.extExtendedDynamicState);
++      }
++      if (m_deviceExtensions.supports(VK_KHR_ZERO_INITIALIZE_WORKGROUP_MEMORY_EXTENSION_NAME)) {
++        m_deviceFeatures.khrZeroInitializeWorkgroupMemory.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ZERO_INITIALIZE_WORKGROUP_MEMORY_FEATURES_KHR;
++        m_deviceFeatures.khrZeroInitializeWorkgroupMemory.pNext = std::exchange(m_deviceFeatures.core.pNext, &m_deviceFeatures.khrZeroInitializeWorkgroupMemory);
++      }
++      if (m_deviceExtensions.supports(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME)) {
++        m_deviceFeatures.khrSynchronization2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
++        m_deviceFeatures.khrSynchronization2.pNext = std::exchange(m_deviceFeatures.core.pNext, &m_deviceFeatures.khrSynchronization2);
++      }
++      if (m_deviceExtensions.supports(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)) {
++        m_deviceFeatures.khrDynamicRendering.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
++        m_deviceFeatures.khrDynamicRendering.pNext = std::exchange(m_deviceFeatures.core.pNext, &m_deviceFeatures.khrDynamicRendering);
++      }
++      if (m_deviceExtensions.supports(VK_KHR_MAINTENANCE_4_EXTENSION_NAME)) {
++        m_deviceFeatures.khrMaintenance4.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES_KHR;
++        m_deviceFeatures.khrMaintenance4.pNext = std::exchange(m_deviceFeatures.core.pNext, &m_deviceFeatures.khrMaintenance4);
++      }
++    } else
++#endif
++    {
++      m_deviceFeatures.vk13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
++      m_deviceFeatures.vk13.pNext = std::exchange(m_deviceFeatures.core.pNext, &m_deviceFeatures.vk13);
++    }
+ 
+     if (m_deviceExtensions.supports(VK_AMD_SHADER_FRAGMENT_MASK_EXTENSION_NAME))
+       m_deviceFeatures.amdShaderFragmentMask = VK_TRUE;
+@@ -1587,6 +1756,19 @@ namespace dxvk {
+       m_deviceFeatures.nvxImageViewHandle = VK_TRUE;
+ 
+     m_vki->vkGetPhysicalDeviceFeatures2(m_handle, &m_deviceFeatures.core);
++
++#ifdef __ANDROID__
++    if (useVulkan12Compatibility()) {
++      // Keep DXVK's established vk13 runtime checks, but source every bit from the extension struct actually queried.
++      m_deviceFeatures.vk13.robustImageAccess = m_deviceFeatures.extImageRobustness.robustImageAccess;
++      m_deviceFeatures.vk13.pipelineCreationCacheControl = m_deviceFeatures.extPipelineCreationCacheControl.pipelineCreationCacheControl;
++      m_deviceFeatures.vk13.shaderDemoteToHelperInvocation = m_deviceFeatures.extShaderDemoteToHelperInvocation.shaderDemoteToHelperInvocation;
++      m_deviceFeatures.vk13.shaderZeroInitializeWorkgroupMemory = m_deviceFeatures.khrZeroInitializeWorkgroupMemory.shaderZeroInitializeWorkgroupMemory;
++      m_deviceFeatures.vk13.synchronization2 = m_deviceFeatures.khrSynchronization2.synchronization2;
++      m_deviceFeatures.vk13.dynamicRendering = m_deviceFeatures.khrDynamicRendering.dynamicRendering;
++      m_deviceFeatures.vk13.maintenance4 = m_deviceFeatures.khrMaintenance4.maintenance4;
++    }
++#endif
+   }
+ 
+ 
+@@ -1623,11 +1805,15 @@ namespace dxvk {
+       &devExtensions.extCustomBorderColor,
+       &devExtensions.extDepthClipEnable,
+       &devExtensions.extDepthBiasControl,
++      &devExtensions.extExtendedDynamicState,
+       &devExtensions.extExtendedDynamicState3,
+       &devExtensions.extFragmentShaderInterlock,
+       &devExtensions.extFullScreenExclusive,
+       &devExtensions.extGraphicsPipelineLibrary,
+       &devExtensions.extHdrMetadata,
++      &devExtensions.extImageRobustness,
++      &devExtensions.extPipelineCreationCacheControl,
++      &devExtensions.extShaderDemoteToHelperInvocation,
+       &devExtensions.extLineRasterization,
+       &devExtensions.extMemoryBudget,
+       &devExtensions.extMemoryPriority,
+@@ -1642,6 +1828,12 @@ namespace dxvk {
+       &devExtensions.extVertexAttributeDivisor,
+       &devExtensions.khrExternalMemoryWin32,
+       &devExtensions.khrExternalSemaphoreWin32,
++      &devExtensions.khrCopyCommands2,
++      &devExtensions.khrDynamicRendering,
++      &devExtensions.khrFormatFeatureFlags2,
++      &devExtensions.khrMaintenance4,
++      &devExtensions.khrSynchronization2,
++      &devExtensions.khrZeroInitializeWorkgroupMemory,
+       &devExtensions.khrMaintenance5,
+       &devExtensions.khrPipelineLibrary,
+       &devExtensions.khrPresentId,
+@@ -1669,8 +1861,54 @@ namespace dxvk {
+     enabledFeatures.vk12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+     enabledFeatures.vk12.pNext = std::exchange(enabledFeatures.core.pNext, &enabledFeatures.vk12);
+ 
+-    enabledFeatures.vk13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+-    enabledFeatures.vk13.pNext = std::exchange(enabledFeatures.core.pNext, &enabledFeatures.vk13);
++#ifdef __ANDROID__
++    if (useVulkan12Compatibility()) {
++      enabledFeatures.extImageRobustness.robustImageAccess = enabledFeatures.vk13.robustImageAccess;
++      enabledFeatures.extPipelineCreationCacheControl.pipelineCreationCacheControl = enabledFeatures.vk13.pipelineCreationCacheControl;
++      enabledFeatures.extShaderDemoteToHelperInvocation.shaderDemoteToHelperInvocation = enabledFeatures.vk13.shaderDemoteToHelperInvocation;
++      enabledFeatures.khrZeroInitializeWorkgroupMemory.shaderZeroInitializeWorkgroupMemory = enabledFeatures.vk13.shaderZeroInitializeWorkgroupMemory;
++      enabledFeatures.khrSynchronization2.synchronization2 = enabledFeatures.vk13.synchronization2;
++      enabledFeatures.khrDynamicRendering.dynamicRendering = enabledFeatures.vk13.dynamicRendering;
++      enabledFeatures.khrMaintenance4.maintenance4 = enabledFeatures.vk13.maintenance4;
++
++      if (devExtensions.extImageRobustness) {
++        enabledFeatures.extImageRobustness.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ROBUSTNESS_FEATURES_EXT;
++        enabledFeatures.extImageRobustness.pNext = std::exchange(enabledFeatures.core.pNext, &enabledFeatures.extImageRobustness);
++      }
++      if (devExtensions.extPipelineCreationCacheControl) {
++        enabledFeatures.extPipelineCreationCacheControl.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES_EXT;
++        enabledFeatures.extPipelineCreationCacheControl.pNext = std::exchange(enabledFeatures.core.pNext, &enabledFeatures.extPipelineCreationCacheControl);
++      }
++      if (devExtensions.extShaderDemoteToHelperInvocation) {
++        enabledFeatures.extShaderDemoteToHelperInvocation.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES_EXT;
++        enabledFeatures.extShaderDemoteToHelperInvocation.pNext = std::exchange(enabledFeatures.core.pNext, &enabledFeatures.extShaderDemoteToHelperInvocation);
++      }
++      if (devExtensions.extExtendedDynamicState) {
++        enabledFeatures.extExtendedDynamicState.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
++        enabledFeatures.extExtendedDynamicState.pNext = std::exchange(enabledFeatures.core.pNext, &enabledFeatures.extExtendedDynamicState);
++      }
++      if (devExtensions.khrZeroInitializeWorkgroupMemory) {
++        enabledFeatures.khrZeroInitializeWorkgroupMemory.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ZERO_INITIALIZE_WORKGROUP_MEMORY_FEATURES_KHR;
++        enabledFeatures.khrZeroInitializeWorkgroupMemory.pNext = std::exchange(enabledFeatures.core.pNext, &enabledFeatures.khrZeroInitializeWorkgroupMemory);
++      }
++      if (devExtensions.khrSynchronization2) {
++        enabledFeatures.khrSynchronization2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
++        enabledFeatures.khrSynchronization2.pNext = std::exchange(enabledFeatures.core.pNext, &enabledFeatures.khrSynchronization2);
++      }
++      if (devExtensions.khrDynamicRendering) {
++        enabledFeatures.khrDynamicRendering.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
++        enabledFeatures.khrDynamicRendering.pNext = std::exchange(enabledFeatures.core.pNext, &enabledFeatures.khrDynamicRendering);
++      }
++      if (devExtensions.khrMaintenance4) {
++        enabledFeatures.khrMaintenance4.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES_KHR;
++        enabledFeatures.khrMaintenance4.pNext = std::exchange(enabledFeatures.core.pNext, &enabledFeatures.khrMaintenance4);
++      }
++    } else
++#endif
++    {
++      enabledFeatures.vk13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
++      enabledFeatures.vk13.pNext = std::exchange(enabledFeatures.core.pNext, &enabledFeatures.vk13);
++    }
+ 
+     if (devExtensions.amdShaderFragmentMask)
+       enabledFeatures.amdShaderFragmentMask = VK_TRUE;
+diff --git a/src/dxvk/dxvk_adapter.h b/src/dxvk/dxvk_adapter.h
+index f545849..cb14981 100644
+--- a/src/dxvk/dxvk_adapter.h
++++ b/src/dxvk/dxvk_adapter.h
+@@ -96,7 +96,8 @@ namespace dxvk {
+     
+     DxvkAdapter(
+       const Rc<vk::InstanceFn>& vki,
+-            VkPhysicalDevice    handle);
++            VkPhysicalDevice    handle,
++            uint32_t            apiVersion);
+     ~DxvkAdapter();
+     
+     /**
+@@ -318,6 +319,7 @@ namespace dxvk {
+     
+     Rc<vk::InstanceFn>  m_vki;
+     VkPhysicalDevice    m_handle;
++    uint32_t            m_apiVersion;
+ 
+     DxvkNameSet         m_extraExtensions;
+     DxvkNameSet         m_deviceExtensions;
+@@ -333,6 +335,7 @@ namespace dxvk {
+ 
+     std::array<DxvkAdapterMemoryStats, VK_MAX_MEMORY_HEAPS> m_memoryStats = { };
+ 
++    bool useVulkan12Compatibility() const;
+     void queryExtensions();
+     void queryDeviceInfo();
+     void queryDeviceFeatures();
+@@ -345,7 +348,7 @@ namespace dxvk {
+     std::vector<DxvkExt*> getExtensionList(
+             DxvkDeviceExtensions&   devExtensions);
+ 
+-    static void initFeatureChain(
++    void initFeatureChain(
+             DxvkDeviceFeatures&   enabledFeatures,
+       const DxvkDeviceExtensions& devExtensions,
+       const DxvkInstanceExtensions& insExtensions);
+diff --git a/src/dxvk/dxvk_device_info.h b/src/dxvk/dxvk_device_info.h
+index 87f444a..f4efbb9 100644
+--- a/src/dxvk/dxvk_device_info.h
++++ b/src/dxvk/dxvk_device_info.h
+@@ -44,6 +44,18 @@ namespace dxvk {
+     VkPhysicalDeviceVulkan11Features                          vk11;
+     VkPhysicalDeviceVulkan12Features                          vk12;
+     VkPhysicalDeviceVulkan13Features                          vk13;
++#ifdef __ANDROID__
++    // Vulkan 1.2 extension equivalents. The vk13 members above remain DXVK's canonical runtime capability bits,
++    // but these individual structs are the only valid way to query/enable those features on a 1.2 device.
++    VkPhysicalDeviceImageRobustnessFeaturesEXT                extImageRobustness;
++    VkPhysicalDevicePipelineCreationCacheControlFeaturesEXT   extPipelineCreationCacheControl;
++    VkPhysicalDeviceShaderDemoteToHelperInvocationFeaturesEXT extShaderDemoteToHelperInvocation;
++    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT           extExtendedDynamicState;
++    VkPhysicalDeviceZeroInitializeWorkgroupMemoryFeaturesKHR  khrZeroInitializeWorkgroupMemory;
++    VkPhysicalDeviceSynchronization2FeaturesKHR               khrSynchronization2;
++    VkPhysicalDeviceDynamicRenderingFeaturesKHR               khrDynamicRendering;
++    VkPhysicalDeviceMaintenance4FeaturesKHR                   khrMaintenance4;
++#endif
+     VkBool32                                                  amdShaderFragmentMask;
+     VkPhysicalDeviceAttachmentFeedbackLoopLayoutFeaturesEXT   extAttachmentFeedbackLoopLayout;
+     VkBool32                                                  extConservativeRasterization;
+diff --git a/src/dxvk/dxvk_extensions.h b/src/dxvk/dxvk_extensions.h
+index 5096d44..33665cc 100644
+--- a/src/dxvk/dxvk_extensions.h
++++ b/src/dxvk/dxvk_extensions.h
+@@ -300,8 +300,9 @@ namespace dxvk {
+     DxvkExt extConservativeRasterization      = { VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME,         DxvkExtMode::Optional };
+     DxvkExt extCustomBorderColor              = { VK_EXT_CUSTOM_BORDER_COLOR_EXTENSION_NAME,                DxvkExtMode::Optional };
+     DxvkExt extDepthClipEnable                = { VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME,                  DxvkExtMode::Optional };
+-    DxvkExt extDepthBiasControl               = { VK_EXT_DEPTH_BIAS_CONTROL_EXTENSION_NAME,                 DxvkExtMode::Optional };
+-    DxvkExt extExtendedDynamicState3          = { VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,           DxvkExtMode::Optional };
++    DxvkExt extDepthBiasControl               = { VK_EXT_DEPTH_BIAS_CONTROL_EXTENSION_NAME,                  DxvkExtMode::Optional };
++    DxvkExt extExtendedDynamicState           = { VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME,              DxvkExtMode::Disabled };
++    DxvkExt extExtendedDynamicState3          = { VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,            DxvkExtMode::Optional };
+     DxvkExt extFullScreenExclusive            = { VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME,              DxvkExtMode::Optional };
+     DxvkExt extFragmentShaderInterlock        = { VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME,          DxvkExtMode::Optional };
+     DxvkExt extGraphicsPipelineLibrary        = { VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME,          DxvkExtMode::Optional };
+@@ -315,11 +316,20 @@ namespace dxvk {
+     DxvkExt extShaderStencilExport            = { VK_EXT_SHADER_STENCIL_EXPORT_EXTENSION_NAME,              DxvkExtMode::Optional };
+     DxvkExt extSwapchainColorSpace            = { VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME,              DxvkExtMode::Optional };
+     DxvkExt extSwapchainMaintenance1          = { VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,            DxvkExtMode::Optional };
+-    DxvkExt extHdrMetadata                    = { VK_EXT_HDR_METADATA_EXTENSION_NAME,                       DxvkExtMode::Optional };
+-    DxvkExt extTransformFeedback              = { VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME,                 DxvkExtMode::Optional };
++    DxvkExt extHdrMetadata                    = { VK_EXT_HDR_METADATA_EXTENSION_NAME,                        DxvkExtMode::Optional };
++    DxvkExt extImageRobustness                = { VK_EXT_IMAGE_ROBUSTNESS_EXTENSION_NAME,                    DxvkExtMode::Disabled };
++    DxvkExt extPipelineCreationCacheControl   = { VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME,     DxvkExtMode::Disabled };
++    DxvkExt extShaderDemoteToHelperInvocation = { VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME,  DxvkExtMode::Disabled };
++    DxvkExt extTransformFeedback              = { VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME,                  DxvkExtMode::Optional };
+     DxvkExt extVertexAttributeDivisor         = { VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME,           DxvkExtMode::Optional };
+     DxvkExt khrExternalMemoryWin32            = { VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,              DxvkExtMode::Optional };
+-    DxvkExt khrExternalSemaphoreWin32         = { VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,           DxvkExtMode::Optional };
++    DxvkExt khrExternalSemaphoreWin32         = { VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,            DxvkExtMode::Optional };
++    DxvkExt khrCopyCommands2                  = { VK_KHR_COPY_COMMANDS_2_EXTENSION_NAME,                    DxvkExtMode::Disabled };
++    DxvkExt khrDynamicRendering               = { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,                  DxvkExtMode::Disabled };
++    DxvkExt khrFormatFeatureFlags2            = { VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME,             DxvkExtMode::Disabled };
++    DxvkExt khrMaintenance4                   = { VK_KHR_MAINTENANCE_4_EXTENSION_NAME,                      DxvkExtMode::Disabled };
++    DxvkExt khrSynchronization2               = { VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,                  DxvkExtMode::Disabled };
++    DxvkExt khrZeroInitializeWorkgroupMemory  = { VK_KHR_ZERO_INITIALIZE_WORKGROUP_MEMORY_EXTENSION_NAME,   DxvkExtMode::Disabled };
+     DxvkExt khrMaintenance5                   = { VK_KHR_MAINTENANCE_5_EXTENSION_NAME,                      DxvkExtMode::Optional };
+     DxvkExt khrPipelineLibrary                = { VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,                   DxvkExtMode::Optional };
+     DxvkExt khrPresentId                      = { VK_KHR_PRESENT_ID_EXTENSION_NAME,                         DxvkExtMode::Optional };
+diff --git a/src/dxvk/dxvk_instance.cpp b/src/dxvk/dxvk_instance.cpp
+index 52c0125..149d028 100644
+--- a/src/dxvk/dxvk_instance.cpp
++++ b/src/dxvk/dxvk_instance.cpp
+@@ -186,6 +186,24 @@ namespace dxvk {
+       appInfo.engineVersion         = VK_MAKE_API_VERSION(0, 2, 5, 3);
+       appInfo.apiVersion            = VK_MAKE_API_VERSION(0, 1, 3, 0);
+ 
++#ifdef __ANDROID__
++      // Preserve the proven 1.3 path when possible, but do not ask a 1.2 loader to create a 1.3 instance. The
++      // adapter receives this negotiated version as well, since device-reported 1.3 cannot elevate a 1.2 instance.
++      uint32_t loaderApi = VK_MAKE_API_VERSION(0, 1, 0, 0);
++      if (m_vkl->vkEnumerateInstanceVersion) {
++        VkResult vr = m_vkl->vkEnumerateInstanceVersion(&loaderApi);
++        if (vr != VK_SUCCESS)
++          throw DxvkError(str::format("DxvkInstance: Failed to query Vulkan instance version: ", vr));
++      }
++      m_apiVersion = std::min(loaderApi, VK_MAKE_API_VERSION(0, 1, 3, 0));
++      if (m_apiVersion < VK_MAKE_API_VERSION(0, 1, 2, 0))
++        throw DxvkError("DxvkInstance: Vulkan 1.2 with required extensions, or Vulkan 1.3, is required");
++      appInfo.apiVersion = m_apiVersion;
++      Logger::info(str::format("DXVK: Negotiated Vulkan ",
++        VK_API_VERSION_MAJOR(m_apiVersion), ".", VK_API_VERSION_MINOR(m_apiVersion),
++        " instance (1.3 preferred; 1.2 uses KHR/EXT compatibility paths)"));
++#endif
++
+       VkInstanceCreateInfo info = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
+       info.pApplicationInfo         = &appInfo;
+       info.enabledLayerCount        = layerList.count();
+@@ -196,7 +214,9 @@ namespace dxvk {
+       VkResult status = m_vkl->vkCreateInstance(&info, nullptr, &instance);
+ 
+       if (status != VK_SUCCESS)
+-        throw DxvkError("DxvkInstance::createInstance: Failed to create Vulkan 1.1 instance");
++        throw DxvkError(str::format("DxvkInstance::createInstance: Failed to create Vulkan ",
++          VK_API_VERSION_MAJOR(appInfo.apiVersion), ".", VK_API_VERSION_MINOR(appInfo.apiVersion),
++          " instance: ", status));
+     }
+ 
+     // Create the Vulkan instance loader
+@@ -264,8 +284,15 @@ namespace dxvk {
+     uint32_t numIGPU = 0;
+ 
+     for (uint32_t i = 0; i < numAdapters; i++) {
++#ifdef __ANDROID__
++      if (deviceProperties[i].apiVersion < VK_MAKE_API_VERSION(0, 1, 2, 0)) {
++        Logger::warn(str::format("DXVK: Ignoring ", deviceProperties[i].deviceName,
++          ": Vulkan 1.2 with required extensions, or 1.3, is required"));
++        continue;
++      }
++#endif
+       if (filter.testAdapter(deviceProperties[i])) {
+-        result.push_back(new DxvkAdapter(m_vki, adapters[i]));
++        result.push_back(new DxvkAdapter(m_vki, adapters[i], m_apiVersion));
+ 
+         if (deviceProperties[i].deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+           numDGPU += 1;
+@@ -299,9 +326,14 @@ namespace dxvk {
+     }
+ 
+     if (result.empty()) {
++#ifdef __ANDROID__
++      Logger::warn("DXVK: No adapters found. Please check your device filter settings and Vulkan setup. "
++                   "Android requires Vulkan 1.2 with the logged KHR/EXT capabilities, or Vulkan 1.3.");
++#else
+       Logger::warn("DXVK: No adapters found. Please check your "
+                    "device filter settings and Vulkan setup. "
+                    "A Vulkan 1.3 capable driver is required.");
++#endif
+     } else if (numDGPU == 1 && numIGPU == 1) {
+       result[1]->linkToDGPU(result[0]);
+     }
+diff --git a/src/dxvk/dxvk_instance.h b/src/dxvk/dxvk_instance.h
+index 8075e7f..cd32f8b 100644
+--- a/src/dxvk/dxvk_instance.h
++++ b/src/dxvk/dxvk_instance.h
+@@ -164,6 +164,7 @@ namespace dxvk {
+ 
+     Rc<vk::LibraryFn>       m_vkl;
+     Rc<vk::InstanceFn>      m_vki;
++    uint32_t                m_apiVersion = VK_MAKE_API_VERSION(0, 1, 3, 0);
+     DxvkInstanceExtensions  m_extensions;
+     DxvkNameSet             m_extensionSet;
+     DxvkNameList            m_extensionNames;
+diff --git a/src/dxvk/dxvk_pipemanager.cpp b/src/dxvk/dxvk_pipemanager.cpp
+index 84a07c1..5ad87a1 100644
+--- a/src/dxvk/dxvk_pipemanager.cpp
++++ b/src/dxvk/dxvk_pipemanager.cpp
+@@ -95,6 +95,15 @@ namespace dxvk {
+       if (m_device->config().numCompilerThreads > 0)
+         workerCount = m_device->config().numCompilerThreads;
+ 
++#ifdef __ANDROID__
++      // Mali/Immortalis: bound background compilation without changing the pipeline path or any other vendor's
++      // worker policy. A lower explicit user setting is retained; two is an absolute cap, not merely a default.
++      if (m_device->adapter()->deviceProperties().vendorID == 0x13B5 && workerCount > 2) {
++        workerCount = 2;
++        Logger::info("DXVK: Capping ARM compiler threads at 2");
++      }
++#endif
++
+       // Number of workers that can process pipeline pipelines with normal
+       // priority. Any other workers can only build high-priority pipelines.
+       uint32_t npWorkerCount = std::max(((workerCount - 1) * 5) / 7, 1u);
+diff --git a/src/dxvk/dxvk_state_cache.cpp b/src/dxvk/dxvk_state_cache.cpp
+index b0497c0..a0fe8b4 100644
+--- a/src/dxvk/dxvk_state_cache.cpp
++++ b/src/dxvk/dxvk_state_cache.cpp
+@@ -1,6 +1,7 @@
+ #include "dxvk_device.h"
+ #include "dxvk_pipemanager.h"
+ #include "dxvk_state_cache.h"
++#include "dxvk_state_cache_io.h"
+ 
+ namespace dxvk {
+ 
+@@ -763,10 +764,7 @@ namespace dxvk {
+ 
+     Sha1Hash hash = data.computeHash();
+ 
+-    stream.write(reinterpret_cast<char*>(&header), sizeof(header));
+-    stream.write(reinterpret_cast<char*>(&hash), sizeof(hash));
+-    stream.write(data.data(), data.size());
+-    stream.flush();
++    writeStateCacheEntryPayload(stream, header, hash, data.data(), data.size());
+   }
+ 
+ 
+@@ -812,11 +810,10 @@ namespace dxvk {
+               || m_stopThreads.load();
+         });
+ 
+-        if (m_writerQueue.size() == 0) {
+-          if (m_stopThreads.load())
+-            break;
++        if (stateCacheWriterShouldStop(m_writerQueue.empty(), m_stopThreads.load()))
++          break;
++        if (m_writerQueue.empty())
+           continue;
+-        }
+ 
+         entry = m_writerQueue.front();
+         m_writerQueue.pop();
+diff --git a/src/dxvk/dxvk_state_cache_io.h b/src/dxvk/dxvk_state_cache_io.h
+new file mode 100644
+index 0000000..f76e16b
+--- /dev/null
++++ b/src/dxvk/dxvk_state_cache_io.h
+@@ -0,0 +1,24 @@
++#pragma once
++
++#include <cstddef>
++
++namespace dxvk {
++
++  // Keep the cache entry layout and incremental flush in one small, host-testable operation. Android can be killed
++  // without running C++ destructors, so buffering an entry until the next one or until shutdown loses useful work.
++  template<typename Stream, typename Header, typename Hash>
++  void writeStateCacheEntryPayload(Stream& stream, const Header& header, const Hash& hash,
++      const void* data, size_t size) {
++    stream.write(reinterpret_cast<const char*>(&header), sizeof(header));
++    stream.write(reinterpret_cast<const char*>(&hash), sizeof(hash));
++    stream.write(static_cast<const char*>(data), size);
++    stream.flush();
++  }
++
++
++  // A stop request must not discard entries already queued. The writer exits only when both conditions are true.
++  constexpr bool stateCacheWriterShouldStop(bool queueEmpty, bool stopRequested) {
++    return queueEmpty && stopRequested;
++  }
++
++}
+diff --git a/src/vulkan/vulkan_loader.h b/src/vulkan/vulkan_loader.h
+index 61402fb..f6e36f8 100644
+--- a/src/vulkan/vulkan_loader.h
++++ b/src/vulkan/vulkan_loader.h
+@@ -83,6 +83,7 @@ namespace dxvk::vk {
+     ~LibraryFn();
+     
+     VULKAN_FN(vkCreateInstance);
++    VULKAN_FN(vkEnumerateInstanceVersion);
+     VULKAN_FN(vkEnumerateInstanceLayerProperties);
+     VULKAN_FN(vkEnumerateInstanceExtensionProperties);
+   };
