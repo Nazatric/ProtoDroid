@@ -12,17 +12,18 @@ namespace native {
 
 namespace {
 
-struct V4 {
-    float x, y, z, w;
-};
+// GCC and Clang lower this four-lane vector to SSE on x86-64 and NEON on ARM64. Keeping each operation and its
+// association explicit preserves the original arithmetic while avoiding the compiler's partial scalarization of
+// the local-frame products. Loads/stores stay memcpy-based because records and outputs need not share alignment.
+typedef float V4 __attribute__((vector_size(16)));
 
 inline V4 Load(uint32_t a) {
     V4 v;
     memcpy(&v, Ptr<void>(a), 16);
     return v;
 }
-inline V4 Mul(V4 a, float s) { return {a.x * s, a.y * s, a.z * s, a.w * s}; }
-inline V4 Add(V4 a, V4 b) { return {a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w}; }
+inline V4 Mul(V4 a, float s) { return a * V4{s, s, s, s}; }
+inline V4 Add(V4 a, V4 b) { return a + b; }
 // maxps/minps: the second operand wins unless the first compares greater/less (NaN -> second).
 inline float MaxPs(float a, float b) { return a > b ? a : b; }
 inline float MinPs(float a, float b) { return a < b ? a : b; }
@@ -60,28 +61,28 @@ extern "C" void Native_1071b610(Ctx* c) {
             V4 rows[4];
             for (int r = 0; r < 4; ++r) {
                 const uint32_t o = uint32_t(r) * 0x10;
-                rows[r] = Add(Add(Add(Mul(Load(b[0] + o), w.x), Mul(Load(b[1] + o), w.y)), Mul(Load(b[2] + o), w.z)),
-                              Mul(Load(b[3] + o), w.w));
+                rows[r] = Add(Add(Add(Mul(Load(b[0] + o), w[0]), Mul(Load(b[1] + o), w[1])), Mul(Load(b[2] + o), w[2])),
+                              Mul(Load(b[3] + o), w[3]));
             }
             const V4 l0 = Load(rec), l1 = Load(rec + 0x10), l2 = Load(rec + 0x20);
-            V4 r0 = Add(Add(Add(Mul(rows[0], l0.x), Mul(rows[1], l0.y)), Mul(rows[2], l0.z)), rows[3]);
-            V4 r1 = Add(Add(Mul(rows[0], l1.x), Mul(rows[1], l1.y)), Mul(rows[2], l1.z));
-            V4 r2 = Add(Add(Mul(rows[0], l2.x), Mul(rows[1], l2.y)), Mul(rows[2], l2.z));
-            r0.w = one;
-            r1.w = one;
-            r2.w = l2.w;
+            V4 r0 = Add(Add(Add(Mul(rows[0], l0[0]), Mul(rows[1], l0[1])), Mul(rows[2], l0[2])), rows[3]);
+            V4 r1 = Add(Add(Mul(rows[0], l1[0]), Mul(rows[1], l1[1])), Mul(rows[2], l1[2]));
+            V4 r2 = Add(Add(Mul(rows[0], l2[0]), Mul(rows[1], l2[1])), Mul(rows[2], l2[2]));
+            r0[3] = one;
+            r1[3] = one;
+            r2[3] = l2[3];
             memcpy(Ptr<void>(out), &r0, 16);
             memcpy(Ptr<void>(out + 0x10), &r1, 16);
             memcpy(Ptr<void>(out + 0x20), &r2, 16);
-            vmax = {MaxPs(vmax.x, r0.x), MaxPs(vmax.y, r0.y), MaxPs(vmax.z, r0.z), MaxPs(vmax.w, r0.w)};
-            vmin = {MinPs(vmin.x, r0.x), MinPs(vmin.y, r0.y), MinPs(vmin.z, r0.z), MinPs(vmin.w, r0.w)};
+            vmax = V4{MaxPs(vmax[0], r0[0]), MaxPs(vmax[1], r0[1]), MaxPs(vmax[2], r0[2]), MaxPs(vmax[3], r0[3])};
+            vmin = V4{MinPs(vmin[0], r0[0]), MinPs(vmin[1], r0[1]), MinPs(vmin[2], r0[2]), MinPs(vmin[3], r0[3])};
         }
-        WF32(self + 0x2c4, vmin.x);
-        WF32(self + 0x2c8, vmin.y);
-        WF32(self + 0x2cc, vmin.z);
-        WF32(self + 0x2d0, vmax.x);
-        WF32(self + 0x2d4, vmax.y);
-        WF32(self + 0x2d8, vmax.z);
+        WF32(self + 0x2c4, vmin[0]);
+        WF32(self + 0x2c8, vmin[1]);
+        WF32(self + 0x2cc, vmin[2]);
+        WF32(self + 0x2d0, vmax[0]);
+        WF32(self + 0x2d4, vmax[1]);
+        WF32(self + 0x2d8, vmax[2]);
     }
     c->ret_target = Pop32(c);
     c->esp += 12;  // thiscall: the callee pops its 3 arguments

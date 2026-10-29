@@ -132,6 +132,18 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test_arm64
 
+      - name: Compile and run native ARM64 hot-replacement differential tests
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin TestingFiles
+          git show FETCH_HEAD:prototypeenginef.dll > /tmp/protodroid-hot-engine.dll
+          test "$(stat -c%s /tmp/protodroid-hot-engine.dll)" = 20205568
+          python3 -m venv /tmp/protodroid-hot-venv
+          /tmp/protodroid-hot-venv/bin/pip install -q capstone pefile
+          export PATH=/tmp/protodroid-hot-venv/bin:$PATH
+          export PROTODROID_ENGINE=/tmp/protodroid-hot-engine.dll
+          src/native/tests/run_hot_test.sh
+
   build-deps:
     runs-on: ubuntu-24.04
     strategy:

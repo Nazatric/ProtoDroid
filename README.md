@@ -187,7 +187,7 @@ UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 /tmp/graphics_test
 
 ```
 
-The production Bink harness and its minimal FFmpeg setup are automated in `.github/workflows/build-apk.yml`. The additional hot audio/skinning differential tests use `src/native/tests/run_hot_test.sh` and require the original engine binary.
+The production Bink harness and its minimal FFmpeg setup are automated in `.github/workflows/build-apk.yml`. The additional hot audio/skinning differential tests use `src/native/tests/run_hot_test.sh` and require the original engine binary. CI runs them on native ARM64 with the original DLL fetched read-only from `TestingFiles`; the skinning suite compares 2,000 randomized batches, including larger record counts and both output alignments.
 
 ## CI/CD
 

@@ -282,10 +282,11 @@ int main(int argc, char** argv) {
     int adpcm_failures = failures;
     failures = 0;
 
-    // FUN_1071b610: matrix blending with random bones, weights and frames.
-    for (int trial = 0; trial < 200; ++trial) {
+    // FUN_1071b610: matrix blending with random bones, weights and frames. Include larger record batches so the
+    // packed arithmetic, output alignment, and bounding-box accumulation are checked well beyond a single tiny draw.
+    for (int trial = 0; trial < 2000; ++trial) {
         g_next = 0x20000000u;
-        const uint32_t count = trial % 9, nbones = 16;
+        const uint32_t count = trial % 65, nbones = 64;
         uint32_t self = Alloc(0x300), holder = Alloc(0x40), bones = Alloc(nbones * 0x40 + 16);
         bones = (bones + 15) & ~15u;
         uint32_t records = Alloc(0x50 * count + 16), out = Alloc(0x30 * count + 16) + (trial % 2) * 4;
@@ -327,6 +328,6 @@ int main(int argc, char** argv) {
             ++failures;
         }
     }
-    printf("skin %s: %d/200 trials differ\n", failures ? "FAIL" : "OK", failures);
+    printf("skin %s: %d/2000 trials differ\n", failures ? "FAIL" : "OK", failures);
     return failures || mixer_failures || biquad_failures || adpcm_failures ? 1 : 0;
 }

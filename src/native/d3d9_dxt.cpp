@@ -113,15 +113,20 @@ void DecodeDxt1To16(const uint8_t* src, uint32_t pitch, uint32_t w, uint32_t h, 
             uint16_t colors[4];
             for (int i = 0; i < 4; ++i) colors[i] = PackA1R5G5B5(palette[i]);
             const uint32_t idx = uint32_t(block[4] | block[5] << 8 | block[6] << 16 | uint32_t(block[7]) << 24);
-            for (int i = 0; i < 16; ++i) px[i] = colors[(idx >> (2 * i)) & 3];
-#ifdef PROTODROID_DXT_NEON
             if (bx * 4 + 4 <= w && by * 4 + 4 <= h) {
                 uint8_t* out = dst + int32_t(by * 4) * dst_pitch + bx * 8;
-                for (uint32_t y = 0; y < 4; ++y)
-                    vst1_u8(out + int32_t(y) * dst_pitch, vreinterpret_u8_u16(vld1_u16(px + y * 4)));
+                for (uint32_t y = 0; y < 4; ++y) {
+                    uint16_t row[4];
+                    for (uint32_t x = 0; x < 4; ++x) row[x] = colors[(idx >> (2 * (y * 4 + x))) & 3];
+#ifdef PROTODROID_DXT_NEON
+                    vst1_u8(out + int32_t(y) * dst_pitch, vreinterpret_u8_u16(vld1_u16(row)));
+#else
+                    memcpy(out + int32_t(y) * dst_pitch, row, sizeof(row));
+#endif
+                }
                 continue;
             }
-#endif
+            for (int i = 0; i < 16; ++i) px[i] = colors[(idx >> (2 * i)) & 3];
             for (uint32_t y = 0; y < 4 && by * 4 + y < h; ++y) {
                 for (uint32_t x = 0; x < 4 && bx * 4 + x < w; ++x)
                     memcpy(dst + int32_t(by * 4 + y) * dst_pitch + (bx * 4 + x) * 2, &px[y * 4 + x], 2);
