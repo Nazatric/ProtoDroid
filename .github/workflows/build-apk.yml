@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone -q --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/protodroid-dxvk-test
-          for patch in android/patches/dxvk-*.patch; do
+          for patch in "$PWD"/android/patches/dxvk-*.patch; do
             git -C /tmp/protodroid-dxvk-test apply --check "$patch"
             git -C /tmp/protodroid-dxvk-test apply "$patch"
           done
