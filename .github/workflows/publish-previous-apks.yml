@@ -33,7 +33,11 @@ jobs:
             local version=$1 code=$2 run=$3 commit=$4
             local tag="protodroid-v$version"
             if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              echo "$tag already exists; leaving it unchanged"
+              echo "$tag already exists; leaving its metadata unchanged"
+              if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx 'prototype.apk'; then
+                gh run download "$run" --repo "$GITHUB_REPOSITORY" --name prototype-apk --dir "/tmp/protodroid-v$version"
+                gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "/tmp/protodroid-v$version/prototype.apk"
+              fi
               return 0
             fi
 
@@ -71,8 +75,19 @@ jobs:
               echo "Use protodroid.ini for configuration. CI does not replace physical-device testing."
             } >> "$dir/release-notes.md"
 
-            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$commit" \
-              --title "ProtoDroid v$version" --notes-file "$dir/release-notes.md" "$dir/prototype.apk"
+            local tag_sha latest=false
+            if ! tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null); then
+              gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+                -f "ref=refs/tags/$tag" -f "sha=$commit" --silent
+              tag_sha=$commit
+            fi
+            test "$tag_sha" = "$commit"
+            if [ "$version" = 0.6 ]; then latest=true; fi
+            gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+              -f "tag_name=$tag" -f "name=ProtoDroid v$version" \
+              --raw-field "body=$(cat "$dir/release-notes.md")" \
+              -F draft=false -F prerelease=false -f "make_latest=$latest" --silent
+            gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "$dir/prototype.apk"
             gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,tagName,targetCommitish,assets
           }
 
