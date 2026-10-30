@@ -57,7 +57,7 @@ The Android application ID is **`com.protodroid`**.
    - App-specific storage: `/storage/emulated/0/Android/data/com.protodroid/files/game/`
 3. The game directory must include `prototypeenginef.dll` and the original archives, folders, and other data from your copy of the game. The APK does not supply those files.
 4. When using shared storage, grant file access on the setup screen. For the app-specific `Android/data` location, copy from a PC over USB on Android 11 or above; on Android 10 or below, a file manager with storage access can be used.
-5. Launch the app again after copying the files.
+5. Open the app after copying the files. Once file access is granted, the setup actions become **Settings** and **Play**. The launcher detects game data automatically; press **Play** when you are ready to start it.
 
 The application ID and app-specific directory are both `com.protodroid`. The shared game directory remains `/storage/emulated/0/Prototype`, so game files do not need to be duplicated.
 
@@ -100,9 +100,11 @@ Frequently used keys include:
 
 Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds retain the optional presentation-mode settings.
 
-## In-Game Settings
+## Launcher and In-Game Settings
 
-Open the gear icon to access the Settings overlay. Settings marked with `*` apply after restart; the FPS limit applies immediately.
+The launcher's **Settings** page and the in-game gear overlay share the same saved options. Launcher changes are saved automatically and engine options apply when **Play** starts the game. In the in-game overlay, settings marked with `*` apply after restart; the FPS limit applies immediately.
+
+The launcher also provides **Low**, **Medium**, and **High** graphics presets. They change only Resolution, Textures, and Anisotropy, leaving FPS and control preferences untouched. Choose **Custom** or adjust any graphics row to keep an individual combination.
 
 - Resolution
 - Textures

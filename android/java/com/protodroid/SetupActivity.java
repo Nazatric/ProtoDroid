@@ -19,7 +19,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * Launcher: finds the game files and starts ProtoActivity, or explains where to put them. The game can live in the
+ * Launcher: finds the game files, provides Play and Settings, or explains where to put them. The game can live in the
  * app's own folder (Android/data/com.protodroid/files/game, which file managers often cannot open on Android 11+)
  * or in /sdcard/Prototype, which needs "all files access" (storage permission before Android 11).
  * Also supports /sdcard/Prototype/game subfolder.
@@ -29,6 +29,8 @@ public class SetupActivity extends Activity {
     private static final int REQUEST_STORAGE = 1;
 
     private SetupView setupView;
+    private File foundGame;
+    private boolean foundInApp;
 
     private void showSetup(File app, File shared) {
         if (setupView == null) {
@@ -45,6 +47,11 @@ public class SetupActivity extends Activity {
                 }
 
                 @Override
+                public void onPlay() {
+                    play();
+                }
+
+                @Override
                 public void onExit() {
                     finish();
                 }
@@ -55,11 +62,13 @@ public class SetupActivity extends Activity {
         boolean access = hasSharedAccess();
         String appPath = app != null ? app.getAbsolutePath()
                 : "/storage/emulated/0/Android/data/" + getPackageName() + "/files/game";
+        String status = foundGame != null ? "Ready to play"
+                : access ? "Game files not found. Tap Play to check again" : "Waiting for file access";
         setupView.setState(new SetupView.State(
                 access,
+                foundGame != null,
                 false,
-                false,
-                access ? "Game files not found" : "Waiting for file access",
+                status,
                 shared.getAbsolutePath(),
                 appPath,
                 sharedSub.getAbsolutePath()));
@@ -102,26 +111,23 @@ public class SetupActivity extends Activity {
             shared.mkdirs();
             // Also ensure subfolder exists check doesn't create it yet, but ensure parent exists
         }
-        // Priority: app private, then shared root, then shared/game subfolder (Issue 4)
-        File found = null;
-        if (hasGame(app)) found = app;
-        else if (hasSharedAccess() && hasGame(shared)) found = shared;
-        else if (hasSharedAccess() && hasGame(sharedSub)) found = sharedSub;
-        // Also check direct /storage/emulated/0/Android/data/com.protodroid/files/game (same as app)
-        // and allow launching with found dir, or with null to use default app dir logic in native
-        if (found != null || (app != null && hasGame(app))) {
-            // If found in app, launch with null (native defaults to app/game)
-            if (found == app) launch(null);
-            else launch(found);
+        // Detection is automatic; launching is deliberate so Settings remains available before every game start.
+        foundGame = null;
+        foundInApp = false;
+        if (hasGame(app)) {
+            foundGame = app;
+            foundInApp = true;
         } else if (hasSharedAccess() && hasGame(shared)) {
-            launch(shared);
+            foundGame = shared;
         } else if (hasSharedAccess() && hasGame(sharedSub)) {
-            launch(sharedSub);
-        } else if (app != null && hasGame(app)) {
-            launch(null);
-        } else {
-            showSetup(app, shared);
+            foundGame = sharedSub;
         }
+        showSetup(app, shared);
+    }
+
+    private void play() {
+        check();  // also refreshes after files were copied while this screen remained open
+        if (foundGame != null) launch(foundInApp ? null : foundGame);
     }
 
     private void launch(File gameDir) {
@@ -185,6 +191,12 @@ public class SetupActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
         check();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (setupView != null && setupView.closeSettings()) return;
+        super.onBackPressed();
     }
 
 }

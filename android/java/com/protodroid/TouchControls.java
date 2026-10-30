@@ -25,9 +25,6 @@ import android.view.View;
 import org.libsdl.app.SDLActivity;
 
 import java.io.File;
-import java.io.FileWriter;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -129,60 +126,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
 
     // ---- settings ----
     private final SharedPreferences prefs;
+    private final GameSettings settingsStore;
+    private final GameSettings.Setting[] settings;
     private float opacity, scale;
     private boolean vibrate, showFps, hideWithPad, autoRun, invertY, powerButtons;
     private float camGain;
     private boolean padConnected;
-
-    private static final class Setting {
-        final String label, key;     // key: preference name; engine settings also go to protodroid.ini
-        final String[] names;
-        final int[] values;
-        final boolean engine;        // read by the engine at start: needs a restart
-        int index;
-
-        Setting(String label, String key, String[] names, int[] values, boolean engine) {
-            this.label = label;
-            this.key = key;
-            this.names = names;
-            this.values = values;
-            this.engine = engine;
-        }
-
-        int value() {
-            return values[index];
-        }
-    }
-
-    private static boolean isLiveEngineSetting(Setting s) {
-        return s.key.equals("fps_limit");
-    }
-
-    private final Setting[] settings = {
-        new Setting("Resolution", "render_height", new String[] {"540p", "720p", "900p", "1080p"},
-                new int[] {540, 720, 900, 1080}, true),
-        new Setting("Textures", "texture_skip_mips", new String[] {"Full", "Half", "Quarter"},
-                new int[] {0, 1, 2}, true),
-        new Setting("FPS limit", "fps_limit", new String[] {"Off", "30", "45", "60"}, new int[] {0, 30, 45, 60},
-                true),
-        new Setting("Battery saver", "battery_saver", new String[] {"Off", "On"}, new int[] {0, 1}, true),
-        new Setting("Opacity", "ui_opacity", new String[] {"40%", "60%", "80%", "100%"},
-                new int[] {40, 60, 80, 100}, false),
-        new Setting("Button size", "ui_scale", new String[] {"80%", "100%", "120%", "140%"},
-                new int[] {80, 100, 120, 140}, false),
-        new Setting("Vibration", "ui_vibrate", new String[] {"Off", "On"}, new int[] {0, 1}, false),
-        new Setting("Show FPS", "ui_fps", new String[] {"Off", "On"}, new int[] {0, 1}, false),
-        new Setting("Hide with gamepad", "ui_pad_hide", new String[] {"Off", "On"}, new int[] {0, 1}, false),
-        new Setting("Stick edge sprint", "ui_stick_run", new String[] {"Off", "On"}, new int[] {0, 1}, false),
-        new Setting("Camera speed", "ui_cam", new String[] {"50%", "75%", "100%", "150%", "200%"},
-                new int[] {50, 75, 100, 150, 200}, false),
-        new Setting("Invert Y", "ui_invert", new String[] {"Off", "On"}, new int[] {0, 1}, false),
-        new Setting("Extra buttons", "ui_power_buttons", new String[] {"Off", "On"}, new int[] {0, 1}, false),
-        new Setting("Anisotropy", "max_anisotropy", new String[] {"1x", "2x", "4x", "8x"},
-                new int[] {1, 2, 4, 8}, true),
-        new Setting("Unlock menu FPS", "unlock_menu_fps", new String[] {"Off", "On"}, new int[] {0, 1}, true),
-    };
-    private static final int[] DEFAULTS = {1, 1, 0, 0, 2, 1, 1, 0, 0, 0, 2, 0, 0, 0, 1};
     private boolean panelOpen = false, restartNeeded = false;
     private final RectF panel = new RectF(), restartRect = new RectF(), closeRect = new RectF(),
             layoutRect = new RectF();
@@ -227,10 +176,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         super(context);
         density = context.getResources().getDisplayMetrics().density;
         prefs = context.getSharedPreferences("controls", Context.MODE_PRIVATE);
-        for (int i = 0; i < settings.length; i++) {
-            Setting s = settings[i];
-            s.index = Math.max(0, Math.min(s.values.length - 1, prefs.getInt(s.key, DEFAULTS[i])));
-        }
+        settingsStore = new GameSettings(context);
+        settings = settingsStore.settings;
         loadLayout();
         applyUiSettings();
         Typeface face = Typeface.create("sans-serif-condensed", Typeface.BOLD);
@@ -743,41 +690,13 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         for (int i = 0; i < settings.length; i++) {
             int delta = leftArrows.get(i).contains(x, y) ? -1 : rightArrows.get(i).contains(x, y) ? 1 : 0;
             if (delta == 0) continue;
-            Setting s = settings[i];
-            s.index = (s.index + delta + s.values.length) % s.values.length;
+            GameSettings.Setting s = settings[i];
+            settingsStore.setIndex(i, s.index + delta);
             buzz();
-            prefs.edit().putInt(s.key, s.index).apply();
             if (s.key.equals("fps_limit")) nativeSetFpsLimit(s.value());  // applies right away
-            else if (s.engine && !isLiveEngineSetting(s)) restartNeeded = true;
-            if (s.engine) writeEngineSettings();
+            else if (s.engine && !GameSettings.isLiveEngineSetting(s)) restartNeeded = true;
             applyUiSettings();
             return;
-        }
-    }
-
-    /** Rewrites the engine keys in protodroid.ini (next to game/), keeping every other line. */
-    private void writeEngineSettings() {
-        File dir = getContext().getExternalFilesDir(null);
-        if (dir == null) return;
-        File ini = new File(dir, "protodroid.ini");
-        StringBuilder out = new StringBuilder();
-        try {
-            if (ini.exists()) {
-                for (String line : new String(Files.readAllBytes(ini.toPath()), StandardCharsets.UTF_8).split("\n")) {
-                    String k = line.split("=", 2)[0].trim();
-                    boolean ours = false;
-                    for (Setting s : settings) ours |= s.engine && s.key.equals(k);
-                    if (!ours && !line.trim().isEmpty()) out.append(line).append('\n');
-                }
-            }
-            for (Setting s : settings) {
-                if (s.engine) out.append(s.key).append(" = ").append(s.value()).append('\n');
-            }
-            try (FileWriter w = new FileWriter(ini)) {
-                w.write(out.toString());
-            }
-        } catch (Exception ignored) {
-            // settings stay in effect for the UI; the engine keeps its previous values
         }
     }
 
@@ -959,12 +878,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         rightArrows.clear();
         text.setTextSize(Math.min(15 * density, rowH * 0.42f));
         for (int i = 0; i < settings.length; i++) {
-            Setting s = settings[i];
+            GameSettings.Setting s = settings[i];
             float colLeft = panel.left + pad + (i / rows) * (colW + pad), colRight = colLeft + colW;
             float y = top + rowH * (i % rows) + rowH / 2;
             text.setTextAlign(Paint.Align.LEFT);
             text.setColor(0xffe8d6d4);
-            c.drawText(s.label + (s.engine && !isLiveEngineSetting(s) ? " *" : ""), colLeft, y + 5 * density,
+            c.drawText(s.label + (s.engine && !GameSettings.isLiveEngineSetting(s) ? " *" : ""), colLeft, y + 5 * density,
                     text);
             float vx = colRight - 62 * density;
             RectF l = new RectF(vx - 64 * density, y - rowH / 2, vx - 32 * density, y + rowH / 2);

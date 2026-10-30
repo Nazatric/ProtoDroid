@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7 - 2026-10-30
+
+- Turned the setup screen into a launcher: **Settings** and **Play** replace the permission actions after access is granted. Game detection remains automatic, while Play starts the game deliberately and rechecks for newly copied files.
+- Added a matching settings page with scrolling, full touch feedback, and **Low**, **Medium**, **High**, and **Custom** graphics presets.
+- Included every existing graphics, performance, and touch-control option. Presets change only resolution, textures, and anisotropy, leaving FPS and controls untouched.
+- Unified the launcher and in-game settings through the same saved preferences and `protodroid.ini` values. Launcher changes save automatically and engine options apply on Play.
+
 ## 0.6 - 2026-10-30
 
 - Rebuilt the first-launch setup screen with the supplied Prototype artwork, icon, Barlow Condensed fonts, status displays, and animations.

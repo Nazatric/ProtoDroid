@@ -33,12 +33,13 @@ import java.util.Locale;
 /**
  * Native Android rendering of the Prototype setup design. It deliberately uses only platform APIs so the existing
  * non-Gradle APK build does not need a Compose runtime. Game discovery and Android permission policy remain in
- * SetupActivity; this class only renders its state and reports the three actions.
+ * SetupActivity; this class renders the setup, launcher and shared settings page and reports their actions.
  */
 final class SetupView extends View {
     interface Listener {
         void onAllowFileAccess();
         void onCheckAgain();
+        void onPlay();
         void onExit();
     }
 
@@ -75,6 +76,14 @@ final class SetupView extends View {
     private static final int ACTION_ALLOW = 1;
     private static final int ACTION_CHECK = 2;
     private static final int ACTION_EXIT = 3;
+    private static final int ACTION_SETTINGS = 4;
+    private static final int ACTION_PLAY = 5;
+    private static final int ACTION_PRESET_LOW = 6;
+    private static final int ACTION_PRESET_MEDIUM = 7;
+    private static final int ACTION_PRESET_HIGH = 8;
+    private static final int ACTION_PRESET_CUSTOM = 9;
+    private static final int ACTION_SETTINGS_DONE = 10;
+    private static final int SETTING_ACTION_BASE = 32;
 
     private static final int BUTTON_NORMAL = 0;
     private static final int BUTTON_PRIMARY = 1;
@@ -87,6 +96,7 @@ final class SetupView extends View {
     };
 
     private final Listener listener;
+    private final GameSettings gameSettings;
     private final Bitmap[] slides = new Bitmap[4];
     private final Bitmap icon;
     private final Typeface medium;
@@ -99,7 +109,12 @@ final class SetupView extends View {
     private final RectF allowBounds = new RectF();
     private final RectF checkBounds = new RectF();
     private final RectF exitBounds = new RectF();
-    private final float[] buttonFill = new float[4];
+    private final RectF[] presetBounds = {new RectF(), new RectF(), new RectF(), new RectF()};
+    private final RectF settingsDoneBounds = new RectF();
+    private final RectF settingsListBounds = new RectF();
+    private final RectF[] settingLeftBounds;
+    private final RectF[] settingRightBounds;
+    private final float[] buttonFill = new float[16];
     private final long startedAt = SystemClock.uptimeMillis();
     private final float density;
     private final float fontScale;
@@ -122,6 +137,7 @@ final class SetupView extends View {
     private float splatY;
     private long splatStartedAt;
     private boolean scrolling;
+    private boolean settingsOpen;
     private float touchStartY;
     private float lastTouchY;
     private float scrollY;
@@ -137,6 +153,13 @@ final class SetupView extends View {
     SetupView(Context context, Listener listener) {
         super(context);
         this.listener = listener;
+        gameSettings = new GameSettings(context);
+        settingLeftBounds = new RectF[gameSettings.settings.length];
+        settingRightBounds = new RectF[gameSettings.settings.length];
+        for (int i = 0; i < gameSettings.settings.length; i++) {
+            settingLeftBounds[i] = new RectF();
+            settingRightBounds[i] = new RectF();
+        }
         density = getResources().getDisplayMetrics().density;
         fontScale = getResources().getConfiguration().fontScale;
         touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
@@ -179,11 +202,43 @@ final class SetupView extends View {
     void setState(State next) {
         state = next;
         layoutDirty = true;
-        if (focusedAction == ACTION_ALLOW && next.fileAccess) focusedAction = ACTION_NONE;
+        if (focusedAction == ACTION_ALLOW && (next.fileAccess || next.gameFound)) focusedAction = ACTION_NONE;
         if (focusedAction == ACTION_CHECK && next.checking) focusedAction = ACTION_NONE;
-        setContentDescription("Prototype setup. " + next.status + ". Storage access "
-                + (next.fileAccess ? "granted" : "required"));
+        updateContentDescription();
         invalidate();
+    }
+
+    private boolean launcherMode() {
+        return state.fileAccess || state.gameFound;
+    }
+
+    private void updateContentDescription() {
+        if (settingsOpen) {
+            setContentDescription("Prototype settings. Graphics presets and individual options. Changes save automatically.");
+        } else {
+            setContentDescription("Prototype setup. " + state.status + ". Storage access "
+                    + (state.fileAccess ? "granted" : "required"));
+        }
+    }
+
+    private void showSettings() {
+        settingsOpen = true;
+        scrollY = 0f;
+        focusedAction = ACTION_NONE;
+        pressedAction = ACTION_NONE;
+        updateContentDescription();
+        invalidate();
+    }
+
+    boolean closeSettings() {
+        if (!settingsOpen) return false;
+        settingsOpen = false;
+        scrollY = 0f;
+        focusedAction = ACTION_NONE;
+        pressedAction = ACTION_NONE;
+        updateContentDescription();
+        invalidate();
+        return true;
     }
 
     @Override
@@ -386,7 +441,8 @@ final class SetupView extends View {
         drawLine(canvas, "]", brandX, top, iconSize, 26f, 500, RED_HOT, 0f, u, -1f);
 
         exitBounds.set(right - 96f * u, top + 8f * u, right, top + 38f * u);
-        drawButton(canvas, ACTION_EXIT, exitBounds, "EXIT", BUTTON_GHOST, true, false, u, now, 16f);
+        drawButton(canvas, ACTION_EXIT, exitBounds, settingsOpen ? "BACK" : "EXIT", BUTTON_GHOST,
+                true, false, u, now, 16f);
     }
 
     private void drawGlitch(Canvas canvas, String value, float x, float top, float lineHeight, float size, int weight,
@@ -731,11 +787,15 @@ final class SetupView extends View {
         float buttonWidth = (leftWidth - 8f * u) / 2f;
         allowBounds.set(left, buttonsTop, left + buttonWidth, buttonsTop + 42f * u);
         checkBounds.set(left + buttonWidth + 8f * u, buttonsTop, left + leftWidth, buttonsTop + 42f * u);
-        drawButton(canvas, ACTION_ALLOW, allowBounds, state.fileAccess ? "ACCESS ALLOWED" : "ALLOW FILE ACCESS",
-                state.fileAccess ? BUTTON_DONE : BUTTON_PRIMARY, !state.fileAccess, false, u, now, dt);
-        drawButton(canvas, ACTION_CHECK, checkBounds, state.checking ? "CHECKING" : "CHECK AGAIN",
-                state.fileAccess && !state.gameFound ? BUTTON_PRIMARY : BUTTON_NORMAL,
-                !state.checking, state.checking, u, now, dt);
+        if (launcherMode()) {
+            drawButton(canvas, ACTION_SETTINGS, allowBounds, "SETTINGS", BUTTON_NORMAL, true, false, u, now, dt);
+            drawButton(canvas, ACTION_PLAY, checkBounds, "PLAY", BUTTON_PRIMARY, true, false, u, now, dt);
+        } else {
+            drawButton(canvas, ACTION_ALLOW, allowBounds, "ALLOW FILE ACCESS", BUTTON_PRIMARY,
+                    true, false, u, now, dt);
+            drawButton(canvas, ACTION_CHECK, checkBounds, state.checking ? "CHECKING" : "CHECK AGAIN",
+                    BUTTON_NORMAL, !state.checking, state.checking, u, now, dt);
+        }
 
         float chipsHeight = chipsHeight(rightWidth, u);
         float chipsTop = contentBottom - chipsHeight;
@@ -780,16 +840,149 @@ final class SetupView extends View {
         float buttonWidth = (width - 8f * u) / 2f;
         allowBounds.set(left, y, left + buttonWidth, y + 42f * u);
         checkBounds.set(left + buttonWidth + 8f * u, y, right, y + 42f * u);
-        drawButton(canvas, ACTION_ALLOW, allowBounds, state.fileAccess ? "ACCESS ALLOWED" : "ALLOW FILE ACCESS",
-                state.fileAccess ? BUTTON_DONE : BUTTON_PRIMARY, !state.fileAccess, false, u, now, dt);
-        drawButton(canvas, ACTION_CHECK, checkBounds, state.checking ? "CHECKING" : "CHECK AGAIN",
-                state.fileAccess && !state.gameFound ? BUTTON_PRIMARY : BUTTON_NORMAL,
-                !state.checking, state.checking, u, now, dt);
+        if (launcherMode()) {
+            drawButton(canvas, ACTION_SETTINGS, allowBounds, "SETTINGS", BUTTON_NORMAL, true, false, u, now, dt);
+            drawButton(canvas, ACTION_PLAY, checkBounds, "PLAY", BUTTON_PRIMARY, true, false, u, now, dt);
+        } else {
+            drawButton(canvas, ACTION_ALLOW, allowBounds, "ALLOW FILE ACCESS", BUTTON_PRIMARY,
+                    true, false, u, now, dt);
+            drawButton(canvas, ACTION_CHECK, checkBounds, state.checking ? "CHECKING" : "CHECK AGAIN",
+                    BUTTON_NORMAL, !state.checking, state.checking, u, now, dt);
+        }
         y += 56f * u;
         float panelHeight = panelHeight(u);
         drawPathPanel(canvas, left, y + panelHeight, width, u, now);
         y += panelHeight + 14f * u;
         drawChips(canvas, left, y, width, u);
+    }
+
+    private void drawSettingRow(Canvas canvas, int index, RectF bounds, float u) {
+        GameSettings.Setting setting = gameSettings.settings[index];
+        int leftAction = SETTING_ACTION_BASE + index * 2;
+        int rightAction = leftAction + 1;
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xa6080808);
+        canvas.drawPath(cutPath(bounds, 7f * u), paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(1f, 0.7f * u));
+        paint.setColor(withAlpha(Color.WHITE, 0.13f));
+        canvas.drawPath(cutPath(bounds, 7f * u), paint);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(withAlpha(RED_HOT, setting.engine ? 0.42f : 0.20f));
+        canvas.drawRect(bounds.left, bounds.top + 5f * u, bounds.left + 2f * u, bounds.bottom - 5f * u, paint);
+
+        float groupWidth = Math.min(164f * u, bounds.width() * 0.52f);
+        float groupLeft = bounds.right - groupWidth - 4f * u;
+        float arrowWidth = Math.min(32f * u, groupWidth * 0.22f);
+        settingLeftBounds[index].set(groupLeft, bounds.top + 4f * u,
+                groupLeft + arrowWidth, bounds.bottom - 4f * u);
+        settingRightBounds[index].set(bounds.right - 4f * u - arrowWidth, bounds.top + 4f * u,
+                bounds.right - 4f * u, bounds.bottom - 4f * u);
+        if (pressedAction == leftAction || focusedAction == leftAction) {
+            paint.setColor(withAlpha(RED, 0.55f));
+            canvas.drawRect(settingLeftBounds[index], paint);
+        }
+        if (pressedAction == rightAction || focusedAction == rightAction) {
+            paint.setColor(withAlpha(RED, 0.55f));
+            canvas.drawRect(settingRightBounds[index], paint);
+        }
+
+        float labelX = bounds.left + 12f * u;
+        float labelWidth = Math.max(1f, groupLeft - labelX - 8f * u);
+        drawLine(canvas, setting.label, labelX, bounds.top, bounds.height(), 12.5f, 500,
+                BONE, 0.4f, u, labelWidth);
+        RectF valueBounds = new RectF(settingLeftBounds[index].right + 2f * u, bounds.top,
+                settingRightBounds[index].left - 2f * u, bounds.bottom);
+        drawCentered(canvas, setting.names[setting.index], valueBounds, 12.5f, 600,
+                0xfff3eee7, 0.3f, u, 3f * u);
+        drawCentered(canvas, "\u2039", settingLeftBounds[index], 22f, 500, RED_HOT, 0f, u, 0f);
+        drawCentered(canvas, "\u203a", settingRightBounds[index], 22f, 500, RED_HOT, 0f, u, 0f);
+    }
+
+    private void drawSettings(Canvas canvas, long now, float dt) {
+        boolean portrait = getHeight() > getWidth();
+        float u = unit(portrait);
+        float margin = (portrait ? 18f : 26f) * u;
+        float left = insetLeft + margin;
+        float right = getWidth() - insetRight - margin;
+        float width = Math.max(1f, right - left);
+        float top = insetTop + (portrait ? 16f : 12f) * u;
+        float bottom = getHeight() - insetBottom - 12f * u;
+        drawHeader(canvas, left, right, top, u, now);
+        float hudY = top + (portrait ? 60f : 50f) * u;
+        drawHud(canvas, left, right, hudY, u, now);
+        float contentTop = hudY + 10f * u;
+        drawLine(canvas, "SETTINGS  /  GRAPHICS PRESET", left, contentTop, 16f * u,
+                14f, 700, BONE, 1.2f, u, width);
+
+        int presetColumns = !portrait && width / u >= 560f ? 4 : 2;
+        int presetRows = (4 + presetColumns - 1) / presetColumns;
+        float presetGap = 8f * u;
+        float presetHeight = 36f * u;
+        float presetTop = contentTop + 20f * u;
+        float presetWidth = (width - (presetColumns - 1) * presetGap) / presetColumns;
+        String[] presetNames = {"LOW", "MEDIUM", "HIGH", "CUSTOM"};
+        int selectedPreset = gameSettings.graphicsPreset();
+        for (int i = 0; i < 4; i++) {
+            int row = i / presetColumns;
+            int column = i % presetColumns;
+            float x = left + column * (presetWidth + presetGap);
+            float y = presetTop + row * (presetHeight + presetGap);
+            presetBounds[i].set(x, y, x + presetWidth, y + presetHeight);
+            drawButton(canvas, ACTION_PRESET_LOW + i, presetBounds[i], presetNames[i],
+                    selectedPreset == i ? BUTTON_PRIMARY : BUTTON_NORMAL, true, false, u, now, dt);
+        }
+
+        float listTop = presetTop + presetRows * presetHeight + (presetRows - 1) * presetGap + 12f * u;
+        float doneWidth = Math.min(160f * u, width * 0.38f);
+        settingsDoneBounds.set(right - doneWidth, bottom - 38f * u, right, bottom);
+        drawButton(canvas, ACTION_SETTINGS_DONE, settingsDoneBounds, "DONE", BUTTON_NORMAL,
+                true, false, u, now, dt);
+        float noteWidth = Math.max(1f, settingsDoneBounds.left - left - 12f * u);
+        drawLine(canvas, "SAVED AUTOMATICALLY", left, bottom - 36f * u, 14f * u,
+                9.5f, 600, DIM, 1.2f, u, noteWidth);
+        drawLine(canvas, "ENGINE OPTIONS APPLY ON PLAY", left, bottom - 19f * u, 14f * u,
+                9.5f, 500, DIM, 0.8f, u, noteWidth);
+
+        settingsListBounds.set(left, listTop, right, Math.max(listTop + 1f, bottom - 48f * u));
+        int columns = portrait ? 1 : 2;
+        int rows = (gameSettings.settings.length + columns - 1) / columns;
+        float rowHeight = (portrait ? 44f : 38f) * u;
+        float rowGap = 10f * u;
+        float columnWidth = (width - (columns - 1) * rowGap) / columns;
+        float contentHeight = rows * rowHeight;
+        maxScrollY = Math.max(0f, contentHeight - settingsListBounds.height());
+        scrollY = Math.max(0f, Math.min(scrollY, maxScrollY));
+
+        int clipped = canvas.save();
+        canvas.clipRect(settingsListBounds);
+        for (int i = 0; i < gameSettings.settings.length; i++) {
+            int column = i / rows;
+            int row = i % rows;
+            float x = left + column * (columnWidth + rowGap);
+            float y = settingsListBounds.top + row * rowHeight - scrollY;
+            RectF rowBounds = new RectF(x, y + 2f * u, x + columnWidth, y + rowHeight - 2f * u);
+            if (rowBounds.bottom < settingsListBounds.top || rowBounds.top > settingsListBounds.bottom) {
+                settingLeftBounds[i].setEmpty();
+                settingRightBounds[i].setEmpty();
+                continue;
+            }
+            drawSettingRow(canvas, i, rowBounds, u);
+        }
+        canvas.restoreToCount(clipped);
+
+        if (maxScrollY > 0f) {
+            float trackX = settingsListBounds.right - 2f * u;
+            paint.setColor(withAlpha(Color.WHITE, 0.14f));
+            canvas.drawRect(trackX, settingsListBounds.top, trackX + 2f * u,
+                    settingsListBounds.bottom, paint);
+            float thumbHeight = Math.min(settingsListBounds.height(), Math.max(24f * u,
+                    settingsListBounds.height() * settingsListBounds.height() / contentHeight));
+            float thumbY = settingsListBounds.top + (settingsListBounds.height() - thumbHeight)
+                    * (scrollY / maxScrollY);
+            paint.setColor(withAlpha(RED_HOT, 0.75f));
+            canvas.drawRect(trackX, thumbY, trackX + 2f * u, thumbY + thumbHeight, paint);
+        }
     }
 
     private void drawBootCurtain(Canvas canvas, long now) {
@@ -817,7 +1010,8 @@ final class SetupView extends View {
         lastFrameAt = now;
         drawBackdrop(canvas, now);
         if (getWidth() > 0 && getHeight() > 0) {
-            if (getHeight() > getWidth()) drawPortrait(canvas, now, dt);
+            if (settingsOpen) drawSettings(canvas, now, dt);
+            else if (getHeight() > getWidth()) drawPortrait(canvas, now, dt);
             else drawLandscape(canvas, now, dt);
             drawBootCurtain(canvas, now);
         }
@@ -826,8 +1020,26 @@ final class SetupView extends View {
 
     private int actionAt(float x, float y) {
         if (exitBounds.contains(x, y)) return ACTION_EXIT;
-        if (allowBounds.contains(x, y) && !state.fileAccess) return ACTION_ALLOW;
-        if (checkBounds.contains(x, y) && !state.checking) return ACTION_CHECK;
+        if (settingsOpen) {
+            for (int i = 0; i < presetBounds.length; i++) {
+                if (presetBounds[i].contains(x, y)) return ACTION_PRESET_LOW + i;
+            }
+            if (settingsDoneBounds.contains(x, y)) return ACTION_SETTINGS_DONE;
+            if (settingsListBounds.contains(x, y)) {
+                for (int i = 0; i < gameSettings.settings.length; i++) {
+                    if (settingLeftBounds[i].contains(x, y)) return SETTING_ACTION_BASE + i * 2;
+                    if (settingRightBounds[i].contains(x, y)) return SETTING_ACTION_BASE + i * 2 + 1;
+                }
+            }
+            return ACTION_NONE;
+        }
+        if (launcherMode()) {
+            if (allowBounds.contains(x, y)) return ACTION_SETTINGS;
+            if (checkBounds.contains(x, y)) return ACTION_PLAY;
+        } else {
+            if (allowBounds.contains(x, y)) return ACTION_ALLOW;
+            if (checkBounds.contains(x, y) && !state.checking) return ACTION_CHECK;
+        }
         return ACTION_NONE;
     }
 
@@ -852,7 +1064,7 @@ final class SetupView extends View {
                 invalidate();
                 return true;
             case MotionEvent.ACTION_MOVE:
-                if (getHeight() > getWidth() && !scrolling
+                if ((settingsOpen || getHeight() > getWidth()) && !scrolling
                         && Math.abs(y - touchStartY) > touchSlop) {
                     scrolling = true;
                     pressedAction = ACTION_NONE;
@@ -886,9 +1098,35 @@ final class SetupView extends View {
 
     private void activate(int action) {
         performClick();
-        if (action == ACTION_ALLOW && !state.fileAccess) listener.onAllowFileAccess();
-        else if (action == ACTION_CHECK && !state.checking) listener.onCheckAgain();
-        else if (action == ACTION_EXIT) listener.onExit();
+        if (action >= SETTING_ACTION_BASE) {
+            int index = (action - SETTING_ACTION_BASE) / 2;
+            int delta = (action - SETTING_ACTION_BASE) % 2 == 0 ? -1 : 1;
+            if (index >= 0 && index < gameSettings.settings.length) {
+                GameSettings.Setting setting = gameSettings.settings[index];
+                gameSettings.setIndex(index, setting.index + delta);
+                invalidate();
+            }
+            return;
+        }
+        if (action == ACTION_EXIT) {
+            if (!closeSettings()) listener.onExit();
+        } else if (action == ACTION_SETTINGS_DONE) {
+            closeSettings();
+        } else if (action == ACTION_SETTINGS) {
+            showSettings();
+        } else if (action == ACTION_PLAY) {
+            listener.onPlay();
+        } else if (action >= ACTION_PRESET_LOW && action <= ACTION_PRESET_HIGH) {
+            gameSettings.applyPreset(action - ACTION_PRESET_LOW);
+            invalidate();
+        } else if (action == ACTION_PRESET_CUSTOM) {
+            gameSettings.selectCustom();
+            invalidate();
+        } else if (action == ACTION_ALLOW && !state.fileAccess) {
+            listener.onAllowFileAccess();
+        } else if (action == ACTION_CHECK && !state.checking) {
+            listener.onCheckAgain();
+        }
     }
 
     @Override
@@ -898,12 +1136,20 @@ final class SetupView extends View {
     }
 
     private int nextFocusable(int current, int direction) {
-        int[] order = {ACTION_ALLOW, ACTION_CHECK, ACTION_EXIT};
+        int[] order;
+        if (settingsOpen) {
+            order = new int[] {ACTION_PRESET_LOW, ACTION_PRESET_MEDIUM, ACTION_PRESET_HIGH,
+                    ACTION_PRESET_CUSTOM, ACTION_SETTINGS_DONE, ACTION_EXIT};
+        } else if (launcherMode()) {
+            order = new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_EXIT};
+        } else {
+            order = new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_EXIT};
+        }
         int index = -1;
         for (int i = 0; i < order.length; i++) if (order[i] == current) index = i;
+        if (index < 0) return direction > 0 ? order[0] : order[order.length - 1];
         for (int step = 1; step <= order.length; step++) {
             int candidate = order[(index + direction * step + order.length * 2) % order.length];
-            if (candidate == ACTION_ALLOW && state.fileAccess) continue;
             if (candidate == ACTION_CHECK && state.checking) continue;
             return candidate;
         }
