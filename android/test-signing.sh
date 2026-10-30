@@ -31,7 +31,7 @@ test_case() {
         -keyalg RSA -keysize 2048 -validity 2 -dname "CN=ProtoDroid Signing Test,O=ProtoDroid,C=US"
     KEYSTORE_PASS="$store_pass" KEY_PASS="$key_pass" "$APKSIGNER" sign \
         --ks "$keystore" --ks-key-alias protodroid-ci --ks-pass env:KEYSTORE_PASS --key-pass env:KEY_PASS \
-        --out "$signed" "$TMP/input.zip"
+        --min-sdk-version 26 --out "$signed" "$TMP/input.zip"
     "$APKSIGNER" verify --verbose --print-certs "$signed" > "$report"
     local digest
     digest=$(awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}' "$report")
