@@ -92,7 +92,7 @@ du -sh "$OUT/pkg"/lib/*/* 2>&1 | head -n 20
 "$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-key-alias "$KEY_ALIAS" \
     --ks-pass env:KEYSTORE_PASS --key-pass env:KEY_PASS --out "$OUT/prototype.apk" "$OUT/aligned.apk"
 "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT/prototype.apk" | tee "$OUT/signature.txt"
-CERTIFICATE_SHA256=$(sed -n 's/^Signer #1 certificate SHA-256 digest:[[:space:]]*//p' "$OUT/signature.txt" | head -n 1 | tr -d '[:space:]' | tr 'A-F' 'a-f')
+CERTIFICATE_SHA256=$(awk 'index($0, "certificate SHA-256 digest:") { sub(/^.*certificate SHA-256 digest:[[:space:]]*/, ""); gsub(/[[:space:]]/, ""); print; exit }' "$OUT/signature.txt" | tr 'A-F' 'a-f')
 if ! printf '%s' "$CERTIFICATE_SHA256" | grep -Eq '^[0-9a-f]{64}$'; then
     echo "ERROR: could not verify the signed APK certificate digest"
     exit 1
