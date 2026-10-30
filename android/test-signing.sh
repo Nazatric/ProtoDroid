@@ -32,7 +32,7 @@ test_case() {
     KEYSTORE_PASS="$store_pass" KEY_PASS="$key_pass" "$APKSIGNER" sign \
         --ks "$keystore" --ks-key-alias protodroid-ci --ks-pass env:KEYSTORE_PASS --key-pass env:KEY_PASS \
         --min-sdk-version 26 --out "$signed" "$TMP/input.zip"
-    "$APKSIGNER" verify --verbose --print-certs "$signed" > "$report"
+    "$APKSIGNER" verify --min-sdk-version 26 --verbose --print-certs "$signed" > "$report"
     local digest
     digest=$(awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}' "$report")
     if ! printf '%s' "$digest" | grep -Eq '^[0-9a-f]{64}$'; then
