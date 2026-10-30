@@ -120,6 +120,9 @@ jobs:
       - name: Test Android version increments
         run: python3 tools/test_bump_version.py
 
+      - name: Test APK signing configurations
+        run: android/test-signing.sh
+
       - name: Build minimal host FFmpeg
         run: |
           set -euo pipefail
@@ -717,7 +720,7 @@ jobs:
           # Random non-default credentials exercise the generic apksigner path without making artifacts update-stable.
           KEYSTORE=/tmp/protodroid-ci.keystore
           STORE_PASS=$(openssl rand -hex 24)
-          KEY_PASS=$(openssl rand -hex 24)
+          KEY_PASS=$STORE_PASS
           echo "::add-mask::$STORE_PASS"
           echo "::add-mask::$KEY_PASS"
           keytool -genkey -v -keystore "$KEYSTORE" -storepass "$STORE_PASS" -alias protodroid-ci \

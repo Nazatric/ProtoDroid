@@ -204,7 +204,7 @@ A release candidate should have an exact-commit green workflow, real native comp
 
 ### Signing and in-place updates
 
-Local packaging uses the Android debug keystore by default. Set `KEYSTORE`, `KEYSTORE_PASS`, `KEY_ALIAS`, and optionally `KEY_PASS` to use another key. Ordinary branch/PR CI artifacts use a disposable identity and are not release-eligible; protected release secrets are read only for an explicitly approved release dispatch on `main`.
+Local packaging uses the Android debug keystore by default. Set `KEYSTORE`, `KEYSTORE_PASS`, `KEY_ALIAS`, and optionally `KEY_PASS` to use another key. `KEY_PASS` defaults to the store password (normally required for PKCS#12); JKS also supports a distinct key password. Ordinary branch/PR CI artifacts use a disposable identity and are not release-eligible; protected release secrets are read only for an explicitly approved release dispatch on `main`.
 
 Protected releases require these repository Actions secrets:
 
