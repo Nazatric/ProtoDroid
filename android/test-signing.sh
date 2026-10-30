@@ -54,7 +54,8 @@ test_case() {
         --out "$signed" "$TMP/input.apk"
     "$APKSIGNER" verify --verbose --print-certs "$signed" > "$report"
     local digest
-    digest=$(awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}' "$report")
+    cat "$report"
+    digest=$(sed -n 's/^Signer #1 certificate SHA-256 digest:[[:space:]]*//p' "$report" | head -n 1 | tr -d '[:space:]' | tr 'A-F' 'a-f')
     if ! printf '%s' "$digest" | grep -Eq '^[0-9a-f]{64}$'; then
         echo "ERROR: $type signing test did not report a valid certificate digest"
         exit 1
