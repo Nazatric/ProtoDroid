@@ -869,7 +869,7 @@ final class SetupView extends View {
         canvas.drawPath(cutPath(bounds, 7f * u), paint);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(withAlpha(RED_HOT, setting.engine ? 0.42f : 0.20f));
-        canvas.drawRect(bounds.left, bounds.top + 5f * u, bounds.left + 2f * u, bounds.bottom - 5f * u);
+        canvas.drawRect(bounds.left, bounds.top + 5f * u, bounds.left + 2f * u, bounds.bottom - 5f * u, paint);
 
         float groupWidth = Math.min(164f * u, bounds.width() * 0.52f);
         float groupLeft = bounds.right - groupWidth - 4f * u;
