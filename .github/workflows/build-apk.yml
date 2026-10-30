@@ -813,8 +813,6 @@ jobs:
             echo "APK SHA-256: \`$APK_SHA256\`"
             echo
             echo "Use protodroid.ini for configuration. CI does not replace physical-device testing."
-            echo
-            echo "Original Android port by VinTeRuS."
           } >> release-notes.md
 
       - name: Publish GitHub release

@@ -6,7 +6,6 @@
 - Kept automatic game detection and launch, all three supported game directories, permission refreshes, and custom-driver installation intact.
 - Made the full **Allow file access** label fit instead of cutting it off on narrower screens.
 - Clarified the app-specific storage instructions: Android 11 or above uses PC/USB, while Android 10 or below can use a file manager with storage access.
-- Removed the setup-screen credit line. The VinTeRuS credit remains in the in-game Settings panel and project documentation.
 - Removed obsolete device logs, superseded design archives, and the uploaded cache seed from the repository. No cache seed is shipped with the APK.
 
 ## 0.5 - 2026-10-29

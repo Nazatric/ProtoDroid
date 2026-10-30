@@ -114,7 +114,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         new Button("TARGET", KeyEvent.KEYCODE_TAB, 0, true, 258, true, 140, 27, true),  // lock-on is Tab on PC
         new Button("SPRINT", KeyEvent.KEYCODE_SHIFT_LEFT, 0, true, 168, true, 245, 27, true),
         new Button("POWERS", KeyEvent.KEYCODE_R, 0, true, 190, false, 33, 24, true),  // Power Select Menu: R
-        // Extra buttons from VinTeRuS's v0.2.0 port (PC Keyboard Setup keys): disguise powers menu, last attack,
+        // Extra buttons use the reference port's PC Keyboard Setup keys: disguise powers menu, last attack,
         // defense and sensory power; then last disguise power, Web of Intrigue, take a disguise and back to Alex.
         // Appended so every saved position above keeps its index. All remain hidden unless Extra buttons is enabled.
         new Button("DSG MENU", KeyEvent.KEYCODE_F, 0, true, 370, false, 33, 24, true),
@@ -996,10 +996,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             text.setColor(0xff9a8a88);
             c.drawText("* applies after restart", restartRect.centerX(), by + 4 * density, text);
         }
-        // Keep author credit at the bottom, away from the empty header corners and the settings controls.
-        text.setTextSize(10 * density);
-        text.setColor(0xff9a8a88);
-        c.drawText(SetupActivity.CREDIT, cx, panel.bottom - 9 * density, text);
     }
 
     private void drawEditor(Canvas c) {
