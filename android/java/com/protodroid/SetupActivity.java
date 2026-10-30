@@ -25,9 +25,8 @@ import java.io.OutputStream;
  * Also supports /sdcard/Prototype/game subfolder.
  */
 public class SetupActivity extends Activity {
-    /** Shown on the setup screen and at the bottom of the in-game Settings panel. */
+    /** Shown at the bottom of the in-game Settings panel. */
     static final String CREDIT = "Original Android port by VinTeRuS";
-    static final String CREDIT_URL = "github.com/VinTeRuS";
 
     private static final String DLL = "prototypeenginef.dll";
     private static final int REQUEST_STORAGE = 1;

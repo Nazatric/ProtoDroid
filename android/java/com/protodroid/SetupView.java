@@ -465,6 +465,20 @@ final class SetupView extends View {
                 messageX + messageWidth + (4f * u) + caretWidth, top + 14.5f * u, paint);
     }
 
+    private void drawButtonLabel(Canvas canvas, RectF bounds, String label, int color, float u) {
+        // Keep the full action name visible on narrower phones instead of truncating it with an ellipsis.
+        float size = 13.5f;
+        float spacing = 2.2f;
+        float available = Math.max(1f, bounds.width() - 48f * u);
+        configure(text, size, 600, color, spacing, u);
+        while (text.measureText(label) > available && size > 10.5f) {
+            size = Math.max(10.5f, size - 0.5f);
+            spacing = 2.2f * size / 13.5f;
+            configure(text, size, 600, color, spacing, u);
+        }
+        drawCentered(canvas, label, bounds, size, 600, color, spacing, u, 24f * u);
+    }
+
     private void drawButton(Canvas canvas, int action, RectF bounds, String label, int variant, boolean enabled,
                             boolean busy, float u, long now, float dt) {
         boolean live = enabled && (variant == BUTTON_PRIMARY || pressedAction == action
@@ -547,7 +561,7 @@ final class SetupView extends View {
         float bracketInset = (live ? 15f : 9f) * u;
         drawCentered(canvas, "[", new RectF(bounds.left + bracketInset - 8f * u, bounds.top,
                 bounds.left + bracketInset + 8f * u, bounds.bottom), 22f, 400, bracketColor, 0f, u, 0f);
-        drawCentered(canvas, label, bounds, 13.5f, 600, textColor, 2.2f, u, 30f * u);
+        drawButtonLabel(canvas, bounds, label, textColor, u);
         drawCentered(canvas, "]", new RectF(bounds.right - bracketInset - 8f * u, bounds.top,
                 bounds.right - bracketInset + 8f * u, bounds.bottom), 22f, 400, bracketColor, 0f, u, 0f);
         canvas.restoreToCount(outer);
@@ -578,7 +592,8 @@ final class SetupView extends View {
         }
         primaryNoteLayout = wrapped(accessNote, 10.5f, 500, DIM, 0.6f, u, textWidth);
         secondaryPathLayout = wrapped(state.secondaryPath, 13f, 600, 0xfff1ece3, 0.2f, u, textWidth);
-        secondaryNoteLayout = wrapped("Android 11+: copy from a PC over USB", 10.5f, 500, DIM, 0.6f, u, textWidth);
+        secondaryNoteLayout = wrapped("Android 11 or above: copy via PC/USB\n"
+                + "Android 10 or below: use a file manager", 10.5f, 500, DIM, 0.6f, u, textWidth);
         layoutDirty = false;
     }
 
@@ -678,11 +693,6 @@ final class SetupView extends View {
         }
     }
 
-    private void drawCredit(Canvas canvas, float left, float top, float width, float u) {
-        drawLine(canvas, SetupActivity.CREDIT + " \u00b7 " + SetupActivity.CREDIT_URL,
-                left, top, 12f * u, 9.5f, 500, DIM, 0.2f, u, width);
-    }
-
     private void drawLandscape(Canvas canvas, long now, float dt) {
         float u = unit(false);
         float left = insetLeft + 26f * u;
@@ -702,7 +712,7 @@ final class SetupView extends View {
 
         float headline = getHeight() / u < 300f ? 26f : (getHeight() / u < 340f ? 31f : 38f);
         float groupHeight = 46f * u + 10f * u + headline * 2f * u + 10f * u + 18f * u
-                + 10f * u + 42f * u + 6f * u + 12f * u;
+                + 10f * u + 42f * u;
         float groupTop = contentTop + Math.max(0f, (contentBottom - contentTop - groupHeight) / 2f);
         float tileWidth = (leftWidth - 8f * u) / 2f;
         drawTile(canvas, new RectF(left, groupTop, left + tileWidth, groupTop + 46f * u),
@@ -726,7 +736,6 @@ final class SetupView extends View {
         drawButton(canvas, ACTION_CHECK, checkBounds, state.checking ? "CHECKING" : "CHECK AGAIN",
                 state.fileAccess && !state.gameFound ? BUTTON_PRIMARY : BUTTON_NORMAL,
                 !state.checking, state.checking, u, now, dt);
-        drawCredit(canvas, left, buttonsTop + 48f * u, leftWidth, u);
 
         float chipsHeight = chipsHeight(rightWidth, u);
         float chipsTop = contentBottom - chipsHeight;
@@ -745,7 +754,7 @@ final class SetupView extends View {
         float headline = width / u < 380f ? 30f : 36f;
         float contentHeight = 46f * u + 14f * u + 2f * u + 14f * u + 46f * u + 14f * u
                 + headline * 2f * u + 14f * u + 18f * u + 14f * u + 42f * u + 14f * u
-                + panelHeight(u) + 14f * u + chipsHeight(width, u) + 14f * u + 12f * u;
+                + panelHeight(u) + 14f * u + chipsHeight(width, u);
         float available = getHeight() - insetTop - insetBottom - 32f * u;
         maxScrollY = Math.max(0f, contentHeight - available);
         scrollY = Math.max(0f, Math.min(scrollY, maxScrollY));
@@ -781,8 +790,6 @@ final class SetupView extends View {
         drawPathPanel(canvas, left, y + panelHeight, width, u, now);
         y += panelHeight + 14f * u;
         drawChips(canvas, left, y, width, u);
-        y += chipsHeight(width, u) + 14f * u;
-        drawCredit(canvas, left, y, width, u);
     }
 
     private void drawBootCurtain(Canvas canvas, long now) {

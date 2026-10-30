@@ -56,7 +56,7 @@ The Android application ID is **`com.protodroid`**.
    - A supported subdirectory: `/storage/emulated/0/Prototype/game/`
    - App-specific storage: `/storage/emulated/0/Android/data/com.protodroid/files/game/`
 3. The game directory must include `prototypeenginef.dll` and the original archives, folders, and other data from your copy of the game. The APK does not supply those files.
-4. When using shared storage, grant file access on the setup screen. On recent Android versions, a PC/USB connection may be the easiest way to access `Android/data`.
+4. When using shared storage, grant file access on the setup screen. For the app-specific `Android/data` location, copy from a PC over USB on Android 11 or above; on Android 10 or below, a file manager with storage access can be used.
 5. Launch the app again after copying the files.
 
 The application ID and app-specific directory are both `com.protodroid`. The shared game directory remains `/storage/emulated/0/Prototype`, so game files do not need to be duplicated.
@@ -200,7 +200,7 @@ The production Bink harness and its minimal FFmpeg setup are automated in `.gith
 - **`build-apk`**: runs host UBSAN tests, builds ARM64 dependencies, generates the real recompiled engine, compiles native libraries, packages and signs the APK, verifies embedded libraries/DXVK and the signed package version, and uploads `prototype-apk` plus diagnostic artifacts. Ordinary pushes, including log-only uploads to `main`, do not publish releases.
 - **`android-deps`**: independently builds the ARM64 and x86_64 dependency sets and the Adreno Turnip package.
 
-`android/AndroidManifest.xml` is the version source of truth. Before each new approved release cycle, run `python3 tools/bump_version.py` once and commit the result; it advances both values together (`0.1`/code `1` → `0.2`/code `2` → `0.3`/code `3`). Packaging verifies those exact values in the signed APK. After an exact-commit green run on `main`, an explicitly approved manual workflow dispatch with **Publish a new versioned GitHub release** enabled creates `protodroid-v<version>`. The release job refuses reused or out-of-order visible versions and `versionCode` values instead of replacing an existing release.
+`android/AndroidManifest.xml` is the version source of truth. Before each new approved release cycle, run `python3 tools/bump_version.py` once, add the version's notes to `CHANGELOG.md`, and commit both changes. The version tool advances both values together (`0.1`/code `1` → `0.2`/code `2` → `0.3`/code `3`). Packaging verifies those exact values in the signed APK. After an exact-commit green run on `main`, an explicitly approved manual workflow dispatch with **Publish a new versioned GitHub release** enabled creates `protodroid-v<version>` using the matching changelog section. The release job refuses reused or out-of-order visible versions and `versionCode` values instead of replacing an existing release.
 
 A release candidate should have an exact-commit green workflow, real native compilation rather than a dummy/prebuilt fallback, successful `apksigner verify`, and a verified `prototype.apk` artifact. Compilation and host tests do not replace on-device gameplay and visual testing. A version bump does not by itself resolve signature conflicts or every Android installation error.
 

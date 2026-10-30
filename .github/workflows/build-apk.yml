@@ -398,7 +398,7 @@ jobs:
           timeout 600 bash -c 'PROTODROID_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
           cat /tmp/recomp.log | tail -n 100
           test -f /tmp/recomp_exit && cat /tmp/recomp_exit
-          if [ "$(cat /tmp/recomp_exit | awk '\''{print $2}'\'')" != "0" ]; then
+          if [ "$(awk '{print $2}' /tmp/recomp_exit)" != "0" ]; then
             echo "recomp failed, log:"
             cat /tmp/recomp.log
             exit 1
@@ -741,6 +741,9 @@ jobs:
     needs: build-apk
     if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
     steps:
+      - name: Check out release notes
+        uses: actions/checkout@v4
+
       - name: Download verified APK
         uses: actions/download-artifact@v4
         with:
@@ -795,13 +798,30 @@ jobs:
             echo "RELEASE_CODE=$versionCode"
           } >> "$GITHUB_ENV"
 
+      - name: Prepare changelog and verification notes
+        run: |
+          set -euo pipefail
+          APK_SHA256=$(sha256sum release-apk/prototype.apk | awk '{print $1}')
+          python3 tools/release_notes.py "$RELEASE_VERSION" > release-notes.md
+          {
+            echo
+            echo "## Verification"
+            echo
+            echo "Version $RELEASE_VERSION (versionCode $RELEASE_CODE), built from exact main commit $GITHUB_SHA."
+            echo "Real ARM64 compilation, APK signing, and packaged verification passed in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+            echo
+            echo "APK SHA-256: \`$APK_SHA256\`"
+            echo
+            echo "Use protodroid.ini for configuration. CI does not replace physical-device testing."
+            echo
+            echo "Original Android port by VinTeRuS."
+          } >> release-notes.md
+
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "ProtoDroid v$RELEASE_VERSION" \
-            --notes "Verified ARM64 build from commit $GITHUB_SHA. Version $RELEASE_VERSION (versionCode $RELEASE_CODE). Use protodroid.ini for configuration. Original Android port by VinTeRuS." \
-            release-apk/prototype.apk
+            --title "ProtoDroid v$RELEASE_VERSION" --notes-file release-notes.md release-apk/prototype.apk
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url,tagName,assets

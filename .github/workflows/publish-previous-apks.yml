@@ -1,0 +1,82 @@
+name: publish-previous-apks
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      approve:
+        description: Type RELEASE to publish the four previously verified APKs
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    if: inputs.approve == 'RELEASE'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify and publish v0.2 through v0.5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          AAPT2=$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -n 1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)
+
+          publish() {
+            local version=$1 code=$2 run=$3 commit=$4
+            local tag="protodroid-v$version"
+            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "$tag already exists; leaving it unchanged"
+              return 0
+            fi
+
+            test "$(gh run view "$run" --repo "$GITHUB_REPOSITORY" --json headSha --jq .headSha)" = "$commit"
+            test "$(gh run view "$run" --repo "$GITHUB_REPOSITORY" --json status --jq .status)" = completed
+            test "$(gh run view "$run" --repo "$GITHUB_REPOSITORY" --json conclusion --jq .conclusion)" = success
+
+            local dir="/tmp/protodroid-v$version"
+            rm -rf "$dir"
+            gh run download "$run" --repo "$GITHUB_REPOSITORY" --name prototype-apk --dir "$dir"
+            test -s "$dir/prototype.apk"
+            source "$dir/version.txt"
+            test "$versionName" = "$version"
+            test "$versionCode" = "$code"
+
+            "$APKSIGNER" verify --verbose "$dir/prototype.apk"
+            "$ZIPALIGN" -c -P 16 4 "$dir/prototype.apk"
+            "$AAPT2" dump badging "$dir/prototype.apk" > "$dir/badging.txt"
+            grep -F "package: name='com.protodroid' versionCode='$code' versionName='$version'" "$dir/badging.txt"
+            unzip -q "$dir/prototype.apk" 'lib/arm64-v8a/libmain.so' -d "$dir/check"
+            test "$(stat -c%s "$dir/check/lib/arm64-v8a/libmain.so")" -gt 100000
+
+            local apk_sha256
+            apk_sha256=$(sha256sum "$dir/prototype.apk" | awk '{print $1}')
+            python3 tools/release_notes.py "$version" > "$dir/release-notes.md"
+            {
+              echo
+              echo "## Verification"
+              echo
+              echo "Version $version (versionCode $code), built from exact commit $commit."
+              echo "Real ARM64 compilation, APK signing, and packaged verification passed in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run."
+              echo
+              echo "APK SHA-256: \`$apk_sha256\`"
+              echo
+              echo "Use protodroid.ini for configuration. CI does not replace physical-device testing."
+              echo
+              echo "Original Android port by VinTeRuS."
+            } >> "$dir/release-notes.md"
+
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$commit" \
+              --title "ProtoDroid v$version" --notes-file "$dir/release-notes.md" "$dir/prototype.apk"
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,tagName,targetCommitish,assets
+          }
+
+          publish 0.2 2 40880853367 eec15e766399dee4d8a3a15d6601cd507e7a133e
+          publish 0.3 3 40894239685 ebb8b00b93db88525dbffa846284efffc7382471
+          publish 0.4 4 40920153377 aebf690838b7cae28e0dbb23ad3d2e03486a137e
+          publish 0.5 5 40932709940 904a7ffa9722b95859ec1e4daacefc5c0f1f40e0
