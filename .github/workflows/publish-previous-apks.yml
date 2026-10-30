@@ -77,16 +77,24 @@ jobs:
 
             local tag_sha latest=false
             if ! tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null); then
-              gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
-                -f "ref=refs/tags/$tag" -f "sha=$commit" --silent
+              local tag_output
+              if ! tag_output=$(gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+                -f "ref=refs/tags/$tag" -f "sha=$commit" 2>&1); then
+                echo "::error::Tag creation failed for $tag: $(printf '%s' "$tag_output" | tr '\n' ' ' | cut -c1-1500)"
+                return 1
+              fi
               tag_sha=$commit
             fi
             test "$tag_sha" = "$commit"
             if [ "$version" = 0.6 ]; then latest=true; fi
-            gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+            local release_output
+            if ! release_output=$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
               -f "tag_name=$tag" -f "name=ProtoDroid v$version" \
               --raw-field "body=$(cat "$dir/release-notes.md")" \
-              -F draft=false -F prerelease=false -f "make_latest=$latest" --silent
+              -F draft=false -F prerelease=false -f "make_latest=$latest" 2>&1); then
+              echo "::error::Release creation failed for $tag: $(printf '%s' "$release_output" | tr '\n' ' ' | cut -c1-1500)"
+              return 1
+            fi
             gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "$dir/prototype.apk"
             gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,tagName,targetCommitish,assets
           }
