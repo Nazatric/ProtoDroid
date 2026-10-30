@@ -32,13 +32,9 @@ jobs:
           publish() {
             local version=$1 code=$2 run=$3 commit=$4
             local tag="protodroid-v$version"
+            local release_exists=false
             if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              echo "$tag already exists; leaving its metadata unchanged"
-              if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx 'prototype.apk'; then
-                gh run download "$run" --repo "$GITHUB_REPOSITORY" --name prototype-apk --dir "/tmp/protodroid-v$version"
-                gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "/tmp/protodroid-v$version/prototype.apk"
-              fi
-              return 0
+              release_exists=true
             fi
 
             test "$(gh run view "$run" --repo "$GITHUB_REPOSITORY" --json headSha --jq .headSha)" = "$commit"
@@ -74,6 +70,14 @@ jobs:
               echo
               echo "Use protodroid.ini for configuration. CI does not replace physical-device testing."
             } >> "$dir/release-notes.md"
+
+            if [ "$release_exists" = true ]; then
+              if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx 'prototype.apk'; then
+                gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "$dir/prototype.apk"
+              fi
+              gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,tagName,targetCommitish,isDraft,assets
+              return 0
+            fi
 
             local tag_sha latest=false
             if ! tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null); then
