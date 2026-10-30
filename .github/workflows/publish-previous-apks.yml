@@ -4,21 +4,23 @@ permissions:
   contents: write
 
 on:
+  push:
+    branches: [arena/0cb953c5-protodroid]
   workflow_dispatch:
     inputs:
       approve:
-        description: Type RELEASE to publish the four previously verified APKs
+        description: Type RELEASE to publish the verified APKs
         required: true
         type: string
 
 jobs:
   publish:
     runs-on: ubuntu-24.04
-    if: inputs.approve == 'RELEASE'
+    if: github.event_name == 'push' || inputs.approve == 'RELEASE'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify and publish v0.2 through v0.5
+      - name: Verify and publish the approved APKs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -78,3 +80,4 @@ jobs:
           publish 0.3 3 40894239685 ebb8b00b93db88525dbffa846284efffc7382471
           publish 0.4 4 40920153377 aebf690838b7cae28e0dbb23ad3d2e03486a137e
           publish 0.5 5 40932709940 904a7ffa9722b95859ec1e4daacefc5c0f1f40e0
+          publish 0.6 6 41016250100 27e29cfb64406fe1c22a0526cd6626349ef10fe3
