@@ -1,0 +1,68 @@
+diff --git a/src/dxvk/dxvk_state_cache.cpp b/src/dxvk/dxvk_state_cache.cpp
+index a0fe8b4..e3c8c12 100644
+--- a/src/dxvk/dxvk_state_cache.cpp
++++ b/src/dxvk/dxvk_state_cache.cpp
+@@ -840,19 +840,14 @@ namespace dxvk {
+ 
+ 
+   str::path_string DxvkStateCache::getCacheFileName() const {
+-    std::string path = getCacheDir();
+-
+-    if (!path.empty() && *path.rbegin() != '/')
+-      path += '/';
+-    
+ #ifdef __ANDROID__
+     // /proc/self/exe is app_process64, not the game. Use a stable, meaningful name shared with the native log mirror
+     // instead of tying persistence to Android's launcher process name.
+-    std::string exeName = "prototypeenginef.dll";
++    std::string exeName = androidStateCacheExecutableName();
+ #else
+     std::string exeName = env::getExeBaseName();
+ #endif
+-    path += exeName + ".dxvk-cache";
++    std::string path = stateCacheFileName(getCacheDir(), exeName);
+     return str::topath(path.c_str());
+   }
+ 
+@@ -910,7 +905,7 @@ namespace dxvk {
+ 
+ 
+   std::string DxvkStateCache::getCacheDir() const {
+-    return env::getEnvVar("DXVK_STATE_CACHE_PATH");
++    return env::getEnvVar(stateCachePathEnvironmentVariable());
+   }
+ 
+ }
+diff --git a/src/dxvk/dxvk_state_cache_io.h b/src/dxvk/dxvk_state_cache_io.h
+index f76e16b..c0b1608 100644
+--- a/src/dxvk/dxvk_state_cache_io.h
++++ b/src/dxvk/dxvk_state_cache_io.h
+@@ -1,9 +1,28 @@
+ #pragma once
+ 
+ #include <cstddef>
++#include <string>
+ 
+ namespace dxvk {
+ 
++  constexpr const char* stateCachePathEnvironmentVariable() {
++    return "DXVK_STATE_CACHE_PATH";
++  }
++
++
++  constexpr const char* androidStateCacheExecutableName() {
++    return "prototypeenginef.dll";
++  }
++
++
++  inline std::string stateCacheFileName(const std::string& directory, const std::string& executableName) {
++    std::string path = directory;
++    if (!path.empty() && path.back() != '/')
++      path += '/';
++    path += executableName + ".dxvk-cache";
++    return path;
++  }
++
+   // Keep the cache entry layout and incremental flush in one small, host-testable operation. Android can be killed
+   // without running C++ destructors, so buffering an entry until the next one or until shutdown loses useful work.
+   template<typename Stream, typename Header, typename Hash>

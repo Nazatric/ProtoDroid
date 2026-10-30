@@ -38,10 +38,10 @@ namespace native {
 
 namespace {
 
-// Logs the system driver's GPU, for reports from phones where Turnip is not used. DXVK needs Vulkan 1.3: an older
-// system driver (Qualcomm's for Adreno 6xx/710 on many phones) cannot run the game, so say that plainly instead of
-// letting DXVK fail later with "no adapters found".
-// The system driver's GPU and Vulkan version (0 when it has no device); logged.
+// Logs the system driver's GPU, for reports from phones where Turnip is not used. Vulkan 1.3 is preferred; 1.2
+// requires DXVK's extension-equivalent path. Older drivers cannot run the game, so say that plainly instead of letting
+// DXVK fail later with "no adapters found".
+// The system driver's GPU and physical-device Vulkan version (0 when it has no device); logged.
 uint32_t SystemDriverApi(std::string& device) {
     // Keep the system loader and its dependencies visible to subsequent
     // Vulkan users (including DXVK). The handle is intentionally retained.
@@ -54,10 +54,10 @@ uint32_t SystemDriverApi(std::string& device) {
     }
     Log("vulkan: system vkGetInstanceProcAddr resolved (RTLD_GLOBAL)");
     std::string report;
-    uint32_t api = 0;
-    device = ProbeDevice(gipa, "system driver", report, &api);
+    ProbeInfo info;
+    device = ProbeDevice(gipa, "system driver", report, &info);
     Log("%s", report.c_str());
-    return device.empty() ? 0 : api;
+    return device.empty() ? 0 : info.api_version;
 }
 
 // Logs the device extensions of the system driver: for drivers below Vulkan 1.3, which DXVK could only use through
@@ -106,12 +106,12 @@ void LogSystemExtensions() {
 void LogSystemDevice() {
     std::string device;
     uint32_t api = SystemDriverApi(device);
-    if (!device.empty() && api < VK_API_VERSION_1_3) {
-        LogSystemExtensions();
+    if (!device.empty() && api < kVulkanApi13) LogSystemExtensions();
+    if (!device.empty() && api < kVulkanApi12) {
         const bool adreno = access("/dev/kgsl-3d0", F_OK) == 0;
         char msg[512];
         snprintf(msg, sizeof(msg),
-                 "The GPU driver of this phone (%s) supports Vulkan %u.%u, and the game needs Vulkan 1.3. %s",
+                 "The GPU driver of this phone (%s) supports Vulkan %u.%u; the game needs Vulkan 1.2 with its required extensions, or 1.3. %s",
                  device.c_str(), VK_API_VERSION_MAJOR(api), VK_API_VERSION_MINOR(api),
                  adreno ? "The bundled Turnip driver did not work on this GPU either."
                         : "A system update may bring a newer driver.");
@@ -215,7 +215,7 @@ std::string GpuModel() {
 
 // Crash guard (working directory = the app's files folder): while a Turnip run has not yet reached
 // VulkanDriverConfirm, a crash (the crash handler calls VulkanDriverCrashed) writes turnip_failed, and auto mode then
-// uses the system driver for this build, unless that driver cannot run the game anyway (Vulkan < 1.3: nothing to
+// uses the system driver for this build, unless that driver cannot run the game anyway (Vulkan < 1.2: nothing to
 // lose by trying Turnip again). Quitting, being closed from the launcher or killed by the system is no failure: it
 // used to count as one and locked phones whose only usable driver is Turnip out of the game. vulkan_driver = turnip
 // forces Turnip. A failed test in the child process is not recorded: it costs a second and is retried at every start.
@@ -271,14 +271,14 @@ void SelectVulkanDriver() {
     } else if (std::string why = FailedBefore(); !why.empty()) {
         Log("vulkan: Turnip failed here before: %s", why.c_str());
         std::string device;
-        if (SystemDriverApi(device) >= VK_API_VERSION_1_3) {
+        if (SystemDriverApi(device) >= kVulkanApi12) {
             Log("vulkan: using the system driver (vulkan_driver = turnip forces Turnip)");
             return;
         }
         Log("vulkan: the system driver cannot run the game, trying Turnip again");
     }
     // Adreno 8xx: Turnip's support for them is new (an Adreno 840 hung at startup), and Qualcomm's driver there has
-    // Vulkan 1.3, which DXVK needs. vulkan_driver = turnip still tries Turnip.
+    // the proven Vulkan 1.3 path. vulkan_driver = turnip still tries Turnip.
     const std::string model = GpuModel();
     if (!model.empty()) Log("vulkan: GPU %s", model.c_str());
     const bool skip_bundled = mode == "auto" && model.compare(0, 7, "Adreno8") == 0;

@@ -4,7 +4,7 @@
 // the one place an app may run programs from.
 //
 // Usage: libturnipprobe.so <hook dir> <driver dir> <driver file> <custom 0|1>
-// Prints one report line; exits 0 if the driver drives the GPU with Vulkan 1.3, 3 if not.
+// Prints one report line; exits 0 if the driver drives the GPU with negotiated Vulkan 1.2 or 1.3, 3 if not.
 #include <cstdio>
 #include <cstring>
 #include <string>

@@ -129,6 +129,23 @@ void TestDxt() {
     }
 }
 
+void TestDxt1EndpointsExhaustive() {
+    // Every RGB565 endpoint against its complement, with all four palette entries selected in every row. This
+    // exhaustively checks the 5/6-bit expansion tables and both DXT1 palette modes for 16-bit and 32-bit output.
+    for (uint32_t value = 0; value <= 0xffff; ++value) {
+        const uint32_t other = 0xffff - value;
+        uint8_t block[8] = {uint8_t(value), uint8_t(value >> 8), uint8_t(other), uint8_t(other >> 8),
+                            0xe4, 0xe4, 0xe4, 0xe4};
+        for (uint32_t output : {kBgra, kA1R5G5B5}) {
+            const uint32_t pixel = output == kA1R5G5B5 ? 2 : 4;
+            uint8_t actual[64] = {}, expected[64] = {};
+            DecodeDxt(kDxt1, block, 8, 4, 4, actual, 4 * pixel, output);
+            Reference(kDxt1, block, 8, 4, 4, expected, 4 * pixel, output);
+            Check(memcmp(actual, expected, 16 * pixel) == 0, "exhaustive DXT1 endpoint decoding differs");
+        }
+    }
+}
+
 void TestSamplerTransform() {
     Check(D3D9EffectiveSamplerValue(10, 16, 1) == 1, "1x did not clamp MAXANISOTROPY");
     Check(D3D9EffectiveSamplerValue(10, 0, 1) == 0, "zero anisotropy was changed");
@@ -166,6 +183,21 @@ void TestLockSemantics() {
     Check(D3D9BufferLockSize(1, 1023, 1024) == 1, "one-byte ranged lock changed size");
     Check(D3D9BufferLockSize(0, 128, 1024) == 896, "whole-buffer lock did not use the remainder");
     Check(D3D9BufferLockSize(0, 0, 1024) == 1024, "full buffer lock changed size");
+
+    for (uint32_t flags : {0u, read_only, no_overwrite, discard, read_only | no_overwrite | discard, 0xffffffffu})
+        Check(D3D9NativeBufferLockFlags(flags) == flags, "guest flags changed before the single DXVK buffer lock");
+
+    uint8_t host[16], guest[16], expected[16];
+    for (uint8_t i = 0; i < 16; ++i) {
+        host[i] = uint8_t(0xa0 + i);
+        guest[i] = uint8_t(0x30 + i);
+    }
+    memcpy(expected, host, sizeof(expected));
+    memcpy(expected + 3, guest + 5, 7);
+    D3D9ShadowCopyBack(host + 3, guest + 5, 7, true);
+    Check(memcmp(host, expected, sizeof(host)) == 0, "shadow copyback left the original mapped range");
+    D3D9ShadowCopyBack(host, guest, sizeof(host), false);
+    Check(memcmp(host, expected, sizeof(host)) == 0, "read-only shadow copyback dirtied the DXVK mapping");
 }
 
 }  // namespace
@@ -173,6 +205,7 @@ void TestLockSemantics() {
 int main() {
     try {
         TestDxt();
+        TestDxt1EndpointsExhaustive();
         TestSamplerTransform();
         TestPresentationInterval();
         TestLockSemantics();

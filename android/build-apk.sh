@@ -20,6 +20,9 @@ ABIS=("${@:-arm64-v8a}")
 OUT=$ROOT/build/apk
 rm -rf "$OUT"
 mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/pkg"
+VERSION_INFO=$(python3 "$ROOT/tools/bump_version.py" --show "$ROOT/android/AndroidManifest.xml")
+read -r VERSION_NAME VERSION_CODE <<< "$VERSION_INFO"
+echo "=== Package version: $VERSION_NAME (versionCode $VERSION_CODE) ==="
 
 # Java: SDL's activity classes plus ProtoActivity.
 javac --release 11 -nowarn -cp "$PLATFORM_JAR" -d "$OUT/classes" \
@@ -27,10 +30,10 @@ javac --release 11 -nowarn -cp "$PLATFORM_JAR" -d "$OUT/classes" \
 "$BUILD_TOOLS/d8" --release --min-api 26 --lib "$PLATFORM_JAR" --output "$OUT/dex" \
     $(find "$OUT/classes" -name '*.class')
 
-# Resources (launcher icon; tools/make_icon.py draws it).
+# Resources (launcher icon; tools/make_icon.py draws it) and the self-contained setup artwork/fonts.
 "$BUILD_TOOLS/aapt2" compile --dir "$ROOT/android/res" -o "$OUT/res.zip"
 "$BUILD_TOOLS/aapt2" link -o "$OUT/base.apk" -I "$PLATFORM_JAR" --manifest "$ROOT/android/AndroidManifest.xml" \
-    -R "$OUT/res.zip" --auto-add-overlay --min-sdk-version 26 --target-sdk-version 35
+    -A "$ROOT/android/assets" -R "$OUT/res.zip" --auto-add-overlay --min-sdk-version 26 --target-sdk-version 35
 
 cp "$OUT/dex/classes.dex" "$OUT/pkg/"
 echo "=== classes.dex size ==="
@@ -80,6 +83,37 @@ du -sh "$OUT/pkg"/lib/*/* 2>&1 | head -n 20
     --out "$OUT/prototype.apk" "$OUT/aligned.apk"
 "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT/prototype.apk"
 "$BUILD_TOOLS/zipalign" -c -P 16 4 "$OUT/prototype.apk"
+# The redesigned setup must be fully offline. Compare every packaged setup resource byte-for-byte with its source so
+# an APK can never silently fall back to missing artwork or platform fonts.
+python3 - "$OUT/prototype.apk" "$ROOT/android/assets" <<'PY'
+from pathlib import Path
+import sys
+import zipfile
+
+apk, asset_root = sys.argv[1], Path(sys.argv[2])
+expected = sorted(p for p in asset_root.rglob("*") if p.is_file())
+if not expected:
+    raise SystemExit("ERROR: no Android assets found")
+with zipfile.ZipFile(apk) as archive:
+    names = set(archive.namelist())
+    for source in expected:
+        name = "assets/" + source.relative_to(asset_root).as_posix()
+        if name not in names:
+            raise SystemExit(f"ERROR: signed APK is missing {name}")
+        if archive.read(name) != source.read_bytes():
+            raise SystemExit(f"ERROR: signed APK asset differs from source: {name}")
+        print(f"Verified {name} ({source.stat().st_size} bytes)")
+PY
+# Verify the metadata in the signed APK, not just the source manifest. The release job consumes this only after the
+# exact package assertion succeeds. versionName is visible metadata; versionCode is Android's monotonic update ID.
+"$BUILD_TOOLS/aapt2" dump badging "$OUT/prototype.apk" > "$OUT/badging.txt"
+head -n 5 "$OUT/badging.txt"
+EXPECTED_PACKAGE="package: name='com.protodroid' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'"
+if ! grep -F -- "$EXPECTED_PACKAGE" "$OUT/badging.txt"; then
+    echo "ERROR: signed APK package/version mismatch; expected $EXPECTED_PACKAGE"
+    exit 1
+fi
+printf 'versionName=%s\nversionCode=%s\n' "$VERSION_NAME" "$VERSION_CODE" > "$OUT/version.txt"
 echo "=== Final APK ==="
 ls -lh "$OUT/prototype.apk"
 stat -c%s "$OUT/prototype.apk" | awk '{printf "APK size bytes: %d (MB %.2f)\n", $1, $1/1024/1024}'

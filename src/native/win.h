@@ -56,6 +56,8 @@ uint32_t GetLastError();
 // Windows path (relative to the guest current directory, or absolute with a drive) -> host path. Components are
 // matched case-insensitively against existing files, as on Windows.
 std::string HostPath(const char* win_path);
+// Normalize a relative or absolute guest path without accessing the host filesystem.
+std::string FullGuestPath(const char* win_path);
 // The guest current directory, "C:\Game" style; the game directory is C:\Game.
 std::string GuestCurrentDir();
 void SetGuestCurrentDir(const std::string& dir);

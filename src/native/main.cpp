@@ -32,12 +32,15 @@
 #include <vector>
 
 #include "guest.h"
+#include "present_stats.h"
+#include "save_path.h"
+#include "state_cache.h"
 #include "win.h"
 
 namespace native {
 
 const char* g_game_dir = nullptr;
-const char* g_data_dir = nullptr;  // Android: the app's external files folder (logs, ini, saves)
+const char* g_data_dir = nullptr;  // Android: the app's external files folder (logs, ini, legacy saves)
 
 namespace {
 std::mutex g_log_mutex;
@@ -259,14 +262,18 @@ void MirrorCopyDXVKLogs() {
     std::string base_log = std::string(g_data_dir) + "/app_process64_d3d9.log";
     std::string mirror_dxvk = g_mirror_dir + "/app_process64_d3d9.log";
     CopyFile(base_log, mirror_dxvk);
-    // Also copy state cache if it exists.
+    // Do not replace a useful shared backup with an empty or invalid private file. Once DXVK has entries, retain the
+    // existing periodic mirror so an external-files wipe does not discard all compiled pipeline state.
     std::string base_cache = std::string(g_data_dir) + "/prototypeenginef.dll.dxvk-cache";
     std::string mirror_cache = g_mirror_dir + "/prototypeenginef.dll.dxvk-cache";
-    CopyFile(base_cache, mirror_cache);
+    // Replace the backup atomically. A process kill or failed write must not truncate the last usable cache, and
+    // the live DXVK writer remains in app-private storage instead of doing shader-cache I/O through shared FUSE.
+    native::BackupStateCache(base_cache, mirror_cache);
 }
 
-std::string TakeIoStats();   // kernel32.cpp
-std::string ArenaUsage();    // memory.cpp
+std::string TakeIoStats();           // kernel32.cpp
+std::string ArenaUsage();            // memory.cpp
+std::string TakeTextureTimingStats();  // d3d9.cpp
 
 void Fatal(const char* fmt, ...) {
     char buf[1024];
@@ -303,9 +310,8 @@ extern SDL_Window* g_sdl_window;
 }  // namespace native
 
 
-// ---- performance counters and frame limiter (read by the on-screen overlay through JNI) ----
+// ---- frame limiter and presented-frame counters (read by the on-screen overlay through JNI) ----
 namespace native {
-std::atomic<float> g_fps{0}, g_frame_ms{0};
 std::atomic<int> g_fps_limit{0};  // 0 = no limit (the swap interval still applies)
 
 static long ResidentMiB() {
@@ -320,10 +326,13 @@ static long ResidentMiB() {
 
 #ifdef __ANDROID__
 extern "C" JNIEXPORT jfloat JNICALL Java_com_protodroid_TouchControls_nativeFps(JNIEnv*, jclass) {
-    return native::g_fps.load();
+    return jfloat(native::GetPresentStats().fps);
 }
 extern "C" JNIEXPORT jfloat JNICALL Java_com_protodroid_TouchControls_nativeFrameMs(JNIEnv*, jclass) {
-    return native::g_frame_ms.load();
+    return jfloat(native::GetPresentStats().average_ms);
+}
+extern "C" JNIEXPORT jfloat JNICALL Java_com_protodroid_TouchControls_nativeFrameP99Ms(JNIEnv*, jclass) {
+    return jfloat(native::GetPresentStats().p99_ms);
 }
 extern "C" JNIEXPORT jint JNICALL Java_com_protodroid_TouchControls_nativeMemoryMiB(JNIEnv*, jclass) {
     return jint(native::ResidentMiB());
@@ -389,9 +398,9 @@ int main(int argc, char** argv) {
 #endif
     g_game_dir = argc > 1 ? argv[1] : getenv("PROTODROID_GAME");
 #ifdef __ANDROID__
-    // Logs, protodroid.ini, saves (native_c) and the DXVK caches live in the app's external files folder
-    // (/sdcard/Android/data/<package>/files). The game is <that folder>/game, or wherever SetupActivity found it
-    // (PROTODROID_GAME, e.g. /sdcard/Prototype with all files access); SetupActivity checks it before starting us.
+    // Logs, protodroid.ini and DXVK caches live in the app's external files folder. Saves use the shared Prototype
+    // folder when it is writable, with the legacy app-specific native_c directory as a no-permission fallback.
+    // The game is <that folder>/game, or wherever SetupActivity found it (PROTODROID_GAME, e.g. /sdcard/Prototype).
     static std::string android_game;
     const char* base = SDL_AndroidGetExternalStoragePath();
     if (!base) {
@@ -407,13 +416,18 @@ int main(int argc, char** argv) {
                                  "The app log directory is not writable.", nullptr);
         return 1;
     }
-    // DXVK previously derived app_process64.dxvk-cache from /proc/self/exe. The Android patch now uses a stable game
-    // name; preserve pipelines compiled by older builds instead of starting with another empty cache.
-    std::string state_cache = std::string(base) + "/prototypeenginef.dll.dxvk-cache";
-    std::string legacy_cache = std::string(base) + "/app_process64.dxvk-cache";
-    if (access(state_cache.c_str(), F_OK) != 0 && access(legacy_cache.c_str(), R_OK) == 0) {
-        if (rename(legacy_cache.c_str(), state_cache.c_str()) == 0) Log("DXVK state cache migrated from app_process64");
-        else CopyFile(legacy_cache, state_cache);
+    // DXVK v2.5.3 reads DXVK_STATE_CACHE_PATH and the Android patch resolves prototypeenginef.dll.dxvk-cache within
+    // it. Recover a populated cache from the old app_process64 name or shared storage, but never invent a seed or
+    // overwrite a populated/invalid target. DXVK remains responsible for validating every entry and reporting counts.
+    std::string state_cache = native::StateCacheFile(base, native::kStateCacheFilename);
+    native::StateCacheMigration cache_migration = native::PlanStateCacheMigration(
+        base, {"/storage/emulated/0/Prototype/logs", "/storage/emulated/0/Prototype"});
+    if (!cache_migration.source.empty()) {
+        native::StateCacheMigrationResult migrated = native::MigrateStateCache(cache_migration);
+        if (migrated == native::StateCacheMigrationResult::Migrated)
+            Log("DXVK state cache restored from %s", cache_migration.source.c_str());
+        else
+            Log("DXVK state cache migration from %s failed: %s", cache_migration.source.c_str(), strerror(errno));
     }
     setenv("DXVK_STATE_CACHE_PATH", base, 1);
     setenv("DXVK_LOG_PATH", base, 1);
@@ -480,6 +494,8 @@ int main(int argc, char** argv) {
     // Log game dir detection
     Log("game dir: %s", g_game_dir);
     Log("data dir: %s", g_data_dir ? g_data_dir : "(none)");
+    native::ConfigureSaveDirectory(base, native::kAndroidSharedSaveDir);
+    Log("save dir: %s", native::HostPath(native::kGuestSaveDir).c_str());
 #endif
     // DXVK's durable pipeline diagnostics are strictly opt-in. Export this
     // before any DXVK device can be created; PROTODROID_PIPELINE_TRACE itself
@@ -660,14 +676,13 @@ int main(int argc, char** argv) {
     g_fps_limit.store(fps_limit);
     PerfHintStart(fps_limit);
     using Clock = std::chrono::steady_clock;
-    Clock::time_point stats_start = Clock::now(), frame_start = stats_start, next_log = stats_start;
-    uint64_t stats_frames = 0;
+    Clock::time_point frame_start = Clock::now(), next_log = frame_start;
     for (uint64_t frame = 0;; ++frame) {
         frames.store(frame, std::memory_order_relaxed);
         if (frame == 900) VulkanDriverConfirm();  // well past the intro movies: the driver survived startup
-        // Frame time, FPS over the last second, a perf line in the log every 30 s, and the optional limiter.
+        // The limiter remains anchored to the engine loop. FPS, frame statistics, and ADPF are anchored only to real
+        // D3D9 presents, so thousands of empty message-pump iterations cannot inflate them or skew CPU clocking.
         Clock::time_point now = Clock::now();
-        PerfHintFrame(std::chrono::duration_cast<std::chrono::nanoseconds>(now - frame_start).count());
         if (int limit = g_fps_limit.load(); limit > 0) {
             Clock::time_point due = frame_start + std::chrono::microseconds(1000000 / limit);
             if (now < due) {
@@ -675,17 +690,14 @@ int main(int argc, char** argv) {
                 now = Clock::now();
             }
         }
-        g_frame_ms.store(std::chrono::duration<float, std::milli>(now - frame_start).count());
         frame_start = now;
-        if (++stats_frames, now - stats_start >= std::chrono::seconds(1)) {
-            g_fps.store(float(stats_frames) / std::chrono::duration<float>(now - stats_start).count());
-            stats_frames = 0;
-            stats_start = now;
-        }
         if (now >= next_log) {
             if (frame) {
-                Log("perf: %.1f fps, %.1f ms, %ld MiB resident; arena %s; io: %s", g_fps.load(), g_frame_ms.load(),
-                    ResidentMiB(), ArenaUsage().c_str(), TakeIoStats().c_str());
+                const PresentStatsSnapshot present = GetPresentStats();
+                Log("perf: %.1f present fps, avg %.2f ms, p99 %.2f ms, max %.2f ms, %ld MiB resident; arena %s; io: %s",
+                    present.fps, present.average_ms, present.p99_ms, present.max_ms, ResidentMiB(),
+                    ArenaUsage().c_str(), TakeIoStats().c_str());
+                Log("texture timing (calls / total ms / max ms): %s", native::TakeTextureTimingStats().c_str());
                 native::MirrorCopyDXVKLogs();
             }
             next_log = now + std::chrono::seconds(30);

@@ -4,20 +4,12 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
-import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.provider.Settings;
 import android.system.ErrnoException;
 import android.system.Os;
-import android.util.TypedValue;
-import android.view.Gravity;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.TextView;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -33,12 +25,45 @@ import java.io.OutputStream;
  * Also supports /sdcard/Prototype/game subfolder.
  */
 public class SetupActivity extends Activity {
-    /** Shown on the setup screen and at the bottom of the in-game Settings panel. */
-    static final String CREDIT = "Original Android port by VinTeRuS";
-    static final String CREDIT_URL = "github.com/VinTeRuS";
-
     private static final String DLL = "prototypeenginef.dll";
     private static final int REQUEST_STORAGE = 1;
+
+    private SetupView setupView;
+
+    private void showSetup(File app, File shared) {
+        if (setupView == null) {
+            // Keep the automatic found-game launch path as light as before: artwork is decoded only when help is needed.
+            setupView = new SetupView(this, new SetupView.Listener() {
+                @Override
+                public void onAllowFileAccess() {
+                    requestAccess();
+                }
+
+                @Override
+                public void onCheckAgain() {
+                    check();
+                }
+
+                @Override
+                public void onExit() {
+                    finish();
+                }
+            });
+            setContentView(setupView);
+        }
+        File sharedSub = new File(shared, "game");
+        boolean access = hasSharedAccess();
+        String appPath = app != null ? app.getAbsolutePath()
+                : "/storage/emulated/0/Android/data/" + getPackageName() + "/files/game";
+        setupView.setState(new SetupView.State(
+                access,
+                false,
+                false,
+                access ? "Game files not found" : "Waiting for file access",
+                shared.getAbsolutePath(),
+                appPath,
+                sharedSub.getAbsolutePath()));
+    }
 
     private File appGame() {
         File base = getExternalFilesDir(null);  // also creates Android/data/<package>/files
@@ -95,7 +120,7 @@ public class SetupActivity extends Activity {
         } else if (app != null && hasGame(app)) {
             launch(null);
         } else {
-            showHelp(app, shared);
+            showSetup(app, shared);
         }
     }
 
@@ -162,66 +187,4 @@ public class SetupActivity extends Activity {
         check();
     }
 
-    private int dp(float v) {
-        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics());
-    }
-
-    private TextView text(String s, float sp, boolean bold) {
-        TextView t = new TextView(this);
-        t.setText(s);
-        t.setTextColor(Color.rgb(230, 230, 230));
-        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
-        if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
-        t.setPadding(0, 0, 0, dp(12));
-        return t;
-    }
-
-    private Button button(String label, Runnable action) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setOnClickListener(v -> action.run());
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 0, dp(12), 0);
-        b.setLayoutParams(lp);
-        return b;
-    }
-
-    private void showHelp(File app, File shared) {
-        File sharedSub = new File(shared, "game");
-        LinearLayout col = new LinearLayout(this);
-        col.setOrientation(LinearLayout.VERTICAL);
-        col.setPadding(dp(32), dp(24), dp(32), dp(24));
-        col.addView(text("Game files not found", 22, true));
-        col.addView(text("Copy the contents of your Prototype folder (PC version, Steam): prototypeenginef.dll, "
-                + "all .rcf and .p3d files and the art, audio and scripts folders, to one of these places:", 15,
-                false));
-        col.addView(text("1. " + (app != null ? app.getAbsolutePath() : "Android/data/" + getPackageName()
-                + "/files/game") + "\n   The folder exists now. On Android 11+ most file managers cannot open "
-                + "Android/data; copy from a PC over USB, or use option 2.", 14, false));
-        String access = hasSharedAccess() ? "access granted" : "needs file access: tap the button below";
-        col.addView(text("2. " + shared.getAbsolutePath() + "\n   Any file manager can open it (" + access + ").\n"
-                + "   Also accepted: " + sharedSub.getAbsolutePath(), 14, false));
-        col.addView(text("3. " + "/storage/emulated/0/Android/data/com.protodroid/files/game"
-                + "\n   Alternative private location on Android 11+ via USB.", 14, false));
-        col.addView(text("Then tap Check again.", 15, false));
-
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.START);
-        row.addView(button("Check again", this::check));
-        if (!hasSharedAccess()) row.addView(button("Allow file access", this::requestAccess));
-        row.addView(button("Exit", this::finish));
-        col.addView(row);
-        TextView credit = text(CREDIT + " \u00b7 " + CREDIT_URL, 12, false);
-        credit.setTextColor(Color.rgb(150, 150, 150));
-        credit.setPadding(0, dp(24), 0, 0);
-        col.addView(credit);
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(Color.rgb(18, 18, 18));
-        scroll.addView(col);
-        setContentView(scroll);
-    }
 }

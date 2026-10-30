@@ -39,7 +39,7 @@ The Android application ID is **`com.protodroid`**.
 ### Controls
 
 - MENU-mode absolute mouse clicks, plus separate GAME-mode camera look, virtual joystick, action buttons, and power wheels.
-- Configurable button opacity, size, positions, vibration, camera speed, invert Y, edge sprint, and optional power buttons.
+- Configurable button opacity, size, positions, vibration, camera speed, invert Y, edge sprint, and optional extra buttons for disguise powers, Web of Intrigue, disguise, and Alex form.
 - Gamepad detection and an option to hide touch controls while a gamepad is connected.
 
 ## Requirements
@@ -56,10 +56,16 @@ The Android application ID is **`com.protodroid`**.
    - A supported subdirectory: `/storage/emulated/0/Prototype/game/`
    - App-specific storage: `/storage/emulated/0/Android/data/com.protodroid/files/game/`
 3. The game directory must include `prototypeenginef.dll` and the original archives, folders, and other data from your copy of the game. The APK does not supply those files.
-4. When using shared storage, grant file access on the setup screen. On recent Android versions, a PC/USB connection may be the easiest way to access `Android/data`.
+4. When using shared storage, grant file access on the setup screen. For the app-specific `Android/data` location, copy from a PC over USB on Android 11 or above; on Android 10 or below, a file manager with storage access can be used.
 5. Launch the app again after copying the files.
 
 The application ID and app-specific directory are both `com.protodroid`. The shared game directory remains `/storage/emulated/0/Prototype`, so game files do not need to be duplicated.
+
+## Saves and Profiles
+
+With shared file access granted, profiles and saves such as `profile.bin` and `slot-*.bin` are read and written directly in `/storage/emulated/0/Prototype/`. Files added, replaced, or deleted there by a file manager are used by the game.
+
+On the first run with shared access, existing saves are copied from `/storage/emulated/0/Android/data/com.protodroid/files/native_c/Users/Player/Documents/Prototype/` without overwriting files already in shared storage. This migration runs only once, so later deletion of a shared save does not restore the old copy. The legacy files remain as a backup. Without shared access, the legacy app-specific save directory continues to be used.
 
 ## Configuration
 
@@ -110,7 +116,7 @@ Open the gear icon to access the Settings overlay. Settings marked with `*` appl
 - Stick edge sprint
 - Camera speed
 - Invert Y
-- Power buttons
+- Extra buttons, default **Off**
 - Anisotropy
 - Unlock menu FPS, default **On**
 
@@ -130,6 +136,10 @@ Important files:
 - `app_process64_d3d9.log`: DXVK and Vulkan diagnostics
 - `prototypeenginef.dll.dxvk-cache`: persistent pipeline state cache
 - `turnip_failed`: present only after a Turnip initialization failure
+
+No state-cache seed is bundled. If the app-private cache is missing or header-only, startup can restore a populated `prototypeenginef.dll.dxvk-cache` (or legacy `app_process64.dxvk-cache`) from the app-specific directory or the shared locations above. Existing populated or invalid private caches are not overwritten by recovery; DXVK performs the final entry validation and reports the actual count read. Populated private caches are mirrored periodically to shared storage with atomic replacement, so an interrupted backup does not truncate the previous copy. The live DXVK writer stays in app-private storage; the mirror is a recovery backup, not a power-loss-durability guarantee.
+
+The 30-second native performance report includes presented-frame statistics plus interval texture timing: DXT decode, host texture creation, and host upload calls with call count, total milliseconds, and worst-call milliseconds. These measurements help distinguish CPU conversion, allocation, and upload/sync stalls; they do not claim that any one counter is the sole cause of a frame spike.
 
 For bug reports, include the complete logs, phone model, SoC/GPU, Android version, APK commit, and exact steps that reproduce the issue. Also use `adb logcat -s protodroid` when logcat access is available.
 
@@ -171,7 +181,7 @@ android/build-apk.sh arm64-v8a
 
 ## Tests
 
-Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler/lock rules, presentation normalization, and Bink input/ABI/planes/audio/pacing.
+Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler/lock rules, presentation normalization, state-cache resolution/migration, Android version increments, and Bink input/ABI/planes/audio/pacing.
 
 ```sh
 # Graphics helpers and DXT differential tests.
@@ -183,14 +193,16 @@ UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 /tmp/graphics_test
 
 ```
 
-The production Bink harness and its minimal FFmpeg setup are automated in `.github/workflows/build-apk.yml`. The additional hot audio/skinning differential tests use `src/native/tests/run_hot_test.sh` and require the original engine binary.
+The production Bink harness and its minimal FFmpeg setup are automated in `.github/workflows/build-apk.yml`. The additional hot audio/skinning differential tests use `src/native/tests/run_hot_test.sh` and require the original engine binary. CI runs them on native ARM64 with the original DLL fetched read-only from `TestingFiles`; the skinning suite compares 2,000 randomized batches, including larger record counts and both output alignments.
 
 ## CI/CD
 
-- **`build-apk`**: runs host UBSAN tests, builds ARM64 dependencies, generates the real recompiled engine, compiles native libraries, packages and signs the APK, verifies embedded libraries/DXVK, and uploads `prototype-apk` plus diagnostic artifacts. A verified main-branch build also publishes `prototype.apk` as a GitHub release asset.
+- **`build-apk`**: runs host UBSAN tests, builds ARM64 dependencies, generates the real recompiled engine, compiles native libraries, packages and signs the APK, verifies embedded libraries/DXVK and the signed package version, and uploads `prototype-apk` plus diagnostic artifacts. Ordinary pushes, including log-only uploads to `main`, do not publish releases.
 - **`android-deps`**: independently builds the ARM64 and x86_64 dependency sets and the Adreno Turnip package.
 
-A release candidate should have an exact-commit green workflow, real native compilation rather than a dummy/prebuilt fallback, successful `apksigner verify`, and a verified `prototype.apk` artifact. Compilation and host tests do not replace on-device gameplay and visual testing.
+`android/AndroidManifest.xml` is the version source of truth. Before each new approved release cycle, run `python3 tools/bump_version.py` once, add the version's notes to `CHANGELOG.md`, and commit both changes. The version tool advances both values together (`0.1`/code `1` → `0.2`/code `2` → `0.3`/code `3`). Packaging verifies those exact values in the signed APK. After an exact-commit green run on `main`, an explicitly approved manual workflow dispatch with **Publish a new versioned GitHub release** enabled creates `protodroid-v<version>` using the matching changelog section. The release job refuses reused or out-of-order visible versions and `versionCode` values instead of replacing an existing release.
+
+A release candidate should have an exact-commit green workflow, real native compilation rather than a dummy/prebuilt fallback, successful `apksigner verify`, and a verified `prototype.apk` artifact. Compilation and host tests do not replace on-device gameplay and visual testing. A version bump does not by itself resolve signature conflicts or every Android installation error.
 
 ## Credits and Legal
 

@@ -13,6 +13,12 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish a new versioned GitHub release from main (explicit approval)
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   bink-tests:
@@ -33,6 +39,23 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test
 
+      - name: Compile and run shared-save path tests
+        id: save
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/tests/save_path_test.cpp -o /tmp/save_path_test 2>&1 | tee /tmp/protodroid-save-test.log
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/save_path_test 2>&1 | tee -a /tmp/protodroid-save-test.log
+
+      - name: Report shared-save test failure
+        if: failure() && steps.save.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/6/comments \
+            --raw-field body="Shared-save test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-save-test.log 2>/dev/null || echo 'no save-test log')\n\`\`\`" || true
+
       - name: Compile and run performance-hint session tests
         run: |
           set -euo pipefail
@@ -40,6 +63,38 @@ jobs:
           g++ $CXXFLAGS src/native/tests/perf_hint_test.cpp -o /tmp/perf_hint_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/perf_hint_test
+
+      - name: Compile and run presented-frame statistics tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/present_stats.cpp src/native/tests/present_stats_test.cpp -o /tmp/present_stats_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/present_stats_test
+
+      - name: Compile and run GPU profile and API negotiation tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/gpu_profile_test.cpp -o /tmp/gpu_profile_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/gpu_profile_test
+
+      - name: Compile and run DXVK state-cache behavior tests
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/protodroid-dxvk-test
+          for patch in "$PWD"/android/patches/dxvk-*.patch; do
+            git -C /tmp/protodroid-dxvk-test apply --check "$patch"
+            git -C /tmp/protodroid-dxvk-test apply "$patch"
+          done
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-test/src/dxvk"
+          g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/state_cache_test
+
+      - name: Test Android version increments
+        run: python3 tools/test_bump_version.py
 
       - name: Build minimal host FFmpeg
         run: |
@@ -80,6 +135,57 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures
           BINK_TEST_AUDIO_RATE=44100 /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures-44100
+
+  arm64-graphics-tests:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile and run native ARM64 graphics UBSAN tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/d3d9_dxt.cpp src/native/tests/graphics_test.cpp -o /tmp/graphics_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/graphics_test_arm64
+
+      - name: Compile and run native ARM64 shared-save path tests
+        id: save
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/tests/save_path_test.cpp -o /tmp/save_path_test_arm64 2>&1 | tee /tmp/protodroid-save-test.log
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/save_path_test_arm64 2>&1 | tee -a /tmp/protodroid-save-test.log
+
+      - name: Report native ARM64 shared-save test failure
+        if: failure() && steps.save.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/6/comments \
+            --raw-field body="Native ARM64 shared-save test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-save-test.log 2>/dev/null || echo 'no save-test log')\n\`\`\`" || true
+
+      - name: Compile and run native ARM64 hot-replacement differential tests
+        id: hot
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin TestingFiles
+          git show FETCH_HEAD:prototypeenginef.dll > /tmp/protodroid-hot-engine.dll
+          test "$(stat -c%s /tmp/protodroid-hot-engine.dll)" = 20205568
+          python3 -m venv /tmp/protodroid-hot-venv
+          /tmp/protodroid-hot-venv/bin/pip install -q capstone pefile
+          export PATH=/tmp/protodroid-hot-venv/bin:$PATH
+          export PROTODROID_ENGINE=/tmp/protodroid-hot-engine.dll
+          src/native/tests/run_hot_test.sh 2>&1 | tee /tmp/protodroid-arm-hot-test.log
+
+      - name: Report native ARM64 hot-test failure
+        if: failure() && steps.hot.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/1/comments \
+            --raw-field body="ARM64 hot-test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-arm-hot-test.log 2>/dev/null || echo 'no hot-test log')\n\`\`\`" || true
 
   build-deps:
     runs-on: ubuntu-24.04
@@ -136,7 +242,7 @@ jobs:
 
   build-apk:
     runs-on: ubuntu-24.04
-    needs: [build-deps, bink-tests]
+    needs: [build-deps, bink-tests, arm64-graphics-tests]
     steps:
       - uses: actions/checkout@v4
 
@@ -292,7 +398,7 @@ jobs:
           timeout 600 bash -c 'PROTODROID_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
           cat /tmp/recomp.log | tail -n 100
           test -f /tmp/recomp_exit && cat /tmp/recomp_exit
-          if [ "$(cat /tmp/recomp_exit | awk '\''{print $2}'\'')" != "0" ]; then
+          if [ "$(awk '{print $2}' /tmp/recomp_exit)" != "0" ]; then
             echo "recomp failed, log:"
             cat /tmp/recomp.log
             exit 1
@@ -601,7 +707,10 @@ jobs:
           done
           $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging "$APK" > /tmp/protodroid-badging.txt
           head -n 20 /tmp/protodroid-badging.txt
-          grep -F "package: name='com.protodroid'" /tmp/protodroid-badging.txt
+          source build/apk/version.txt
+          grep -F "package: name='com.protodroid' versionCode='$versionCode' versionName='$versionName'" \
+            /tmp/protodroid-badging.txt
+          echo "Verified signed package: com.protodroid $versionName (versionCode $versionCode)"
 
       - name: Upload APK artifact
         if: always()
@@ -610,6 +719,7 @@ jobs:
           name: prototype-apk
           path: |
             build/apk/prototype.apk
+            build/apk/version.txt
           retention-days: 30
           if-no-files-found: warn
 
@@ -624,31 +734,92 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
-  # Publish only after a verified main-branch build. Feature branches and pull requests upload artifacts but never
-  # create or replace a GitHub release.
+  # Ordinary pushes (including log-only uploads to main) never publish. A release requires an explicitly approved
+  # workflow dispatch on main after all host tests and the real ARM64 build have passed for this exact commit.
   release:
     runs-on: ubuntu-24.04
     needs: build-apk
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
     steps:
+      - name: Check out release notes
+        uses: actions/checkout@v4
+
       - name: Download verified APK
         uses: actions/download-artifact@v4
         with:
           name: prototype-apk
           path: release-apk
 
-      - name: Publish GitHub release
+      - name: Verify this is a new sequential release version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           test -s release-apk/prototype.apk
-          TAG="protodroid-${GITHUB_SHA::7}"
-          TITLE="ProtoDroid ${GITHUB_SHA::7}"
-          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "$TITLE" \
-              --notes "Verified ARM64 build from commit $GITHUB_SHA. Use protodroid.ini for configuration. Original Android port by VinTeRuS."
+          source release-apk/version.txt
+          python3 - "$versionName" "$versionCode" <<'PY'
+          import re
+          import sys
+          if not re.fullmatch(r"[0-9]+\.[0-9]+", sys.argv[1]) or int(sys.argv[2]) < 1:
+              raise SystemExit("invalid verified APK version metadata")
+          PY
+          TAG="protodroid-v$versionName"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists. Run python3 tools/bump_version.py before the next approved release."
+            exit 1
           fi
-          gh release upload "$TAG" release-apk/prototype.apk --repo "$GITHUB_REPOSITORY" --clobber
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,tagName,assets
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/protodroid-releases.json
+          python3 - "$versionName" "$versionCode" /tmp/protodroid-releases.json <<'PY'
+          import json
+          import re
+          import sys
+          current = tuple(map(int, sys.argv[1].split(".")))
+          current_code = int(sys.argv[2])
+          with open(sys.argv[3], encoding="utf-8") as source:
+              releases = json.load(source)
+          versions = []
+          codes = []
+          for release in releases:
+              match = re.fullmatch(r"protodroid-v([0-9]+)\.([0-9]+)", release.get("tag_name", ""))
+              if match:
+                  versions.append(tuple(map(int, match.groups())))
+              code = re.search(r"versionCode[ =]([0-9]+)", release.get("body") or "")
+              if code:
+                  codes.append(int(code.group(1)))
+          if versions and current <= max(versions):
+              raise SystemExit("APK version is not newer than the latest release; run tools/bump_version.py")
+          if codes and current_code <= max(codes):
+              raise SystemExit("APK versionCode is not newer than the latest release; run tools/bump_version.py")
+          print(f"Release version accepted: {sys.argv[1]} (versionCode {current_code})")
+          PY
+          {
+            echo "RELEASE_TAG=$TAG"
+            echo "RELEASE_VERSION=$versionName"
+            echo "RELEASE_CODE=$versionCode"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare changelog and verification notes
+        run: |
+          set -euo pipefail
+          APK_SHA256=$(sha256sum release-apk/prototype.apk | awk '{print $1}')
+          python3 tools/release_notes.py "$RELEASE_VERSION" > release-notes.md
+          {
+            echo
+            echo "## Verification"
+            echo
+            echo "Version $RELEASE_VERSION (versionCode $RELEASE_CODE), built from exact main commit $GITHUB_SHA."
+            echo "Real ARM64 compilation, APK signing, and packaged verification passed in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+            echo
+            echo "APK SHA-256: \`$APK_SHA256\`"
+            echo
+            echo "Use protodroid.ini for configuration. CI does not replace physical-device testing."
+          } >> release-notes.md
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "ProtoDroid v$RELEASE_VERSION" --notes-file release-notes.md release-apk/prototype.apk
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url,tagName,assets

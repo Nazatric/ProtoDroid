@@ -2,6 +2,7 @@
 #define PROTODROID_D3D9_STATE_H
 
 #include <cstdint>
+#include <cstring>
 
 namespace native {
 
@@ -31,6 +32,14 @@ constexpr D3D9LockPlan D3D9ShadowLockPlan(uint32_t flags) {
     const bool read_only = (flags & 0x10u) != 0;
     const bool discard = (flags & 0x2000u) != 0;
     return {read_only || !discard, !read_only};
+}
+
+// The bridge must pass the guest's flags to its one DXVK Lock call unchanged. Shadow policy is derived separately.
+constexpr uint32_t D3D9NativeBufferLockFlags(uint32_t guest_flags) { return guest_flags; }
+
+// Copy only the range exposed by the original mapping. Unlock remains a separate operation; this never re-locks DXVK.
+inline void D3D9ShadowCopyBack(void* host, const void* guest, uint32_t size, bool write_back) {
+    if (write_back) memcpy(host, guest, size);
 }
 
 // A nonzero ranged VB/IB lock uploads exactly SizeToLock. Only a whole-buffer lock (size zero) uses the remainder.
