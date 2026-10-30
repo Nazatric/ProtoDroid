@@ -9,6 +9,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -18,6 +19,7 @@
 #include <vector>
 
 #include "win.h"
+#include "cpu_affinity.h"
 
 namespace native {
 
@@ -603,9 +605,27 @@ K(SetThreadPriority) {
     Return(c, 1, 2);
 }
 K(SetThreadAffinityMask) { Return(c, 1, 2); }
+
+uint32_t HostProcessAffinityMask() {
+    cpu_set_t cpus;
+    if (sched_getaffinity(0, sizeof(cpus), &cpus) == 0) {
+        const uint32_t mask = LowCpuMask([&cpus](uint32_t cpu) { return CPU_ISSET(cpu, &cpus); });
+        if (mask) return mask;
+    }
+    // If the kernel interface is unavailable or exposes only CPUs above the 32-bit Windows limit, retain a
+    // conservative nonzero fallback. The engine counts these bits when choosing its worker-pool size.
+    return FallbackCpuMask(uint32_t(std::max(sysconf(_SC_NPROCESSORS_ONLN), 1l)));
+}
+
 K(GetProcessAffinityMask) {
-    W32(Arg(c, 1), 0xf);
-    W32(Arg(c, 2), 0xf);
+    static const uint32_t mask = [] {
+        const uint32_t value = HostProcessAffinityMask();
+        Log("process affinity: reporting mask %08x (%u low CPUs) to the engine", value,
+            unsigned(__builtin_popcount(value)));
+        return value;
+    }();
+    W32(Arg(c, 1), mask);
+    W32(Arg(c, 2), mask);
     Return(c, 1, 3);
 }
 K(GetExitCodeThread) {

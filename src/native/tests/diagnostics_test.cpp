@@ -80,6 +80,17 @@ std::string ProcLine(const std::string& comm) {
     return line;
 }
 
+void TestCpuBusyAvailability() {
+    double percent = -1;
+    Check(native::CpuBusyPercent(200, 100, 100, 75, percent) && Near(percent, 75.0),
+          "valid CPU deltas produced the wrong busy percentage");
+    Check(native::CpuBusyPercent(200, 200, 100, 100, percent) && Near(percent, 0.0),
+          "a genuine idle delta was rejected");
+    Check(!native::CpuBusyPercent(0, 0, 0, 0, percent), "zeroed Android CPU data was reported as idle");
+    Check(!native::CpuBusyPercent(90, 50, 100, 40, percent), "regressed CPU totals were accepted");
+    Check(!native::CpuBusyPercent(200, 180, 100, 50, percent), "an invalid idle delta was accepted");
+}
+
 void TestProcStatParser() {
     native::ProcStatInfo info;
     Check(native::ParseProcStat(ProcLine("dxvk shader ) worker"), info), "valid proc stat was rejected");
@@ -95,7 +106,8 @@ void TestProcStatParser() {
 int main() {
     TestDistributionThresholdsAndWorstEvents();
     TestWorstEventTiesAndZeroDuration();
+    TestCpuBusyAvailability();
     TestProcStatParser();
-    std::puts("diagnostics tests passed (timing windows, thresholds, worst events, /proc parsing)");
+    std::puts("diagnostics tests passed (timing windows, CPU availability, worst events, /proc parsing)");
     return 0;
 }

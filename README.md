@@ -202,6 +202,21 @@ The production Bink harness and its minimal FFmpeg setup are automated in `.gith
 
 A release candidate should have an exact-commit green workflow, real native compilation rather than a dummy/prebuilt fallback, successful `apksigner verify`, and a verified `prototype.apk` artifact. Compilation and host tests do not replace on-device gameplay and visual testing. A version bump does not by itself resolve signature conflicts or every Android installation error.
 
+### Signing and in-place updates
+
+Local packaging uses the Android debug keystore by default. Set `KEYSTORE`, `KEYSTORE_PASS`, `KEY_ALIAS`, and optionally `KEY_PASS` to use another key. Ordinary branch/PR CI artifacts use a disposable identity and are not release-eligible; protected release secrets are read only for an explicitly approved release dispatch on `main`.
+
+Protected releases require these repository Actions secrets:
+
+- `PROTODROID_ANDROID_KEYSTORE_BASE64`: the keystore encoded with `base64 -w 0` (Linux) or `base64` without line wrapping (macOS).
+- `PROTODROID_ANDROID_KEYSTORE_PASSWORD`
+- `PROTODROID_ANDROID_KEY_ALIAS`
+- `PROTODROID_ANDROID_KEY_PASSWORD`
+
+Keep an offline backup of the original keystore and passwords; never commit them. The release workflow refuses a missing/incomplete signing configuration, records the certificate SHA-256 digest, and rejects dummy, prebuilt, or ephemerally signed APKs. Once configured, subsequent releases keep the same identity and can update each other in place.
+
+Version 0.7 and earlier CI artifacts were signed with per-run keys whose private keys are not available. A newly signed APK cannot directly update a differently signed installation: Android requires a one-time uninstall first. Shared saves under `/storage/emulated/0/Prototype` are separate from the app and remain there; back up any important app-specific data before uninstalling.
+
 ## Credits and Legal
 
 Original Android port and recompilation research by **[VinTeRuS](https://github.com/VinTeRuS)**. ProtoDroid continues with contributions from the community.

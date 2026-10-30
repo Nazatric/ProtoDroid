@@ -310,38 +310,40 @@ public:
         double system_busy = 0;
         const auto aggregate = current.find("cpu");
         const auto previous = previous_cpus_.find("cpu");
-        if (aggregate != current.end() && previous != previous_cpus_.end() && aggregate->second.total >= previous->second.total &&
-            aggregate->second.idle >= previous->second.idle) {
-            const uint64_t total_diff = aggregate->second.total - previous->second.total;
-            const uint64_t idle_diff = aggregate->second.idle - previous->second.idle;
-            if (total_diff) system_busy = 100.0 * double(total_diff - idle_diff) / double(total_diff);
-        }
+        const bool have_system_busy =
+            aggregate != current.end() && previous != previous_cpus_.end() &&
+            CpuBusyPercent(aggregate->second.total, aggregate->second.idle, previous->second.total,
+                           previous->second.idle, system_busy);
 
         std::string cores;
         for (const auto& entry : current) {
             if (entry.first == "cpu") continue;
             const auto old = previous_cpus_.find(entry.first);
-            if (old == previous_cpus_.end() || entry.second.total < old->second.total || entry.second.idle < old->second.idle)
+            if (old == previous_cpus_.end()) continue;
+            double busy = 0;
+            if (!CpuBusyPercent(entry.second.total, entry.second.idle, old->second.total, old->second.idle, busy))
                 continue;
-            const uint64_t total_diff = entry.second.total - old->second.total;
-            const uint64_t idle_diff = entry.second.idle - old->second.idle;
-            if (!total_diff) continue;
             if (!cores.empty()) cores += ' ';
             char value[64];
-            snprintf(value, sizeof(value), "%s=%.1f", entry.first.c_str(),
-                     100.0 * double(total_diff - idle_diff) / double(total_diff));
+            snprintf(value, sizeof(value), "%s=%.1f", entry.first.c_str(), busy);
             cores += value;
         }
         previous_cpus_ = std::move(current);
         const std::string frequencies = ReadCurrentFrequencies();
+        char system_text[64];
+        if (have_system_busy) {
+            snprintf(system_text, sizeof(system_text), "%.2f%%", system_busy);
+        } else {
+            snprintf(system_text, sizeof(system_text), "unavailable");
+        }
 
         char out[768];
         snprintf(out, sizeof(out),
                  "process_cpu=%.2f%% of_one_core delta=%.1fms user=%.1fms system=%.1fms last_core=%d; "
-                 "device_cpu_busy=%.2f%%; cores_busy%%=%s; current_MHz=%s",
+                 "device_cpu_busy=%s; cores_busy%%=%s; current_MHz=%s",
                  process_percent, process_ms, double(user_delta) * jiffy_ms, double(system_delta) * jiffy_ms,
-                 have_process ? process.processor : -1, system_busy, cores.empty() ? "baseline/unavailable" : cores.c_str(),
-                 frequencies.c_str());
+                 have_process ? process.processor : -1, system_text,
+                 cores.empty() ? "baseline/unavailable" : cores.c_str(), frequencies.c_str());
         return out;
     }
 

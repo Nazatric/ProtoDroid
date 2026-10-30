@@ -37,6 +37,17 @@ bool ParseProcNumber(const std::string& text, T& value) {
 
 }  // namespace detail
 
+inline bool CpuBusyPercent(uint64_t total, uint64_t idle, uint64_t previous_total, uint64_t previous_idle,
+                           double& percent) {
+    if (total < previous_total || idle < previous_idle) return false;
+    const uint64_t total_delta = total - previous_total;
+    const uint64_t idle_delta = idle - previous_idle;
+    // Android can expose a zeroed /proc/stat on restricted kernels. That is unavailable data, not an idle CPU.
+    if (!total_delta || idle_delta > total_delta) return false;
+    percent = 100.0 * double(total_delta - idle_delta) / double(total_delta);
+    return true;
+}
+
 inline bool ParseProcStat(const std::string& text, ProcStatInfo& out) {
     const size_t open = text.find('(');
     const size_t close = text.rfind(") ");
