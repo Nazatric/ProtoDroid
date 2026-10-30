@@ -8,6 +8,7 @@
 - Expanded **Low**, **Medium**, and **High** presets to cover the game's AA, shadow, and quality levels as well as the existing port graphics options. FPS and control choices remain independent.
 - Moved active shared saves into `/storage/emulated/0/Prototype/Saves/`, with one-time no-overwrite migration from the previous shared root and app-specific layouts. External save management and deletion behavior are preserved.
 - Preserved explicit FPS-cap pacing and moved recurring shared cache/log copies off the engine thread while retaining synchronous shutdown flushing. Presets and individual graphics edits now leave unrelated engine settings unchanged; diagnostics separate Present() wall time from frame pacing.
+- Added timestamped five-second diagnostics for frame stalls, engine work, pipeline calls, file I/O, CPU threads, memory, ADPF, and supported thermal/headroom APIs, with a whole-run summary and no shader-dump overhead.
 - Stopped camera-only touch movement from redrawing the entire control overlay. Mouse motion, stick/wheel feedback, editing, and all existing controls are unchanged.
 
 ## 0.7 - 2026-10-30

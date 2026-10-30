@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "timing_window.h"
+
 namespace native {
 
 struct PresentStatsSnapshot {
@@ -23,7 +25,7 @@ public:
 
     // The first Present establishes the baseline. Every later call returns one complete Present-to-Present interval;
     // this is also the single value that may be reported to ADPF for that Present.
-    int64_t AddPresent(int64_t now_ns) {
+    int64_t AddPresent(int64_t now_ns, int tid = 0, bool collect_detailed = true) {
         if (!have_last_) {
             have_last_ = true;
             last_present_ns_ = now_ns;
@@ -35,6 +37,7 @@ public:
         last_present_ns_ = now_ns;
         if (duration_ns <= 0) return 0;
 
+        if (collect_detailed) detailed_.Add(now_ns, duration_ns, tid);
         ++window_frames_;
         window_total_ns_ += duration_ns;
         window_max_ns_ = std::max(window_max_ns_, duration_ns);
@@ -46,6 +49,7 @@ public:
     }
 
     PresentStatsSnapshot Snapshot() const { return current_; }
+    TimingWindowSnapshot TakeDetailed() { return detailed_.Take(); }
 
 private:
     void FinishWindow(int64_t elapsed_ns) {
@@ -76,10 +80,14 @@ private:
     int64_t window_max_ns_ = 0;
     std::vector<int64_t> samples_;
     PresentStatsSnapshot current_;
+    TimingWindow detailed_;
 };
 
 // Process-wide thread-safe adapter used by D3D9 Present, the main-loop logger, and the Android overlay.
 int64_t RecordPresent();  // monotonic clock read and tracker update; returns the ADPF interval, or zero
 PresentStatsSnapshot GetPresentStats();
+void SetPresentDetailedEnabled(bool enabled);
+bool PresentDetailedEnabled();
+TimingWindowSnapshot TakePresentDetailedStats();
 
 }  // namespace native

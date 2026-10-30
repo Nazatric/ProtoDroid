@@ -92,9 +92,12 @@ Frequently used keys include:
 | `audio_driver` | `aaudio` or `openslES`. |
 | `audio_master_reuse` | Reuses the retained mastering output when the game recreates voices. |
 | `vulkan_driver` | `auto`, `system`, or `turnip`. |
-| `present_stats` | Enables detailed presentation diagnostics. |
+| `present_stats` | Enables DXVK presentation diagnostics. |
 | `audio_stats` | `1` logs real output underruns (default), `2` logs every timing window, `0` disables audio diagnostics. |
-| `pipeline_trace` | Enables expensive Mali pipeline tracing for debugging only. |
+| `detailed_diagnostics` | Enables timestamped five-second native/device diagnostics by default; `0` disables metrics but retains log mirroring. |
+| `detailed_diagnostics_interval` | Diagnostic window in seconds, clamped to 1–60. Default: `5`. |
+| `pipeline_timing` | Lightweight DXVK pipeline-call timing; defaults to the detailed-diagnostics setting. |
+| `pipeline_trace` | Enables expensive Mali pipeline tracing and shader dumps for debugging only. |
 | `dxvk_config` | Additional DXVK options; separate entries with commas in this file. |
 | `watchdog`, `import_profile` | Hang and import profiling diagnostics. |
 
@@ -127,6 +130,8 @@ Important files:
 - `app_process64_d3d9.log`: DXVK and Vulkan diagnostics
 - `prototypeenginef.dll.dxvk-cache`: persistent pipeline state cache
 - `turnip_failed`: present only after a Turnip initialization failure
+
+Detailed diagnostics timestamp native and DXVK events with monotonic seconds and thread IDs. Five-second windows include Present and engine timing percentiles, fixed long-frame thresholds and worst events, texture and file I/O, process/per-thread CPU, memory, ADPF, and Android thermal/headroom data where supported. Slow file events above 50 ms retain their path and thread. Present() wall time is not labeled as GPU time, and threshold counts are not claimed to be physical display-drop counts. The lightweight pipeline log does not dump shaders or enable the expensive `pipeline_trace` path.
 
 No state-cache seed is bundled. If the app-private cache is missing or header-only, startup can restore a populated `prototypeenginef.dll.dxvk-cache` (or legacy `app_process64.dxvk-cache`) from the app-specific directory or the shared locations above. Existing populated or invalid private caches are not overwritten by recovery; DXVK performs the final entry validation and reports the actual count read. DXVK queues cached pipelines for early compilation as their game shaders become available; variants that have never been encountered cannot be known or preloaded in advance.
 

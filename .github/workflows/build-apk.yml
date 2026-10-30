@@ -72,6 +72,14 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/present_stats_test
 
+      - name: Compile and run detailed diagnostics tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostics_test.cpp -o /tmp/diagnostics_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostics_test
+
       - name: Compile and run GPU profile and API negotiation tests
         run: |
           set -euo pipefail
@@ -164,6 +172,14 @@ jobs:
           g++ $CXXFLAGS src/native/video_settings.cpp src/native/tests/video_settings_test.cpp -o /tmp/video_settings_test_arm64
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/video_settings_test_arm64
+
+      - name: Compile and run native ARM64 detailed diagnostics tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostics_test.cpp -o /tmp/diagnostics_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostics_test_arm64
 
       - name: Compile and run native ARM64 shared-save path tests
         id: save

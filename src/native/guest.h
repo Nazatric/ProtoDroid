@@ -132,5 +132,15 @@ void PerfHintStart(int fps_target);
 void PerfHintAddThread(int tid);
 void PerfHintTarget(int fps_target);
 void PerfHintFrame(int64_t work_ns);
+struct PerfHintSnapshot {
+    bool session = false;
+    int64_t target_ns = 0;
+    size_t threads = 0;
+    uint64_t reports = 0;
+    uint64_t report_errors = 0;
+    uint64_t target_updates = 0;
+    uint64_t target_errors = 0;
+};
+PerfHintSnapshot GetPerfHintStats();
 
 }  // namespace native

@@ -31,6 +31,7 @@ std::mutex g_mutex;
 APerformanceHintSession* g_session = nullptr;
 std::vector<int32_t> g_tids;
 int64_t g_target_ns = 16666667;
+uint64_t g_reports = 0, g_report_errors = 0, g_target_updates = 0, g_target_errors = 0;
 
 bool ThreadAlive(int32_t tid) {
     char path[64];
@@ -91,7 +92,8 @@ void PerfHintAddThread(int tid) {
 void PerfHintTarget(int fps_target) {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_target_ns = 1000000000ll / (fps_target > 0 ? fps_target : 60);
-    if (g_session) g_api.updateTarget(g_session, g_target_ns);
+    ++g_target_updates;
+    if (g_session && g_api.updateTarget(g_session, g_target_ns) != 0) ++g_target_errors;
 }
 
 void PerfHintFrame(int64_t work_ns) {
@@ -99,7 +101,23 @@ void PerfHintFrame(int64_t work_ns) {
     // NDK session methods are not thread-safe: worker registration can arrive from the audio thread while the
     // engine reports a frame, so reportActual must use the same lock as setThreads/updateTarget.
     std::lock_guard<std::mutex> lock(g_mutex);
-    if (g_session) g_api.reportActual(g_session, work_ns);
+    if (g_session) {
+        ++g_reports;
+        if (g_api.reportActual(g_session, work_ns) != 0) ++g_report_errors;
+    }
+}
+
+PerfHintSnapshot GetPerfHintStats() {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    PerfHintSnapshot out;
+    out.session = g_session != nullptr;
+    out.target_ns = g_target_ns;
+    out.threads = g_tids.size();
+    out.reports = g_reports;
+    out.report_errors = g_report_errors;
+    out.target_updates = g_target_updates;
+    out.target_errors = g_target_errors;
+    return out;
 }
 
 }  // namespace native
@@ -112,6 +130,7 @@ void PerfHintStart(int) {}
 void PerfHintAddThread(int) {}
 void PerfHintTarget(int) {}
 void PerfHintFrame(int64_t) {}
+PerfHintSnapshot GetPerfHintStats() { return {}; }
 
 }  // namespace native
 

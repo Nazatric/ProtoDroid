@@ -156,6 +156,9 @@ for marker in \
     'Unmapped descriptor binding' \
     'DXVK: Using Vulkan 1.2 KHR/EXT compatibility path' \
     'DXVK: Capping ARM compiler threads at 2' \
+    'DXVK pipeline timing:' \
+    'PROTODROID_PIPELINE_TIMING' \
+    'DXVK_LOG_TIMESTAMPS' \
     'prototypeenginef.dll'; do
     printf '%s\n' "$DXVK_STRINGS" | grep -F "$marker" >/dev/null || {
         echo "DXVK is missing required compatibility/cache marker: $marker" >&2

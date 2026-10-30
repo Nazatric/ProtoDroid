@@ -34,6 +34,12 @@ texture_skip_min_size = 512
 # DXVK extra config: d3d9.presentInterval, d3d9.numBackBuffers etc. Comma as separator (semicolon in DXVK).
 #dxvk_config = d3d9.presentInterval = 1
 
+# Timestamped five-second frame/system diagnostics are enabled by default. The interval accepts 1-60 seconds.
+# Lightweight pipeline-call timing follows detailed_diagnostics unless pipeline_timing is set independently.
+#detailed_diagnostics = 1
+#detailed_diagnostics_interval = 5
+#pipeline_timing = 1
+
 # Low-level Mali pipeline diagnostics. Disabled by default because every traced pipeline performs
 # SPIR-V analysis plus durable file/fsync writes. Enables pipeline_trace.log and last_vs/last_fs.spv.
 # The PROTODROID_PIPELINE_TRACE=1 environment variable is an equivalent override.
