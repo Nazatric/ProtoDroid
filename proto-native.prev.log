@@ -1,0 +1,112 @@
+protodroid build Oct 30 2026 12:10:09
+logs mirrored to /storage/emulated/0/Prototype/logs
+protodroid build Oct 30 2026 12:10:09
+DXVK logs mirrored to /storage/emulated/0/Prototype/logs
+game dir: /storage/emulated/0/Prototype
+data dir: /storage/emulated/0/Android/data/com.protodroid/files
+save dir: /storage/emulated/0/Prototype
+config: loaded protodroid.ini
+config: render_height = 540
+config: texture_skip_mips = 2
+config: fps_limit = 0
+config: battery_saver = 0
+config: max_anisotropy = 1
+config: unlock_menu_fps = 1
+memory: guest window at 1000000000, arena 2000 MiB
+present mode: FIFO (vsync), interval 1 for CreateDevice and Reset
+anisotropy: bridge/DXVK maximum 1x
+render size 1200x540 (window 2712x1220)
+loader: rebased to 7c000000 (418563 fixups)
+loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
+DllMain(PROCESS_ATTACH)
+DllMain returned 1
+EngineInitialize
+SetThreadPriority(0) -> nice 0 on tid 5140
+SetThreadPriority(2) -> nice -4 on tid 5168
+SetThreadPriority(0) -> nice 0 on tid 5169
+SetThreadPriority(0) -> nice 0 on tid 5171
+SetThreadPriority(0) -> nice 0 on tid 5173
+SetThreadPriority(15) -> nice -10 on tid 5174
+SetThreadPriority(1) -> nice -2 on tid 5175
+SetThreadPriority(1) -> nice -2 on tid 5177
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+Direct3DCreate9(32) -> 0xb400006fa76b8070
+GPU BC (DXT) textures: not supported, decoding on (DXT1 as 16-bit)
+CreateDevice 1200x540 fmt 22 windowed 1 msaa 0/0 interval 1 -> 00000000
+textures: skip 2 mip level(s) of textures >= 512, decode DXT on
+SetThreadPriority(0) -> nice 0 on tid 5207
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Keyboard)
+CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+dinput: CreateDevice(Mouse)
+xaudio2: Initialize(flags 0) -> 0
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) created retained output -> 0 in 37.651 ms
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 5230
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.001 ms
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 5232
+SetThreadPriority(15) -> nice -10 on tid 5237
+SetThreadPriority(1) -> nice -2 on tid 5238
+SetThreadPriority(1) -> nice -2 on tid 5245
+EngineInitialize returned 1
+perf hint: session (target 16.7 ms, 6 threads)
+frame 0
+Reset 1200x540 msaa 0/0 interval 1 -> 00000000
+samplers: effective DXVK forwarding maximum 1x; MIN/MAG anisotropic -> LINEAR
+frame 1
+frame 2
+frame 4
+frame 8
+frame 16
+frame 32
+frame 64
+frame 128
+frame 256
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.003 ms
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 5260
+Reset 1200x540 msaa 0/0 interval 1 -> 00000000
+frame 512
+frame 1024
+frame 2048
+frame 4096
+frame 8192
+audio: 236 passes, max gap 30.2 ms, guest 30.6 ms (max 10.78), refill requests 233, underruns 1, submits 968
+[bink] SDL movie audio: 48000 Hz, stereo float
+
+[bink] indexed 18044 RCF paths from 11 archives
+
+[bink] RCF input movies/activisionRadicalLogos.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik +841885696 (21244780 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: 21244780 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: 1280x720, 427 frames, 4 audio tracks, video threads=1 type=0x0 active=0x0, wait=paced
+
+[bink] RCF input movies/fe_ambientMovie_start.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik +1016276992 (13275304 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 13275304 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 1280x720, 612 frames, 0 audio tracks, video threads=1 type=0x0 active=0x0, wait=non-blocking menu
+
+frame 16384
+[bink] RCF input movies/fe_ambientMovie_1.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik +958214144 (58061816 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 58061816 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 1280x720, 1808 frames, 0 audio tracks, video threads=1 type=0x0 active=0x0, wait=non-blocking menu
+
+[bink] RCF input movies/fe_ambientMovie_1.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik +958214144 (58061816 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 58061816 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 1280x720, 1808 frames, 0 audio tracks, video threads=1 type=0x0 active=0x0, wait=non-blocking menu
+
+[bink] RCF input movies/fe_ambientMovie_1.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik +958214144 (58061816 bytes)
+
+[bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 58061816 bytes, AVIO 256 KiB
+
+[bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 1280x720, 1808 frames, 0 audio tracks, video threads=1 type=0x0 active=0x0, wait=non-blocking menu
+
+perf: 37.9 present fps, avg 26.37 ms, p99 104.34 ms, max 104.34 ms, 700 MiB resident; arena 359 MiB (peak 359), up to 17780000; io: 109 reads, 46 MiB, 0 over 50 ms, longest 2.6 ms
+texture timing (calls / total ms / max ms): dxt 129 calls / 6.20 total / 0.61 max; create 221 / 86.46 / 15.87; upload 1889 / 26.53 / 14.05
