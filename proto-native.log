@@ -1,15 +1,16 @@
-protodroid build Oct 30 2026 14:41:41
+protodroid build Oct 30 2026 15:38:04
 logs mirrored to /storage/emulated/0/Prototype/logs
-protodroid build Oct 30 2026 14:41:41
+protodroid build Oct 30 2026 15:38:04
 DXVK logs mirrored to /storage/emulated/0/Prototype/logs
 game dir: /storage/emulated/0/Prototype
 data dir: /storage/emulated/0/Android/data/com.protodroid/files
-save dir: /storage/emulated/0/Prototype
+migrated 2 save file(s) to /storage/emulated/0/Prototype/Saves
+save dir: /storage/emulated/0/Prototype/Saves
 config: loaded protodroid.ini
 config: render_height = 1080
 config: texture_skip_mips = 0
 config: max_anisotropy = 4
-config: fps_limit = 60
+config: fps_limit = 0
 config: battery_saver = 0
 config: unlock_menu_fps = 1
 config: game_aa_level = 0
@@ -24,34 +25,34 @@ loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000,
 DllMain(PROCESS_ATTACH)
 DllMain returned 1
 EngineInitialize
-SetThreadPriority(0) -> nice 0 on tid 28829
-SetThreadPriority(2) -> nice -4 on tid 28834
-SetThreadPriority(0) -> nice 0 on tid 28835
-SetThreadPriority(0) -> nice 0 on tid 28836
-SetThreadPriority(0) -> nice 0 on tid 28837
-SetThreadPriority(15) -> nice -10 on tid 28838
-SetThreadPriority(1) -> nice -2 on tid 28839
-SetThreadPriority(1) -> nice -2 on tid 28840
+SetThreadPriority(0) -> nice 0 on tid 25306
+SetThreadPriority(2) -> nice -4 on tid 25311
+SetThreadPriority(0) -> nice 0 on tid 25312
+SetThreadPriority(0) -> nice 0 on tid 25313
+SetThreadPriority(0) -> nice 0 on tid 25314
+SetThreadPriority(15) -> nice -10 on tid 25315
+SetThreadPriority(1) -> nice -2 on tid 25319
+SetThreadPriority(1) -> nice -2 on tid 25320
 CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
-Direct3DCreate9(32) -> 0xb400006fa76c3470
+Direct3DCreate9(32) -> 0xb400006fa76c3fb0
 GPU BC (DXT) textures: not supported, decoding on (DXT1 as 16-bit)
 CreateDevice 2400x1080 fmt 22 windowed 1 msaa 0/0 interval 1 -> 00000000
 textures: skip 0 mip level(s) of textures >= 512, decode DXT on
-SetThreadPriority(0) -> nice 0 on tid 28851
+SetThreadPriority(0) -> nice 0 on tid 25331
 CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
 dinput: CreateDevice(Keyboard)
 CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
 dinput: CreateDevice(Mouse)
 xaudio2: Initialize(flags 0) -> 0
-xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) created retained output -> 0 in 90.389 ms
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) created retained output -> 0 in 67.213 ms
 xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
-SetThreadPriority(15) -> nice -10 on tid 28856
+SetThreadPriority(15) -> nice -10 on tid 25337
 xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.001 ms
 xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
-SetThreadPriority(15) -> nice -10 on tid 28857
-SetThreadPriority(15) -> nice -10 on tid 28858
-SetThreadPriority(1) -> nice -2 on tid 28859
-SetThreadPriority(1) -> nice -2 on tid 28860
+SetThreadPriority(15) -> nice -10 on tid 25338
+SetThreadPriority(15) -> nice -10 on tid 25340
+SetThreadPriority(1) -> nice -2 on tid 25341
+SetThreadPriority(1) -> nice -2 on tid 25342
 EngineInitialize returned 1
 perf hint: session (target 16.7 ms, 6 threads)
 frame 0
@@ -64,13 +65,18 @@ frame 8
 frame 16
 frame 32
 frame 64
-xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.004 ms
-xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
-SetThreadPriority(15) -> nice -10 on tid 28863
-Reset 2400x1080 msaa 0/0 interval 1 -> 00000000
 frame 128
 frame 256
-audio: 236 passes, max gap 32.3 ms, guest 25.3 ms (max 1.14), refill requests 233, underruns 1, submits 968
+frame 512
+frame 1024
+xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.033 ms
+xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+SetThreadPriority(15) -> nice -10 on tid 25345
+Reset 2400x1080 msaa 0/0 interval 1 -> 00000000
+frame 2048
+frame 4096
+frame 8192
+audio: 234 passes, max gap 24.5 ms, guest 30.7 ms (max 2.59), refill requests 231, underruns 1, submits 960
 [bink] SDL movie audio: 48000 Hz, stereo float
 
 [bink] indexed 18044 RCF paths from 11 archives
@@ -81,72 +87,49 @@ audio: 236 passes, max gap 32.3 ms, guest 25.3 ms (max 1.14), refill requests 23
 
 [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: 1280x720, 427 frames, 4 audio tracks, video threads=1 type=0x0 active=0x0, wait=paced
 
-frame 512
 [bink] RCF input movies/fe_ambientMovie_start.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik +1016276992 (13275304 bytes)
 
 [bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 13275304 bytes, AVIO 256 KiB
 
 [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 1280x720, 612 frames, 0 audio tracks, video threads=1 type=0x0 active=0x0, wait=non-blocking menu
 
+frame 16384
 [bink] RCF input movies/fe_ambientMovie_1.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik +958214144 (58061816 bytes)
 
 [bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 58061816 bytes, AVIO 256 KiB
 
 [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 1280x720, 1808 frames, 0 audio tracks, video threads=1 type=0x0 active=0x0, wait=non-blocking menu
 
-frame 1024
-perf: 57.9 present fps, avg 17.27 ms, p99 35.57 ms, max 35.57 ms, 789 MiB resident; arena 359 MiB (peak 359), up to 17780000; io: 110 reads, 46 MiB, 0 over 50 ms, longest 5.8 ms
-texture timing (calls / total ms / max ms): dxt 129 calls / 5.89 total / 1.00 max; create 209 / 136.43 / 49.19; upload 2188 / 5.36 / 0.66
-frame 2048
-perf: 48.7 present fps, avg 20.54 ms, p99 40.45 ms, max 40.45 ms, 787 MiB resident; arena 360 MiB (peak 360), up to 17800000; io: 4 reads, 0 MiB, 0 over 50 ms, longest 3.1 ms
-texture timing (calls / total ms / max ms): dxt 0 calls / 0.00 total / 0.00 max; create 0 / 0.00 / 0.00; upload 2722 / 5.14 / 0.14
-frame 4096
+frame 32768
 LoadLibraryA(RPCRT4): not provided
-perf: 55.6 present fps, avg 18.00 ms, p99 48.20 ms, max 48.20 ms, 824 MiB resident; arena 364 MiB (peak 364), up to 18000000; io: 28 reads, 6 MiB, 0 over 50 ms, longest 10.1 ms
-texture timing (calls / total ms / max ms): dxt 162 calls / 1.95 total / 0.34 max; create 18 / 6.42 / 0.75; upload 2801 / 6.24 / 0.27
+frame 65536
 LoadLibraryA(RPCRT4): not provided
+perf: 113.7 present fps, avg 8.80 ms, p99 24.00 ms, max 29.30 ms, 1503 MiB resident; arena 501 MiB (peak 501), up to 20590000; io: 345 reads, 149 MiB, 0 over 50 ms, longest 17.9 ms
+texture timing (calls / total ms / max ms): dxt 5023 calls / 337.77 total / 17.10 max; create 954 / 709.34 / 129.81; upload 6520 / 48.47 / 15.16
 textures: 1024 created, 0 reduced, 942 decoded; top levels 247 MiB -> 413 MiB
-perf: 57.2 present fps, avg 17.48 ms, p99 27.86 ms, max 27.86 ms, 1940 MiB resident; arena 563 MiB (peak 563), up to 24a50000; io: 393 reads, 156 MiB, 0 over 50 ms, longest 21.4 ms
-texture timing (calls / total ms / max ms): dxt 8694 calls / 604.25 total / 15.72 max; create 1148 / 913.44 / 102.53; upload 8773 / 31.81 / 12.07
-perf: 58.3 present fps, avg 17.15 ms, p99 24.96 ms, max 24.96 ms, 1920 MiB resident; arena 562 MiB (peak 563), up to 24a50000; io: 33 reads, 6 MiB, 0 over 50 ms, longest 9.8 ms
-texture timing (calls / total ms / max ms): dxt 56 calls / 4.83 total / 1.08 max; create 6 / 3.49 / 0.90; upload 56 / 0.12 / 0.09
-frame 8192
-perf: 59.3 present fps, avg 16.85 ms, p99 19.49 ms, max 19.49 ms, 1945 MiB resident; arena 562 MiB (peak 563), up to 24a50000; io: 24 reads, 5 MiB, 0 over 50 ms, longest 8.9 ms
-texture timing (calls / total ms / max ms): dxt 0 calls / 0.00 total / 0.00 max; create 0 / 0.00 / 0.00; upload 0 / 0.00 / 0.00
-perf: 59.1 present fps, avg 16.93 ms, p99 20.79 ms, max 20.79 ms, 1945 MiB resident; arena 562 MiB (peak 563), up to 24a50000; io: 29 reads, 6 MiB, 0 over 50 ms, longest 5.0 ms
-texture timing (calls / total ms / max ms): dxt 0 calls / 0.00 total / 0.00 max; create 0 / 0.00 / 0.00; upload 0 / 0.00 / 0.00
-perf: 58.9 present fps, avg 16.97 ms, p99 23.02 ms, max 23.02 ms, 1945 MiB resident; arena 562 MiB (peak 563), up to 24a50000; io: 23 reads, 4 MiB, 0 over 50 ms, longest 7.9 ms
-texture timing (calls / total ms / max ms): dxt 0 calls / 0.00 total / 0.00 max; create 0 / 0.00 / 0.00; upload 0 / 0.00 / 0.00
-perf: 48.0 present fps, avg 20.85 ms, p99 27.41 ms, max 27.41 ms, 1990 MiB resident; arena 581 MiB (peak 581), up to 256a0000; io: 170 reads, 51 MiB, 0 over 50 ms, longest 10.1 ms
-texture timing (calls / total ms / max ms): dxt 3157 calls / 224.05 total / 10.04 max; create 352 / 154.82 / 4.46; upload 3179 / 5.86 / 3.96
-textures: 2048 created, 0 reduced, 1965 decoded; top levels 326 MiB -> 727 MiB
-perf: 49.4 present fps, avg 20.25 ms, p99 24.09 ms, max 24.09 ms, 2025 MiB resident; arena 594 MiB (peak 594), up to 26500000; io: 143 reads, 44 MiB, 0 over 50 ms, longest 8.7 ms
-texture timing (calls / total ms / max ms): dxt 3223 calls / 123.00 total / 3.08 max; create 361 / 124.51 / 4.02; upload 3223 / 9.19 / 2.64
-frame 16384
-perf: 43.6 present fps, avg 22.96 ms, p99 36.87 ms, max 36.87 ms, 2033 MiB resident; arena 595 MiB (peak 595), up to 26500000; io: 98 reads, 16 MiB, 0 over 50 ms, longest 5.9 ms
-texture timing (calls / total ms / max ms): dxt 309 calls / 25.25 total / 3.52 max; create 34 / 19.04 / 4.85; upload 328 / 0.53 / 0.09
-perf: 42.8 present fps, avg 23.38 ms, p99 31.98 ms, max 31.98 ms, 2027 MiB resident; arena 598 MiB (peak 598), up to 268e0000; io: 151 reads, 46 MiB, 0 over 50 ms, longest 13.4 ms
-texture timing (calls / total ms / max ms): dxt 2285 calls / 132.03 total / 5.15 max; create 255 / 93.42 / 4.70; upload 2287 / 8.74 / 3.64
-perf: 58.7 present fps, avg 17.04 ms, p99 28.02 ms, max 28.02 ms, 2039 MiB resident; arena 598 MiB (peak 598), up to 268e0000; io: 63 reads, 13 MiB, 0 over 50 ms, longest 9.8 ms
-texture timing (calls / total ms / max ms): dxt 28 calls / 1.44 total / 0.90 max; create 3 / 1.58 / 1.06; upload 47 / 0.03 / 0.01
-perf: 40.9 present fps, avg 24.44 ms, p99 34.51 ms, max 34.51 ms, 2060 MiB resident; arena 598 MiB (peak 598), up to 268e0000; io: 101 reads, 15 MiB, 0 over 50 ms, longest 5.8 ms
-texture timing (calls / total ms / max ms): dxt 448 calls / 27.05 total / 1.99 max; create 48 / 24.98 / 2.90; upload 455 / 0.92 / 0.17
-perf: 59.6 present fps, avg 16.77 ms, p99 20.41 ms, max 20.41 ms, 1980 MiB resident; arena 590 MiB (peak 598), up to 267c0000; io: 147 reads, 48 MiB, 0 over 50 ms, longest 14.8 ms
-texture timing (calls / total ms / max ms): dxt 2502 calls / 202.61 total / 14.91 max; create 278 / 140.73 / 10.72; upload 2504 / 1.45 / 0.24
-textures: 3072 created, 0 reduced, 2988 decoded; top levels 403 MiB -> 1036 MiB
-perf: 48.0 present fps, avg 20.85 ms, p99 37.19 ms, max 37.19 ms, 1980 MiB resident; arena 593 MiB (peak 598), up to 267c0000; io: 173 reads, 67 MiB, 0 over 50 ms, longest 9.4 ms
-texture timing (calls / total ms / max ms): dxt 4821 calls / 424.68 total / 15.47 max; create 541 / 239.18 / 4.26; upload 4821 / 7.48 / 2.40
+perf: 57.7 present fps, avg 17.34 ms, p99 32.64 ms, max 32.64 ms, 2016 MiB resident; arena 561 MiB (peak 561), up to 249d0000; io: 186 reads, 61 MiB, 0 over 50 ms, longest 17.2 ms
+texture timing (calls / total ms / max ms): dxt 4017 calls / 256.54 total / 6.02 max; create 426 / 364.49 / 96.08; upload 4060 / 12.61 / 4.02
+perf: 52.0 present fps, avg 19.24 ms, p99 25.95 ms, max 25.95 ms, 2018 MiB resident; arena 579 MiB (peak 579), up to 256b0000; io: 140 reads, 46 MiB, 0 over 50 ms, longest 12.2 ms
+texture timing (calls / total ms / max ms): dxt 3045 calls / 240.87 total / 10.97 max; create 340 / 144.63 / 2.32; upload 3064 / 9.03 / 2.85
+textures: 2048 created, 0 reduced, 1965 decoded; top levels 324 MiB -> 722 MiB
+perf: 43.1 present fps, avg 23.18 ms, p99 30.96 ms, max 30.96 ms, 2061 MiB resident; arena 595 MiB (peak 595), up to 26500000; io: 149 reads, 44 MiB, 0 over 50 ms, longest 14.8 ms
+texture timing (calls / total ms / max ms): dxt 3139 calls / 134.71 total / 6.28 max; create 352 / 130.56 / 3.43; upload 3142 / 10.14 / 5.38
+perf: 41.0 present fps, avg 24.41 ms, p99 43.08 ms, max 43.08 ms, 2046 MiB resident; arena 595 MiB (peak 595), up to 26550000; io: 95 reads, 16 MiB, 0 over 50 ms, longest 9.2 ms
+texture timing (calls / total ms / max ms): dxt 337 calls / 27.15 total / 1.63 max; create 37 / 25.65 / 2.96; upload 354 / 0.83 / 0.21
+perf: 30.7 present fps, avg 32.52 ms, p99 44.47 ms, max 44.47 ms, 2040 MiB resident; arena 599 MiB (peak 599), up to 26910000; io: 152 reads, 35 MiB, 0 over 50 ms, longest 10.7 ms
+texture timing (calls / total ms / max ms): dxt 1833 calls / 106.68 total / 3.67 max; create 201 / 90.27 / 4.72; upload 1835 / 7.74 / 3.38
+perf: 54.5 present fps, avg 18.35 ms, p99 39.26 ms, max 39.26 ms, 2044 MiB resident; arena 598 MiB (peak 599), up to 26a50000; io: 100 reads, 28 MiB, 0 over 50 ms, longest 9.9 ms
+texture timing (calls / total ms / max ms): dxt 900 calls / 69.77 total / 10.32 max; create 102 / 44.31 / 3.03; upload 910 / 9.05 / 5.89
+textures: 3072 created, 0 reduced, 2988 decoded; top levels 403 MiB -> 1035 MiB
+perf: 58.0 present fps, avg 17.25 ms, p99 21.39 ms, max 21.39 ms, 1982 MiB resident; arena 595 MiB (peak 599), up to 268f0000; io: 262 reads, 101 MiB, 0 over 50 ms, longest 14.9 ms
+texture timing (calls / total ms / max ms): dxt 7327 calls / 578.37 total / 19.88 max; create 823 / 362.43 / 4.49; upload 7342 / 4.89 / 0.80
 [bink] RCF input movies/woi/woi_node_041.bik -> /storage/emulated/0/Prototype/01woi.rcf:movies/woi/woi_node_041.bik +766777344 (17701376 bytes)
 
 [bink] host direct input /storage/emulated/0/Prototype/01woi.rcf:movies/woi/woi_node_041.bik: 17701376 bytes, AVIO 256 KiB
 
 [bink] opened /storage/emulated/0/Prototype/01woi.rcf:movies/woi/woi_node_041.bik: 1280x576, 508 frames, 2 audio tracks, video threads=1 type=0x0 active=0x0, wait=paced
 
-perf: 29.8 present fps, avg 33.58 ms, p99 45.70 ms, max 45.70 ms, 1974 MiB resident; arena 598 MiB (peak 598), up to 26880000; io: 79 reads, 12 MiB, 0 over 50 ms, longest 7.7 ms
-texture timing (calls / total ms / max ms): dxt 256 calls / 16.13 total / 1.31 max; create 37 / 20.86 / 1.96; upload 1212 / 3.51 / 0.21
-perf: 59.5 present fps, avg 16.81 ms, p99 21.04 ms, max 21.04 ms, 1934 MiB resident; arena 557 MiB (peak 598), up to 267c0000; io: 94 reads, 27 MiB, 0 over 50 ms, longest 7.7 ms
-texture timing (calls / total ms / max ms): dxt 1329 calls / 114.01 total / 13.97 max; create 147 / 57.14 / 4.10; upload 1911 / 2.23 / 0.14
-perf: 48.2 present fps, avg 20.73 ms, p99 27.14 ms, max 27.14 ms, 1986 MiB resident; arena 598 MiB (peak 598), up to 267e0000; io: 204 reads, 58 MiB, 0 over 50 ms, longest 8.1 ms
-texture timing (calls / total ms / max ms): dxt 4521 calls / 312.19 total / 17.16 max; create 503 / 210.94 / 3.32; upload 4522 / 8.13 / 3.77
-perf: 11.3 present fps, avg 88.78 ms, p99 128.85 ms, max 128.85 ms, 1999 MiB resident; arena 597 MiB (peak 598), up to 267c0000; io: 117 reads, 16 MiB, 0 over 50 ms, longest 10.7 ms
-texture timing (calls / total ms / max ms): dxt 504 calls / 29.90 total / 3.34 max; create 54 / 30.11 / 3.80; upload 504 / 4.85 / 2.51
+perf: 55.5 present fps, avg 18.02 ms, p99 32.68 ms, max 32.68 ms, 1984 MiB resident; arena 597 MiB (peak 599), up to 268f0000; io: 201 reads, 69 MiB, 0 over 50 ms, longest 19.6 ms
+texture timing (calls / total ms / max ms): dxt 5373 calls / 369.41 total / 17.79 max; create 605 / 222.56 / 2.60; upload 5705 / 6.59 / 0.40
+perf: 59.2 present fps, avg 16.89 ms, p99 20.32 ms, max 20.32 ms, 1988 MiB resident; arena 596 MiB (peak 599), up to 268f0000; io: 82 reads, 14 MiB, 0 over 50 ms, longest 7.1 ms
+texture timing (calls / total ms / max ms): dxt 441 calls / 25.55 total / 1.17 max; create 166 / 42.73 / 4.53; upload 496 / 1.81 / 0.24
