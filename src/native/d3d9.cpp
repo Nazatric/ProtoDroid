@@ -59,8 +59,9 @@ struct TextureTiming {
     uint64_t total_ns = 0;
     uint64_t max_ns = 0;
 };
-TextureTiming g_decode_timing, g_create_timing, g_upload_timing;
+TextureTiming g_decode_timing, g_create_timing, g_upload_timing, g_present_timing;
 std::mutex g_texture_timing_mutex;
+std::mutex g_present_timing_mutex;
 
 void RecordTextureTiming(TextureTiming& timing, std::chrono::steady_clock::duration elapsed) {
     const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
@@ -68,6 +69,14 @@ void RecordTextureTiming(TextureTiming& timing, std::chrono::steady_clock::durat
     ++timing.calls;
     timing.total_ns += ns;
     timing.max_ns = std::max(timing.max_ns, ns);
+}
+
+void RecordPresentTiming(std::chrono::steady_clock::duration elapsed) {
+    const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
+    std::lock_guard<std::mutex> lock(g_present_timing_mutex);
+    ++g_present_timing.calls;
+    g_present_timing.total_ns += ns;
+    g_present_timing.max_ns = std::max(g_present_timing.max_ns, ns);
 }
 
 template <typename Upload>
@@ -638,6 +647,23 @@ std::string TakeTextureTimingStats() {
     return out;
 }
 
+// Present() wall time is diagnostic only: it can include FIFO acquisition/vsync waits, so it is deliberately not
+// substituted for ADPF's actual-work duration. Comparing it with the Present-to-Present interval identifies pacing
+// stalls without changing the renderer or the performance-hint contract.
+std::string TakePresentTimingStats() {
+    uint64_t calls, total, maximum;
+    {
+        std::lock_guard<std::mutex> lock(g_present_timing_mutex);
+        calls = std::exchange(g_present_timing.calls, 0);
+        total = std::exchange(g_present_timing.total_ns, 0);
+        maximum = std::exchange(g_present_timing.max_ns, 0);
+    }
+    char out[160];
+    snprintf(out, sizeof(out), "%llu calls / %.2f avg ms / %.2f max ms", (unsigned long long)calls,
+             calls ? total / double(calls) / 1.0e6 : 0.0, maximum / 1.0e6);
+    return out;
+}
+
 // ---------------- manual methods ----------------
 #define M(iface, method) void Manual_##iface##_##method(Ctx* c)
 
@@ -831,7 +857,9 @@ HRESULT GuardedPresent(F present) {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return D3D_OK;
     }
+    const auto present_start = std::chrono::steady_clock::now();
     HRESULT hr = present();
+    RecordPresentTiming(std::chrono::steady_clock::now() - present_start);
     if (SUCCEEDED(hr)) {
         // Both IDirect3DDevice9 and IDirect3DSwapChain9 presents converge here. A real Present contributes one
         // complete end-to-end interval; empty guest pump iterations and skipped surface-less presents do not.

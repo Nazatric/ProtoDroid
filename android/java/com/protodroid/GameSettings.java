@@ -161,7 +161,9 @@ final class GameSettings {
         }
         graphicsPreset = preset;
         editor.putInt(PRESET_KEY, preset).apply();
-        writeEngineSettings();
+        // A preset owns only its six graphics keys. In particular, do not rewrite an explicitly configured
+        // fps_limit/battery_saver/unlock_menu_fps value from an unrelated preference default.
+        writeEngineSettings(PRESET_KEYS);
     }
 
     void setIndex(int index, int next) {
@@ -173,11 +175,21 @@ final class GameSettings {
             editor.putInt(PRESET_KEY, PRESET_CUSTOM);
         }
         editor.apply();
-        if (setting.engine) writeEngineSettings();
+        if (setting.engine) writeEngineSettings(new String[] {setting.key});
     }
 
     /** Rewrites only our engine keys, preserving comments and every unrelated setting in protodroid.ini. */
     void writeEngineSettings() {
+        writeEngineSettings(null);
+    }
+
+    private static boolean containsKey(String[] keys, String key) {
+        if (keys == null) return true;
+        for (String candidate : keys) if (candidate.equals(key)) return true;
+        return false;
+    }
+
+    private void writeEngineSettings(String[] keys) {
         File dir = context.getExternalFilesDir(null);
         if (dir == null) return;
         File ini = new File(dir, "protodroid.ini");
@@ -186,13 +198,17 @@ final class GameSettings {
             if (ini.exists()) {
                 for (String line : new String(Files.readAllBytes(ini.toPath()), StandardCharsets.UTF_8).split("\n")) {
                     String key = line.split("=", 2)[0].trim();
-                    boolean ours = false;
-                    for (Setting setting : settings) ours |= setting.engine && setting.key.equals(key);
-                    if (!ours && !line.trim().isEmpty()) out.append(line).append('\n');
+                    boolean replace = false;
+                    for (Setting setting : settings) {
+                        replace |= setting.engine && containsKey(keys, setting.key) && setting.key.equals(key);
+                    }
+                    if (!replace && !line.trim().isEmpty()) out.append(line).append('\n');
                 }
             }
             for (Setting setting : settings) {
-                if (setting.engine) out.append(setting.key).append(" = ").append(setting.value()).append('\n');
+                if (setting.engine && containsKey(keys, setting.key)) {
+                    out.append(setting.key).append(" = ").append(setting.value()).append('\n');
+                }
             }
             try (FileWriter writer = new FileWriter(ini)) {
                 writer.write(out.toString());

@@ -9,12 +9,6 @@
 
 namespace native {
 
-// FIFO already enforces the display's refresh interval. Avoid a second host sleep when it covers the requested cap;
-// lower caps, unknown refresh rates, and non-FIFO desktop builds retain the explicit engine-loop limiter.
-constexpr bool FrameLimitNeedsSleep(int limit, int fifo_refresh_hz) {
-    return limit > 0 && (fifo_refresh_hz <= 0 || limit < fifo_refresh_hz);
-}
-
 struct PresentStatsSnapshot {
     double fps = 0;
     double average_ms = 0;

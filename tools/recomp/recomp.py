@@ -29,6 +29,15 @@ LOCALIZE = True  # general registers in C locals (--no-localize to compare)
 DIRTY_TRACKING = True  # spill only changed state (--no-dirty to compare)
 NATIVE = False  # use NATIVE_OVERRIDES (native host builds: --base other than the DLL's)
 
+# ProtoRenderManager reads these integer settings immediately before the original render setters. Hook only these
+# exact direct calls: the generic GameDB getter has many unrelated callers, and the fourth read in this function
+# feeds a Boolean setter with a different signature.
+VIDEO_SETTING_READ_CALLS = frozenset({
+    0x102E352F,  # Anti-Alias Level
+    0x102E357C,  # Shadow Detail
+    0x102E35A0,  # Graphic Quality
+})
+
 REG32 = {"eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"}
 REG16 = {"ax": "eax", "cx": "ecx", "dx": "edx", "bx": "ebx", "sp": "esp", "bp": "ebp", "si": "esi", "di": "edi"}
 REG8L = {"al": "eax", "cl": "ecx", "dl": "edx", "bl": "ebx"}
@@ -339,7 +348,8 @@ _FLAG_CALLS = [("SubFlags(c, ", "SubFlagsL(&rf, "), ("AddFlags(c, ", "AddFlagsL(
                ("RecompSahf(c, ", "RecompSahfL(&rf, "), ("RecompEflags(c)", "RecompEflagsL(&rf)"),
                ("RecompSetEflags(c, ", "RecompSetEflagsL(&rf, "), ("X87CompareFlags(c, ", "X87CompareFlagsL(&rf, ")]
 # Callees that read or write the general registers through the context: spill before, reload after.
-_SPILL_CALL_RE = re.compile(r"\b(f_[0-9a-f]{8}|RecompDispatch|RecompUnimplemented|RecompCpuid|RecompLongjmp)\(c\b")
+_SPILL_CALL_RE = re.compile(
+    r"\b(f_[0-9a-f]{8}|RecompDispatch|RecompUnimplemented|RecompCpuid|RecompLongjmp|RecompVideoSettingRead)\(c\b")
 
 
 def _wrap_calls(line):
@@ -814,12 +824,19 @@ class FunctionCompiler:
                 final = self.follow_jmp_thunks(t)
                 if final in INLINE_HELPERS:
                     return inline_helper(INLINE_HELPERS[final], nxt)
+                hook = ""
+                original_call = ins.address - BASE + ORIG_BASE
+                original_target = t - BASE + ORIG_BASE
+                if NATIVE and original_target == 0x107F87D0 and original_call in VIDEO_SETTING_READ_CALLS:
+                    # Push32 has already installed the getter's return address, so Arg(c, 0) is the key.
+                    # The spill/reload wrapper is added by localize(), just like the original guest call.
+                    hook = " RecompVideoSettingRead(c);"
                 if t in self.known:
                     self.direct_calls.add(t)
-                    return (f"Push32(c, 0x{nxt:08x}u); if (RecompDirect(0x{t:08x}u)) f_{t:08x}(c); "
+                    return (f"Push32(c, 0x{nxt:08x}u);{hook} if (RecompDirect(0x{t:08x}u)) f_{t:08x}(c); "
                             f"else RecompDispatch(c, 0x{t:08x}u);")
                 self.unknown_targets.add(t)
-                return f"Push32(c, 0x{nxt:08x}u); RecompDispatch(c, 0x{t:08x}u);"
+                return f"Push32(c, 0x{nxt:08x}u);{hook} RecompDispatch(c, 0x{t:08x}u);"
             return f"{{ uint32_t t = {self.read(ins, ops[0])}; Push32(c, 0x{nxt:08x}u); RecompDispatch(c, t); }}"
         if base == "ret":
             n = ops[0].imm if ops else 0
@@ -1336,10 +1353,6 @@ class FunctionCompiler:
         out = [f"void f_{self.va:08x}(Ctx* c) {{"]
         if LOCALIZE:
             out.append("    RLOCALS;")
-        # Android's launcher writes explicit game-video choices through GameDB on their first read. Keep this hook
-        # specific to the original getter; all other functions and direct-call paths remain unchanged.
-        if NATIVE and self.va - BASE + ORIG_BASE == 0x107F87D0:
-            out.append("    RecompVideoSettingRead(c);")
         trap_labels = set()
         # Fall-through into an instruction that is not next in the output (overlapping decodes) needs its label.
         for n, (i, _) in enumerate(body):

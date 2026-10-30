@@ -12,6 +12,6 @@ int VideoSettingIndex(uint32_t low, uint32_t high);
 
 }  // namespace native
 
-// Called by the recompiled GameDB integer getter before its original body. The hook may store a launcher value via
-// the engine's own setter; it never replaces the getter or its return value.
+// Called after the return-address push at each of the three recompiled video-setting getter call sites. The hook
+// may store a launcher value via the engine's own setter; it never replaces the getter or its return value.
 extern "C" void RecompVideoSettingRead(Ctx* c);

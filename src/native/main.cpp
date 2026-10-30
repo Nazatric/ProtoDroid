@@ -300,9 +300,10 @@ void WaitForMirrorCopy() {
     g_mirror_copy_active.store(false, std::memory_order_release);
 }
 
-std::string TakeIoStats();           // kernel32.cpp
-std::string ArenaUsage();            // memory.cpp
+std::string TakeIoStats();             // kernel32.cpp
+std::string ArenaUsage();              // memory.cpp
 std::string TakeTextureTimingStats();  // d3d9.cpp
+std::string TakePresentTimingStats();  // d3d9.cpp
 
 void Fatal(const char* fmt, ...) {
     char buf[1024];
@@ -704,24 +705,17 @@ int main(int argc, char** argv) {
     if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
     g_fps_limit.store(fps_limit);
     PerfHintStart(fps_limit);
-    int fifo_refresh_hz = 0;
-#ifdef __ANDROID__
-    SDL_DisplayMode current_mode;
-    if (SDL_GetCurrentDisplayMode(0, &current_mode) == 0) fifo_refresh_hz = current_mode.refresh_rate;
-    if (fps_limit > 0 && !FrameLimitNeedsSleep(fps_limit, fifo_refresh_hz)) {
-        Log("frame limit: %d FPS already covered by FIFO at %d Hz; redundant host sleep disabled", fps_limit,
-            fifo_refresh_hz);
-    }
-#endif
     using Clock = std::chrono::steady_clock;
-    Clock::time_point frame_start = Clock::now(), next_log = frame_start;
+    Clock::time_point frame_start = Clock::now(), next_log = frame_start, next_perf_log = frame_start;
+    Clock::time_point last_perf_log = frame_start;
+    uint64_t last_perf_frame = 0;
     for (uint64_t frame = 0;; ++frame) {
         frames.store(frame, std::memory_order_relaxed);
         if (frame == 900) VulkanDriverConfirm();  // well past the intro movies: the driver survived startup
         // The limiter remains anchored to the engine loop. FPS, frame statistics, and ADPF are anchored only to real
         // D3D9 presents, so thousands of empty message-pump iterations cannot inflate them or skew CPU clocking.
         Clock::time_point now = Clock::now();
-        if (int limit = g_fps_limit.load(); FrameLimitNeedsSleep(limit, fifo_refresh_hz)) {
+        if (int limit = g_fps_limit.load(); limit > 0) {
             Clock::time_point due = frame_start + std::chrono::microseconds(1000000 / limit);
             if (now < due) {
                 std::this_thread::sleep_until(due);
@@ -729,12 +723,23 @@ int main(int argc, char** argv) {
             }
         }
         frame_start = now;
-        if (now >= next_log) {
+        if (now >= next_perf_log) {
             if (frame) {
                 const PresentStatsSnapshot present = GetPresentStats();
-                Log("perf: %.1f present fps, avg %.2f ms, p99 %.2f ms, max %.2f ms, %ld MiB resident; arena %s; io: %s",
-                    present.fps, present.average_ms, present.p99_ms, present.max_ms, ResidentMiB(),
-                    ArenaUsage().c_str(), TakeIoStats().c_str());
+                const double elapsed_s = std::chrono::duration<double>(now - last_perf_log).count();
+                const double pump_fps = elapsed_s > 0 ? double(frame - last_perf_frame) / elapsed_s : 0.0;
+                Log("perf: %.1f present fps (%llu frames), avg %.2f ms, p99 %.2f ms, max %.2f ms, "
+                    "Present() %s, pump %.1f/s, %ld MiB resident; arena %s; io: %s",
+                    present.fps, (unsigned long long)present.frames, present.average_ms, present.p99_ms,
+                    present.max_ms, TakePresentTimingStats().c_str(), pump_fps, ResidentMiB(), ArenaUsage().c_str(),
+                    TakeIoStats().c_str());
+            }
+            last_perf_log = now;
+            last_perf_frame = frame;
+            next_perf_log = now + std::chrono::seconds(10);
+        }
+        if (now >= next_log) {
+            if (frame) {
                 Log("texture timing (calls / total ms / max ms): %s", native::TakeTextureTimingStats().c_str());
                 native::MirrorCopyDXVKLogsAsync();
             }

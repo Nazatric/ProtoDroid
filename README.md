@@ -98,7 +98,7 @@ Frequently used keys include:
 | `dxvk_config` | Additional DXVK options; separate entries with commas in this file. |
 | `watchdog`, `import_profile` | Hang and import profiling diagnostics. |
 
-Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds retain the optional presentation-mode settings. When FIFO already covers the selected FPS cap at the display's refresh rate, the launcher avoids a redundant second host sleep; lower FPS caps still use the host limiter.
+Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds retain the optional presentation-mode settings. An explicitly selected FPS cap continues to use the host limiter, while unlimited mode leaves presentation pacing to FIFO. Periodic diagnostics report Present-to-Present timing separately from Present() wall time so vsync waits are not mistaken for measured CPU work.
 
 ## Launcher and In-Game Settings
 

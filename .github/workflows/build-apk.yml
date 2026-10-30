@@ -435,6 +435,10 @@ jobs:
             exit 1
           fi
 
+      - name: Verify generated video-setting hooks
+        if: env.HAS_DLL == '1'
+        run: python3 tools/recomp/verify_video_hooks.py build/recomp/native
+
       - name: Build libmain.so from source (Android arm64-v8a)
         if: env.HAS_DLL == '1'
         env:

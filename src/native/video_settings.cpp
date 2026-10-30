@@ -1,7 +1,8 @@
 // The engine hashes setting names to 64-bit GameDB keys. Its video initialization registers these three settings,
-// and ProtoRenderManager reads them through 0x107f87d0 before calling the original AA/shadow/quality render setters.
-// On the first read of a recognized key, write an explicitly configured launcher value through GameDB's own integer
-// setter (0x107f8680). Subsequent reads, including changes made in the game's Video menu, use the engine unmodified.
+// and ProtoRenderManager reads them at three dedicated 0x107f87d0 call sites before calling the original
+// AA/shadow/quality render setters. On the first read of a recognized key, write an explicitly configured launcher
+// value through GameDB's own integer setter (0x107f8680). Subsequent reads, including changes made in the game's
+// Video menu, use the engine unmodified.
 #include <atomic>
 
 #include "guest.h"
@@ -54,6 +55,8 @@ extern "C" void RecompVideoSettingRead(Ctx* c) {
     // active value and linked profile through the same routine used by the game.
     const uint32_t profile = native::Arg(c, 1);
     const uint32_t slot = native::Arg(c, 2);
-    native::Log("video settings: %s = %d", setting.label, value);
     native::GuestCallNested(c, kGameDbSetInt, {key, profile, uint32_t(value), slot}, c->ecx);
+    // This is intentionally after the nested setter returns: the log confirms the call-site hook executed, rather
+    // than merely recognizing a key or queuing a write. Device testing still has to confirm the rendered result.
+    native::Log("video settings: %s = %d (GameDB setter returned)", setting.label, value);
 }
