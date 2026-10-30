@@ -2,9 +2,13 @@
 
 ## 0.8 - 2026-10-30
 
-- Grouped launcher Settings into **Graphics**, **Game Video**, **Controls**, and **Interface** without changing the existing options or presets.
+- Grouped launcher Settings into **Graphics**, **Game Video**, **Controls**, and **Interface** while preserving every existing option.
 - Added functional launcher access to the game's own **Anti-Alias Level**, **Shadow Detail**, and **Graphic Quality** settings through GameDB and its original render application path.
 - Added **Game default** choices to preserve device-dependent engine defaults until an explicit level is selected. All settings continue to share the same preferences and `protodroid.ini` persistence.
+- Expanded **Low**, **Medium**, and **High** presets to cover the game's AA, shadow, and quality levels as well as the existing port graphics options. FPS and control choices remain independent.
+- Moved active shared saves into `/storage/emulated/0/Prototype/Saves/`, with one-time no-overwrite migration from the previous shared root and app-specific layouts. External save management and deletion behavior are preserved.
+- Avoided a redundant host sleep when FIFO already covers the selected FPS cap, and moved recurring shared cache/log copies off the engine thread while retaining synchronous shutdown flushing.
+- Stopped camera-only touch movement from redrawing the entire control overlay. Mouse motion, stick/wheel feedback, editing, and all existing controls are unchanged.
 
 ## 0.7 - 2026-10-30
 

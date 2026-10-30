@@ -577,6 +577,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             invalidate();
             return true;
         }
+        // Camera-only movement has no overlay visual to redraw. Native mouse motion is still delivered for every
+        // pointer below; only the expensive full-overlay invalidation is conditional.
+        boolean redraw = action != MotionEvent.ACTION_MOVE;
         switch (action) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN: {
@@ -626,8 +629,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                         mouseMoveBy((px - held.fx) * g, (py - held.fy) * g);
                         held.fx = px;
                         held.fy = py;
+                        redraw = true;
                     } else if (pid == stickPointer) {
                         updateStick(px, py);
+                        redraw = true;
                     } else if (pid == lookPointer) {
                         float g = 1.5f * camGain;
                         if (gameMode) mouseMoveBy((px - lookX) * g, (py - lookY) * g * (invertY ? -1 : 1));
@@ -669,7 +674,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             default:
                 break;
         }
-        invalidate();
+        if (redraw) invalidate();
         return true;
     }
 

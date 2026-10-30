@@ -63,9 +63,9 @@ The application ID and app-specific directory are both `com.protodroid`. The sha
 
 ## Saves and Profiles
 
-With shared file access granted, profiles and saves such as `profile.bin` and `slot-*.bin` are read and written directly in `/storage/emulated/0/Prototype/`. Files added, replaced, or deleted there by a file manager are used by the game.
+With shared file access granted, profiles and saves such as `profile.bin` and `slot-*.bin` are read and written in `/storage/emulated/0/Prototype/Saves/`. The folder is created automatically. Files added, replaced, or deleted there by a file manager are used by the game.
 
-On the first run with shared access, existing saves are copied from `/storage/emulated/0/Android/data/com.protodroid/files/native_c/Users/Player/Documents/Prototype/` without overwriting files already in shared storage. This migration runs only once, so later deletion of a shared save does not restore the old copy. The legacy files remain as a backup. Without shared access, the legacy app-specific save directory continues to be used.
+The first run with this folder migrates existing saves from the previous shared `/storage/emulated/0/Prototype/` location and from `/storage/emulated/0/Android/data/com.protodroid/files/native_c/Users/Player/Documents/Prototype/`, without overwriting files already in `Saves`. Current shared saves take priority over retained app-specific backups. Migration runs only once, so later deletion of a save does not restore an old copy. Previous files remain as backups. Without shared access, the legacy app-specific save directory continues to be used.
 
 ## Configuration
 
@@ -98,13 +98,13 @@ Frequently used keys include:
 | `dxvk_config` | Additional DXVK options; separate entries with commas in this file. |
 | `watchdog`, `import_profile` | Hang and import profiling diagnostics. |
 
-Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds retain the optional presentation-mode settings.
+Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds retain the optional presentation-mode settings. When FIFO already covers the selected FPS cap at the display's refresh rate, the launcher avoids a redundant second host sleep; lower FPS caps still use the host limiter.
 
 ## Launcher and In-Game Settings
 
 The launcher's **Settings** page and the in-game gear overlay share the same saved options. Launcher changes are saved automatically and engine options apply when **Play** starts the game. In the in-game overlay, settings marked with `*` apply after restart; the FPS limit applies immediately.
 
-The launcher groups options into **Graphics**, **Game Video**, **Controls**, and **Interface**. It also provides **Low**, **Medium**, and **High** graphics presets. They change only Resolution, Textures, and Anisotropy, leaving FPS, game-video, and control preferences untouched. Choose **Custom** or adjust any preset graphics row to keep an individual combination.
+The launcher groups options into **Graphics**, **Game Video**, **Controls**, and **Interface**. It also provides **Low**, **Medium**, and **High** graphics presets. They change Resolution, Textures, Anisotropy, Anti-Alias Level, Shadow Detail, and Graphic Quality together, leaving FPS, battery, menu-FPS, and control preferences untouched. Choose **Custom** or adjust any preset-covered row to keep an individual combination.
 
 - **Graphics:** Resolution, Textures, Anisotropy, FPS limit, Battery saver, and Unlock menu FPS (default **On**).
 - **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. These use the game's own GameDB settings and render paths. **Game default** preserves the engine's device-dependent choice; explicit levels apply on the next Play or restart.
@@ -128,7 +128,9 @@ Important files:
 - `prototypeenginef.dll.dxvk-cache`: persistent pipeline state cache
 - `turnip_failed`: present only after a Turnip initialization failure
 
-No state-cache seed is bundled. If the app-private cache is missing or header-only, startup can restore a populated `prototypeenginef.dll.dxvk-cache` (or legacy `app_process64.dxvk-cache`) from the app-specific directory or the shared locations above. Existing populated or invalid private caches are not overwritten by recovery; DXVK performs the final entry validation and reports the actual count read. Populated private caches are mirrored periodically to shared storage with atomic replacement, so an interrupted backup does not truncate the previous copy. The live DXVK writer stays in app-private storage; the mirror is a recovery backup, not a power-loss-durability guarantee.
+No state-cache seed is bundled. If the app-private cache is missing or header-only, startup can restore a populated `prototypeenginef.dll.dxvk-cache` (or legacy `app_process64.dxvk-cache`) from the app-specific directory or the shared locations above. Existing populated or invalid private caches are not overwritten by recovery; DXVK performs the final entry validation and reports the actual count read. DXVK queues cached pipelines for early compilation as their game shaders become available; variants that have never been encountered cannot be known or preloaded in advance.
+
+Populated private caches are mirrored periodically to shared storage with atomic replacement, using a single-flight helper thread rather than blocking the engine thread. Shutdown retains a synchronous final copy. An interrupted backup does not truncate the previous copy. The live DXVK writer stays in app-private storage; the mirror is a recovery backup, not a power-loss-durability guarantee.
 
 The 30-second native performance report includes presented-frame statistics plus interval texture timing: DXT decode, host texture creation, and host upload calls with call count, total milliseconds, and worst-call milliseconds. These measurements help distinguish CPU conversion, allocation, and upload/sync stalls; they do not claim that any one counter is the sole cause of a frame spike.
 

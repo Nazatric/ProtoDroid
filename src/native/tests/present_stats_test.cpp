@@ -68,6 +68,16 @@ void TestAveragePercentileAndOutlier() {
     Check(Near(s.max_ms, 100.0), "maximum frame interval was lost");
 }
 
+void TestFrameLimitAndFifoPolicy() {
+    Check(!native::FrameLimitNeedsSleep(0, 60), "unlimited mode introduced a host sleep");
+    Check(native::FrameLimitNeedsSleep(30, 60), "30 FPS cap was disabled by 60 Hz FIFO");
+    Check(native::FrameLimitNeedsSleep(45, 60), "45 FPS cap was disabled by 60 Hz FIFO");
+    Check(native::FrameLimitNeedsSleep(60, 120), "60 FPS cap was disabled by 120 Hz FIFO");
+    Check(native::FrameLimitNeedsSleep(60, 0), "unknown refresh rate disabled the explicit cap");
+    Check(!native::FrameLimitNeedsSleep(60, 60), "60 Hz FIFO and 60 FPS cap caused double pacing");
+    Check(!native::FrameLimitNeedsSleep(120, 60), "covered above-refresh limit caused a redundant sleep");
+}
+
 void TestNoLoopCounterLeak() {
     native::PresentStatsTracker tracker;
     Check(tracker.Snapshot().frames == 0 && tracker.Snapshot().fps == 0,
@@ -86,7 +96,8 @@ int main() {
     TestBaselineAndOneReportPerPresent();
     TestSixtyFpsWindow();
     TestAveragePercentileAndOutlier();
+    TestFrameLimitAndFifoPolicy();
     TestNoLoopCounterLeak();
-    std::puts("present-stats tests passed (baseline, ADPF count, FPS, average, p99, max)");
+    std::puts("present-stats tests passed (baseline, ADPF count, FPS, percentiles, FIFO limit policy)");
     return 0;
 }

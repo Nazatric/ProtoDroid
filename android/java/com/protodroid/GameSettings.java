@@ -22,7 +22,10 @@ final class GameSettings {
     static final int CATEGORY_COUNT = 4;
 
     private static final String PRESET_KEY = "graphics_preset";
-    private static final String[] GRAPHICS_KEYS = {"render_height", "texture_skip_mips", "max_anisotropy"};
+    private static final String[] PRESET_KEYS = {
+            "render_height", "texture_skip_mips", "max_anisotropy",
+            "game_aa_level", "game_shadow_detail", "game_graphic_quality",
+    };
 
     static final class Setting {
         final String label, key;
@@ -92,11 +95,11 @@ final class GameSettings {
 
     private static final int[] DEFAULTS = {1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 2, 0, 0, 2, 0};
 
-    // Resolution, textures and anisotropy only. FPS, battery, game video and every control preference stay untouched.
+    // Presets cover both port and game video options. FPS, battery and every control preference stay untouched.
     private static final int[][] PRESET_VALUES = {
-            {0, 2, 0},  // Low: 540p, quarter textures, 1x
-            {1, 1, 0},  // Medium: the established 720p / half / 1x defaults
-            {3, 0, 3},  // High: 1080p, full textures, 8x
+            {0, 2, 0, 1, 1, 1},  // Low: 540p, quarter, 1x; AA off, low shadows and game quality
+            {1, 1, 0, 2, 2, 2},  // Medium: 720p, half, 1x; 2x AA, medium shadows and game quality
+            {3, 0, 3, 3, 3, 3},  // High: 1080p, full, 8x; 4x AA, high shadows and game quality
     };
 
     private final Context context;
@@ -127,16 +130,16 @@ final class GameSettings {
         return settings[settingIndex(key)].value();
     }
 
-    private static boolean isGraphics(Setting setting) {
-        for (String key : GRAPHICS_KEYS) if (setting.key.equals(key)) return true;
+    private static boolean isPresetSetting(Setting setting) {
+        for (String key : PRESET_KEYS) if (setting.key.equals(key)) return true;
         return false;
     }
 
     private int detectPreset() {
         for (int preset = PRESET_LOW; preset <= PRESET_HIGH; preset++) {
             boolean matches = true;
-            for (int i = 0; i < GRAPHICS_KEYS.length; i++) {
-                matches &= settings[settingIndex(GRAPHICS_KEYS[i])].index == PRESET_VALUES[preset][i];
+            for (int i = 0; i < PRESET_KEYS.length; i++) {
+                matches &= settings[settingIndex(PRESET_KEYS[i])].index == PRESET_VALUES[preset][i];
             }
             if (matches) return preset;
         }
@@ -151,8 +154,8 @@ final class GameSettings {
     void applyPreset(int preset) {
         if (preset < PRESET_LOW || preset > PRESET_HIGH) return;
         SharedPreferences.Editor editor = prefs.edit();
-        for (int i = 0; i < GRAPHICS_KEYS.length; i++) {
-            Setting setting = settings[settingIndex(GRAPHICS_KEYS[i])];
+        for (int i = 0; i < PRESET_KEYS.length; i++) {
+            Setting setting = settings[settingIndex(PRESET_KEYS[i])];
             setting.index = PRESET_VALUES[preset][i];
             editor.putInt(setting.key, setting.index);
         }
@@ -165,7 +168,7 @@ final class GameSettings {
         Setting setting = settings[index];
         setting.index = (next % setting.values.length + setting.values.length) % setting.values.length;
         SharedPreferences.Editor editor = prefs.edit().putInt(setting.key, setting.index);
-        if (isGraphics(setting)) {
+        if (isPresetSetting(setting)) {
             graphicsPreset = PRESET_CUSTOM;
             editor.putInt(PRESET_KEY, PRESET_CUSTOM);
         }

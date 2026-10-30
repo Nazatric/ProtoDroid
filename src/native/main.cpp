@@ -49,8 +49,13 @@ FILE* g_log_mirror = nullptr;  // Android 11+: /storage/emulated/0/Prototype/log
 std::string g_mirror_dir;
 std::string g_mirror_log_path;
 std::string g_mirror_prev_path;
+std::mutex g_mirror_copy_mutex;
+std::thread g_mirror_thread;
+std::atomic<bool> g_mirror_copy_active{false};
 }  // namespace
 void MirrorCopyDXVKLogs();
+void MirrorCopyDXVKLogsAsync();
+void WaitForMirrorCopy();
 
 // Forward for mirroring helper
 
@@ -259,6 +264,8 @@ static void CopyFile(const std::string& src, const std::string& dst) {
 // symbol. CopyFile and the mirror state remain implementation details of the anonymous namespace above.
 void MirrorCopyDXVKLogs() {
     if (g_mirror_dir.empty() || !g_data_dir) return;
+    // Periodic work runs on a helper thread; shutdown and crash reports may still request a synchronous copy.
+    std::lock_guard<std::mutex> copy_lock(g_mirror_copy_mutex);
     std::string base_log = std::string(g_data_dir) + "/app_process64_d3d9.log";
     std::string mirror_dxvk = g_mirror_dir + "/app_process64_d3d9.log";
     CopyFile(base_log, mirror_dxvk);
@@ -269,6 +276,28 @@ void MirrorCopyDXVKLogs() {
     // Replace the backup atomically. A process kill or failed write must not truncate the last usable cache, and
     // the live DXVK writer remains in app-private storage instead of doing shader-cache I/O through shared FUSE.
     native::BackupStateCache(base_cache, mirror_cache);
+}
+
+void MirrorCopyDXVKLogsAsync() {
+    if (g_mirror_dir.empty() || !g_data_dir || g_mirror_copy_active.load(std::memory_order_acquire)) return;
+    if (g_mirror_thread.joinable()) g_mirror_thread.join();
+    bool expected = false;
+    if (!g_mirror_copy_active.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) return;
+    try {
+        g_mirror_thread = std::thread([] {
+            MirrorCopyDXVKLogs();
+            g_mirror_copy_active.store(false, std::memory_order_release);
+        });
+    } catch (...) {
+        g_mirror_copy_active.store(false, std::memory_order_release);
+        // Thread creation is only an optimization fallback; never skip the cache backup itself.
+        MirrorCopyDXVKLogs();
+    }
+}
+
+void WaitForMirrorCopy() {
+    if (g_mirror_thread.joinable()) g_mirror_thread.join();
+    g_mirror_copy_active.store(false, std::memory_order_release);
 }
 
 std::string TakeIoStats();           // kernel32.cpp
@@ -494,7 +523,7 @@ int main(int argc, char** argv) {
     // Log game dir detection
     Log("game dir: %s", g_game_dir);
     Log("data dir: %s", g_data_dir ? g_data_dir : "(none)");
-    native::ConfigureSaveDirectory(base, native::kAndroidSharedSaveDir);
+    native::ConfigureSaveDirectory(base, native::kAndroidSharedSaveDir, native::kAndroidPreviousSharedSaveDir);
     Log("save dir: %s", native::HostPath(native::kGuestSaveDir).c_str());
 #endif
     // DXVK's durable pipeline diagnostics are strictly opt-in. Export this
@@ -675,6 +704,15 @@ int main(int argc, char** argv) {
     if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
     g_fps_limit.store(fps_limit);
     PerfHintStart(fps_limit);
+    int fifo_refresh_hz = 0;
+#ifdef __ANDROID__
+    SDL_DisplayMode current_mode;
+    if (SDL_GetCurrentDisplayMode(0, &current_mode) == 0) fifo_refresh_hz = current_mode.refresh_rate;
+    if (fps_limit > 0 && !FrameLimitNeedsSleep(fps_limit, fifo_refresh_hz)) {
+        Log("frame limit: %d FPS already covered by FIFO at %d Hz; redundant host sleep disabled", fps_limit,
+            fifo_refresh_hz);
+    }
+#endif
     using Clock = std::chrono::steady_clock;
     Clock::time_point frame_start = Clock::now(), next_log = frame_start;
     for (uint64_t frame = 0;; ++frame) {
@@ -683,7 +721,7 @@ int main(int argc, char** argv) {
         // The limiter remains anchored to the engine loop. FPS, frame statistics, and ADPF are anchored only to real
         // D3D9 presents, so thousands of empty message-pump iterations cannot inflate them or skew CPU clocking.
         Clock::time_point now = Clock::now();
-        if (int limit = g_fps_limit.load(); limit > 0) {
+        if (int limit = g_fps_limit.load(); FrameLimitNeedsSleep(limit, fifo_refresh_hz)) {
             Clock::time_point due = frame_start + std::chrono::microseconds(1000000 / limit);
             if (now < due) {
                 std::this_thread::sleep_until(due);
@@ -698,7 +736,7 @@ int main(int argc, char** argv) {
                     present.fps, present.average_ms, present.p99_ms, present.max_ms, ResidentMiB(),
                     ArenaUsage().c_str(), TakeIoStats().c_str());
                 Log("texture timing (calls / total ms / max ms): %s", native::TakeTextureTimingStats().c_str());
-                native::MirrorCopyDXVKLogs();
+                native::MirrorCopyDXVKLogsAsync();
             }
             next_log = now + std::chrono::seconds(30);
         }
@@ -718,6 +756,7 @@ int main(int argc, char** argv) {
                 // at its checkpoints, so there is nothing to lose by ending the process here.
                 Log("quit");
                 VulkanDriverAbandon();
+                native::WaitForMirrorCopy();
                 native::MirrorCopyDXVKLogs();
                 _exit(0);
 #endif
@@ -735,6 +774,7 @@ int main(int argc, char** argv) {
     }
     GuestCall(terminate, {});
     Log("EngineTerminate done");
+    native::WaitForMirrorCopy();
     native::MirrorCopyDXVKLogs();
     return 0;
 }
