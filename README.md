@@ -63,9 +63,9 @@ The application ID and app-specific directory are both `com.protodroid`. The sha
 
 ## Saves and Profiles
 
-With shared file access granted, profiles and saves such as `profile.bin` and `slot-*.bin` are read and written directly in `/storage/emulated/0/Prototype/`. Files added, replaced, or deleted there by a file manager are used by the game.
+With shared file access granted, profiles and saves such as `profile.bin` and `slot-*.bin` are read and written in `/storage/emulated/0/Prototype/Saves/`. The folder is created automatically. Files added, replaced, or deleted there by a file manager are used by the game.
 
-On the first run with shared access, existing saves are copied from `/storage/emulated/0/Android/data/com.protodroid/files/native_c/Users/Player/Documents/Prototype/` without overwriting files already in shared storage. This migration runs only once, so later deletion of a shared save does not restore the old copy. The legacy files remain as a backup. Without shared access, the legacy app-specific save directory continues to be used.
+The first run with this folder migrates existing saves from the previous shared `/storage/emulated/0/Prototype/` location and from `/storage/emulated/0/Android/data/com.protodroid/files/native_c/Users/Player/Documents/Prototype/`, without overwriting files already in `Saves`. Current shared saves take priority over retained app-specific backups. Migration runs only once, so later deletion of a save does not restore an old copy. Previous files remain as backups. Without shared access, the legacy app-specific save directory continues to be used.
 
 ## Configuration
 
@@ -92,35 +92,27 @@ Frequently used keys include:
 | `audio_driver` | `aaudio` or `openslES`. |
 | `audio_master_reuse` | Reuses the retained mastering output when the game recreates voices. |
 | `vulkan_driver` | `auto`, `system`, or `turnip`. |
-| `present_stats` | Enables detailed presentation diagnostics. |
+| `present_stats` | Enables DXVK presentation diagnostics. |
 | `audio_stats` | `1` logs real output underruns (default), `2` logs every timing window, `0` disables audio diagnostics. |
-| `pipeline_trace` | Enables expensive Mali pipeline tracing for debugging only. |
+| `detailed_diagnostics` | Enables timestamped five-second native/device diagnostics by default; `0` disables metrics but retains log mirroring. |
+| `detailed_diagnostics_interval` | Diagnostic window in seconds, clamped to 1–60. Default: `5`. |
+| `pipeline_timing` | Lightweight DXVK pipeline-call timing; defaults to the detailed-diagnostics setting. |
+| `pipeline_trace` | Enables expensive Mali pipeline tracing and shader dumps for debugging only. |
 | `dxvk_config` | Additional DXVK options; separate entries with commas in this file. |
 | `watchdog`, `import_profile` | Hang and import profiling diagnostics. |
 
-Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds retain the optional presentation-mode settings.
+Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds retain the optional presentation-mode settings. An explicitly selected FPS cap continues to use the host limiter, while unlimited mode leaves presentation pacing to FIFO. Periodic diagnostics report Present-to-Present timing separately from Present() wall time so vsync waits are not mistaken for measured CPU work.
 
 ## Launcher and In-Game Settings
 
 The launcher's **Settings** page and the in-game gear overlay share the same saved options. Launcher changes are saved automatically and engine options apply when **Play** starts the game. In the in-game overlay, settings marked with `*` apply after restart; the FPS limit applies immediately.
 
-The launcher also provides **Low**, **Medium**, and **High** graphics presets. They change only Resolution, Textures, and Anisotropy, leaving FPS and control preferences untouched. Choose **Custom** or adjust any graphics row to keep an individual combination.
+The launcher groups options into **Graphics**, **Game Video**, **Controls**, and **Interface**. It also provides **Low**, **Medium**, and **High** graphics presets. They change Resolution, Textures, Anisotropy, Anti-Alias Level, Shadow Detail, and Graphic Quality together, leaving FPS, battery, menu-FPS, and control preferences untouched. Choose **Custom** or adjust any preset-covered row to keep an individual combination.
 
-- Resolution
-- Textures
-- FPS limit
-- Battery saver
-- Opacity
-- Button size
-- Vibration
-- Show FPS
-- Hide with gamepad
-- Stick edge sprint
-- Camera speed
-- Invert Y
-- Extra buttons, default **Off**
-- Anisotropy
-- Unlock menu FPS, default **On**
+- **Graphics:** Resolution, Textures, Anisotropy, FPS limit, Battery saver, and Unlock menu FPS (default **On**).
+- **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. These use the game's own GameDB settings and render paths. **Game default** preserves the engine's device-dependent choice; explicit levels apply on the next Play or restart.
+- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons (default **Off**).
+- **Interface:** Opacity and Show FPS.
 
 The **LAYOUT** button opens the control-layout editor. Drag controls to reposition them, select a control to resize it, or reset the layout.
 
@@ -139,7 +131,11 @@ Important files:
 - `prototypeenginef.dll.dxvk-cache`: persistent pipeline state cache
 - `turnip_failed`: present only after a Turnip initialization failure
 
-No state-cache seed is bundled. If the app-private cache is missing or header-only, startup can restore a populated `prototypeenginef.dll.dxvk-cache` (or legacy `app_process64.dxvk-cache`) from the app-specific directory or the shared locations above. Existing populated or invalid private caches are not overwritten by recovery; DXVK performs the final entry validation and reports the actual count read. Populated private caches are mirrored periodically to shared storage with atomic replacement, so an interrupted backup does not truncate the previous copy. The live DXVK writer stays in app-private storage; the mirror is a recovery backup, not a power-loss-durability guarantee.
+Detailed diagnostics timestamp native and DXVK events with monotonic seconds and thread IDs. Five-second windows include Present and engine timing percentiles, fixed long-frame thresholds and worst events, texture and file I/O, process/per-thread CPU, memory, ADPF, and Android thermal/headroom data where supported. Slow file events above 50 ms retain their path and thread. Present() wall time is not labeled as GPU time, and threshold counts are not claimed to be physical display-drop counts. The lightweight pipeline log does not dump shaders or enable the expensive `pipeline_trace` path.
+
+No state-cache seed is bundled. If the app-private cache is missing or header-only, startup can restore a populated `prototypeenginef.dll.dxvk-cache` (or legacy `app_process64.dxvk-cache`) from the app-specific directory or the shared locations above. Existing populated or invalid private caches are not overwritten by recovery; DXVK performs the final entry validation and reports the actual count read. DXVK queues cached pipelines for early compilation as their game shaders become available; variants that have never been encountered cannot be known or preloaded in advance.
+
+Populated private caches are mirrored periodically to shared storage with atomic replacement, using a single-flight helper thread rather than blocking the engine thread. Shutdown retains a synchronous final copy. An interrupted backup does not truncate the previous copy. The live DXVK writer stays in app-private storage; the mirror is a recovery backup, not a power-loss-durability guarantee.
 
 The 30-second native performance report includes presented-frame statistics plus interval texture timing: DXT decode, host texture creation, and host upload calls with call count, total milliseconds, and worst-call milliseconds. These measurements help distinguish CPU conversion, allocation, and upload/sync stalls; they do not claim that any one counter is the sole cause of a frame spike.
 
@@ -205,6 +201,21 @@ The production Bink harness and its minimal FFmpeg setup are automated in `.gith
 `android/AndroidManifest.xml` is the version source of truth. Before each new approved release cycle, run `python3 tools/bump_version.py` once, add the version's notes to `CHANGELOG.md`, and commit both changes. The version tool advances both values together (`0.1`/code `1` → `0.2`/code `2` → `0.3`/code `3`). Packaging verifies those exact values in the signed APK. After an exact-commit green run on `main`, an explicitly approved manual workflow dispatch with **Publish a new versioned GitHub release** enabled creates `protodroid-v<version>` using the matching changelog section. The release job refuses reused or out-of-order visible versions and `versionCode` values instead of replacing an existing release.
 
 A release candidate should have an exact-commit green workflow, real native compilation rather than a dummy/prebuilt fallback, successful `apksigner verify`, and a verified `prototype.apk` artifact. Compilation and host tests do not replace on-device gameplay and visual testing. A version bump does not by itself resolve signature conflicts or every Android installation error.
+
+### Signing and in-place updates
+
+Local packaging uses the Android debug keystore by default. Set `KEYSTORE`, `KEYSTORE_PASS`, `KEY_ALIAS`, and optionally `KEY_PASS` to use another key. `KEY_PASS` defaults to the store password (normally required for PKCS#12); JKS also supports a distinct key password. Ordinary branch/PR CI artifacts use a disposable identity and are not release-eligible; protected release secrets are read only for an explicitly approved release dispatch on `main`.
+
+Protected releases require these repository Actions secrets:
+
+- `PROTODROID_ANDROID_KEYSTORE_BASE64`: the keystore encoded with `base64 -w 0` (Linux) or `base64` without line wrapping (macOS).
+- `PROTODROID_ANDROID_KEYSTORE_PASSWORD`
+- `PROTODROID_ANDROID_KEY_ALIAS`
+- `PROTODROID_ANDROID_KEY_PASSWORD`
+
+Keep an offline backup of the original keystore and passwords; never commit them. The release workflow refuses a missing/incomplete signing configuration, records the certificate SHA-256 digest, and rejects dummy, prebuilt, or ephemerally signed APKs. Once configured, subsequent releases keep the same identity and can update each other in place.
+
+Version 0.7 and earlier CI artifacts were signed with per-run keys whose private keys are not available. A newly signed APK cannot directly update a differently signed installation: Android requires a one-time uninstall first. Shared saves under `/storage/emulated/0/Prototype` are separate from the app and remain there; back up any important app-specific data before uninstalling.
 
 ## Credits and Legal
 

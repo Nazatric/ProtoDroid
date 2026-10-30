@@ -72,9 +72,9 @@ LDFLAGS := -rdynamic -pthread -L$(DXVK_LIB) -Wl,-rpath,$(DXVK_LIB) -ldxvk_d3d9 -
 BINARY := proto-native
 endif
 
-SRCS := main.cpp memory.cpp loader.cpp imports.cpp runtime.cpp thread.cpp path.cpp save_path.cpp kernel32.cpp msvcr80.cpp user32.cpp \
+SRCS := main.cpp diagnostics.cpp memory.cpp loader.cpp imports.cpp runtime.cpp thread.cpp path.cpp save_path.cpp kernel32.cpp msvcr80.cpp user32.cpp \
         advapi32.cpp misc.cpp d3d9.cpp d3d9_dxt.cpp input.cpp xaudio2.cpp bink.cpp bink_media.cpp bink_blit.cpp dinput.cpp gamepad.cpp config.cpp watchdog.cpp hot_audio.cpp hot_skin.cpp \
-        vulkan_driver.cpp perf_hint.cpp present_stats.cpp state_cache.cpp
+        vulkan_driver.cpp perf_hint.cpp present_stats.cpp state_cache.cpp video_settings.cpp
 GEN := $(wildcard $(RECOMP_DIR)/*.c)
 OBJS = $(SRCS:%.cpp=$(OUT)/%.o) $(GEN:$(RECOMP_DIR)/%.c=$(OUT)/gen/%.o)
 
@@ -97,8 +97,11 @@ $(OUT)/hot_audio.o $(OUT)/hot_skin.o: CXXFLAGS += -ffp-contract=off
 $(OUT)/perf_hint.o: perf_hint_session.h
 $(OUT)/main.o $(OUT)/state_cache.o: state_cache.h
 $(OUT)/main.o $(OUT)/path.o $(OUT)/save_path.o: save_path.h
-$(OUT)/main.o $(OUT)/d3d9.o $(OUT)/present_stats.o: present_stats.h
+$(OUT)/main.o $(OUT)/d3d9.o $(OUT)/present_stats.o $(OUT)/diagnostics.o: present_stats.h timing_window.h
+$(OUT)/main.o $(OUT)/diagnostics.o: diagnostics.h
+$(OUT)/diagnostics.o: proc_stats.h
 $(OUT)/vulkan_driver.o: gpu_profile.h
+$(OUT)/video_settings.o: video_settings.h
 
 $(OUT)/%.o: %.cpp guest.h win.h turnip_load.h ../recomp/runtime.h d3d9_gen.inc
 	@mkdir -p $(dir $@)

@@ -19,7 +19,8 @@ namespace native {
 void Log(const char* fmt, ...);
 
 const char* const kGuestSaveDir = "C:\\Users\\Player\\Documents\\Prototype";
-const char* const kAndroidSharedSaveDir = "/storage/emulated/0/Prototype";
+const char* const kAndroidSharedSaveDir = "/storage/emulated/0/Prototype/Saves";
+const char* const kAndroidPreviousSharedSaveDir = "/storage/emulated/0/Prototype";
 
 namespace {
 
@@ -161,13 +162,50 @@ bool CopyTree(const std::string& source, const std::string& target, uint32_t& co
     return ok;
 }
 
+bool IsSharedSaveFilename(const char* name) {
+    const size_t length = strlen(name);
+    return !strcasecmp(name, "profile.bin") ||
+           (length > 9 && !strncasecmp(name, "slot-", 5) && !strcasecmp(name + length - 4, ".bin"));
+}
+
+// Previous versions used the shared game directory itself for saves. Copy only known save filenames into the dedicated
+// folder: recursively copying the game root would duplicate archives and could also recurse into the new save folder.
+bool CopyPreviousSharedSaves(const std::string& source, const std::string& target, uint32_t& copied) {
+    if (source.empty() || source == target) return true;
+    DIR* dir = opendir(source.c_str());
+    if (!dir) return errno == ENOENT;
+    bool ok = true;
+    while (ok) {
+        errno = 0;
+        dirent* entry = readdir(dir);
+        if (!entry) {
+            if (errno) ok = false;
+            break;
+        }
+        if (!IsSharedSaveFilename(entry->d_name)) continue;
+        const std::string from = source + "/" + entry->d_name;
+        const std::string to = target + "/" + MatchCase(target, entry->d_name);
+        struct stat st;
+        if (lstat(from.c_str(), &st) != 0) {
+            ok = false;
+            break;
+        }
+        if (S_ISREG(st.st_mode) && !Exists(to)) {
+            ok = CopyFile(from, to);
+            if (ok) ++copied;
+        }
+    }
+    if (closedir(dir) != 0) ok = false;
+    return ok;
+}
+
 bool WriteMigrationMarker(const std::string& marker) {
     std::string pattern = marker + ".XXXXXX";
     std::vector<char> name(pattern.begin(), pattern.end());
     name.push_back('\0');
     int fd = mkstemp(name.data());
     if (fd < 0) return false;
-    const char text[] = "shared save migration v1\n";
+    const char text[] = "shared save migration v2\n";
     bool ok = WriteAll(fd, reinterpret_cast<const unsigned char*>(text), sizeof(text) - 1);
     if (ok && fsync(fd) != 0) ok = false;
     if (close(fd) != 0) ok = false;
@@ -178,7 +216,7 @@ bool WriteMigrationMarker(const std::string& marker) {
 
 }  // namespace
 
-bool ConfigureSaveDirectory(const char* data_dir, const char* shared_dir) {
+bool ConfigureSaveDirectory(const char* data_dir, const char* shared_dir, const char* previous_shared_dir) {
     g_save_dir.clear();
     if (!data_dir || !*data_dir || !shared_dir || !*shared_dir) return false;
     const std::string singular_legacy = LegacySaveDir(data_dir);
@@ -187,7 +225,10 @@ bool ConfigureSaveDirectory(const char* data_dir, const char* shared_dir) {
     // Some existing installations used a lower-case/plural "users/players" directory. Migrate both spellings,
     // while preferring whichever one actually exists for the no-shared-access fallback.
     if (!IsDirectory(legacy) && IsDirectory(plural_legacy)) legacy = plural_legacy;
-    const std::string marker = std::string(data_dir) + "/native_c/.shared-saves-v1";
+    const std::string v1_marker = std::string(data_dir) + "/native_c/.shared-saves-v1";
+    const std::string marker = std::string(data_dir) + "/native_c/.shared-saves-v2";
+    const bool migrate_legacy = !Exists(v1_marker);
+    const std::string previous = previous_shared_dir ? previous_shared_dir : "";
     if (!EnsureDirs(shared_dir) || !WritableDirectory(shared_dir)) {
         if (EnsureDirs(legacy)) g_save_dir = legacy;
         return false;
@@ -199,15 +240,19 @@ bool ConfigureSaveDirectory(const char* data_dir, const char* shared_dir) {
             return false;
         }
         uint32_t copied = 0;
-        if (!CopyTree(singular_legacy, shared_dir, copied) || !CopyTree(plural_legacy, shared_dir, copied) ||
-            !WriteMigrationMarker(marker)) {
+        // Files in the previous shared location are newer than the retained app-specific backups and therefore win.
+        // Once v1 migration completed, never copy those backups again: their shared copies may have been deleted.
+        const bool previous_ok = CopyPreviousSharedSaves(previous, shared_dir, copied);
+        const bool legacy_ok = !migrate_legacy || (CopyTree(singular_legacy, shared_dir, copied) &&
+                                                   CopyTree(plural_legacy, shared_dir, copied));
+        if (!previous_ok || !legacy_ok || !WriteMigrationMarker(marker)) {
             // Do not switch to a partially migrated directory. A later launch retries missing entries without
             // overwriting anything, while this launch keeps using the intact legacy files.
             if (EnsureDirs(legacy)) g_save_dir = legacy;
             Log("shared save migration failed; using %s", legacy.c_str());
             return false;
         }
-        if (copied) Log("migrated %u legacy save file(s) to %s", copied, shared_dir);
+        if (copied) Log("migrated %u save file(s) to %s", copied, shared_dir);
     }
     g_save_dir = shared_dir;
     return true;

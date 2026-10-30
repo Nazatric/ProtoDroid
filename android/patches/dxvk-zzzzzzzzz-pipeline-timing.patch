@@ -1,0 +1,234 @@
+diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
+index 5f0e02f..003f792 100644
+--- a/src/dxvk/dxvk_adapter.cpp
++++ b/src/dxvk/dxvk_adapter.cpp
+@@ -6,6 +6,7 @@
+ #include <algorithm>
+ #include <atomic>
+ #include <cerrno>
++#include <chrono>
+ #include <fcntl.h>
+ #include <map>
+ #include <sstream>
+@@ -34,6 +35,78 @@ namespace dxvk {
+   static constexpr const char* g_maliTraceDirectory = "/storage/emulated/0/Prototype/logs";
+   static constexpr const char* g_maliTraceFile = "/storage/emulated/0/Prototype/logs/pipeline_trace.log";
+   static std::atomic<uint64_t> g_maliTraceSequence = { 0 };
++  static std::atomic<bool> g_pipelineCompileSerialized = { false };
++
++  // Lightweight driver-boundary diagnostics. Unlike PROTODROID_PIPELINE_TRACE, this never inspects shader blobs,
++  // writes per-pipeline files or changes pipeline state. Non-Mali drivers are timed without serialization.
++  struct PipelineTimingStats {
++    std::atomic<uint64_t> calls = { 0 };
++    std::atomic<uint64_t> pipelines = { 0 };
++    std::atomic<uint64_t> errors = { 0 };
++    std::atomic<uint64_t> waitNs = { 0 };
++    std::atomic<uint64_t> driverNs = { 0 };
++    std::atomic<uint64_t> maxWaitNs = { 0 };
++    std::atomic<uint64_t> maxDriverNs = { 0 };
++  };
++
++  static PipelineTimingStats g_pipelineTiming[2];
++  static std::atomic<int64_t> g_pipelineNextLogNs = { 0 };
++
++  static bool pipelineTimingEnabled() {
++    static const bool enabled = env::getEnvVar("PROTODROID_PIPELINE_TIMING") == "1";
++    return enabled;
++  }
++
++  static int64_t pipelineNowNs() {
++    return std::chrono::duration_cast<std::chrono::nanoseconds>(
++      std::chrono::steady_clock::now().time_since_epoch()).count();
++  }
++
++  static void pipelineMax(std::atomic<uint64_t>& target, uint64_t value) {
++    for (uint64_t old = target.load(std::memory_order_relaxed);
++         value > old && !target.compare_exchange_weak(old, value, std::memory_order_relaxed); ) { }
++  }
++
++  static std::string pipelineTakeStats(PipelineTimingStats& stats) {
++    const uint64_t calls = stats.calls.exchange(0, std::memory_order_relaxed);
++    const uint64_t pipelines = stats.pipelines.exchange(0, std::memory_order_relaxed);
++    const uint64_t errors = stats.errors.exchange(0, std::memory_order_relaxed);
++    const uint64_t waitNs = stats.waitNs.exchange(0, std::memory_order_relaxed);
++    const uint64_t driverNs = stats.driverNs.exchange(0, std::memory_order_relaxed);
++    const uint64_t maxWaitNs = stats.maxWaitNs.exchange(0, std::memory_order_relaxed);
++    const uint64_t maxDriverNs = stats.maxDriverNs.exchange(0, std::memory_order_relaxed);
++    return str::format(
++      "calls=", calls, " requested=", pipelines, " errors=", errors,
++      " wait_avg=", calls ? double(waitNs) / double(calls) / 1.0e6 : 0.0,
++      " wait_max=", double(maxWaitNs) / 1.0e6,
++      " driver_avg=", calls ? double(driverNs) / double(calls) / 1.0e6 : 0.0,
++      " driver_max=", double(maxDriverNs) / 1.0e6, " ms");
++  }
++
++  static void recordPipelineTiming(uint32_t kind, uint32_t pipelineCount, VkResult result,
++                                   int64_t waitNs, int64_t driverNs) {
++    PipelineTimingStats& stats = g_pipelineTiming[kind];
++    stats.calls += 1;
++    stats.pipelines += pipelineCount;
++    if (result != VK_SUCCESS && result != VK_PIPELINE_COMPILE_REQUIRED_EXT)
++      stats.errors += 1;
++    stats.waitNs += uint64_t(std::max(waitNs, int64_t(0)));
++    stats.driverNs += uint64_t(std::max(driverNs, int64_t(0)));
++    pipelineMax(stats.maxWaitNs, uint64_t(std::max(waitNs, int64_t(0))));
++    pipelineMax(stats.maxDriverNs, uint64_t(std::max(driverNs, int64_t(0))));
++
++    // At most one active-compilation summary every five seconds. Counter snapshots are approximate under concurrent
++    // calls by design; no lock is introduced merely to make diagnostic numbers look tidier.
++    const int64_t now = pipelineNowNs();
++    int64_t next = g_pipelineNextLogNs.load(std::memory_order_relaxed);
++    while (now >= next) {
++      if (g_pipelineNextLogNs.compare_exchange_weak(next, now + 5000000000ll, std::memory_order_relaxed)) {
++        Logger::info(str::format("DXVK pipeline timing: graphics ", pipelineTakeStats(g_pipelineTiming[0]),
++                                 "; compute ", pipelineTakeStats(g_pipelineTiming[1])));
++        break;
++      }
++    }
++  }
+ 
+   static bool maliPipelineTraceEnabled() {
+     // The native launcher maps protodroid.ini pipeline_trace = 1 to this
+@@ -457,38 +530,63 @@ namespace dxvk {
+     maliSyncTraceDirectory();
+   }
+ 
+-  static VKAPI_ATTR VkResult VKAPI_CALL serializedCreateGraphicsPipelines(
++  static VKAPI_ATTR VkResult VKAPI_CALL diagnosticCreateGraphicsPipelines(
+           VkDevice                        device,
+           VkPipelineCache                 pipelineCache,
+           uint32_t                        createInfoCount,
+     const VkGraphicsPipelineCreateInfo*   pCreateInfos,
+     const VkAllocationCallbacks*          pAllocator,
+           VkPipeline*                     pPipelines) {
+-    std::lock_guard<std::mutex> lock(g_pipelineCompileMutex);
+-
+-    // Keep the trace and raw shader dumps inside the same lock as the real
+-    // driver call. On the crashing path createInfoCount is one, so the last
+-    // fsynced entry and last_vs/last_fs exactly describe the call that faults.
+-    if (maliPipelineTraceEnabled() && pCreateInfos && createInfoCount) {
++    const bool timing = pipelineTimingEnabled();
++    const bool serialize = g_pipelineCompileSerialized.load(std::memory_order_relaxed);
++    const int64_t callStart = timing ? pipelineNowNs() : 0;
++    std::unique_lock<std::mutex> pipelineLock(g_pipelineCompileMutex, std::defer_lock);
++    if (serialize)
++      pipelineLock.lock();
++    const int64_t lockEnd = timing ? pipelineNowNs() : 0;
++
++    // Keep the optional heavy trace and raw shader dumps inside the Mali serialization lock. Non-Mali devices did
++    // not have this trace before lightweight timing was added and must not unexpectedly pay its fsync cost.
++    if (serialize && maliPipelineTraceEnabled() && pCreateInfos && createInfoCount) {
+       uint64_t sequence = g_maliTraceSequence.fetch_add(createInfoCount);
+       for (uint32_t i = 0; i < createInfoCount; i++)
+         maliTraceGraphicsPipeline(pCreateInfos[i], sequence + i, createInfoCount == 1);
+     }
+ 
+-    return g_createGraphicsPipelines(device, pipelineCache,
++    const int64_t driverStart = timing ? pipelineNowNs() : 0;
++    VkResult result = g_createGraphicsPipelines(device, pipelineCache,
+       createInfoCount, pCreateInfos, pAllocator, pPipelines);
++    const int64_t driverEnd = timing ? pipelineNowNs() : 0;
++    if (serialize)
++      pipelineLock.unlock();
++    if (timing)
++      recordPipelineTiming(0, createInfoCount, result, lockEnd - callStart, driverEnd - driverStart);
++    return result;
+   }
+ 
+-  static VKAPI_ATTR VkResult VKAPI_CALL serializedCreateComputePipelines(
++  static VKAPI_ATTR VkResult VKAPI_CALL diagnosticCreateComputePipelines(
+           VkDevice                        device,
+           VkPipelineCache                 pipelineCache,
+           uint32_t                        createInfoCount,
+     const VkComputePipelineCreateInfo*    pCreateInfos,
+     const VkAllocationCallbacks*          pAllocator,
+           VkPipeline*                     pPipelines) {
+-    std::lock_guard<std::mutex> lock(g_pipelineCompileMutex);
+-    return g_createComputePipelines(device, pipelineCache,
++    const bool timing = pipelineTimingEnabled();
++    const bool serialize = g_pipelineCompileSerialized.load(std::memory_order_relaxed);
++    const int64_t callStart = timing ? pipelineNowNs() : 0;
++    std::unique_lock<std::mutex> pipelineLock(g_pipelineCompileMutex, std::defer_lock);
++    if (serialize)
++      pipelineLock.lock();
++    const int64_t lockEnd = timing ? pipelineNowNs() : 0;
++    const int64_t driverStart = timing ? pipelineNowNs() : 0;
++    VkResult result = g_createComputePipelines(device, pipelineCache,
+       createInfoCount, pCreateInfos, pAllocator, pPipelines);
++    const int64_t driverEnd = timing ? pipelineNowNs() : 0;
++    if (serialize)
++      pipelineLock.unlock();
++    if (timing)
++      recordPipelineTiming(1, createInfoCount, result, lockEnd - callStart, driverEnd - driverStart);
++    return result;
+   }
+ 
+   static bool aliasVulkan12Commands(const Rc<vk::DeviceFn>& vkd, bool maintenance4) {
+@@ -1234,13 +1332,18 @@ namespace dxvk {
+       Logger::info("DXVK: Vulkan 1.2 command aliases resolved successfully");
+     }
+ 
+-    // Match the ARM vendor rather than a device-name string. The lock and
+-    // diagnostics cover Mali-G720 without assuming a device-name substring.
+-    if (m_deviceInfo.core.properties.vendorID == 0x13B5) {
++    // Match the ARM vendor rather than a device-name string. Mali retains its established serialization lock;
++    // lightweight timing on other vendors only wraps the call and never serializes their compiler workers.
++    const bool serializePipelines = m_deviceInfo.core.properties.vendorID == 0x13B5;
++    const bool timePipelines = pipelineTimingEnabled();
++    g_pipelineCompileSerialized.store(serializePipelines, std::memory_order_relaxed);
++    if (serializePipelines || timePipelines) {
+       g_createGraphicsPipelines = vkd->vkCreateGraphicsPipelines;
+       g_createComputePipelines  = vkd->vkCreateComputePipelines;
+-      vkd->vkCreateGraphicsPipelines = &serializedCreateGraphicsPipelines;
+-      vkd->vkCreateComputePipelines  = &serializedCreateComputePipelines;
++      vkd->vkCreateGraphicsPipelines = &diagnosticCreateGraphicsPipelines;
++      vkd->vkCreateComputePipelines  = &diagnosticCreateComputePipelines;
++    }
++    if (serializePipelines) {
+       Logger::info("DXVK: Serializing Vulkan pipeline compilation on ARM");
+       if (maliPipelineTraceEnabled()) {
+         Logger::info("DXVK: ARM pipeline trace: /storage/emulated/0/Prototype/logs/pipeline_trace.log");
+@@ -1248,6 +1351,10 @@ namespace dxvk {
+         Logger::info("DXVK: ARM pipeline trace disabled; set PROTODROID_PIPELINE_TRACE=1 or pipeline_trace = 1 to enable");
+       }
+     }
++    if (timePipelines) {
++      Logger::info(str::format("DXVK: Lightweight pipeline timing enabled; serialization=",
++                               serializePipelines ? "on" : "off"));
++    }
+ #endif
+ 
+     DxvkDeviceQueueSet queues = { };
+diff --git a/src/util/log/log.cpp b/src/util/log/log.cpp
+index 76f7f7f..b1837cc 100644
+--- a/src/util/log/log.cpp
++++ b/src/util/log/log.cpp
+@@ -4,6 +4,12 @@
+ 
+ #include "../util_env.h"
+ 
++#ifdef __ANDROID__
++#include <chrono>
++#include <iomanip>
++#include <unistd.h>
++#endif
++
+ namespace dxvk {
+   
+   Logger::Logger(const std::string& fileName)
+@@ -72,6 +78,15 @@ namespace dxvk {
+ 
+       while (std::getline(stream, line, '\n')) {
+         std::stringstream outstream;
++#ifdef __ANDROID__
++        static const bool timestamps = env::getEnvVar("DXVK_LOG_TIMESTAMPS") == "1";
++        if (timestamps) {
++          const double monotonicSeconds = std::chrono::duration<double>(
++            std::chrono::steady_clock::now().time_since_epoch()).count();
++          outstream << "[mono=" << std::fixed << std::setprecision(3) << monotonicSeconds
++                    << " tid=" << gettid() << "] ";
++        }
++#endif
+         outstream << prefix << line << std::endl;
+ 
+         std::string adjusted = outstream.str();

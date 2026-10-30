@@ -58,9 +58,12 @@ struct TextureTiming {
     uint64_t calls = 0;
     uint64_t total_ns = 0;
     uint64_t max_ns = 0;
+    std::array<uint64_t, 3> over{};  // >10, >50 and >100 ms
 };
 TextureTiming g_decode_timing, g_create_timing, g_upload_timing;
+TimingWindow g_present_timing;
 std::mutex g_texture_timing_mutex;
+std::mutex g_present_timing_mutex;
 
 void RecordTextureTiming(TextureTiming& timing, std::chrono::steady_clock::duration elapsed) {
     const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
@@ -68,6 +71,16 @@ void RecordTextureTiming(TextureTiming& timing, std::chrono::steady_clock::durat
     ++timing.calls;
     timing.total_ns += ns;
     timing.max_ns = std::max(timing.max_ns, ns);
+    static constexpr uint64_t kThresholds[] = {10000000ull, 50000000ull, 100000000ull};
+    for (size_t i = 0; i < timing.over.size(); ++i)
+        if (ns > kThresholds[i]) ++timing.over[i];
+}
+
+void RecordPresentTiming(int64_t at_ns, int64_t duration_ns) {
+    if (!PresentDetailedEnabled()) return;
+    thread_local const int tid = int(gettid());
+    std::lock_guard<std::mutex> lock(g_present_timing_mutex);
+    g_present_timing.Add(at_ns, duration_ns, tid);
 }
 
 template <typename Upload>
@@ -596,8 +609,10 @@ void WriteMode(uint32_t out, const D3DDISPLAYMODE& m) {
 
 // ---- Direct3DCreate9 ----
 void x_Direct3DCreate9(Ctx* c) {
+    const int64_t start_ns = MonotonicNanos();
     IDirect3D9* d3d = Direct3DCreate9(Arg(c, 0));
-    Log("Direct3DCreate9(%u) -> %p", Arg(c, 0), static_cast<void*>(d3d));
+    Log("Direct3DCreate9(%u) -> %p in %.3f ms", Arg(c, 0), static_cast<void*>(d3d),
+        double(MonotonicNanos() - start_ns) / 1e6);
     // GPUs without BC formats (Mali, PowerVR) get DXT textures decoded on the CPU; decode_dxt=1/0 forces it.
     if (d3d) {
         bool bc = SUCCEEDED(d3d->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, 0, D3DRTYPE_TEXTURE,
@@ -620,6 +635,7 @@ void x_Direct3DCreate9(Ctx* c) {
 
 std::string TakeTextureTimingStats() {
     uint64_t calls[3], total[3], maximum[3];
+    std::array<uint64_t, 3> over[3];
     TextureTiming* timings[] = {&g_decode_timing, &g_create_timing, &g_upload_timing};
     {
         std::lock_guard<std::mutex> lock(g_texture_timing_mutex);
@@ -627,15 +643,32 @@ std::string TakeTextureTimingStats() {
             calls[i] = std::exchange(timings[i]->calls, 0);
             total[i] = std::exchange(timings[i]->total_ns, 0);
             maximum[i] = std::exchange(timings[i]->max_ns, 0);
+            over[i] = timings[i]->over;
+            timings[i]->over.fill(0);
         }
     }
-    char out[320];
+    char out[640];
     snprintf(out, sizeof(out),
-             "dxt %llu calls / %.2f total / %.2f max; create %llu / %.2f / %.2f; upload %llu / %.2f / %.2f",
-             (unsigned long long)calls[0], total[0] / 1.0e6, maximum[0] / 1.0e6,
-             (unsigned long long)calls[1], total[1] / 1.0e6, maximum[1] / 1.0e6,
-             (unsigned long long)calls[2], total[2] / 1.0e6, maximum[2] / 1.0e6);
+             "dxt n=%llu total=%.2fms avg=%.2f max=%.2f gt10/50/100=%llu/%llu/%llu; "
+             "create n=%llu total=%.2f avg=%.2f max=%.2f gt10/50/100=%llu/%llu/%llu; "
+             "upload n=%llu total=%.2f avg=%.2f max=%.2f gt10/50/100=%llu/%llu/%llu",
+             (unsigned long long)calls[0], total[0] / 1.0e6, calls[0] ? total[0] / double(calls[0]) / 1.0e6 : 0.0,
+             maximum[0] / 1.0e6, (unsigned long long)over[0][0], (unsigned long long)over[0][1],
+             (unsigned long long)over[0][2], (unsigned long long)calls[1], total[1] / 1.0e6,
+             calls[1] ? total[1] / double(calls[1]) / 1.0e6 : 0.0, maximum[1] / 1.0e6,
+             (unsigned long long)over[1][0], (unsigned long long)over[1][1], (unsigned long long)over[1][2],
+             (unsigned long long)calls[2], total[2] / 1.0e6,
+             calls[2] ? total[2] / double(calls[2]) / 1.0e6 : 0.0, maximum[2] / 1.0e6,
+             (unsigned long long)over[2][0], (unsigned long long)over[2][1], (unsigned long long)over[2][2]);
     return out;
+}
+
+// Present() wall time is diagnostic only: it can include FIFO acquisition/vsync waits, so it is deliberately not
+// substituted for ADPF's actual-work duration. Comparing it with the Present-to-Present interval identifies pacing
+// stalls without changing the renderer or the performance-hint contract.
+TimingWindowSnapshot TakePresentTimingWindow() {
+    std::lock_guard<std::mutex> lock(g_present_timing_mutex);
+    return g_present_timing.Take();
 }
 
 // ---------------- manual methods ----------------
@@ -694,6 +727,7 @@ M(IDirect3DDevice9, GetDisplayMode) {
 bool WaitForWindow(int seconds);  // below, with the surface state
 
 M(IDirect3D9, CreateDevice) {
+    const int64_t create_device_start_ns = MonotonicNanos();
     D3DPRESENT_PARAMETERS pp = ToHost(Arg(c, 5));
     IDirect3DDevice9* dev = nullptr;
     // The Vulkan surface needs the window on screen: if the player switched to another app during startup, the
@@ -714,9 +748,9 @@ M(IDirect3D9, CreateDevice) {
         }
         break;  // failed with the window on screen: a real driver problem
     }
-    Log("CreateDevice %ux%u fmt %u windowed %u msaa %u/%u interval %u -> %08x", pp.BackBufferWidth,
+    Log("CreateDevice %ux%u fmt %u windowed %u msaa %u/%u interval %u -> %08x in %.3f ms", pp.BackBufferWidth,
         pp.BackBufferHeight, pp.BackBufferFormat, pp.Windowed, pp.MultiSampleType, pp.MultiSampleQuality,
-        pp.PresentationInterval, uint32_t(hr));
+        pp.PresentationInterval, uint32_t(hr), double(MonotonicNanos() - create_device_start_ns) / 1e6);
     // The engine does not check: without a device it crashes on the next call. The DXVK log says why it failed.
     if (FAILED(hr)) {
         StartupFailure("The graphics driver could not create the D3D9 device (DXVK on Vulkan). "
@@ -751,13 +785,15 @@ M(IDirect3DDevice9, CreateAdditionalSwapChain) {
     Return(c, uint32_t(hr), 3);
 }
 M(IDirect3DDevice9, Reset) {
+    const int64_t reset_start_ns = MonotonicNanos();
     D3DPRESENT_PARAMETERS pp = ToHost(Arg(c, 1));
     // Matching width/height/format alone is not enough to skip Reset: D3D9 also resets device state and default-pool
     // resources. ToHost keeps the Android interval stable, avoiding the observed cutscene presentation-mode change.
     DrainGraves(true);
     HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->Reset(&pp);
-    Log("Reset %ux%u msaa %u/%u interval %u -> %08x", pp.BackBufferWidth, pp.BackBufferHeight, pp.MultiSampleType,
-        pp.MultiSampleQuality, pp.PresentationInterval, uint32_t(hr));
+    Log("Reset %ux%u msaa %u/%u interval %u -> %08x in %.3f ms", pp.BackBufferWidth, pp.BackBufferHeight,
+        pp.MultiSampleType, pp.MultiSampleQuality, pp.PresentationInterval, uint32_t(hr),
+        double(MonotonicNanos() - reset_start_ns) / 1e6);
     if (SUCCEEDED(hr)) {
         if (OverrideModes()) SetClientSize(int(pp.BackBufferWidth), int(pp.BackBufferHeight));
     }
@@ -831,7 +867,10 @@ HRESULT GuardedPresent(F present) {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return D3D_OK;
     }
+    const int64_t present_start_ns = MonotonicNanos();
     HRESULT hr = present();
+    const int64_t present_end_ns = MonotonicNanos();
+    RecordPresentTiming(present_end_ns, present_end_ns - present_start_ns);
     if (SUCCEEDED(hr)) {
         // Both IDirect3DDevice9 and IDirect3DSwapChain9 presents converge here. A real Present contributes one
         // complete end-to-end interval; empty guest pump iterations and skipped surface-less presents do not.

@@ -60,6 +60,8 @@ void RegisterGuestThread();
 // Calls the recompiled function at `va` with stdcall/cdecl arguments on the current guest thread's stack; returns
 // eax (edx in *edx_out when given). ecx is passed for thiscall.
 uint32_t GuestCall(uint32_t va, std::initializer_list<uint32_t> args, uint32_t ecx = 0, uint32_t* edx_out = nullptr);
+// Variant for a native hook entered from recompiled code: nests the guest call below the supplied active context.
+uint32_t GuestCallNested(Ctx* outer, uint32_t va, std::initializer_list<uint32_t> args, uint32_t ecx = 0);
 
 // ---- imports (imports.cpp) ----
 // An import handler runs with the guest return address at [esp] and the arguments above it.
@@ -130,5 +132,15 @@ void PerfHintStart(int fps_target);
 void PerfHintAddThread(int tid);
 void PerfHintTarget(int fps_target);
 void PerfHintFrame(int64_t work_ns);
+struct PerfHintSnapshot {
+    bool session = false;
+    int64_t target_ns = 0;
+    size_t threads = 0;
+    uint64_t reports = 0;
+    uint64_t report_errors = 0;
+    uint64_t target_updates = 0;
+    uint64_t target_errors = 0;
+};
+PerfHintSnapshot GetPerfHintStats();
 
 }  // namespace native

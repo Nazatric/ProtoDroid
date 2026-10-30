@@ -91,7 +91,7 @@ std::string HostPath(const char* win_path) {
     std::string host;
     std::string game = kGuestGameDir;
     if (!SaveDirectory().empty() && IsGuestSavePath(full)) {
-        // Save/profile files live directly in the user-managed shared Prototype folder when all-files access is
+        // Save/profile files live in the user-managed shared Prototype/Saves folder when all-files access is
         // available. The same case-folding below sees files added externally and never consults the legacy backup.
         host = SaveDirectory();
         rest = full.substr(strlen(kGuestSaveDir));

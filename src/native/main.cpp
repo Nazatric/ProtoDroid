@@ -31,8 +31,10 @@
 #include <thread>
 #include <vector>
 
+#include "diagnostics.h"
 #include "guest.h"
 #include "present_stats.h"
+#include "timing_window.h"
 #include "save_path.h"
 #include "state_cache.h"
 #include "win.h"
@@ -49,13 +51,20 @@ FILE* g_log_mirror = nullptr;  // Android 11+: /storage/emulated/0/Prototype/log
 std::string g_mirror_dir;
 std::string g_mirror_log_path;
 std::string g_mirror_prev_path;
+std::mutex g_mirror_copy_mutex;
+std::thread g_mirror_thread;
+std::atomic<bool> g_mirror_copy_active{false};
 }  // namespace
 void MirrorCopyDXVKLogs();
+void MirrorCopyDXVKLogsAsync();
+void WaitForMirrorCopy();
 
 // Forward for mirroring helper
 
 void Log(const char* fmt, ...) {
     std::lock_guard<std::mutex> lock(g_log_mutex);
+    const double monotonic_seconds = double(MonotonicNanos()) / 1e9;
+    const int tid = int(gettid());
     va_list ap;
     va_start(ap, fmt);
 #ifdef __ANDROID__
@@ -66,6 +75,7 @@ void Log(const char* fmt, ...) {
 #endif
     va_end(ap);
     if (g_log) {
+        fprintf(g_log, "[mono=%.3f tid=%d] ", monotonic_seconds, tid);
         va_start(ap, fmt);
         vfprintf(g_log, fmt, ap);
         va_end(ap);
@@ -73,6 +83,7 @@ void Log(const char* fmt, ...) {
         fflush(g_log);
     }
     if (g_log_mirror) {
+        fprintf(g_log_mirror, "[mono=%.3f tid=%d] ", monotonic_seconds, tid);
         va_start(ap, fmt);
         vfprintf(g_log_mirror, fmt, ap);
         va_end(ap);
@@ -259,6 +270,8 @@ static void CopyFile(const std::string& src, const std::string& dst) {
 // symbol. CopyFile and the mirror state remain implementation details of the anonymous namespace above.
 void MirrorCopyDXVKLogs() {
     if (g_mirror_dir.empty() || !g_data_dir) return;
+    // Periodic work runs on a helper thread; shutdown and crash reports may still request a synchronous copy.
+    std::lock_guard<std::mutex> copy_lock(g_mirror_copy_mutex);
     std::string base_log = std::string(g_data_dir) + "/app_process64_d3d9.log";
     std::string mirror_dxvk = g_mirror_dir + "/app_process64_d3d9.log";
     CopyFile(base_log, mirror_dxvk);
@@ -271,9 +284,27 @@ void MirrorCopyDXVKLogs() {
     native::BackupStateCache(base_cache, mirror_cache);
 }
 
-std::string TakeIoStats();           // kernel32.cpp
-std::string ArenaUsage();            // memory.cpp
-std::string TakeTextureTimingStats();  // d3d9.cpp
+void MirrorCopyDXVKLogsAsync() {
+    if (g_mirror_dir.empty() || !g_data_dir || g_mirror_copy_active.load(std::memory_order_acquire)) return;
+    if (g_mirror_thread.joinable()) g_mirror_thread.join();
+    bool expected = false;
+    if (!g_mirror_copy_active.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) return;
+    try {
+        g_mirror_thread = std::thread([] {
+            MirrorCopyDXVKLogs();
+            g_mirror_copy_active.store(false, std::memory_order_release);
+        });
+    } catch (...) {
+        g_mirror_copy_active.store(false, std::memory_order_release);
+        // Thread creation is only an optimization fallback; never skip the cache backup itself.
+        MirrorCopyDXVKLogs();
+    }
+}
+
+void WaitForMirrorCopy() {
+    if (g_mirror_thread.joinable()) g_mirror_thread.join();
+    g_mirror_copy_active.store(false, std::memory_order_release);
+}
 
 void Fatal(const char* fmt, ...) {
     char buf[1024];
@@ -291,6 +322,9 @@ void Fatal(const char* fmt, ...) {
 [[noreturn]] void StartupFailure(const char* what) {
     Log("startup failed: %s", what);
     VulkanDriverAbandon();
+    DiagnosticsStop();
+    WaitForMirrorCopy();
+    MirrorCopyDXVKLogs();
     std::string msg = std::string(what) + "\n\nDetails are in proto-native.log.";
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Prototype", msg.c_str(), nullptr);
     _exit(1);
@@ -494,12 +528,14 @@ int main(int argc, char** argv) {
     // Log game dir detection
     Log("game dir: %s", g_game_dir);
     Log("data dir: %s", g_data_dir ? g_data_dir : "(none)");
-    native::ConfigureSaveDirectory(base, native::kAndroidSharedSaveDir);
+    native::ConfigureSaveDirectory(base, native::kAndroidSharedSaveDir, native::kAndroidPreviousSharedSaveDir);
     Log("save dir: %s", native::HostPath(native::kGuestSaveDir).c_str());
 #endif
-    // DXVK's durable pipeline diagnostics are strictly opt-in. Export this
-    // before any DXVK device can be created; PROTODROID_PIPELINE_TRACE itself
-    // remains an equivalent direct environment override.
+    // Lightweight diagnostics add timestamps and aggregate pipeline timing only. The durable per-pipeline shader
+    // trace remains strictly opt-in and is never needed for an ordinary performance run.
+    const bool detailed_diagnostics = SettingInt("detailed_diagnostics", 1) != 0;
+    if (detailed_diagnostics) setenv("DXVK_LOG_TIMESTAMPS", "1", 0);
+    setenv("PROTODROID_PIPELINE_TIMING", SettingInt("pipeline_timing", detailed_diagnostics ? 1 : 0) ? "1" : "0", 0);
     if (SettingInt("pipeline_trace", 0) == 1) {
         setenv("PROTODROID_PIPELINE_TRACE", "1", 0);
         Log("DXVK pipeline trace enabled (pipeline_trace = 1)");
@@ -621,9 +657,13 @@ int main(int argc, char** argv) {
     }
 #endif
     InitClientSize(window_w, window_h);
+    DiagnosticsStart();
 
     std::string dll = std::string(g_game_dir) + "/prototypeenginef.dll";
-    if (!LoadImage(dll.c_str(), &g_engine, kEngineBase)) StartupFailure("Cannot load prototypeenginef.dll.");
+    const int64_t load_start_ns = MonotonicNanos();
+    const bool loaded = LoadImage(dll.c_str(), &g_engine, kEngineBase);
+    Log("timing: LoadImage %.3f ms (success=%u)", double(MonotonicNanos() - load_start_ns) / 1e6, loaded ? 1u : 0u);
+    if (!loaded) StartupFailure("Cannot load prototypeenginef.dll.");
     g_engine_lo = g_engine.base;
     g_engine_hi = g_engine.base + g_engine.size;
 
@@ -634,8 +674,9 @@ int main(int argc, char** argv) {
     if (!init || !service || !terminate || !focus) Fatal("engine exports missing");
 
     Log("DllMain(PROCESS_ATTACH)");
+    const int64_t dll_main_start_ns = MonotonicNanos();
     uint32_t ok = GuestCall(g_engine.entry, {g_engine.base, 1, 0});
-    Log("DllMain returned %u", ok);
+    Log("DllMain returned %u after %.3f ms", ok, double(MonotonicNanos() - dll_main_start_ns) / 1e6);
     if (!ok) StartupFailure("The engine's DllMain failed.");
 
     uint32_t hwnd = HostWindow();
@@ -644,8 +685,9 @@ int main(int argc, char** argv) {
     W32(params + 4, hwnd);
     W32(params + 8, hwnd);
     Log("EngineInitialize");
+    const int64_t initialize_start_ns = MonotonicNanos();
     uint32_t r = GuestCall(init, {params}) & 0xff;
-    Log("EngineInitialize returned %u", r);
+    Log("EngineInitialize returned %u after %.3f ms", r, double(MonotonicNanos() - initialize_start_ns) / 1e6);
     if (!r) StartupFailure("EngineInitialize failed (game files incomplete or not the Steam build 19788432?).");
 
     InitInput(FindExport(g_engine, "EngineKeyboardService"), FindExport(g_engine, "EngineMouseService"));
@@ -676,32 +718,24 @@ int main(int argc, char** argv) {
     g_fps_limit.store(fps_limit);
     PerfHintStart(fps_limit);
     using Clock = std::chrono::steady_clock;
-    Clock::time_point frame_start = Clock::now(), next_log = frame_start;
+    Clock::time_point frame_start = Clock::now();
     for (uint64_t frame = 0;; ++frame) {
         frames.store(frame, std::memory_order_relaxed);
         if (frame == 900) VulkanDriverConfirm();  // well past the intro movies: the driver survived startup
         // The limiter remains anchored to the engine loop. FPS, frame statistics, and ADPF are anchored only to real
         // D3D9 presents, so thousands of empty message-pump iterations cannot inflate them or skew CPU clocking.
         Clock::time_point now = Clock::now();
+        int64_t limiter_ns = -1;
         if (int limit = g_fps_limit.load(); limit > 0) {
+            const Clock::time_point limiter_start = now;
             Clock::time_point due = frame_start + std::chrono::microseconds(1000000 / limit);
             if (now < due) {
                 std::this_thread::sleep_until(due);
                 now = Clock::now();
             }
+            limiter_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - limiter_start).count();
         }
         frame_start = now;
-        if (now >= next_log) {
-            if (frame) {
-                const PresentStatsSnapshot present = GetPresentStats();
-                Log("perf: %.1f present fps, avg %.2f ms, p99 %.2f ms, max %.2f ms, %ld MiB resident; arena %s; io: %s",
-                    present.fps, present.average_ms, present.p99_ms, present.max_ms, ResidentMiB(),
-                    ArenaUsage().c_str(), TakeIoStats().c_str());
-                Log("texture timing (calls / total ms / max ms): %s", native::TakeTextureTimingStats().c_str());
-                native::MirrorCopyDXVKLogs();
-            }
-            next_log = now + std::chrono::seconds(30);
-        }
         for (const Tap& t : taps) {
             if (t.key == SDL_SCANCODE_UNKNOWN) continue;
             if (frame == t.frame) InjectKey(t.key, true);
@@ -709,6 +743,7 @@ int main(int argc, char** argv) {
         }
         if ((frame & (frame - 1)) == 0) Log("frame %llu", (unsigned long long)frame);
         bool quit = false;
+        const int64_t pump_start_ns = MonotonicNanos();
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT || e.type == SDL_APP_TERMINATING) {
@@ -718,6 +753,8 @@ int main(int argc, char** argv) {
                 // at its checkpoints, so there is nothing to lose by ending the process here.
                 Log("quit");
                 VulkanDriverAbandon();
+                native::DiagnosticsStop();
+                native::WaitForMirrorCopy();
                 native::MirrorCopyDXVKLogs();
                 _exit(0);
 #endif
@@ -729,12 +766,20 @@ int main(int argc, char** argv) {
                 ForwardInput(e);
             }
         }
+        const int64_t service_start_ns = MonotonicNanos();
         bool keep = (GuestCall(service, {quit ? 1u : 0u, focused ? 0u : 1u}) & 0xff) != 0;
+        const int64_t service_end_ns = MonotonicNanos();
         GuestCall(focus, {focused ? 1u : 0u});
+        const int64_t focus_end_ns = MonotonicNanos();
+        RecordEngineLoop(service_end_ns, service_end_ns - service_start_ns, service_start_ns - pump_start_ns, limiter_ns,
+                         focus_end_ns - service_end_ns);
         if (!keep) break;
     }
+    const int64_t terminate_start_ns = MonotonicNanos();
     GuestCall(terminate, {});
-    Log("EngineTerminate done");
+    Log("EngineTerminate done after %.3f ms", double(MonotonicNanos() - terminate_start_ns) / 1e6);
+    native::DiagnosticsStop();
+    native::WaitForMirrorCopy();
     native::MirrorCopyDXVKLogs();
     return 0;
 }

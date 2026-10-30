@@ -9,6 +9,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -18,6 +19,7 @@
 #include <vector>
 
 #include "win.h"
+#include "cpu_affinity.h"
 
 namespace native {
 
@@ -70,19 +72,99 @@ void CloseKernelHandle(uint32_t handle) {
 void SetLastError(uint32_t code) { tl_last_error = code; }
 uint32_t GetLastError() { return tl_last_error; }
 
-// Read statistics for the perf line: the engine streams music and speech from the archives with synchronous reads
-// on its I/O thread, so slow storage (shared storage goes through FUSE) shows up as audio dropouts.
+// Storage diagnostics: the engine streams assets, music and speech through synchronous Win32 calls. Normal calls
+// update relaxed atomics only. The event list is locked and allocates only after an operation has already taken >50 ms.
+struct IoEvent {
+    bool write = false;
+    uint64_t microseconds = 0;
+    uint64_t bytes = 0;
+    int64_t offset = -1;
+    int tid = 0;
+    std::string path;
+};
 struct IoStats {
-    std::atomic<uint64_t> reads{0}, bytes{0}, slow{0}, max_us{0};
+    std::atomic<uint64_t> reads{0}, read_bytes{0}, read_ns{0}, read_errors{0};
+    std::atomic<uint64_t> writes{0}, write_bytes{0}, write_ns{0}, write_errors{0};
+    std::atomic<uint64_t> opens{0}, open_errors{0}, over10{0}, over50{0}, over100{0};
+    std::atomic<uint64_t> max_read_us{0}, max_write_us{0};
+    std::mutex slow_mutex;
+    std::vector<IoEvent> slow_events;
+    uint64_t slow_events_dropped = 0;
 } g_io;
 
-// "N reads, M MiB, S over 50 ms, longest X ms" since the last call.
+void RecordMax(std::atomic<uint64_t>& target, uint64_t value) {
+    for (uint64_t old = target.load(std::memory_order_relaxed);
+         value > old && !target.compare_exchange_weak(old, value, std::memory_order_relaxed);) {
+    }
+}
+
+void RecordSlowIo(bool write, const std::string& path, uint64_t bytes, int64_t offset, uint64_t us) {
+    std::lock_guard<std::mutex> lock(g_io.slow_mutex);
+    try {
+        if (g_io.slow_events.size() < 16) {
+            g_io.slow_events.push_back({write, us, bytes, offset, int(gettid()), path});
+        } else {
+            ++g_io.slow_events_dropped;
+        }
+    } catch (...) {
+        // Diagnostics must never turn an already-slow game I/O operation into a fatal allocation failure.
+        ++g_io.slow_events_dropped;
+    }
+}
+
 std::string TakeIoStats() {
-    char line[128];
-    snprintf(line, sizeof(line), "%llu reads, %llu MiB, %llu over 50 ms, longest %.1f ms",
-             (unsigned long long)g_io.reads.exchange(0), (unsigned long long)(g_io.bytes.exchange(0) >> 20),
-             (unsigned long long)g_io.slow.exchange(0), double(g_io.max_us.exchange(0)) / 1000.0);
+    const uint64_t reads = g_io.reads.exchange(0, std::memory_order_relaxed);
+    const uint64_t read_bytes = g_io.read_bytes.exchange(0, std::memory_order_relaxed);
+    const uint64_t read_ns = g_io.read_ns.exchange(0, std::memory_order_relaxed);
+    const uint64_t writes = g_io.writes.exchange(0, std::memory_order_relaxed);
+    const uint64_t write_bytes = g_io.write_bytes.exchange(0, std::memory_order_relaxed);
+    const uint64_t write_ns = g_io.write_ns.exchange(0, std::memory_order_relaxed);
+    char line[640];
+    snprintf(line, sizeof(line),
+             "opens=%llu open_errors=%llu; reads=%llu bytes=%llu (%.3f MiB) total=%.2fms avg=%.3fms max=%.2fms "
+             "errors=%llu; writes=%llu bytes=%llu total=%.2fms avg=%.3fms max=%.2fms errors=%llu; "
+             "io_gt10/50/100ms=%llu/%llu/%llu",
+             (unsigned long long)g_io.opens.exchange(0, std::memory_order_relaxed),
+             (unsigned long long)g_io.open_errors.exchange(0, std::memory_order_relaxed),
+             (unsigned long long)reads, (unsigned long long)read_bytes, double(read_bytes) / 1048576.0,
+             read_ns / 1.0e6, reads ? read_ns / double(reads) / 1.0e6 : 0.0,
+             double(g_io.max_read_us.exchange(0, std::memory_order_relaxed)) / 1000.0,
+             (unsigned long long)g_io.read_errors.exchange(0, std::memory_order_relaxed), (unsigned long long)writes,
+             (unsigned long long)write_bytes, write_ns / 1.0e6, writes ? write_ns / double(writes) / 1.0e6 : 0.0,
+             double(g_io.max_write_us.exchange(0, std::memory_order_relaxed)) / 1000.0,
+             (unsigned long long)g_io.write_errors.exchange(0, std::memory_order_relaxed),
+             (unsigned long long)g_io.over10.exchange(0, std::memory_order_relaxed),
+             (unsigned long long)g_io.over50.exchange(0, std::memory_order_relaxed),
+             (unsigned long long)g_io.over100.exchange(0, std::memory_order_relaxed));
     return line;
+}
+
+std::string TakeIoEvents() {
+    std::vector<IoEvent> events;
+    uint64_t dropped = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_io.slow_mutex);
+        events.swap(g_io.slow_events);
+        dropped = g_io.slow_events_dropped;
+        g_io.slow_events_dropped = 0;
+    }
+    std::string out;
+    for (const IoEvent& event : events) {
+        char line[256];
+        snprintf(line, sizeof(line), "%s %.2fms bytes=%llu offset=%lld tid=%d path=",
+                 event.write ? "write" : "read", double(event.microseconds) / 1000.0,
+                 (unsigned long long)event.bytes, (long long)event.offset, event.tid);
+        if (!out.empty()) out += " | ";
+        out += line;
+        out += event.path;
+    }
+    if (dropped) {
+        char line[80];
+        snprintf(line, sizeof(line), "%s%llu additional slow event(s) not retained", out.empty() ? "" : " | ",
+                 (unsigned long long)dropped);
+        out += line;
+    }
+    return out;
 }
 
 namespace {
@@ -165,6 +247,7 @@ struct File : KObject {
         if (fd >= 0) close(fd);
     }
     int fd = -1;
+    std::string path;  // retained for rare slow-I/O diagnostics, not accessed on the normal read path
 };
 
 struct Find : KObject {
@@ -522,9 +605,27 @@ K(SetThreadPriority) {
     Return(c, 1, 2);
 }
 K(SetThreadAffinityMask) { Return(c, 1, 2); }
+
+uint32_t HostProcessAffinityMask() {
+    cpu_set_t cpus;
+    if (sched_getaffinity(0, sizeof(cpus), &cpus) == 0) {
+        const uint32_t mask = LowCpuMask([&cpus](uint32_t cpu) { return CPU_ISSET(cpu, &cpus); });
+        if (mask) return mask;
+    }
+    // If the kernel interface is unavailable or exposes only CPUs above the 32-bit Windows limit, retain a
+    // conservative nonzero fallback. The engine counts these bits when choosing its worker-pool size.
+    return FallbackCpuMask(uint32_t(std::max(sysconf(_SC_NPROCESSORS_ONLN), 1l)));
+}
+
 K(GetProcessAffinityMask) {
-    W32(Arg(c, 1), 0xf);
-    W32(Arg(c, 2), 0xf);
+    static const uint32_t mask = [] {
+        const uint32_t value = HostProcessAffinityMask();
+        Log("process affinity: reporting mask %08x (%u low CPUs) to the engine", value,
+            unsigned(__builtin_popcount(value)));
+        return value;
+    }();
+    W32(Arg(c, 1), mask);
+    W32(Arg(c, 2), mask);
     Return(c, 1, 3);
 }
 K(GetExitCodeThread) {
@@ -712,6 +813,8 @@ K(CreateFileA) {
         mkdir(dir.c_str(), 0755);
     }
     int fd = open(host.c_str(), flags | O_CLOEXEC, 0644);
+    g_io.opens.fetch_add(1, std::memory_order_relaxed);
+    if (fd < 0) g_io.open_errors.fetch_add(1, std::memory_order_relaxed);
     static const bool trace = getenv("PROTODROID_TRACE_FILES") != nullptr;
     if (trace) Log("CreateFileA(%s, %x, disp %u) -> %s", name, access, disposition, fd < 0 ? strerror(errno) : "ok");
     if (fd < 0) {
@@ -721,6 +824,7 @@ K(CreateFileA) {
     }
     auto* f = new File();
     f->fd = fd;
+    f->path = host;
     SetLastError((disposition == 2 || disposition == 4) && existed ? ERROR_ALREADY_EXISTS : 0);
     Return(c, NewHandle(f), 7);
 }
@@ -745,22 +849,29 @@ K(ReadFile) {
     File* f = FileOf(Arg(c, 0));
     uint32_t buf = Arg(c, 1), n = Arg(c, 2), out = Arg(c, 3), ov = Arg(c, 4);
     if (!f) {
+        g_io.read_errors.fetch_add(1, std::memory_order_relaxed);
         SetLastError(ERROR_INVALID_HANDLE);
         Return(c, 0, 5);
         return;
     }
+    const int64_t offset = ov ? int64_t(uint64_t(R32(ov + 8)) | (uint64_t(R32(ov + 12)) << 32)) : -1;
     auto t0 = std::chrono::steady_clock::now();
-    ssize_t r = ov ? pread(f->fd, Ptr<void>(buf), n, off_t(R32(ov + 8)) | (off_t(R32(ov + 12)) << 32))
-                   : read(f->fd, Ptr<void>(buf), n);
-    uint64_t us = uint64_t(
-        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0).count());
+    ssize_t r = ov ? pread(f->fd, Ptr<void>(buf), n, off_t(offset)) : read(f->fd, Ptr<void>(buf), n);
+    const int io_error = r < 0 ? errno : 0;
+    const uint64_t ns = uint64_t(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count());
+    const uint64_t us = ns / 1000;
     g_io.reads.fetch_add(1, std::memory_order_relaxed);
-    if (r > 0) g_io.bytes.fetch_add(uint64_t(r), std::memory_order_relaxed);
-    if (us > 50000) g_io.slow.fetch_add(1, std::memory_order_relaxed);
-    for (uint64_t m = g_io.max_us.load(); us > m && !g_io.max_us.compare_exchange_weak(m, us);) {
-    }
+    g_io.read_ns.fetch_add(ns, std::memory_order_relaxed);
+    if (r > 0) g_io.read_bytes.fetch_add(uint64_t(r), std::memory_order_relaxed);
+    if (r < 0) g_io.read_errors.fetch_add(1, std::memory_order_relaxed);
+    if (us > 10000) g_io.over10.fetch_add(1, std::memory_order_relaxed);
+    if (us > 50000) g_io.over50.fetch_add(1, std::memory_order_relaxed);
+    if (us > 100000) g_io.over100.fetch_add(1, std::memory_order_relaxed);
+    RecordMax(g_io.max_read_us, us);
+    if (us > 50000) RecordSlowIo(false, f->path, r > 0 ? uint64_t(r) : 0, offset, us);
     if (r < 0) {
-        SetLastError(ErrnoToWin(errno));
+        SetLastError(ErrnoToWin(io_error));
         Return(c, 0, 5);
         return;
     }
@@ -772,14 +883,29 @@ K(WriteFile) {
     File* f = FileOf(Arg(c, 0));
     uint32_t buf = Arg(c, 1), n = Arg(c, 2), out = Arg(c, 3), ov = Arg(c, 4);
     if (!f) {
+        g_io.write_errors.fetch_add(1, std::memory_order_relaxed);
         SetLastError(ERROR_INVALID_HANDLE);
         Return(c, 0, 5);
         return;
     }
-    ssize_t r = ov ? pwrite(f->fd, Ptr<void>(buf), n, off_t(R32(ov + 8)) | (off_t(R32(ov + 12)) << 32))
-                   : write(f->fd, Ptr<void>(buf), n);
+    const int64_t offset = ov ? int64_t(uint64_t(R32(ov + 8)) | (uint64_t(R32(ov + 12)) << 32)) : -1;
+    auto t0 = std::chrono::steady_clock::now();
+    ssize_t r = ov ? pwrite(f->fd, Ptr<void>(buf), n, off_t(offset)) : write(f->fd, Ptr<void>(buf), n);
+    const int io_error = r < 0 ? errno : 0;
+    const uint64_t ns = uint64_t(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count());
+    const uint64_t us = ns / 1000;
+    g_io.writes.fetch_add(1, std::memory_order_relaxed);
+    g_io.write_ns.fetch_add(ns, std::memory_order_relaxed);
+    if (r > 0) g_io.write_bytes.fetch_add(uint64_t(r), std::memory_order_relaxed);
+    if (r < 0) g_io.write_errors.fetch_add(1, std::memory_order_relaxed);
+    if (us > 10000) g_io.over10.fetch_add(1, std::memory_order_relaxed);
+    if (us > 50000) g_io.over50.fetch_add(1, std::memory_order_relaxed);
+    if (us > 100000) g_io.over100.fetch_add(1, std::memory_order_relaxed);
+    RecordMax(g_io.max_write_us, us);
+    if (us > 50000) RecordSlowIo(true, f->path, r > 0 ? uint64_t(r) : 0, offset, us);
     if (r < 0) {
-        SetLastError(ErrnoToWin(errno));
+        SetLastError(ErrnoToWin(io_error));
         Return(c, 0, 5);
         return;
     }

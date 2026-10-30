@@ -64,6 +64,14 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/perf_hint_test
 
+      - name: Compile and run CPU affinity tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/cpu_affinity_test.cpp -o /tmp/cpu_affinity_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/cpu_affinity_test
+
       - name: Compile and run presented-frame statistics tests
         run: |
           set -euo pipefail
@@ -71,6 +79,14 @@ jobs:
           g++ $CXXFLAGS src/native/present_stats.cpp src/native/tests/present_stats_test.cpp -o /tmp/present_stats_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/present_stats_test
+
+      - name: Compile and run detailed diagnostics tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostics_test.cpp -o /tmp/diagnostics_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostics_test
 
       - name: Compile and run GPU profile and API negotiation tests
         run: |
@@ -93,8 +109,19 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/state_cache_test
 
+      - name: Compile and run GameDB video-setting tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/video_settings.cpp src/native/tests/video_settings_test.cpp -o /tmp/video_settings_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/video_settings_test
+
       - name: Test Android version increments
         run: python3 tools/test_bump_version.py
+
+      - name: Test APK signing configurations
+        run: android/test-signing.sh
 
       - name: Build minimal host FFmpeg
         run: |
@@ -148,6 +175,30 @@ jobs:
           g++ $CXXFLAGS src/native/d3d9_dxt.cpp src/native/tests/graphics_test.cpp -o /tmp/graphics_test_arm64
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test_arm64
+
+      - name: Compile and run native ARM64 GameDB video-setting tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/video_settings.cpp src/native/tests/video_settings_test.cpp -o /tmp/video_settings_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/video_settings_test_arm64
+
+      - name: Compile and run native ARM64 detailed diagnostics tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostics_test.cpp -o /tmp/diagnostics_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostics_test_arm64
+
+      - name: Compile and run native ARM64 CPU affinity tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/cpu_affinity_test.cpp -o /tmp/cpu_affinity_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/cpu_affinity_test_arm64
 
       - name: Compile and run native ARM64 shared-save path tests
         id: save
@@ -419,6 +470,10 @@ jobs:
             exit 1
           fi
 
+      - name: Verify generated video-setting hooks
+        if: env.HAS_DLL == '1'
+        run: python3 tools/recomp/verify_video_hooks.py build/recomp/native
+
       - name: Build libmain.so from source (Android arm64-v8a)
         if: env.HAS_DLL == '1'
         env:
@@ -532,6 +587,7 @@ jobs:
           cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
           ls -lh build/symbols/
           du -sh build/symbols/
+          printf 'nativeBuild=compiled\n' > build/native-build.txt
 
       - name: Upload make logs
         if: always()
@@ -606,6 +662,7 @@ jobs:
           # Now rebuild libmain.so with patched DXVK? Actually we will still need to rebuild libdxvk_d3d9.so with patch
           # But we already have deps built with patched DXVK (via build-deps)
           echo "Using prebuilt libmain.so, but deps are rebuilt with Mali fix"
+          printf 'nativeBuild=prebuilt\n' > build/native-build.txt
 
       - name: DXVK symbolization diagnostics
         run: |
@@ -621,17 +678,66 @@ jobs:
             0x237268 0x236bd4 0x143ac8 0x1d8bd4 0x1d8fcc | tee /tmp/dxvk-addr2line.txt
           "$TOOLS/llvm-nm" -D "$LIB" | tee /tmp/dxvk-nm.txt
 
-      - name: Setup Android keystore (debug)
-        if: always()
+      - name: Setup protected release signing identity
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
+        env:
+          KEYSTORE_B64: ${{ secrets.PROTODROID_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.PROTODROID_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.PROTODROID_ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.PROTODROID_ANDROID_KEY_PASSWORD }}
         run: |
-          mkdir -p $HOME/.android
-          if [ ! -f $HOME/.android/debug.keystore ]; then
-            keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" || true
-          fi
-          ls -lh $HOME/.android/debug.keystore
+          set -euo pipefail
+          for value in "$KEYSTORE_B64" "$KEYSTORE_PASS" "$KEY_ALIAS" "$KEY_PASS"; do
+            if [ -z "$value" ]; then
+              echo "::error::A release requires all four protected PROTODROID_ANDROID_* signing secrets"
+              exit 1
+            fi
+          done
+          for value in "$KEYSTORE_PASS" "$KEY_ALIAS" "$KEY_PASS"; do
+            case "$value" in *$'\n'*|*$'\r'*)
+              echo "::error::Signing passwords and aliases must be single-line secrets"
+              exit 1
+            ;; esac
+          done
+          KEYSTORE=/tmp/protodroid-release.keystore
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$KEYSTORE"
+          test -s "$KEYSTORE"
+          chmod 600 "$KEYSTORE"
+          {
+            echo "KEYSTORE=$KEYSTORE"
+            echo "KEYSTORE_PASS=$KEYSTORE_PASS"
+            echo "KEY_ALIAS=$KEY_ALIAS"
+            echo "KEY_PASS=$KEY_PASS"
+            echo "SIGNING_IDENTITY=persistent"
+          } >> "$GITHUB_ENV"
+          echo "Using the protected persistent release signing identity"
+          ls -lh "$KEYSTORE"
+
+      - name: Setup disposable CI signing identity
+        if: github.event_name != 'workflow_dispatch' || !inputs.publish_release || github.ref != 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          # Random non-default credentials exercise the generic apksigner path without making artifacts update-stable.
+          KEYSTORE=/tmp/protodroid-ci.keystore
+          STORE_PASS=$(openssl rand -hex 24)
+          KEY_PASS=$STORE_PASS
+          echo "::add-mask::$STORE_PASS"
+          echo "::add-mask::$KEY_PASS"
+          keytool -genkey -v -keystore "$KEYSTORE" -storepass "$STORE_PASS" -alias protodroid-ci \
+            -keypass "$KEY_PASS" -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=ProtoDroid CI,O=ProtoDroid,C=US"
+          chmod 600 "$KEYSTORE"
+          {
+            echo "KEYSTORE=$KEYSTORE"
+            echo "KEYSTORE_PASS=$STORE_PASS"
+            echo "KEY_ALIAS=protodroid-ci"
+            echo "KEY_PASS=$KEY_PASS"
+            echo "SIGNING_IDENTITY=ephemeral"
+          } >> "$GITHUB_ENV"
+          echo "Using a disposable CI signing identity; this artifact is not release-eligible"
+          ls -lh "$KEYSTORE"
 
       - name: Build APK (package + sign)
-        if: always()
         env:
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
@@ -720,6 +826,8 @@ jobs:
           path: |
             build/apk/prototype.apk
             build/apk/version.txt
+            build/apk/signing.txt
+            build/apk/native-build.txt
           retention-days: 30
           if-no-files-found: warn
 
@@ -757,6 +865,20 @@ jobs:
           set -euo pipefail
           test -s release-apk/prototype.apk
           source release-apk/version.txt
+          source release-apk/signing.txt
+          source release-apk/native-build.txt
+          if [ "$identity" != "persistent" ]; then
+            echo "::error::Release APK is not signed with the protected persistent identity"
+            exit 1
+          fi
+          if [ "$nativeBuild" != "compiled" ]; then
+            echo "::error::Release APK does not contain native code compiled from this exact commit"
+            exit 1
+          fi
+          if ! printf '%s' "$certificateSha256" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "::error::Release APK certificate digest is invalid"
+            exit 1
+          fi
           python3 - "$versionName" "$versionCode" <<'PY'
           import re
           import sys
@@ -769,33 +891,45 @@ jobs:
             exit 1
           fi
           gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/protodroid-releases.json
-          python3 - "$versionName" "$versionCode" /tmp/protodroid-releases.json <<'PY'
+          python3 - "$versionName" "$versionCode" "$certificateSha256" /tmp/protodroid-releases.json <<'PY'
           import json
           import re
           import sys
           current = tuple(map(int, sys.argv[1].split(".")))
           current_code = int(sys.argv[2])
-          with open(sys.argv[3], encoding="utf-8") as source:
+          current_certificate = sys.argv[3]
+          with open(sys.argv[4], encoding="utf-8") as source:
               releases = json.load(source)
           versions = []
           codes = []
+          certificates = {}
           for release in releases:
               match = re.fullmatch(r"protodroid-v([0-9]+)\.([0-9]+)", release.get("tag_name", ""))
+              body = release.get("body") or ""
               if match:
-                  versions.append(tuple(map(int, match.groups())))
-              code = re.search(r"versionCode[ =]([0-9]+)", release.get("body") or "")
+                  version = tuple(map(int, match.groups()))
+                  versions.append(version)
+                  certificate = re.search(r"Signing certificate SHA-256: `([0-9a-f]{64})`", body)
+                  if certificate:
+                      certificates[version] = certificate.group(1)
+              code = re.search(r"versionCode[ =]([0-9]+)", body)
               if code:
                   codes.append(int(code.group(1)))
           if versions and current <= max(versions):
               raise SystemExit("APK version is not newer than the latest release; run tools/bump_version.py")
           if codes and current_code <= max(codes):
               raise SystemExit("APK versionCode is not newer than the latest release; run tools/bump_version.py")
-          print(f"Release version accepted: {sys.argv[1]} (versionCode {current_code})")
+          if versions:
+              previous_certificate = certificates.get(max(versions))
+              if previous_certificate and current_certificate != previous_certificate:
+                  raise SystemExit("APK signing certificate differs from the latest release; refusing an update-breaking release")
+          print(f"Release version and signing identity accepted: {sys.argv[1]} (versionCode {current_code})")
           PY
           {
             echo "RELEASE_TAG=$TAG"
             echo "RELEASE_VERSION=$versionName"
             echo "RELEASE_CODE=$versionCode"
+            echo "RELEASE_CERTIFICATE=$certificateSha256"
           } >> "$GITHUB_ENV"
 
       - name: Prepare changelog and verification notes
@@ -811,6 +945,9 @@ jobs:
             echo "Real ARM64 compilation, APK signing, and packaged verification passed in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
             echo
             echo "APK SHA-256: \`$APK_SHA256\`"
+            echo "Signing certificate SHA-256: \`$RELEASE_CERTIFICATE\`"
+            echo
+            echo "In-place updates require the same signing certificate. A differently signed older installation needs a one-time uninstall; shared saves under /storage/emulated/0/Prototype remain separate."
             echo
             echo "Use protodroid.ini for configuration. CI does not replace physical-device testing."
           } >> release-notes.md

@@ -43,6 +43,9 @@ typedef void (*RecompFn)(Ctx*);
  * original native code in the prototype). The caller has already pushed the return address. */
 void RecompDispatch(Ctx* ctx, uint32_t target);
 
+/* Native Android host only: emitted at the three integer GameDB reads that feed the original video setters. */
+void RecompVideoSettingRead(Ctx* c);
+
 /* Looks up the recompiled implementation of a guest function entry, or null. */
 RecompFn RecompLookup(uint32_t target);
 

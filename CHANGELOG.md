@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8 - 2026-10-31
+
+- Grouped launcher Settings into **Graphics**, **Game Video**, **Controls**, and **Interface** while preserving every existing option.
+- Added functional launcher access to the game's own **Anti-Alias Level**, **Shadow Detail**, and **Graphic Quality** settings through GameDB and its original render application path.
+- Added **Game default** choices to preserve device-dependent engine defaults until an explicit level is selected. All settings continue to share the same preferences and `protodroid.ini` persistence.
+- Expanded **Low**, **Medium**, and **High** presets to cover the game's AA, shadow, and quality levels as well as the existing port graphics options. FPS and control choices remain independent.
+- Moved active shared saves into `/storage/emulated/0/Prototype/Saves/`, with one-time no-overwrite migration from the previous shared root and app-specific layouts. External save management and deletion behavior are preserved.
+- Preserved explicit FPS-cap pacing and moved recurring shared cache/log copies off the engine thread while retaining synchronous shutdown flushing. Presets and individual graphics edits now leave unrelated engine settings unchanged; diagnostics separate Present() wall time from frame pacing.
+- Added timestamped five-second diagnostics for frame stalls, engine work, pipeline calls, file I/O, CPU threads, memory, ADPF, and supported thermal/headroom APIs, with a whole-run summary and no shader-dump overhead.
+- Stopped camera-only touch movement from redrawing the entire control overlay. Mouse motion, stick/wheel feedback, editing, and all existing controls are unchanged.
+- Allowed the engine's worker sizing to use the logical CPUs actually visible to Android instead of a fixed four-core mask, without pinning threads or changing graphics.
+- Made restricted or zeroed device CPU counters report **unavailable** rather than a misleading 0% reading.
+- Added protected persistent-release signing configuration, certificate-digest reporting, and native-build provenance checks. Releases reject ephemeral keys and dummy/prebuilt native inputs; differently signed older installations still require a one-time uninstall.
+
 ## 0.7 - 2026-10-30
 
 - Turned the setup screen into a launcher: **Settings** and **Play** replace the permission actions after access is granted. Game detection remains automatic, while Play starts the game deliberately and rechecks for newly copied files.

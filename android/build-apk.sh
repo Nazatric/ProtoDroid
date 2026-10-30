@@ -1,6 +1,7 @@
 #!/bin/bash
 # Packages the APK without Gradle: SDL's Java activity + ours -> classes.dex, the manifest -> aapt2, native
-# libraries for the requested ABIs, then zipalign and apksigner (debug key).
+# libraries for the requested ABIs, then zipalign and apksigner. KEYSTORE and its password/alias environment
+# variables select the signing identity; the default remains the local Android debug key.
 #
 # Usage: android/build-apk.sh [abi ...]          (default: arm64-v8a)
 # Needs: build/android/<abi>/libmain.so (make -C src/native PLATFORM=android ABI=<abi>) and the libraries from
@@ -15,6 +16,15 @@ DEPS_ROOT=${DEPS_ROOT:-$HOME/protodroid-data/android-deps}
 TURNIP_ROOT=${TURNIP_ROOT:-$HOME/protodroid-data/android-turnip}
 SDL_SRC=${SDL_SRC:-$HOME/protodroid-data/android-deps-src/SDL2}
 KEYSTORE=${KEYSTORE:-$HOME/.android/debug.keystore}
+KEYSTORE_PASS=${KEYSTORE_PASS:-android}
+KEY_ALIAS=${KEY_ALIAS:-androiddebugkey}
+KEY_PASS=${KEY_PASS:-$KEYSTORE_PASS}
+SIGNING_IDENTITY=${SIGNING_IDENTITY:-local}
+export KEYSTORE_PASS KEY_PASS
+case "$SIGNING_IDENTITY" in
+    local|ephemeral|persistent) ;;
+    *) echo "ERROR: invalid SIGNING_IDENTITY=$SIGNING_IDENTITY"; exit 1 ;;
+esac
 ABIS=("${@:-arm64-v8a}")
 
 OUT=$ROOT/build/apk
@@ -79,9 +89,15 @@ du -sh "$OUT/pkg"/lib/*/* 2>&1 | head -n 20
 (cd "$OUT/pkg" && zip -q -r "$OUT/base.apk" classes.dex lib && echo "zip done" && ls -lh "$OUT/base.apk" && unzip -l "$OUT/base.apk" | head -n 100)
 
 "$BUILD_TOOLS/zipalign" -P 16 -f 4 "$OUT/base.apk" "$OUT/aligned.apk"
-"$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-pass pass:android --key-pass pass:android \
-    --out "$OUT/prototype.apk" "$OUT/aligned.apk"
-"$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT/prototype.apk"
+"$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-key-alias "$KEY_ALIAS" \
+    --ks-pass env:KEYSTORE_PASS --key-pass env:KEY_PASS --out "$OUT/prototype.apk" "$OUT/aligned.apk"
+"$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT/prototype.apk" | tee "$OUT/signature.txt"
+CERTIFICATE_SHA256=$(awk 'index($0, "certificate SHA-256 digest:") { sub(/^.*certificate SHA-256 digest:[[:space:]]*/, ""); gsub(/[[:space:]]/, ""); print; exit }' "$OUT/signature.txt" | tr 'A-F' 'a-f')
+if ! printf '%s' "$CERTIFICATE_SHA256" | grep -Eq '^[0-9a-f]{64}$'; then
+    echo "ERROR: could not verify the signed APK certificate digest"
+    exit 1
+fi
+printf 'identity=%s\ncertificateSha256=%s\n' "$SIGNING_IDENTITY" "$CERTIFICATE_SHA256" > "$OUT/signing.txt"
 "$BUILD_TOOLS/zipalign" -c -P 16 4 "$OUT/prototype.apk"
 # The redesigned setup must be fully offline. Compare every packaged setup resource byte-for-byte with its source so
 # an APK can never silently fall back to missing artwork or platform fonts.
@@ -114,6 +130,11 @@ if ! grep -F -- "$EXPECTED_PACKAGE" "$OUT/badging.txt"; then
     exit 1
 fi
 printf 'versionName=%s\nversionCode=%s\n' "$VERSION_NAME" "$VERSION_CODE" > "$OUT/version.txt"
+if [ -f "$ROOT/build/native-build.txt" ]; then
+    cp "$ROOT/build/native-build.txt" "$OUT/native-build.txt"
+else
+    printf 'nativeBuild=unknown\n' > "$OUT/native-build.txt"
+fi
 echo "=== Final APK ==="
 ls -lh "$OUT/prototype.apk"
 stat -c%s "$OUT/prototype.apk" | awk '{printf "APK size bytes: %d (MB %.2f)\n", $1, $1/1024/1024}'

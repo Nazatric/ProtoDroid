@@ -80,6 +80,14 @@ void TestNoLoopCounterLeak() {
           "message-pump iterations leaked into presented-frame statistics");
 }
 
+void TestDisabledDetailedCollection() {
+    native::PresentStatsTracker tracker;
+    tracker.AddPresent(1000000000ll, 7, false);
+    for (int i = 1; i <= 10000; ++i) tracker.AddPresent(1000000000ll + i * 16666667ll, 7, false);
+    Check(tracker.TakeDetailed().count == 0, "disabled detailed diagnostics retained per-frame samples");
+    Check(tracker.Snapshot().frames > 0, "disabling detailed diagnostics broke the one-second ADPF/overlay window");
+}
+
 }  // namespace
 
 int main() {
@@ -87,6 +95,7 @@ int main() {
     TestSixtyFpsWindow();
     TestAveragePercentileAndOutlier();
     TestNoLoopCounterLeak();
-    std::puts("present-stats tests passed (baseline, ADPF count, FPS, average, p99, max)");
+    TestDisabledDetailedCollection();
+    std::puts("present-stats tests passed (baseline, ADPF count, FPS, percentiles)");
     return 0;
 }
