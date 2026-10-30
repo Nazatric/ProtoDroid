@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8 - 2026-10-30
+
+- Grouped launcher Settings into **Graphics**, **Game Video**, **Controls**, and **Interface** without changing the existing options or presets.
+- Added functional launcher access to the game's own **Anti-Alias Level**, **Shadow Detail**, and **Graphic Quality** settings through GameDB and its original render application path.
+- Added **Game default** choices to preserve device-dependent engine defaults until an explicit level is selected. All settings continue to share the same preferences and `protodroid.ini` persistence.
+
 ## 0.7 - 2026-10-30
 
 - Turned the setup screen into a launcher: **Settings** and **Play** replace the permission actions after access is granted. Game detection remains automatic, while Play starts the game deliberately and rechecks for newly copied files.

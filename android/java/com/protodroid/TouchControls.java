@@ -233,15 +233,15 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
 
     private void applyUiSettings() {
         cache.clear();
-        opacity = settings[4].value() / 100f;
-        scale = settings[5].value() / 100f;
-        vibrate = settings[6].value() != 0;
-        showFps = settings[7].value() != 0;
-        hideWithPad = settings[8].value() != 0;
-        autoRun = settings[9].value() != 0;
-        camGain = settings[10].value() / 100f;
-        invertY = settings[11].value() != 0;
-        powerButtons = settings[12].value() != 0;
+        opacity = settingsStore.valueOf("ui_opacity") / 100f;
+        scale = settingsStore.valueOf("ui_scale") / 100f;
+        vibrate = settingsStore.valueOf("ui_vibrate") != 0;
+        showFps = settingsStore.valueOf("ui_fps") != 0;
+        hideWithPad = settingsStore.valueOf("ui_pad_hide") != 0;
+        autoRun = settingsStore.valueOf("ui_stick_run") != 0;
+        camGain = settingsStore.valueOf("ui_cam") / 100f;
+        invertY = settingsStore.valueOf("ui_invert") != 0;
+        powerButtons = settingsStore.valueOf("ui_power_buttons") != 0;
         layoutButtons(getWidth(), getHeight());
     }
 

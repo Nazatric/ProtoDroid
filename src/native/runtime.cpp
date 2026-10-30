@@ -204,4 +204,12 @@ uint32_t GuestCall(uint32_t va, std::initializer_list<uint32_t> args, uint32_t e
     return ctx.eax;
 }
 
+uint32_t GuestCallNested(Ctx* outer, uint32_t va, std::initializer_list<uint32_t> args, uint32_t ecx) {
+    Ctx* saved = tl_ctx;
+    tl_ctx = outer;
+    const uint32_t result = GuestCall(va, args, ecx);
+    tl_ctx = saved;
+    return result;
+}
+
 }  // namespace native

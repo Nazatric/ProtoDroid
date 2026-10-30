@@ -104,23 +104,12 @@ Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds
 
 The launcher's **Settings** page and the in-game gear overlay share the same saved options. Launcher changes are saved automatically and engine options apply when **Play** starts the game. In the in-game overlay, settings marked with `*` apply after restart; the FPS limit applies immediately.
 
-The launcher also provides **Low**, **Medium**, and **High** graphics presets. They change only Resolution, Textures, and Anisotropy, leaving FPS and control preferences untouched. Choose **Custom** or adjust any graphics row to keep an individual combination.
+The launcher groups options into **Graphics**, **Game Video**, **Controls**, and **Interface**. It also provides **Low**, **Medium**, and **High** graphics presets. They change only Resolution, Textures, and Anisotropy, leaving FPS, game-video, and control preferences untouched. Choose **Custom** or adjust any preset graphics row to keep an individual combination.
 
-- Resolution
-- Textures
-- FPS limit
-- Battery saver
-- Opacity
-- Button size
-- Vibration
-- Show FPS
-- Hide with gamepad
-- Stick edge sprint
-- Camera speed
-- Invert Y
-- Extra buttons, default **Off**
-- Anisotropy
-- Unlock menu FPS, default **On**
+- **Graphics:** Resolution, Textures, Anisotropy, FPS limit, Battery saver, and Unlock menu FPS (default **On**).
+- **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. These use the game's own GameDB settings and render paths. **Game default** preserves the engine's device-dependent choice; explicit levels apply on the next Play or restart.
+- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons (default **Off**).
+- **Interface:** Opacity and Show FPS.
 
 The **LAYOUT** button opens the control-layout editor. Drag controls to reposition them, select a control to resize it, or reset the layout.
 

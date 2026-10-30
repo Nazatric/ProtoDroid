@@ -60,6 +60,8 @@ void RegisterGuestThread();
 // Calls the recompiled function at `va` with stdcall/cdecl arguments on the current guest thread's stack; returns
 // eax (edx in *edx_out when given). ecx is passed for thiscall.
 uint32_t GuestCall(uint32_t va, std::initializer_list<uint32_t> args, uint32_t ecx = 0, uint32_t* edx_out = nullptr);
+// Variant for a native hook entered from recompiled code: nests the guest call below the supplied active context.
+uint32_t GuestCallNested(Ctx* outer, uint32_t va, std::initializer_list<uint32_t> args, uint32_t ecx = 0);
 
 // ---- imports (imports.cpp) ----
 // An import handler runs with the guest return address at [esp] and the arguments above it.

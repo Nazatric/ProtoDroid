@@ -94,6 +94,7 @@ final class SetupView extends View {
     private static final String[] REQUIREMENTS = {
             "prototypeenginef.dll", ".rcf", ".p3d", "art", "audio", "scripts"
     };
+    private static final String[] CATEGORY_NAMES = {"GRAPHICS", "GAME VIDEO", "CONTROLS", "INTERFACE"};
 
     private final Listener listener;
     private final GameSettings gameSettings;
@@ -214,7 +215,7 @@ final class SetupView extends View {
 
     private void updateContentDescription() {
         if (settingsOpen) {
-            setContentDescription("Prototype settings. Graphics presets and individual options. Changes save automatically.");
+            setContentDescription("Prototype settings. Graphics presets and grouped game, control, and interface options. Changes save automatically.");
         } else {
             setContentDescription("Prototype setup. " + state.status + ". Storage access "
                     + (state.fileAccess ? "granted" : "required"));
@@ -946,28 +947,55 @@ final class SetupView extends View {
 
         settingsListBounds.set(left, listTop, right, Math.max(listTop + 1f, bottom - 48f * u));
         int columns = portrait ? 1 : 2;
-        int rows = (gameSettings.settings.length + columns - 1) / columns;
         float rowHeight = (portrait ? 44f : 38f) * u;
+        float headerHeight = 28f * u;
         float rowGap = 10f * u;
         float columnWidth = (width - (columns - 1) * rowGap) / columns;
-        float contentHeight = rows * rowHeight;
+        float contentHeight = 0f;
+        for (int column = 0; column < columns; column++) {
+            float height = 0f;
+            int firstCategory = portrait ? GameSettings.CATEGORY_GRAPHICS : column * 2;
+            int endCategory = portrait ? GameSettings.CATEGORY_COUNT : firstCategory + 2;
+            for (int category = firstCategory; category < endCategory; category++) {
+                height += headerHeight;
+                for (GameSettings.Setting setting : gameSettings.settings) {
+                    if (GameSettings.categoryOf(setting) == category) height += rowHeight;
+                }
+            }
+            contentHeight = Math.max(contentHeight, height);
+        }
         maxScrollY = Math.max(0f, contentHeight - settingsListBounds.height());
         scrollY = Math.max(0f, Math.min(scrollY, maxScrollY));
 
         int clipped = canvas.save();
         canvas.clipRect(settingsListBounds);
-        for (int i = 0; i < gameSettings.settings.length; i++) {
-            int column = i / rows;
-            int row = i % rows;
+        for (int column = 0; column < columns; column++) {
             float x = left + column * (columnWidth + rowGap);
-            float y = settingsListBounds.top + row * rowHeight - scrollY;
-            RectF rowBounds = new RectF(x, y + 2f * u, x + columnWidth, y + rowHeight - 2f * u);
-            if (rowBounds.bottom < settingsListBounds.top || rowBounds.top > settingsListBounds.bottom) {
-                settingLeftBounds[i].setEmpty();
-                settingRightBounds[i].setEmpty();
-                continue;
+            float y = settingsListBounds.top - scrollY;
+            int firstCategory = portrait ? GameSettings.CATEGORY_GRAPHICS : column * 2;
+            int endCategory = portrait ? GameSettings.CATEGORY_COUNT : firstCategory + 2;
+            for (int category = firstCategory; category < endCategory; category++) {
+                if (y + headerHeight >= settingsListBounds.top && y <= settingsListBounds.bottom) {
+                    drawLine(canvas, CATEGORY_NAMES[category], x + 3f * u, y, headerHeight - 3f * u,
+                            10.5f, 700, RED_HOT, 1.1f, u, columnWidth - 6f * u);
+                    paint.setColor(withAlpha(RED, 0.32f));
+                    canvas.drawRect(x + 3f * u, y + headerHeight - 4f * u,
+                            x + columnWidth - 3f * u, y + headerHeight - 3f * u, paint);
+                }
+                y += headerHeight;
+                for (int i = 0; i < gameSettings.settings.length; i++) {
+                    GameSettings.Setting setting = gameSettings.settings[i];
+                    if (GameSettings.categoryOf(setting) != category) continue;
+                    RectF rowBounds = new RectF(x, y + 2f * u, x + columnWidth, y + rowHeight - 2f * u);
+                    if (rowBounds.bottom < settingsListBounds.top || rowBounds.top > settingsListBounds.bottom) {
+                        settingLeftBounds[i].setEmpty();
+                        settingRightBounds[i].setEmpty();
+                    } else {
+                        drawSettingRow(canvas, i, rowBounds, u);
+                    }
+                    y += rowHeight;
+                }
             }
-            drawSettingRow(canvas, i, rowBounds, u);
         }
         canvas.restoreToCount(clipped);
 

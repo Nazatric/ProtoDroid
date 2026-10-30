@@ -15,6 +15,12 @@ final class GameSettings {
     static final int PRESET_HIGH = 2;
     static final int PRESET_CUSTOM = 3;
 
+    static final int CATEGORY_GRAPHICS = 0;
+    static final int CATEGORY_GAME_VIDEO = 1;
+    static final int CATEGORY_CONTROLS = 2;
+    static final int CATEGORY_INTERFACE = 3;
+    static final int CATEGORY_COUNT = 4;
+
     private static final String PRESET_KEY = "graphics_preset";
     private static final String[] GRAPHICS_KEYS = {"render_height", "texture_skip_mips", "max_anisotropy"};
 
@@ -42,34 +48,51 @@ final class GameSettings {
         return setting.key.equals("fps_limit");
     }
 
+    static int categoryOf(Setting setting) {
+        if (setting.key.startsWith("game_")) return CATEGORY_GAME_VIDEO;
+        if (setting.key.equals("ui_opacity") || setting.key.equals("ui_fps")) return CATEGORY_INTERFACE;
+        if (setting.key.startsWith("ui_")) return CATEGORY_CONTROLS;
+        return CATEGORY_GRAPHICS;
+    }
+
     final Setting[] settings = {
+            // Port graphics and performance.
             new Setting("Resolution", "render_height", new String[] {"540p", "720p", "900p", "1080p"},
                     new int[] {540, 720, 900, 1080}, true),
             new Setting("Textures", "texture_skip_mips", new String[] {"Full", "Half", "Quarter"},
                     new int[] {0, 1, 2}, true),
+            new Setting("Anisotropy", "max_anisotropy", new String[] {"1x", "2x", "4x", "8x"},
+                    new int[] {1, 2, 4, 8}, true),
             new Setting("FPS limit", "fps_limit", new String[] {"Off", "30", "45", "60"},
                     new int[] {0, 30, 45, 60}, true),
             new Setting("Battery saver", "battery_saver", new String[] {"Off", "On"}, new int[] {0, 1}, true),
-            new Setting("Opacity", "ui_opacity", new String[] {"40%", "60%", "80%", "100%"},
-                    new int[] {40, 60, 80, 100}, false),
+            new Setting("Unlock menu FPS", "unlock_menu_fps", new String[] {"Off", "On"}, new int[] {0, 1}, true),
+            // The game's own GameDB video settings. -1 leaves its device-dependent default untouched.
+            new Setting("Anti-Alias Level", "game_aa_level", new String[] {"Game default", "Off", "2x", "4x"},
+                    new int[] {-1, 0, 1, 2}, true),
+            new Setting("Shadow Detail", "game_shadow_detail", new String[] {"Game default", "Low", "Medium", "High"},
+                    new int[] {-1, 0, 1, 2}, true),
+            new Setting("Graphic Quality", "game_graphic_quality", new String[] {"Game default", "Low", "Medium", "High"},
+                    new int[] {-1, 0, 1, 2}, true),
+            // Touch and gamepad controls.
             new Setting("Button size", "ui_scale", new String[] {"80%", "100%", "120%", "140%"},
                     new int[] {80, 100, 120, 140}, false),
             new Setting("Vibration", "ui_vibrate", new String[] {"Off", "On"}, new int[] {0, 1}, false),
-            new Setting("Show FPS", "ui_fps", new String[] {"Off", "On"}, new int[] {0, 1}, false),
             new Setting("Hide with gamepad", "ui_pad_hide", new String[] {"Off", "On"}, new int[] {0, 1}, false),
             new Setting("Stick edge sprint", "ui_stick_run", new String[] {"Off", "On"}, new int[] {0, 1}, false),
             new Setting("Camera speed", "ui_cam", new String[] {"50%", "75%", "100%", "150%", "200%"},
                     new int[] {50, 75, 100, 150, 200}, false),
             new Setting("Invert Y", "ui_invert", new String[] {"Off", "On"}, new int[] {0, 1}, false),
             new Setting("Extra buttons", "ui_power_buttons", new String[] {"Off", "On"}, new int[] {0, 1}, false),
-            new Setting("Anisotropy", "max_anisotropy", new String[] {"1x", "2x", "4x", "8x"},
-                    new int[] {1, 2, 4, 8}, true),
-            new Setting("Unlock menu FPS", "unlock_menu_fps", new String[] {"Off", "On"}, new int[] {0, 1}, true),
+            // Interface visibility.
+            new Setting("Opacity", "ui_opacity", new String[] {"40%", "60%", "80%", "100%"},
+                    new int[] {40, 60, 80, 100}, false),
+            new Setting("Show FPS", "ui_fps", new String[] {"Off", "On"}, new int[] {0, 1}, false),
     };
 
-    private static final int[] DEFAULTS = {1, 1, 0, 0, 2, 1, 1, 0, 0, 0, 2, 0, 0, 0, 1};
+    private static final int[] DEFAULTS = {1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 2, 0, 0, 2, 0};
 
-    // Resolution, textures and anisotropy only. FPS, battery and every control preference remain untouched.
+    // Resolution, textures and anisotropy only. FPS, battery, game video and every control preference stay untouched.
     private static final int[][] PRESET_VALUES = {
             {0, 2, 0},  // Low: 540p, quarter textures, 1x
             {1, 1, 0},  // Medium: the established 720p / half / 1x defaults
@@ -98,6 +121,10 @@ final class GameSettings {
     private int settingIndex(String key) {
         for (int i = 0; i < settings.length; i++) if (settings[i].key.equals(key)) return i;
         throw new IllegalArgumentException("Unknown setting " + key);
+    }
+
+    int valueOf(String key) {
+        return settings[settingIndex(key)].value();
     }
 
     private static boolean isGraphics(Setting setting) {

@@ -1336,6 +1336,10 @@ class FunctionCompiler:
         out = [f"void f_{self.va:08x}(Ctx* c) {{"]
         if LOCALIZE:
             out.append("    RLOCALS;")
+        # Android's launcher writes explicit game-video choices through GameDB on their first read. Keep this hook
+        # specific to the original getter; all other functions and direct-call paths remain unchanged.
+        if NATIVE and self.va - BASE + ORIG_BASE == 0x107F87D0:
+            out.append("    RecompVideoSettingRead(c);")
         trap_labels = set()
         # Fall-through into an instruction that is not next in the output (overlapping decodes) needs its label.
         for n, (i, _) in enumerate(body):
