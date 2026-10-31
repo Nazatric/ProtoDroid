@@ -69,7 +69,6 @@ EOF
 BUILD=$SRC/build/mesa-wrapper-$ABI
 rm -rf "$BUILD"
 meson setup "$BUILD" "$MESA" --cross-file "$CROSS" --buildtype release --prefix "$PREFIX" \
-    -Dbuildtype=release \
     -Dcpp_rtti=false \
     -Dgbm=disabled \
     -Dopengl=false \
