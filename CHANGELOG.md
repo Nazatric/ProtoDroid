@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12 - 2026-10-31
+
+- Fixed the **Drivers** button crash: opening the dedicated screen detaches the launcher view during touch-up, so touch cleanup now retains and null-checks the original parent instead of dereferencing a removed view. Added a regression check for this content-view replacement order; driver rendering, downloads, and game/native behavior are unchanged.
+
 ## 0.11 - 2026-10-31
 
 - Replaced the hidden driver-package row and generic dialogs with a dedicated Prototype-styled **Drivers** screen, accessible from the launcher and a fixed Settings button. Auto remains the default; the screen explains Auto/System/Turnip/Custom and Mali fallback behavior.

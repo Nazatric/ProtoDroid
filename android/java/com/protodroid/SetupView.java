@@ -24,6 +24,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.view.ViewParent;
 import android.view.WindowInsets;
 
 import java.io.IOException;
@@ -1358,15 +1359,19 @@ final class SetupView extends View {
             case MotionEvent.ACTION_UP:
                 int action = pressedAction;
                 pressedAction = ACTION_NONE;
+                // Drivers replaces the content view inside activate(). Keep the original parent for touch cleanup:
+                // calling getParent() afterwards would dereference null on the now-detached setup view.
+                ViewParent parent = getParent();
                 if (!scrolling && action != ACTION_NONE && actionAt(x, y) == action) activate(action);
                 scrolling = false;
-                getParent().requestDisallowInterceptTouchEvent(false);
+                if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
                 invalidate();
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 pressedAction = ACTION_NONE;
                 scrolling = false;
-                getParent().requestDisallowInterceptTouchEvent(false);
+                ViewParent cancelledParent = getParent();
+                if (cancelledParent != null) cancelledParent.requestDisallowInterceptTouchEvent(false);
                 invalidate();
                 return true;
             default:

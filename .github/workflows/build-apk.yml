@@ -131,6 +131,9 @@ jobs:
       - name: Validate GitHub issue forms
         run: python3 tools/test_issue_templates.py
 
+      - name: Test Drivers navigation touch cleanup
+        run: python3 tools/test_driver_screen_navigation.py
+
       - name: Test launcher update metadata
         run: |
           set -euo pipefail
