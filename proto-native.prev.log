@@ -1,91 +1,162 @@
-[mono=73370.304 tid=29237] protodroid build Oct 31 2026 12:53:45
-[mono=73370.304 tid=29237] protodroid source a3a7e9525fd597f0c7803c916c7a3e95944cd808
-[mono=73370.304 tid=29237] logs mirrored to /storage/emulated/0/Prototype/logs
+[mono=75806.456 tid=26257] protodroid build Oct 31 2026 12:53:45
+[mono=75806.456 tid=26257] protodroid source a3a7e9525fd597f0c7803c916c7a3e95944cd808
+[mono=75806.456 tid=26257] logs mirrored to /storage/emulated/0/Prototype/logs
 protodroid build Oct 31 2026 12:53:45
 protodroid source a3a7e9525fd597f0c7803c916c7a3e95944cd808
-[mono=73370.304 tid=29237] DXVK logs mirrored to /storage/emulated/0/Prototype/logs
-[mono=73370.304 tid=29237] game dir: /storage/emulated/0/Prototype
-[mono=73370.304 tid=29237] data dir: /storage/emulated/0/Android/data/com.protodroid/files
-[mono=73370.319 tid=29237] save dir: /storage/emulated/0/Prototype/Saves
-[mono=73370.321 tid=29237] config: loaded protodroid.ini
-[mono=73370.321 tid=29237] config: render_height = 1080
-[mono=73370.321 tid=29237] config: texture_skip_mips = 0
-[mono=73370.321 tid=29237] config: game_shadow_detail = 2
-[mono=73370.321 tid=29237] config: game_graphic_quality = 2
-[mono=73370.321 tid=29237] config: game_aa_level = 0
-[mono=73370.321 tid=29237] config: max_anisotropy = 4
-[mono=73370.321 tid=29237] config: vulkan_driver = turnip
-[mono=73370.321 tid=29237] memory: guest window at 1000000000, arena 2000 MiB
-[mono=73370.322 tid=29237] vulkan: Turnip is Adreno-only; use custom mode for a compatible Mali/PanVK package
-[mono=73370.323 tid=29237] vulkan: system vkGetInstanceProcAddr resolved (RTLD_GLOBAL)
-[mono=73370.324 tid=29237] vulkan: system driver sees Mali-G720 MC7 (profile mali-immortalis, device Vulkan 1.3.278, instance 1.3, usable 1.3, driver 0c401000, driverID 9, vendor 13b5 device c8700010)
-[mono=73370.324 tid=29237] present mode: FIFO (vsync), interval 1 for CreateDevice and Reset
-[mono=73370.324 tid=29237] anisotropy: bridge/DXVK maximum 4x
-[mono=73370.330 tid=29237] render size 2400x1080 (window 2712x1220)
-[mono=73370.330 tid=29237] diagnostics: detailed metrics disabled; shared log mirroring remains active
-[mono=73370.368 tid=29237] loader: rebased to 7c000000 (418563 fixups)
-[mono=73370.369 tid=29237] loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
-[mono=73370.370 tid=29237] timing: LoadImage 40.470 ms (success=1)
-[mono=73370.370 tid=29237] DllMain(PROCESS_ATTACH)
-[mono=73370.376 tid=29237] DllMain returned 1 after 5.514 ms
-[mono=73370.376 tid=29237] EngineInitialize
-[mono=73370.376 tid=29237] SetThreadPriority(0) -> nice 0 on tid 29237
-[mono=73370.377 tid=29237] SetThreadPriority(2) -> nice -4 on tid 29242
-[mono=73370.377 tid=29237] process affinity: reporting mask 000000ff (8 low CPUs) to the engine
-[mono=73370.377 tid=29237] SetThreadPriority(0) -> nice 0 on tid 29243
-[mono=73370.378 tid=29237] SetThreadPriority(0) -> nice 0 on tid 29262
-[mono=73370.378 tid=29237] SetThreadPriority(0) -> nice 0 on tid 29264
-[mono=73370.378 tid=29237] SetThreadPriority(0) -> nice 0 on tid 29265
-[mono=73370.379 tid=29237] SetThreadPriority(0) -> nice 0 on tid 29266
-[mono=73370.379 tid=29237] SetThreadPriority(0) -> nice 0 on tid 29268
-[mono=73370.379 tid=29237] SetThreadPriority(0) -> nice 0 on tid 29269
-[mono=73370.380 tid=29237] SetThreadPriority(15) -> nice -10 on tid 29288
-[mono=73370.385 tid=29237] SetThreadPriority(1) -> nice -2 on tid 29290
-[mono=73370.385 tid=29237] SetThreadPriority(1) -> nice -2 on tid 29291
-[mono=73370.385 tid=29237] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
-[mono=73370.390 tid=29237] Direct3DCreate9(32) -> 0xb400006fa76c5510 in 4.324 ms
-[mono=73370.390 tid=29237] GPU BC (DXT) textures: not supported, decoding on (DXT1 as 16-bit)
-[mono=73370.461 tid=29237] CreateDevice 2400x1080 fmt 22 windowed 1 msaa 0/0 interval 1 swap 1 buffers 1 behavior 00000044 adapters 1 -> 00000000 in 71.085 ms
-[mono=73370.472 tid=29237] textures: skip 0 mip level(s) of textures >= 512, decode DXT on
-[mono=73370.569 tid=29237] SetThreadPriority(0) -> nice 0 on tid 29301
-[mono=73370.581 tid=29237] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
-[mono=73370.581 tid=29237] dinput: CreateDevice(Keyboard)
-[mono=73370.581 tid=29237] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
-[mono=73370.581 tid=29237] dinput: CreateDevice(Mouse)
-[mono=73370.589 tid=29237] xaudio2: Initialize(flags 0) -> 0
-[mono=73370.621 tid=29237] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) created retained output -> 0 in 30.963 ms
-[mono=73370.621 tid=29237] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
-[mono=73370.621 tid=29237] SetThreadPriority(15) -> nice -10 on tid 29307
-[mono=73370.621 tid=29237] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.001 ms
-[mono=73370.621 tid=29237] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
-[mono=73370.622 tid=29237] SetThreadPriority(15) -> nice -10 on tid 29308
-[mono=73370.643 tid=29237] SetThreadPriority(15) -> nice -10 on tid 29309
-[mono=73370.676 tid=29237] SetThreadPriority(1) -> nice -2 on tid 29310
-[mono=73370.715 tid=29237] SetThreadPriority(1) -> nice -2 on tid 29311
-[mono=73370.726 tid=29237] video settings: Anti-Alias Level = 0 (GameDB setter returned)
-[mono=73370.726 tid=29237] video settings: Shadow Detail = 2 (GameDB setter returned)
-[mono=73370.726 tid=29237] video settings: Graphic Quality = 2 (GameDB setter returned)
-[mono=73370.814 tid=29237] EngineInitialize returned 1 after 438.266 ms
-[mono=73370.820 tid=29237] perf hint: session (target 16.7 ms, 6 threads)
-[mono=73370.820 tid=29237] frame 0
-[mono=73370.853 tid=29237] Reset 2400x1080 msaa 0/0 interval 1 -> 00000000 in 14.812 ms
-[mono=73370.857 tid=29301] samplers: effective DXVK forwarding maximum 4x
-[mono=73370.865 tid=29237] frame 1
-[mono=73370.914 tid=29237] Reset 2400x1080 msaa 0/0 interval 1 -> 00000000 in 5.100 ms
-[mono=73370.931 tid=29237] frame 2
-[mono=73370.934 tid=29237] frame 4
-[mono=73370.934 tid=29237] frame 8
-[mono=73370.935 tid=29237] frame 16
-[mono=73370.935 tid=29237] frame 32
-[mono=73370.935 tid=29237] frame 64
-[mono=73370.935 tid=29237] frame 128
-[mono=73370.935 tid=29237] frame 256
-[mono=73370.936 tid=29237] frame 512
-[mono=73371.581 tid=29237] frame 1024
-[mono=73371.614 tid=29237] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.008 ms
-[mono=73371.615 tid=29237] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
-[mono=73371.615 tid=29237] SetThreadPriority(15) -> nice -10 on tid 29314
-[mono=73371.646 tid=29237] Reset 2400x1080 msaa 0/0 interval 1 -> 00000000 in 24.777 ms
-[mono=73372.296 tid=29237] frame 2048
-[mono=73372.922 tid=29237] frame 4096
-[mono=73375.641 tid=29306] audio: 235 passes, max gap 24.1 ms, guest 37.5 ms (max 5.31), refill requests 232, underruns 2, submits 964
+[mono=75806.456 tid=26257] DXVK logs mirrored to /storage/emulated/0/Prototype/logs
+[mono=75806.456 tid=26257] game dir: /storage/emulated/0/Prototype
+[mono=75806.456 tid=26257] data dir: /storage/emulated/0/Android/data/com.protodroid/files
+[mono=75806.476 tid=26257] save dir: /storage/emulated/0/Prototype/Saves
+[mono=75806.477 tid=26257] config: loaded protodroid.ini
+[mono=75806.478 tid=26257] config: render_height = 1080
+[mono=75806.478 tid=26257] config: texture_skip_mips = 0
+[mono=75806.478 tid=26257] config: game_shadow_detail = 2
+[mono=75806.478 tid=26257] config: game_graphic_quality = 2
+[mono=75806.478 tid=26257] config: game_aa_level = 0
+[mono=75806.478 tid=26257] config: max_anisotropy = 4
+[mono=75806.478 tid=26257] config: vulkan_driver = custom
+[mono=75806.478 tid=26257] memory: guest window at 1000000000, arena 2000 MiB
+[mono=75807.214 tid=26257] vulkan: libvulkan_freedreno.so vkEnumeratePhysicalDevices -> 0, 0 device(s) (test process)
+[mono=75807.293 tid=26257] vulkan test logcat: W/libturnipprobe.: type=1400 audit(0.0:73603): avc:  denied  { search } for  name="tests" dev="dm-67" ino=441 scontext=u:r:untrusted_app:s0:c98,c259,c512,c768 tcontext=u:object_r:shell_test_data_file:s0 tclass=dir permissive=0 app=com.protodroid
+[mono=75807.293 tid=26257] vulkan test logcat: W/libturnipprobe.: type=1400 audit(0.0:73604): avc:  denied  { search } for  name="tests" dev="dm-67" ino=441 scontext=u:r:untrusted_app:s0:c98,c259,c512,c768 tcontext=u:object_r:shell_test_data_file:s0 tclass=dir permissive=0 app=com.protodroid
+[mono=75807.293 tid=26257] vulkan test logcat: W/libturnipprobe.: type=1400 audit(0.0:73605): avc:  denied  { search } for  name="tests" dev="dm-67" ino=441 scontext=u:r:untrusted_app:s0:c98,c259,c512,c768 tcontext=u:object_r:shell_test_data_file:s0 tclass=dir permissive=0 app=com.protodroid
+[mono=75807.293 tid=26257] vulkan test logcat: W/libturnipprobe.: type=1400 audit(0.0:73606): avc:  denied  { search } for  name="tests" dev="dm-67" ino=441 scontext=u:r:untrusted_app:s0:c98,c259,c512,c768 tcontext=u:object_r:shell_test_data_file:s0 tclass=dir permissive=0 app=com.protodroid
+[mono=75807.293 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "persist.vendor.track.malloc.enable"
+[mono=75807.293 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "persist.vendor.fd.monitor.enable"
+[mono=75807.293 tid=26257] vulkan test logcat: W/libturnipprobe.: type=1400 audit(0.0:73607): avc:  denied  { execstack } for  scontext=u:r:untrusted_app:s0:c98,c259,c512,c768 tcontext=u:r:untrusted_app:s0:c98,c259,c512,c768 tclass=process permissive=0 app=com.protodroid
+[mono=75807.293 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "ro.debuggable"
+[mono=75807.293 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "ro.debuggable"
+[mono=75807.293 tid=26257] vulkan test logcat: W/libturnipprobe.: type=1400 audit(0.0:73609): avc:  denied  { read } for  name="u:object_r:userdebug_or_eng_prop:s0" dev="tmpfs" ino=552 scontext=u:r:untrusted_app:s0:c98,c259,c512,c768 tcontext=u:object_r:userdebug_or_eng_prop:s0 tclass=file permissive=0 app=com.protodroid
+[mono=75807.293 tid=26257] vulkan test logcat: W/libturnipprobe.: type=1400 audit(0.0:73610): avc:  denied  { read } for  name="u:object_r:userdebug_or_eng_prop:s0" dev="tmpfs" ino=552 scontext=u:r:untrusted_app:s0:c98,c259,c512,c768 tcontext=u:object_r:userdebug_or_eng_prop:s0 tclass=file permissive=0 app=com.protodroid
+[mono=75807.293 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "ro.debuggable"
+[mono=75807.293 tid=26257] vulkan test logcat: I/hook_impl: hook_android_load_sphal_library: filename: vulkan.mali.so
+[mono=75807.294 tid=26257] vulkan test logcat: I/hook_impl: hook_android_dlopen_ext: filename: vulkan.mali.so
+[mono=75807.294 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "ro.debuggable"
+[mono=75807.294 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "ro.debuggable"
+[mono=75807.294 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "ro.debuggable"
+[mono=75807.294 tid=26257] vulkan test logcat: I/hook_impl: hook_android_dlopen_ext: loading custom driver: /data/user/0/com.protodroid/files/driver/libvulkan_freedreno.so
+[mono=75807.294 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mivk.log.debug"
+[mono=75807.294 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.fd.rd.dump"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.fd.rd.dump.path"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.debug"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.debug.file"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.trace"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.trace.per.submit"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.gallium.print.options"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.trace.frame"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.trace.trigger"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.dont.care.as.load"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.force.vk.vendor"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.force.vk.devicename"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.wsi.force.bgra8.unorm.first"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.wsi.force.swapchain.to.current.extent"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.wsi.disable.unordered.submits"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.x11.ignore.suboptimal"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.disable.conservative.lrz"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.dont.reserve.descriptor.set"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.allow.oob.indirect.ubo.loads"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.enable.d24s8.border.color.workaround"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.enable.fast.border.color.for.undefined.formats"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.use.tex.coord.round.nearest.even.mode"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.ignore.frag.depth.direction"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.enable.softfloat32"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.emulate.alpha.to.coverage"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.override.uncached.as.cache.coherent"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.expose.device.local.only.memory.type"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.restrict.subgroup.size.64"
+[mono=75807.295 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.emulate.second.queue"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.override.graphics.shader.version"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.override.compute.shader.version"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.enable.texel.buffer.emulation"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.enable.ssbo.emulation"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.disable.conservative.fdm.binning"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.heap.memory.percent"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.allow.concurrent.binning"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.tu.autotune.algorithm"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.adaptive.sync"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.x11.override.min.image.count"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.x11.strict.image.count"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.x11.ensure.min.image.count"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.vk.google.display.timing"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.driconf.executable.override"
+[mono=75807.296 tid=26257] vulkan test logcat: W/libc    : Access denied finding property "vendor.mesa.process.name"
+[mono=75807.296 tid=26257] vulkan test logcat: I/libturnipprobe.so: hook_module_exit libgui_unisoc_utils.so over, handle:0x0
+[mono=75807.296 tid=26257] vulkan test logcat: W/RefBase : RefBase: Explicit destruction, weak count = 0 (in 0x70af413d48). Use sp<> to manage this object. Note - if weak count is 0, this leaks mRefs (weakref_impl).
+[mono=75807.296 tid=26257] vulkan test logcat: D/RefBase :   #00 pc 0000000000073b50  /apex/com.android.runtime/lib64/bionic/libc.so (__cxa_finalize+224) (BuildId: 9511d9cb89af590535458e21a5811d1a)
+[mono=75807.296 tid=26257] vulkan test logcat: D/RefBase :   #01 pc 0000000000078a64  /apex/com.android.runtime/lib64/bionic/libc.so (exit+36) (BuildId: 9511d9cb89af590535458e21a5811d1a)
+[mono=75807.296 tid=26257] vulkan test logcat: D/RefBase :   #02 pc 000000000006c1ac  /apex/com.android.runtime/lib64/bionic/libc.so (__libc_init+124) (BuildId: 9511d9cb89af590535458e21a5811d1a)
+[mono=75807.296 tid=26257] vulkan test logcat: I/libturnipprobe.so: hook_module_exit libgui_unisoc_utils.so over, handle:0x0
+[mono=75807.296 tid=26257] vulkan test logcat: W/RefBase : RefBase: Explicit destruction, weak count = 0 (in 0x70f7001d48). Use sp<> to manage this object. Note - if weak count is 0, this leaks mRefs (weakref_impl).
+[mono=75807.296 tid=26257] vulkan test logcat: D/RefBase :   #00 pc 0000000000073b50  /apex/com.android.runtime/lib64/bionic/libc.so (__cxa_finalize+224) (BuildId: 9511d9cb89af590535458e21a5811d1a)
+[mono=75807.297 tid=26257] vulkan test logcat: D/RefBase :   #01 pc 0000000000078a64  /apex/com.android.runtime/lib64/bionic/libc.so (exit+36) (BuildId: 9511d9cb89af590535458e21a5811d1a)
+[mono=75807.297 tid=26257] vulkan test logcat: D/RefBase :   #02 pc 000000000006c1ac  /apex/com.android.runtime/lib64/bionic/libc.so (__libc_init+124) (BuildId: 9511d9cb89af590535458e21a5811d1a)
+[mono=75807.297 tid=26257] vulkan: no usable custom/bundled driver, using the system driver
+[mono=75807.298 tid=26257] vulkan: system vkGetInstanceProcAddr resolved (RTLD_GLOBAL)
+[mono=75807.301 tid=26257] vulkan: system driver sees Mali-G720 MC7 (profile mali-immortalis, device Vulkan 1.3.278, instance 1.3, usable 1.3, driver 0c401000, driverID 9, vendor 13b5 device c8700010)
+[mono=75807.302 tid=26257] present mode: FIFO (vsync), interval 1 for CreateDevice and Reset
+[mono=75807.302 tid=26257] anisotropy: bridge/DXVK maximum 4x
+[mono=75807.312 tid=26257] render size 2400x1080 (window 2712x1220)
+[mono=75807.312 tid=26257] diagnostics: detailed metrics disabled; shared log mirroring remains active
+[mono=75807.359 tid=26257] loader: rebased to 7c000000 (418563 fixups)
+[mono=75807.360 tid=26257] loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
+[mono=75807.360 tid=26257] timing: LoadImage 48.091 ms (success=1)
+[mono=75807.360 tid=26257] DllMain(PROCESS_ATTACH)
+[mono=75807.406 tid=26257] DllMain returned 1 after 45.761 ms
+[mono=75807.406 tid=26257] EngineInitialize
+[mono=75807.407 tid=26257] SetThreadPriority(0) -> nice 0 on tid 26257
+[mono=75807.410 tid=26257] SetThreadPriority(2) -> nice -4 on tid 26271
+[mono=75807.410 tid=26257] process affinity: reporting mask 000000ff (8 low CPUs) to the engine
+[mono=75807.411 tid=26257] SetThreadPriority(0) -> nice 0 on tid 26272
+[mono=75807.412 tid=26257] SetThreadPriority(0) -> nice 0 on tid 26273
+[mono=75807.412 tid=26257] SetThreadPriority(0) -> nice 0 on tid 26274
+[mono=75807.413 tid=26257] SetThreadPriority(0) -> nice 0 on tid 26275
+[mono=75807.413 tid=26257] SetThreadPriority(0) -> nice 0 on tid 26276
+[mono=75807.413 tid=26257] SetThreadPriority(0) -> nice 0 on tid 26277
+[mono=75807.413 tid=26257] SetThreadPriority(0) -> nice 0 on tid 26278
+[mono=75807.417 tid=26257] SetThreadPriority(15) -> nice -10 on tid 26279
+[mono=75807.433 tid=26257] SetThreadPriority(1) -> nice -2 on tid 26280
+[mono=75807.434 tid=26257] SetThreadPriority(1) -> nice -2 on tid 26281
+[mono=75807.434 tid=26257] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+[mono=75807.440 tid=26257] Direct3DCreate9(32) -> 0xb400006fa76bcf30 in 6.327 ms
+[mono=75807.441 tid=26257] GPU BC (DXT) textures: not supported, decoding on (DXT1 as 16-bit)
+[mono=75807.553 tid=26257] CreateDevice 2400x1080 fmt 22 windowed 1 msaa 0/0 interval 1 swap 1 buffers 1 behavior 00000044 adapters 1 -> 00000000 in 112.671 ms
+[mono=75807.572 tid=26257] textures: skip 0 mip level(s) of textures >= 512, decode DXT on
+[mono=75807.694 tid=26257] SetThreadPriority(0) -> nice 0 on tid 26291
+[mono=75807.725 tid=26257] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+[mono=75807.725 tid=26257] dinput: CreateDevice(Keyboard)
+[mono=75807.726 tid=26257] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+[mono=75807.726 tid=26257] dinput: CreateDevice(Mouse)
+[mono=75807.743 tid=26257] xaudio2: Initialize(flags 0) -> 0
+[mono=75807.838 tid=26257] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) created retained output -> 0 in 95.612 ms
+[mono=75807.839 tid=26257] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+[mono=75807.839 tid=26257] SetThreadPriority(15) -> nice -10 on tid 26296
+[mono=75807.839 tid=26257] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.001 ms
+[mono=75807.840 tid=26257] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+[mono=75807.840 tid=26257] SetThreadPriority(15) -> nice -10 on tid 26297
+[mono=75807.847 tid=26257] SetThreadPriority(15) -> nice -10 on tid 26298
+[mono=75807.908 tid=26257] SetThreadPriority(1) -> nice -2 on tid 26299
+[mono=75807.969 tid=26257] SetThreadPriority(1) -> nice -2 on tid 26300
+[mono=75807.991 tid=26257] video settings: Anti-Alias Level = 0 (GameDB setter returned)
+[mono=75807.991 tid=26257] video settings: Shadow Detail = 2 (GameDB setter returned)
+[mono=75807.991 tid=26257] video settings: Graphic Quality = 2 (GameDB setter returned)
+[mono=75808.118 tid=26257] EngineInitialize returned 1 after 711.346 ms
+[mono=75808.134 tid=26257] perf hint: session (target 16.7 ms, 6 threads)
+[mono=75808.134 tid=26257] frame 0
+[mono=75808.197 tid=26257] Reset 2400x1080 msaa 0/0 interval 1 -> 00000000 in 40.080 ms
+[mono=75808.211 tid=26291] samplers: effective DXVK forwarding maximum 4x
+[mono=75808.228 tid=26257] frame 1
+[mono=75808.307 tid=26257] Reset 2400x1080 msaa 0/0 interval 1 -> 00000000 in 10.424 ms
+[mono=75808.335 tid=26257] frame 2
+[mono=75808.339 tid=26257] frame 4
+[mono=75808.339 tid=26257] frame 8
+[mono=75808.339 tid=26257] frame 16
+[mono=75808.340 tid=26257] frame 32
+[mono=75808.340 tid=26257] frame 64
+[mono=75808.340 tid=26257] frame 128
+[mono=75808.360 tid=26257] frame 256
+[mono=75809.457 tid=26257] frame 512
+[mono=75809.608 tid=26257] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.003 ms
+[mono=75809.608 tid=26257] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+[mono=75809.609 tid=26257] SetThreadPriority(15) -> nice -10 on tid 26304
+[mono=75809.669 tid=26257] Reset 2400x1080 msaa 0/0 interval 1 -> 00000000 in 44.176 ms
+[mono=75812.852 tid=26295] audio: 234 passes, max gap 24.1 ms, guest 32.0 ms (max 4.06), refill requests 231, underruns 1, submits 957
