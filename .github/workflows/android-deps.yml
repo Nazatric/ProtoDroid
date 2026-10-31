@@ -58,7 +58,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: out/turnip
-          key: android-turnip-${{ hashFiles('android/build-turnip.sh') }}
+          key: android-turnip-gen8-v1-${{ hashFiles('android/build-turnip.sh', 'android/patches/turnip-gen8/**') }}
 
       - name: Tools
         if: steps.cache.outputs.cache-hit != 'true'

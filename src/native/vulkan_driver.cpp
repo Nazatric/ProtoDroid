@@ -3,7 +3,7 @@
 // shipped in the APK, through libadrenotools (which gets a driver past Android's linker namespaces), and hands its
 // vkGetInstanceProcAddr to DXVK (DXVK_VK_GIPA, android/patches/dxvk-android.patch). Turnip is used only if it
 // finds the GPU; otherwise, and on other GPUs (Mali, PowerVR, Xclipse), the system driver stays.
-// Setting vulkan_driver: auto (default) | system | turnip.
+// Setting vulkan_driver: auto (default) | system | turnip | custom. Custom also allows a probed Mali/PanVK package.
 #include "guest.h"
 
 #if defined(__ANDROID__) && defined(PROTODROID_ADRENOTOOLS)
@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "turnip_load.h"
+#include "driver_recovery.h"
 
 // libadrenotools is built for API 29, where libc exports android_get_device_api_level; libmain targets API 26,
 // whose headers only have an inline version, so the Makefile points the symbol here (--defsym).
@@ -147,18 +148,19 @@ void LogChildLogcat(pid_t pid) {
 bool TurnipWorksInChild(const Driver& d) {
     const std::string probe = d.hook_dir + "libturnipprobe.so";
     if (access(probe.c_str(), X_OK) != 0) {
-        Log("vulkan: no driver probe program, trying %s in the game process", d.file.c_str());
-        return true;
+        Log("vulkan: no driver probe program, %s %s", d.custom ? "rejecting imported driver" : "trying",
+            d.file.c_str());
+        return !d.custom;  // an imported driver is never loaded into gameplay without a successful probe
     }
     int fds[2];
-    if (pipe(fds) != 0) return true;  // cannot test: try in-process
+    if (pipe(fds) != 0) return !d.custom;
     const char* argv[] = {probe.c_str(), d.hook_dir.c_str(), d.dir.c_str(), d.file.c_str(), d.custom ? "1" : "0",
-                          nullptr};
+                          d.direct_icd ? "1" : "0", nullptr};
     pid_t pid = fork();
     if (pid < 0) {
         close(fds[0]);
         close(fds[1]);
-        return true;
+        return !d.custom;
     }
     if (pid == 0) {  // only async-signal-safe calls until exec
         dup2(fds[1], 1);
@@ -222,95 +224,168 @@ std::string GpuModel() {
 constexpr const char* kFailed = "turnip_failed";
 constexpr const char* kBuild = __DATE__ " " __TIME__;  // a failure recorded by another build is retried
 bool g_turnip_pending = false;
+bool g_auto_recovery_pending = false;
 
 // The recorded reason if Turnip failed with this build, "" otherwise.
 std::string FailedBefore() {
-    FILE* f = fopen(kFailed, "r");
-    if (!f) return "";
-    char build[64] = {}, reason[256] = {};
-    fgets(build, sizeof(build), f);
-    fgets(reason, sizeof(reason), f);
-    fclose(f);
-    build[strcspn(build, "\n")] = 0;
-    reason[strcspn(reason, "\n")] = 0;
-    if (strcmp(build, kBuild) != 0) return "";
-    return reason[0] ? reason : "unknown";
+    return ReadDriverFailureMarker(kFailed, kBuild);
 }
 
 }  // namespace
 
-void VulkanDriverAbandon() { g_turnip_pending = false; }
+void VulkanDriverAbandon() {
+    g_turnip_pending = false;
+    g_auto_recovery_pending = false;
+}
 
 void VulkanDriverConfirm() {
     if (!g_turnip_pending) return;
     g_turnip_pending = false;
-    Log("vulkan: Turnip startup ok");
+    g_auto_recovery_pending = false;
+    Log("vulkan: custom/bundled driver startup ok");
+}
+
+// A graceful DXVK initialization failure is just as much a failed driver attempt as a native crash. Record it before
+// StartupFailure abandons the active attempt; only Auto promises a system-driver retry on the next launch.
+bool VulkanDriverStartupFailed(const char* reason) {
+    if (!g_turnip_pending) return false;
+    const bool automatic = g_auto_recovery_pending;
+    if (!WriteDriverFailureMarker(kFailed, kBuild, reason)) {
+        Log("vulkan: could not record the selected driver's initialization failure");
+        return false;
+    }
+    Log("vulkan: recorded selected-driver initialization failure: %s", reason);
+    if (automatic) Log("vulkan: Auto will try the system driver on the next launch");
+    return automatic;
 }
 
 // From the crash handler: only open/write/close.
 void VulkanDriverCrashed() {
     if (!g_turnip_pending) return;
-    int fd = open(kFailed, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return;
-    static const char reason[] = "\nthe game crashed during startup on Turnip (see proto-native.prev.log)\n";
-    (void)!write(fd, kBuild, strlen(kBuild));
-    (void)!write(fd, reason, sizeof(reason) - 1);
-    close(fd);
+    WriteDriverFailureMarker(kFailed, kBuild,
+                             "the game crashed during startup on a custom/bundled Vulkan driver (see proto-native.prev.log)");
 }
 
 void SelectVulkanDriver() {
-    const std::string mode = Setting("vulkan_driver", "auto");
-    const bool adreno = access("/dev/kgsl-3d0", F_OK) == 0;  // Qualcomm's GPU kernel driver
-    if (mode == "system" || (mode == "auto" && !adreno)) {
+    std::string mode = Setting("vulkan_driver", "auto");
+    if (mode != "auto" && mode != "system" && mode != "turnip" && mode != "custom") {
+        Log("vulkan: unknown vulkan_driver '%s', using auto", mode.c_str());
+        mode = "auto";
+    }
+    char soc[PROP_VALUE_MAX] = {};
+    __system_property_get("ro.soc.model", soc);
+    // SM8735 is an A825/KGSL platform even if Android restricts the model/device sysfs node.
+    const bool adreno = access("/dev/kgsl-3d0", F_OK) == 0 || StartsWithText(soc, "SM8735");
+    const char* custom = getenv("PROTODROID_CUSTOM_DRIVER");
+    const char* custom_backend = getenv("PROTODROID_CUSTOM_DRIVER_BACKEND");
+    const bool direct_custom = custom_backend &&
+            (strcmp(custom_backend, "panvk-kbase") == 0 || strcmp(custom_backend, "panvk") == 0);
+    const bool custom_available = custom && *custom && access(custom, R_OK) == 0;
+    Log("vulkan: requested driver mode %s%s", mode.c_str(),
+        mode == "custom" && direct_custom ? " (direct PanVK ICD)" : "");
+    if (custom && *custom && !custom_available) Log("vulkan: imported driver is not readable: %s", custom);
+
+    if (mode == "system") {
         LogSystemDevice();
         return;
     }
+    if (mode == "custom" && !custom_available) {
+        Log("vulkan: custom mode has no readable imported driver, using automatic driver selection");
+        mode = "auto";
+    }
+    if (mode == "custom" && custom_available && direct_custom) {
+        // PanVK-kbase otherwise defaults to lossy BC transcode/AFRC paths on some Mali GPUs. These are PanVK-only
+        // settings: keep exact decoded textures and do not trade the game's accepted rendering quality for speed.
+        setenv("PANVK_BC_MODE", "exact", 1);
+        setenv("PANVK_BC_AFRC", "0", 1);
+        setenv("PANVK_BC_BC6H", "exact", 1);
+        // PanVK is an explicit experimental Custom choice, not an Auto substitution for a working Mali system driver.
+        setenv("PAN_I_WANT_A_BROKEN_VULKAN_DRIVER", "1", 1);
+    }
+    if (mode == "turnip" && !adreno) {
+        Log("vulkan: Turnip is Adreno-only; use custom mode for a compatible Mali/PanVK package");
+        LogSystemDevice();
+        return;
+    }
+    if (mode == "custom" && custom_available && !direct_custom && !adreno) {
+        Log("vulkan: selected package is Turnip/AdrenoTools, which is Adreno-only on this Mali/non-Adreno device; using System");
+        LogSystemDevice();
+        return;
+    }
+    if (mode == "auto" && !adreno) {
+        LogSystemDevice();
+        return;
+    }
+
     unlink("turnip_pending");  // left by older builds
-    if (mode == "turnip") {
-        unlink(kFailed);
+    if (mode == "turnip" || mode == "custom") {
+        unlink(kFailed);  // an explicit selection retries that driver
     } else if (std::string why = FailedBefore(); !why.empty()) {
-        Log("vulkan: Turnip failed here before: %s", why.c_str());
+        Log("vulkan: a custom/bundled driver failed here before: %s", why.c_str());
         std::string device;
         if (SystemDriverApi(device) >= kVulkanApi12) {
-            Log("vulkan: using the system driver (vulkan_driver = turnip forces Turnip)");
+            Log("vulkan: using the system driver (explicit Turnip/custom selection retries)");
             return;
         }
-        Log("vulkan: the system driver cannot run the game, trying Turnip again");
+        Log("vulkan: the system driver cannot run the game, trying the driver again");
     }
-    // Adreno 8xx: Turnip's support for them is new (an Adreno 840 hung at startup), and Qualcomm's driver there has
-    // the proven Vulkan 1.3 path. vulkan_driver = turnip still tries Turnip.
-    const std::string model = GpuModel();
+
+    const std::string model = adreno ? GpuModel() : "";
     if (!model.empty()) Log("vulkan: GPU %s", model.c_str());
-    const bool skip_bundled = mode == "auto" && model.compare(0, 7, "Adreno8") == 0;
-    const char* libdir = getenv("PROTODROID_NATIVE_LIB_DIR");  // set by ProtoActivity: the APK's extracted libraries
+    const bool adreno825 = PreferGen8Turnip(model.c_str(), soc);
+    if (adreno825 && model.empty()) Log("vulkan: SoC %s: selecting the Adreno 825 driver policy", soc);
+    const bool adreno8 = adreno && (model.compare(0, 7, "Adreno8") == 0 || adreno825);
+    const bool gen8_auto = mode == "auto" && adreno825;
+    const char* libdir = getenv("PROTODROID_NATIVE_LIB_DIR");  // set by ProtoActivity: extracted APK libraries
     if (!libdir) {
         LogSystemDevice();
         return;
     }
     const std::string hooks = std::string(libdir) + "/";
-    // The user's own driver (SetupActivity copies it from files/driver/), then the tested Turnip release, then the
-    // newer Mesa for the GPUs the release does not know (Adreno 710/720).
     std::vector<Driver> drivers;
-    if (const char* custom = getenv("PROTODROID_CUSTOM_DRIVER"); custom && access(custom, R_OK) == 0) {
+    if (mode == "custom" && custom_available) {
         std::string path = custom;
-        size_t slash = path.rfind('/');
-        drivers.push_back({hooks, path.substr(0, slash + 1), path.substr(slash + 1), true});
+        const size_t slash = path.rfind('/');
+        if (slash != std::string::npos) {
+            drivers.push_back({hooks, path.substr(0, slash + 1), path.substr(slash + 1), true, direct_custom});
+            Log("vulkan: custom package %s, backend %s", path.substr(slash + 1).c_str(),
+                direct_custom ? "panvk-kbase/direct-icd" : "turnip/adrenotools");
+        }
     }
-    for (const char* file : {"libvulkan_freedreno.so", "libvulkan_freedreno_next.so"}) {
-        if (!skip_bundled && access((hooks + file).c_str(), F_OK) == 0) drivers.push_back({hooks, hooks, file, false});
+    auto add_bundled = [&](const char* file) {
+        if (access((hooks + file).c_str(), F_OK) == 0) drivers.push_back({hooks, hooks, file, false});
+    };
+
+    if (adreno && mode != "custom") {
+        if (adreno8) {
+            if (mode == "turnip") {
+                add_bundled("libvulkan_freedreno_gen8.so");
+                add_bundled("libvulkan_freedreno.so");
+                add_bundled("libvulkan_freedreno_next.so");
+            } else if (gen8_auto) {
+                Log("vulkan: Adreno 825: trying the A8xx Turnip build before Qualcomm's driver");
+                add_bundled("libvulkan_freedreno_gen8.so");
+            } else {
+                Log("vulkan: Adreno 8xx: keeping the system driver in auto mode; Turnip/custom remain available");
+            }
+        } else {
+            // Preserve the established A6xx/A7xx order: stable 26.2, then the 26.3 A710/A720 candidate.
+            add_bundled("libvulkan_freedreno.so");
+            add_bundled("libvulkan_freedreno_next.so");
+        }
     }
-    if (skip_bundled) Log("vulkan: Adreno 8xx: the bundled Turnip is skipped for Qualcomm's driver");
+
     PFN_vkGetInstanceProcAddr gipa = nullptr;
     std::string device;
     for (const Driver& d : drivers) {
         if (!TurnipWorksInChild(d)) continue;
         std::string report;
         gipa = LoadTurnip(d, device, report);
-        Log("%s (%s)", report.c_str(), d.custom ? "the user's driver" : d.file.c_str());
+        Log("%s (%s)", report.c_str(), d.custom ? "the imported driver" : d.file.c_str());
         break;  // a second driver in this process after a failed load is not worth the risk
     }
     if (!gipa) {
-        Log("vulkan: no usable Turnip, using the system driver");
+        Log("vulkan: no usable custom/bundled driver, using the system driver");
         LogSystemDevice();
         return;
     }
@@ -318,6 +393,7 @@ void SelectVulkanDriver() {
     snprintf(hex, sizeof(hex), "%llx", (unsigned long long)reinterpret_cast<uintptr_t>(gipa));
     setenv("DXVK_VK_GIPA", hex, 1);
     Log("vulkan: using %s", device.c_str());
+    g_auto_recovery_pending = mode == "auto";
     g_turnip_pending = true;
 }
 
@@ -330,6 +406,7 @@ namespace native {
 void SelectVulkanDriver() {}
 void VulkanDriverConfirm() {}
 void VulkanDriverAbandon() {}
+bool VulkanDriverStartupFailed(const char*) { return false; }
 void VulkanDriverCrashed() {}
 
 }  // namespace native

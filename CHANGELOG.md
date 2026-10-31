@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.13 - 2026-10-31
+
+- Fixed the Drivers screen's **BACK** crash: touch tracking is now released before closing the screen can detach its view, with null-safe cleanup shared by touch cancellation and detachment. Both the on-screen BACK action and Android system Back return to the existing launcher homepage instead of terminating it. Added entry/exit and cleanup-order regression coverage; gameplay and native driver behavior are unchanged.
+- Brings the validated 0.10–0.12 driver updates into this release: the dedicated driver center and verified custom packages, Adreno 825 Turnip selection, Qualcomm unified-memory correction, and automatic startup recovery. Device-specific compatibility still requires physical testing; see the sections below for full details.
+
+## 0.12 - 2026-10-31
+
+- Fixed the **Drivers** button crash: opening the dedicated screen detaches the launcher view during touch-up, so touch cleanup now retains and null-checks the original parent instead of dereferencing a removed view. Added a regression check for this content-view replacement order; driver rendering, downloads, and game/native behavior are unchanged.
+- Consolidated the open Adreno reports without another version bump: the Adreno 710/750 logs confirm the same 90,808-byte unified-memory failure already backported from upstream DXVK. Expanded the exact regression coverage and made dependency builds reject a missing patch; physical #15/#17/#18 outcomes still require device validation.
+- Improved Auto recovery for clean D3D9 initialization failures such as #16: an unconfirmed selected driver is recorded so the next launch can try System, with a clear recovery message. Explicit Turnip/Custom choices still retry by choice, and the A825 Gen8 policy is unchanged.
+
+## 0.11 - 2026-10-31
+
+- Replaced the hidden driver-package row and generic dialogs with a dedicated Prototype-styled **Drivers** screen, accessible from the launcher and a fixed Settings button. Auto remains the default; the screen explains Auto/System/Turnip/Custom and Mali fallback behavior.
+- Added a scrollable/filterable multi-package library with explicit Select and two-tap Remove, private legacy migration, hash-deduplicated imports, and in-screen download/progress/error states. Added pinned GitHub downloads for standard, One UI, and Gen8 Turnip plus PanVK-kbase; installing a package never silently selects Custom.
+- Added direct Vulkan ICD loading for explicitly selected PanVK-kbase packages while retaining AdrenoTools for Turnip. Probe and gameplay share backend selection, mapped-library checks, and crash recovery; Turnip is refused on non-Adreno devices. Exact BC texture behavior and accepted rendering quality are preserved.
+- Expanded host/multi-slot tests and added CI validation of every pinned release asset and PanVK's ICD export. Physical Mali PanVK gameplay and device-specific black-screen outcomes remain unverified; no universal compatibility, FPS, or black-screen fix is claimed.
+
+## 0.10 - 2026-10-31
+
+- Added a pinned A825 Gen8 Turnip build and made Auto select it for Adreno 825/SM8735 instead of skipping directly to Qualcomm's driver. Other Adreno 8xx models retain their previous automatic policy.
+- Added **Auto / System / Turnip / Custom** driver settings and a **Driver packages** manager with ZIP/raw-SO import, removal, and hash-pinned in-app Turnip Gen8 and experimental PanVK-kbase downloads. PanVK uses exact BC modes, not its optional lossy texture paths.
+- Added staged ELF/metadata/checksum validation, rollback-safe replacement, legacy import migration, isolated custom-driver probes, and mapped-library checks against silent stock fallback. Missing custom packages restore Auto; System remains available for recovery.
+- Backported DXVK's upstream unified-memory type-selection fix for Qualcomm's driver and clarified no-compatible-GPU failures. Rendering and texture quality are unchanged.
+- Wired the required Gen8 driver and probe into exact-commit ARM64 APK builds and added host package/policy tests. Signed-APK checks now require the exact source revision and linked driver-selection code. Physical A825 and Mali gameplay still require device validation; no universal compatibility or FPS claim is made.
+
 ## 0.9 - 2026-10-31
 
 - Added a launcher update card for published GitHub releases, with versionCode checks, resumable system downloads, APK/certificate verification, progress, and signer-aware installation. Differently signed updates explain the required uninstall first; shared game saves remain in `/storage/emulated/0/Prototype`, and the downloaded APK stays in Downloads for Android's process-change fallback.

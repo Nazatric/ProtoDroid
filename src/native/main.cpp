@@ -325,6 +325,8 @@ void Fatal(const char* fmt, ...) {
 // the same process, on top of this run's guest memory.
 [[noreturn]] void StartupFailure(const char* what) {
     Log("startup failed: %s", what);
+    // End the attempt without blaming ordinary startup errors on the driver. A D3D9 initialization failure may
+    // already have recorded its own recovery marker before reaching this common exit path.
     VulkanDriverAbandon();
     DiagnosticsStop();
     WaitForMirrorCopy();

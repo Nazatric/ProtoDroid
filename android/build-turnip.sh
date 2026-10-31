@@ -7,22 +7,26 @@
 # Usage: android/build-turnip.sh <source dir> <install prefix>
 # Needs ANDROID_NDK_HOME (or ANDROID_NDK_LATEST_HOME), cmake, ninja, meson >= 1.4, python3 with mako and pyyaml,
 # bison, flex, glslangValidator, git.
-# Output: <prefix>/lib/libvulkan_freedreno.so and libvulkan_freedreno_next.so, <prefix>/lib/libadrenotools.a and
+# Output: <prefix>/lib/libvulkan_freedreno.so, libvulkan_freedreno_next.so and the patched A825
+# libvulkan_freedreno_gen8.so, plus <prefix>/lib/libadrenotools.a and
 # the adrenotools hook libraries
 # (<prefix>/lib/lib*_hook.so, lib*_impl.so: shipped in the APK next to libmain.so), headers in <prefix>/include.
 set -euo pipefail
 
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 SRC=$(realpath -m "${1:?source dir}")
 PREFIX=$(realpath -m "${2:?install prefix}")
 NDK=${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:?set ANDROID_NDK_HOME}}
 API=29  # adrenotools uses memfd from API 29; older Android is not targeted for Adreno
 JOBS=${JOBS:-$(nproc)}
 
-# Two Turnip builds: the 26.2 release (libvulkan_freedreno.so; tested on Adreno 660/735/740) and 26.3, which adds
-# Adreno 710/720 (FD710/FD720) but broke startup on an Adreno 740 (libvulkan_freedreno_next.so). The game tries
-# them in that order (src/native/vulkan_driver.cpp).
+# The 26.2 release (libvulkan_freedreno.so; tested on Adreno 660/735/740) and 26.3, which adds Adreno 710/720
+# (FD710/FD720) but broke startup on an Adreno 740 (libvulkan_freedreno_next.so), retain their existing order.
+# A separate pinned Gen8 tree contains the Adreno 825 device entry and A8xx-specific register/offset support.
 MESA_TAG=mesa-26.2.4
 MESA_NEXT_TAG=mesa-26.3.0-rc2
+MESA_GEN8_REPO=https://github.com/whitebelyash/mesa-unified.git
+MESA_GEN8_REV=9c7e022677dfa3abb356c2b6732cbd2e25783d01
 ADRENOTOOLS_REV=8fae8ce
 
 mkdir -p "$SRC" "$PREFIX/lib" "$PREFIX/include"
@@ -75,6 +79,22 @@ build_turnip() {  # <tag> <output name>
 }
 build_turnip $MESA_TAG libvulkan_freedreno.so
 build_turnip $MESA_NEXT_TAG libvulkan_freedreno_next.so
+
+# Gen8 is a pinned source revision, not a moving branch or a prebuilt driver download. Reset before applying the
+# small Android/KGSL patch set so repeated local builds cannot accumulate patches.
+if [ ! -d "$SRC/mesa-gen8/.git" ]; then
+    git init -q "$SRC/mesa-gen8"
+    git -C "$SRC/mesa-gen8" remote add origin "$MESA_GEN8_REPO"
+fi
+if ! git -C "$SRC/mesa-gen8" cat-file -e "$MESA_GEN8_REV^{commit}" 2>/dev/null; then
+    git -C "$SRC/mesa-gen8" fetch -q --depth 1 origin "$MESA_GEN8_REV"
+fi
+git -C "$SRC/mesa-gen8" reset -q --hard "$MESA_GEN8_REV"
+git -C "$SRC/mesa-gen8" clean -q -fdx
+for patch in "$ROOT"/android/patches/turnip-gen8/*.patch; do
+    git -C "$SRC/mesa-gen8" apply "$patch"
+done
+build_turnip mesa-gen8 libvulkan_freedreno_gen8.so
 
 # libadrenotools (static) and its hook libraries.
 cmake -S "$SRC/libadrenotools" -B "$SRC/build/adrenotools" -G Ninja \

@@ -63,8 +63,13 @@ for abi in "${ABIS[@]}"; do
         cp -v "$SRC" "$OUT/pkg/lib/$abi/"
         ls -lh "$OUT/pkg/lib/$abi/$lib"
     done
-    if [ -e "$ROOT/build/android/$abi/libturnipprobe.so" ]; then
-        echo "Copying libturnipprobe.so"
+    if [ "$abi" = arm64-v8a ]; then
+        if [ ! -s "$ROOT/build/android/$abi/libturnipprobe.so" ]; then
+            echo "ERROR: missing ARM64 isolated Vulkan driver probe; rebuild with TURNIP_ROOT=$TURNIP_ROOT"
+            exit 1
+        fi
+        cp -v "$ROOT/build/android/$abi/libturnipprobe.so" "$OUT/pkg/lib/$abi/"
+    elif [ -e "$ROOT/build/android/$abi/libturnipprobe.so" ]; then
         cp -v "$ROOT/build/android/$abi/libturnipprobe.so" "$OUT/pkg/lib/$abi/"
     fi
     if [ -e "$ROOT/build/android/$abi-v80/libmain.so" ]; then
@@ -72,8 +77,15 @@ for abi in "${ABIS[@]}"; do
         cp -v "$ROOT/build/android/$abi-v80/libmain.so" "$OUT/pkg/lib/$abi/libmain_v80.so"
         ls -lh "$OUT/pkg/lib/$abi/libmain_v80.so"
     fi
-    if [ "$abi" = arm64-v8a ] && [ -e "$TURNIP_ROOT/lib/libvulkan_freedreno.so" ]; then
-        echo "Copying Turnip libs"
+    if [ "$abi" = arm64-v8a ]; then
+        echo "Copying and verifying Turnip/AdrenoTools libs"
+        for library in libvulkan_freedreno.so libvulkan_freedreno_next.so libvulkan_freedreno_gen8.so \
+                libhook_impl.so libmain_hook.so libfile_redirect_hook.so libgsl_alloc_hook.so; do
+            if [ ! -s "$TURNIP_ROOT/lib/$library" ]; then
+                echo "ERROR: missing required Vulkan driver library $TURNIP_ROOT/lib/$library"
+                exit 1
+            fi
+        done
         cp -v "$TURNIP_ROOT"/lib/*.so "$OUT/pkg/lib/$abi/"
     fi
     echo "=== Before strip ==="
@@ -120,6 +132,38 @@ with zipfile.ZipFile(apk) as archive:
             raise SystemExit(f"ERROR: signed APK asset differs from source: {name}")
         print(f"Verified {name} ({source.stat().st_size} bytes)")
 PY
+# The A825 fix is part of the native package, not an optional download. Verify it in the signed APK itself.
+if [[ " ${ABIS[*]} " == *" arm64-v8a "* ]]; then
+python3 - "$OUT/prototype.apk" <<'PY'
+import sys
+import zipfile
+required = (
+    "libvulkan_freedreno.so", "libvulkan_freedreno_next.so", "libvulkan_freedreno_gen8.so",
+    "libturnipprobe.so", "libhook_impl.so", "libmain_hook.so", "libfile_redirect_hook.so",
+    "libgsl_alloc_hook.so",
+)
+with zipfile.ZipFile(sys.argv[1]) as apk:
+    names = set(apk.namelist())
+    for library in required:
+        path = "lib/arm64-v8a/" + library
+        if path not in names or apk.getinfo(path).file_size == 0:
+            raise SystemExit("ERROR: signed APK is missing " + path)
+        print("Verified " + path)
+    # Both the isolated probe and gameplay must contain the direct-ICD path. These dlsym names survive stripping;
+    # checking only Java metadata or a successful link would not prove that the signed package contains the loader.
+    for library in ("libmain.so", "libturnipprobe.so", "libmain_v80.so"):
+        path = "lib/arm64-v8a/" + library
+        if path not in names:
+            if library == "libmain_v80.so":
+                continue
+            raise SystemExit("ERROR: signed APK is missing native driver consumer " + path)
+        data = apk.read(path)
+        for marker in (b"vk_icdGetInstanceProcAddr", b"vk_icdNegotiateLoaderICDInterfaceVersion"):
+            if marker not in data:
+                raise SystemExit("ERROR: " + path + " lacks direct ICD marker " + marker.decode())
+        print("Verified direct ICD loader in " + path)
+PY
+fi
 # Verify the metadata in the signed APK, not just the source manifest. The release job consumes this only after the
 # exact package assertion succeeds. versionName is visible metadata; versionCode is Android's monotonic update ID.
 "$BUILD_TOOLS/aapt2" dump badging "$OUT/prototype.apk" > "$OUT/badging.txt"

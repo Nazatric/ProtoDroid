@@ -1,9 +1,10 @@
-// Loading and checking a Turnip (or user-supplied Adreno) driver through libadrenotools: shared by the game
-// (vulkan_driver.cpp) and the probe program that tries a driver in a fresh process first (turnip_probe.cpp).
+// Loading and checking a bundled/custom Vulkan driver: shared by the game (vulkan_driver.cpp) and the
+// isolated probe (turnip_probe.cpp). Turnip uses libadrenotools; PanVK-kbase uses its direct ICD entry point.
 // Nothing here logs: the probe reports through its output.
 #pragma once
 
 #include <dlfcn.h>
+#include <sys/stat.h>
 
 #include <adrenotools/driver.h>
 #include <vulkan/vulkan.h>
@@ -112,10 +113,80 @@ inline std::string ProbeDevice(PFN_vkGetInstanceProcAddr gipa, const char* drive
 // A driver to try: adrenotools' hook libraries live in the APK's library folder (hook_dir), the driver in dir.
 struct Driver {
     std::string hook_dir, dir, file;
-    bool custom;  // the user's own driver: any device name is accepted (it may be a Qualcomm build)
+    bool custom;  // an explicitly imported driver: any vendor's Vulkan device may be accepted after validation
+    bool direct_icd = false;  // PanVK-kbase: bypass AdrenoTools and use vk_icdGetInstanceProcAddr
 };
 
+// AdrenoTools can silently return the system driver when a custom library fails to load. A successful Vulkan
+// probe alone cannot distinguish that fallback from a real custom Qualcomm driver. Confirm that the imported
+// inode is actually mapped in this process; the path may differ through /data/data and /data/user/0 symlinks.
+inline bool CustomDriverMapped(const Driver& d) {
+    struct stat expected = {};
+    if (stat((d.dir + d.file).c_str(), &expected) != 0) return false;
+    FILE* maps = fopen("/proc/self/maps", "r");
+    if (!maps) return false;
+    bool found = false;
+    char line[1024];
+    while (!found && fgets(line, sizeof(line), maps)) {
+        unsigned long long inode = 0;
+        if (sscanf(line, "%*s %*s %*s %*s %llu", &inode) == 1 && inode == expected.st_ino &&
+            ContainsText(line, d.file.c_str())) {
+            found = true;
+        }
+    }
+    fclose(maps);
+    return found;
+}
+
+inline PFN_vkGetInstanceProcAddr LoadDirectIcd(const Driver& d, std::string& device, std::string& report) {
+    const std::string path = d.dir + d.file;
+    // Keep the successful handle open for the lifetime of the process. DXVK receives this exact GIPA through
+    // DXVK_VK_GIPA, so instance/device calls cannot accidentally jump back to Android's system loader.
+    void* lib = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
+    if (!lib) {
+        const char* err = dlerror();
+        report = std::string("vulkan: direct ICD could not load ") + d.file + " (" + (err ? err : "no dlerror") + ")";
+        return nullptr;
+    }
+    auto gipa = reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(lib, "vk_icdGetInstanceProcAddr"));
+    if (!gipa) {
+        report = "vulkan: direct ICD has no vk_icdGetInstanceProcAddr";
+        dlclose(lib);
+        return nullptr;
+    }
+    // Vulkan's ICD interface negotiation is optional in a few older builds, but when present it must succeed.
+    // Do not require a loader-only vkGetInstanceProcAddr export from the package.
+    using Negotiate = VkResult (*)(uint32_t*);
+    auto negotiate = reinterpret_cast<Negotiate>(dlsym(lib, "vk_icdNegotiateLoaderICDInterfaceVersion"));
+    if (negotiate) {
+        uint32_t version = 7;
+        VkResult result = negotiate(&version);
+        if (result != VK_SUCCESS || version == 0) {
+            char line[256];
+            snprintf(line, sizeof(line), "vulkan: direct ICD interface negotiation -> %d (version %u)", result, version);
+            report = line;
+            dlclose(lib);
+            return nullptr;
+        }
+    }
+    ProbeInfo info;
+    device = ProbeDevice(gipa, d.file.c_str(), report, &info);
+    if (!device.empty() && !info.usable_api) {
+        report += " (needs Vulkan 1.2 with required extensions, or 1.3)";
+        device.clear();
+        return nullptr;
+    }
+    if (device.empty()) return nullptr;
+    if (d.custom && !CustomDriverMapped(d)) {
+        report += " (the direct ICD was not mapped; refusing an ambiguous fallback)";
+        device.clear();
+        return nullptr;
+    }
+    return gipa;
+}
+
 inline PFN_vkGetInstanceProcAddr LoadTurnip(const Driver& d, std::string& device, std::string& report) {
+    if (d.direct_icd) return LoadDirectIcd(d, device, report);
     // adrenotools joins the directory and the file name as is, so the directories need the trailing slash.
     void* lib = adrenotools_open_libvulkan(RTLD_NOW, ADRENOTOOLS_DRIVER_CUSTOM, nullptr, d.hook_dir.c_str(),
                                            d.dir.c_str(), d.file.c_str(), nullptr, nullptr);
@@ -138,6 +209,11 @@ inline PFN_vkGetInstanceProcAddr LoadTurnip(const Driver& d, std::string& device
     }
     if (device.empty() || (!d.custom && !IsTurnipIdentity(info.driver_id, device.c_str()))) {
         report += device.empty() ? "" : " (not Turnip: the driver did not load)";
+        device.clear();
+        return nullptr;
+    }
+    if (d.custom && !CustomDriverMapped(d)) {
+        report += " (the imported library was not mapped; AdrenoTools fell back to the system driver)";
         device.clear();
         return nullptr;
     }

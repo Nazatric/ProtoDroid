@@ -103,7 +103,15 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/gpu_profile_test
 
-      - name: Compile and run DXVK state-cache behavior tests
+      - name: Compile and run driver recovery marker tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/driver_recovery_test.cpp -o /tmp/driver_recovery_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/driver_recovery_test
+
+      - name: Test DXVK memory selection and state-cache behavior
         run: |
           set -euo pipefail
           git clone -q --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/protodroid-dxvk-test
@@ -111,6 +119,7 @@ jobs:
             git -C /tmp/protodroid-dxvk-test apply --check "$patch"
             git -C /tmp/protodroid-dxvk-test apply "$patch"
           done
+          python3 tools/test_dxvk_unified_memory.py /tmp/protodroid-dxvk-test/src/dxvk/dxvk_memory.cpp
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-test/src/dxvk"
           g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
@@ -129,6 +138,9 @@ jobs:
 
       - name: Validate GitHub issue forms
         run: python3 tools/test_issue_templates.py
+
+      - name: Test Drivers navigation touch cleanup
+        run: python3 tools/test_driver_screen_navigation.py
 
       - name: Test launcher update metadata
         run: |
@@ -313,9 +325,62 @@ jobs:
             deps-out/${{ matrix.abi }}/include
           retention-days: 14
 
+  driver-package-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test staged driver imports, rollback, and pinned catalog packages
+        env:
+          DRIVER_CATALOG_ONLINE: '1'
+        run: android/test-driver-package.sh
+
+  build-turnip:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Turnip and AdrenoTools
+        id: cache-turnip
+        uses: actions/cache@v4
+        with:
+          path: turnip-out
+          key: android-turnip-gen8-v1-${{ hashFiles('android/build-turnip.sh', 'android/patches/turnip-gen8/**') }}
+
+      - name: Install Turnip build tools
+        if: steps.cache-turnip.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools bison flex python3-pip
+          pip3 install --user --break-system-packages meson==1.5.2 mako pyyaml packaging
+
+      - name: Build stable, next, and patched A825 Gen8 Turnip
+        if: steps.cache-turnip.outputs.cache-hit != 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        run: |
+          set -euo pipefail
+          export PATH=$HOME/.local/bin:$PATH
+          android/build-turnip.sh /tmp/protodroid-turnip-src turnip-out
+          for library in libvulkan_freedreno.so libvulkan_freedreno_next.so libvulkan_freedreno_gen8.so libadrenotools.a; do
+            test -s "turnip-out/lib/$library"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-turnip-arm64-v8a
+          path: |
+            turnip-out/lib
+            turnip-out/include
+          retention-days: 14
+
   build-apk:
     runs-on: ubuntu-24.04
-    needs: [build-deps, bink-tests, arm64-graphics-tests]
+    needs: [build-deps, build-turnip, bink-tests, arm64-graphics-tests, driver-package-tests]
     env:
       SOURCE_REVISION: ${{ github.sha }}
     steps:
@@ -347,12 +412,23 @@ jobs:
           name: android-deps-arm64-v8a
           path: deps-out/arm64-v8a
 
+      - name: Download Turnip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-turnip-arm64-v8a
+          path: turnip-out
+
       - name: Prepare deps layout
         run: |
           mkdir -p $HOME/protodroid-data/android-deps/arm64-v8a
           cp -r deps-out/arm64-v8a/* $HOME/protodroid-data/android-deps/arm64-v8a/ || true
           for archive in libavformat.a libavcodec.a libavutil.a libswresample.a; do
             test -s "$HOME/protodroid-data/android-deps/arm64-v8a/lib/$archive"
+          done
+          mkdir -p $HOME/protodroid-data/android-turnip
+          cp -r turnip-out/* $HOME/protodroid-data/android-turnip/
+          for library in libvulkan_freedreno.so libvulkan_freedreno_next.so libvulkan_freedreno_gen8.so libadrenotools.a; do
+            test -s "$HOME/protodroid-data/android-turnip/lib/$library"
           done
           mkdir -p $HOME/protodroid-data/android-deps-src/SDL2
           # SDL src was used in build-apk.sh for Java, we keep minimal
@@ -365,6 +441,16 @@ jobs:
           git clone --depth 1 --branch release-2.30.9 https://github.com/libsdl-org/SDL.git /tmp/deps-src/SDL2 || true
           mkdir -p $HOME/protodroid-data/android-deps-src
           cp -r /tmp/deps-src/SDL2 $HOME/protodroid-data/android-deps-src/ || true
+
+      - name: Compile Android Java sources early
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-java-classes
+          mkdir -p /tmp/protodroid-java-classes
+          javac --release 11 -nowarn -cp "$ANDROID_SDK_ROOT/platforms/android-35/android.jar" \
+            -d /tmp/protodroid-java-classes \
+            "$HOME"/protodroid-data/android-deps-src/SDL2/android-project/app/src/main/java/org/libsdl/app/*.java \
+            android/java/com/protodroid/*.java
 
       - name: Discover binary assets and prepare libmain.so
         id: discover
@@ -818,10 +904,18 @@ jobs:
           SDL=/tmp/protodroid-apk-check/lib/arm64-v8a/libSDL2.so
           MAIN=/tmp/protodroid-apk-check/lib/arm64-v8a/libmain.so
           test "$(stat -c%s "$MAIN")" -gt 100000
+          source build/apk/native-build.txt
+          test "$nativeBuild" = compiled
+          test "$sourceRevision" = "$SOURCE_REVISION"
           $TOOLS/llvm-readelf -d "$MAIN" | tee /tmp/libmain-dynamic.txt
           ! grep -E 'libav(format|codec|util)|libswresample' /tmp/libmain-dynamic.txt
-          $TOOLS/llvm-strings "$MAIN" | grep -F 'binkw32.dll'
-          $TOOLS/llvm-strings "$MAIN" | grep -F 'unlock_menu_fps'
+          MAIN_STRINGS=$($TOOLS/llvm-strings "$MAIN")
+          printf '%s\n' "$MAIN_STRINGS" | grep -Fx "$SOURCE_REVISION"
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'vulkan: Adreno 825: trying the A8xx Turnip build'
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'DXVK found no compatible Vulkan GPU'
+          $TOOLS/llvm-nm -D "$MAIN" | grep -E ' [A-Za-z] protodroid_device_api_level$'
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'binkw32.dll'
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'unlock_menu_fps'
           STRINGS=$($TOOLS/llvm-strings "$DXVK")
           printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2.so'
           ! printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2-2.0.so.0'

@@ -54,6 +54,26 @@ constexpr bool ContainsText(const char* text, const char* needle) {
     return false;
 }
 
+constexpr bool StartsWithText(const char* text, const char* prefix) {
+    if (!text || !prefix) return false;
+    while (*prefix) {
+        if (*text++ != *prefix++) return false;
+    }
+    return true;
+}
+
+// KGSL uses names such as Adreno825 and Adreno840v2. Only the A825 gets the new Gen8 build automatically: other
+// A8xx models keep their existing system-driver policy unless the player explicitly opts into Turnip/custom.
+constexpr bool PreferGen8Turnip(const char* model) {
+    return StartsWithText(model, "Adreno825") || ContainsText(model, "Adreno (TM) 825");
+}
+
+// Android 16 builds can expose ro.soc.model even when the KGSL sysfs model is unavailable. SM8735 is the A825
+// platform; do not infer an A8xx generation from unrelated Snapdragon names.
+constexpr bool PreferGen8Turnip(const char* model, const char* soc) {
+    return PreferGen8Turnip(model) || StartsWithText(soc, "SM8735");
+}
+
 // Recent Turnip identifies itself through VkPhysicalDeviceDriverProperties. Keep the name fallback for older Mesa
 // builds which predate a useful driverID, and never let this override the explicit custom-driver exception.
 constexpr bool IsTurnipIdentity(uint32_t driver_id, const char* device_name) {

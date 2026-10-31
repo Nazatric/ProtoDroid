@@ -24,6 +24,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.view.ViewParent;
 import android.view.WindowInsets;
 
 import java.io.IOException;
@@ -40,6 +41,7 @@ final class SetupView extends View {
         void onAllowFileAccess();
         void onCheckAgain();
         void onPlay();
+        void onDrivers();
         void onExit();
         void onUpdate();
         void onUpdateConfirm();
@@ -89,6 +91,7 @@ final class SetupView extends View {
     private static final int ACTION_UPDATE = 11;
     private static final int ACTION_UPDATE_CONFIRM = 12;
     private static final int ACTION_UPDATE_CANCEL = 13;
+    private static final int ACTION_DRIVERS = 14;
     private static final int SETTING_ACTION_BASE = 32;
 
     private static final int BUTTON_NORMAL = 0;
@@ -119,6 +122,8 @@ final class SetupView extends View {
     private final RectF[] presetBounds = {new RectF(), new RectF(), new RectF(), new RectF()};
     private final RectF settingsDoneBounds = new RectF();
     private final RectF settingsListBounds = new RectF();
+    private final RectF driverBounds = new RectF();
+    private final RectF headerDriverBounds = new RectF();
     private final RectF updateBounds = new RectF();
     private final RectF updateWarningConfirmBounds = new RectF();
     private final RectF updateWarningCancelBounds = new RectF();
@@ -229,6 +234,15 @@ final class SetupView extends View {
         if (updateWarningVisible && updateState.status != UpdateManager.State.READY) hideUpdateWarning();
         updateContentDescription();
         invalidate();
+    }
+
+    void setCustomDriverSelected(boolean custom) {
+        gameSettings.setCustomDriverSelected(custom);
+        invalidate();
+    }
+
+    GameSettings gameSettings() {
+        return gameSettings;
     }
 
     void showUpdateWarning(String versionName) {
@@ -495,6 +509,12 @@ final class SetupView extends View {
         drawLine(canvas, "]", brandX, top, iconSize, 26f, 500, RED_HOT, 0f, u, -1f);
 
         exitBounds.set(right - 96f * u, top + 8f * u, right, top + 38f * u);
+        headerDriverBounds.setEmpty();
+        if (!settingsOpen && right - left >= 400f * u) {
+            headerDriverBounds.set(exitBounds.left - 102f * u, top + 8f * u, exitBounds.left - 8f * u, top + 38f * u);
+            drawButton(canvas, ACTION_DRIVERS, headerDriverBounds, "DRIVERS", BUTTON_GHOST,
+                    true, false, u, now, 13f);
+        }
         drawButton(canvas, ACTION_EXIT, exitBounds, settingsOpen ? "BACK" : "EXIT", BUTTON_GHOST,
                 true, false, u, now, 16f);
     }
@@ -1151,11 +1171,16 @@ final class SetupView extends View {
         }
 
         float listTop = presetTop + presetRows * presetHeight + (presetRows - 1) * presetGap + 12f * u;
-        float doneWidth = Math.min(160f * u, width * 0.38f);
+        float doneWidth = Math.min(160f * u, width * 0.30f);
+        float driverWidth = Math.min(150f * u, width * 0.28f);
         settingsDoneBounds.set(right - doneWidth, bottom - 38f * u, right, bottom);
+        driverBounds.set(settingsDoneBounds.left - driverWidth - 8f * u, bottom - 38f * u,
+                settingsDoneBounds.left - 8f * u, bottom);
+        drawButton(canvas, ACTION_DRIVERS, driverBounds, "DRIVERS", BUTTON_PRIMARY,
+                true, false, u, now, dt);
         drawButton(canvas, ACTION_SETTINGS_DONE, settingsDoneBounds, "DONE", BUTTON_NORMAL,
                 true, false, u, now, dt);
-        float noteWidth = Math.max(1f, settingsDoneBounds.left - left - 12f * u);
+        float noteWidth = Math.max(1f, driverBounds.left - left - 12f * u);
         drawLine(canvas, "SAVED AUTOMATICALLY", left, bottom - 36f * u, 14f * u,
                 9.5f, 600, DIM, 1.2f, u, noteWidth);
         drawLine(canvas, "ENGINE OPTIONS APPLY ON PLAY", left, bottom - 19f * u, 14f * u,
@@ -1175,7 +1200,8 @@ final class SetupView extends View {
             for (int category = firstCategory; category < endCategory; category++) {
                 height += headerHeight;
                 for (GameSettings.Setting setting : gameSettings.settings) {
-                    if (GameSettings.categoryOf(setting) == category) height += rowHeight;
+                    if (GameSettings.categoryOf(setting) != category) continue;
+                    height += rowHeight;
                 }
             }
             contentHeight = Math.max(contentHeight, height);
@@ -1270,11 +1296,13 @@ final class SetupView extends View {
             return ACTION_NONE;
         }
         if (exitBounds.contains(x, y)) return ACTION_EXIT;
+        if (!settingsOpen && headerDriverBounds.contains(x, y)) return ACTION_DRIVERS;
         if (settingsOpen) {
             for (int i = 0; i < presetBounds.length; i++) {
                 if (presetBounds[i].contains(x, y)) return ACTION_PRESET_LOW + i;
             }
             if (settingsDoneBounds.contains(x, y)) return ACTION_SETTINGS_DONE;
+            if (driverBounds.contains(x, y)) return ACTION_DRIVERS;
             if (settingsListBounds.contains(x, y)) {
                 for (int i = 0; i < gameSettings.settings.length; i++) {
                     if (settingLeftBounds[i].contains(x, y)) return SETTING_ACTION_BASE + i * 2;
@@ -1331,15 +1359,19 @@ final class SetupView extends View {
             case MotionEvent.ACTION_UP:
                 int action = pressedAction;
                 pressedAction = ACTION_NONE;
+                // Drivers replaces the content view inside activate(). Keep the original parent for touch cleanup:
+                // calling getParent() afterwards would dereference null on the now-detached setup view.
+                ViewParent parent = getParent();
                 if (!scrolling && action != ACTION_NONE && actionAt(x, y) == action) activate(action);
                 scrolling = false;
-                getParent().requestDisallowInterceptTouchEvent(false);
+                if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
                 invalidate();
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 pressedAction = ACTION_NONE;
                 scrolling = false;
-                getParent().requestDisallowInterceptTouchEvent(false);
+                ViewParent cancelledParent = getParent();
+                if (cancelledParent != null) cancelledParent.requestDisallowInterceptTouchEvent(false);
                 invalidate();
                 return true;
             default:
@@ -1349,6 +1381,10 @@ final class SetupView extends View {
 
     private void activate(int action) {
         performClick();
+        if (action == ACTION_DRIVERS) {
+            listener.onDrivers();
+            return;
+        }
         if (action == ACTION_UPDATE) {
             listener.onUpdate();
             return;
@@ -1404,15 +1440,15 @@ final class SetupView extends View {
             order = new int[] {ACTION_UPDATE_CONFIRM, ACTION_UPDATE_CANCEL};
         } else if (settingsOpen) {
             order = new int[] {ACTION_PRESET_LOW, ACTION_PRESET_MEDIUM, ACTION_PRESET_HIGH,
-                    ACTION_PRESET_CUSTOM, ACTION_SETTINGS_DONE, ACTION_EXIT};
+                    ACTION_PRESET_CUSTOM, ACTION_DRIVERS, ACTION_SETTINGS_DONE, ACTION_EXIT};
         } else if (launcherMode()) {
             order = updateState.visible() && updateState.canPress()
-                    ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_EXIT}
-                    : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_EXIT};
+                    ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_DRIVERS, ACTION_EXIT}
+                    : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_DRIVERS, ACTION_EXIT};
         } else {
             order = updateState.visible() && updateState.canPress()
-                    ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_EXIT}
-                    : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_EXIT};
+                    ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_DRIVERS, ACTION_EXIT}
+                    : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_DRIVERS, ACTION_EXIT};
         }
         int index = -1;
         for (int i = 0; i < order.length; i++) if (order[i] == current) index = i;
