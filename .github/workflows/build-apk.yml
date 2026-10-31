@@ -19,6 +19,11 @@ on:
         required: true
         default: false
         type: boolean
+      allow_ephemeral_release:
+        description: Explicitly allow a disposable-signed release (later updates may require uninstall)
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   bink-tests:
@@ -679,7 +684,7 @@ jobs:
           "$TOOLS/llvm-nm" -D "$LIB" | tee /tmp/dxvk-nm.txt
 
       - name: Setup protected release signing identity
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main' && !inputs.allow_ephemeral_release
         env:
           KEYSTORE_B64: ${{ secrets.PROTODROID_ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASS: ${{ secrets.PROTODROID_ANDROID_KEYSTORE_PASSWORD }}
@@ -714,7 +719,7 @@ jobs:
           ls -lh "$KEYSTORE"
 
       - name: Setup disposable CI signing identity
-        if: github.event_name != 'workflow_dispatch' || !inputs.publish_release || github.ref != 'refs/heads/main'
+        if: github.event_name != 'workflow_dispatch' || !inputs.publish_release || github.ref != 'refs/heads/main' || inputs.allow_ephemeral_release
         run: |
           set -euo pipefail
           # Random non-default credentials exercise the generic apksigner path without making artifacts update-stable.
@@ -861,6 +866,7 @@ jobs:
       - name: Verify this is a new sequential release version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ALLOW_EPHEMERAL: ${{ inputs.allow_ephemeral_release }}
         run: |
           set -euo pipefail
           test -s release-apk/prototype.apk
@@ -868,8 +874,11 @@ jobs:
           source release-apk/signing.txt
           source release-apk/native-build.txt
           if [ "$identity" != "persistent" ]; then
-            echo "::error::Release APK is not signed with the protected persistent identity"
-            exit 1
+            if [ "$ALLOW_EPHEMERAL" != "true" ] || [ "$identity" != "ephemeral" ]; then
+              echo "::error::Release APK is not signed with the protected persistent identity"
+              exit 1
+            fi
+            echo "::warning::Publishing with the explicitly approved disposable CI signing identity"
           fi
           if [ "$nativeBuild" != "compiled" ]; then
             echo "::error::Release APK does not contain native code compiled from this exact commit"
@@ -893,8 +902,10 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/protodroid-releases.json
           python3 - "$versionName" "$versionCode" "$certificateSha256" /tmp/protodroid-releases.json <<'PY'
           import json
+          import os
           import re
           import sys
+          allow_ephemeral = os.environ.get("ALLOW_EPHEMERAL") == "true"
           current = tuple(map(int, sys.argv[1].split(".")))
           current_code = int(sys.argv[2])
           current_certificate = sys.argv[3]
@@ -921,7 +932,7 @@ jobs:
               raise SystemExit("APK versionCode is not newer than the latest release; run tools/bump_version.py")
           if versions:
               previous_certificate = certificates.get(max(versions))
-              if previous_certificate and current_certificate != previous_certificate:
+              if previous_certificate and current_certificate != previous_certificate and not allow_ephemeral:
                   raise SystemExit("APK signing certificate differs from the latest release; refusing an update-breaking release")
           print(f"Release version and signing identity accepted: {sys.argv[1]} (versionCode {current_code})")
           PY
@@ -930,6 +941,7 @@ jobs:
             echo "RELEASE_VERSION=$versionName"
             echo "RELEASE_CODE=$versionCode"
             echo "RELEASE_CERTIFICATE=$certificateSha256"
+            echo "RELEASE_IDENTITY=$identity"
           } >> "$GITHUB_ENV"
 
       - name: Prepare changelog and verification notes
@@ -947,7 +959,12 @@ jobs:
             echo "APK SHA-256: \`$APK_SHA256\`"
             echo "Signing certificate SHA-256: \`$RELEASE_CERTIFICATE\`"
             echo
-            echo "In-place updates require the same signing certificate. A differently signed older installation needs a one-time uninstall; shared saves under /storage/emulated/0/Prototype remain separate."
+            if [ "$RELEASE_IDENTITY" = "ephemeral" ]; then
+              echo "This release uses an explicitly approved disposable CI signing identity. Installing a later build with a different certificate will require a one-time uninstall."
+            else
+              echo "In-place updates require the same signing certificate."
+            fi
+            echo "A differently signed older installation needs a one-time uninstall; shared saves under /storage/emulated/0/Prototype remain separate."
             echo
             echo "Use protodroid.ini for configuration. CI does not replace physical-device testing."
           } >> release-notes.md

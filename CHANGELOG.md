@@ -12,7 +12,7 @@
 - Stopped camera-only touch movement from redrawing the entire control overlay. Mouse motion, stick/wheel feedback, editing, and all existing controls are unchanged.
 - Allowed the engine's worker sizing to use the logical CPUs actually visible to Android instead of a fixed four-core mask, without pinning threads or changing graphics.
 - Made restricted or zeroed device CPU counters report **unavailable** rather than a misleading 0% reading.
-- Added protected persistent-release signing configuration, certificate-digest reporting, and native-build provenance checks. Releases reject ephemeral keys and dummy/prebuilt native inputs; differently signed older installations still require a one-time uninstall.
+- Added protected persistent-release signing configuration, certificate-digest reporting, and native-build provenance checks. Releases reject ephemeral keys by default and always reject dummy/prebuilt native inputs; differently signed installations require a one-time uninstall.
 
 ## 0.7 - 2026-10-30
 
