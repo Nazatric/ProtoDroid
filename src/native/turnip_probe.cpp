@@ -3,8 +3,8 @@
 // executable named like a library (libturnipprobe.so) so that the APK installer extracts it next to libmain.so,
 // the one place an app may run programs from.
 //
-// Usage: libturnipprobe.so <hook dir> <driver dir> <driver file> <custom 0|1> <direct ICD 0|1>
-// Prints one report line; exits 0 if the driver drives the GPU with negotiated Vulkan 1.2 or 1.3, 3 if not.
+// Usage: libturnipprobe.so <hook dir> <driver dir> <driver file> <custom 0|1> <direct ICD 0|1> <wrapper 0|1>
+// Prints capability/failure report lines; exits 0 if the driver drives the GPU with negotiated Vulkan 1.2 or 1.3, 3 if not.
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -12,11 +12,13 @@
 #include "turnip_load.h"
 
 int main(int argc, char** argv) {
-    if (argc != 6) {
-        fprintf(stderr, "usage: %s <hook dir> <driver dir> <driver file> <custom 0|1> <direct ICD 0|1>\n", argv[0]);
+    if (argc != 7) {
+        fprintf(stderr, "usage: %s <hook dir> <driver dir> <driver file> <custom 0|1> <direct ICD 0|1> <wrapper 0|1>\n",
+                argv[0]);
         return 2;
     }
-    native::Driver d{argv[1], argv[2], argv[3], strcmp(argv[4], "1") == 0, strcmp(argv[5], "1") == 0};
+    native::Driver d{argv[1], argv[2], argv[3], strcmp(argv[4], "1") == 0, strcmp(argv[5], "1") == 0,
+                     strcmp(argv[6], "1") == 0};
     std::string device, report;
     bool ok = native::LoadTurnip(d, device, report) != nullptr;
     fputs(report.c_str(), stdout);

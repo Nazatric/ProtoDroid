@@ -47,6 +47,7 @@ final class SetupView extends View {
         void onUpdateConfirm();
         void onUpdateCancel();
         void onUpdateReleases();
+        void onDiagnosticTourToggle();
     }
 
     static final class State {
@@ -94,6 +95,7 @@ final class SetupView extends View {
     private static final int ACTION_UPDATE_CANCEL = 13;
     private static final int ACTION_DRIVERS = 14;
     private static final int ACTION_UPDATE_RELEASES = 15;
+    private static final int ACTION_TOUR = 16;
     private static final int SETTING_ACTION_BASE = 32;
 
     private static final int BUTTON_NORMAL = 0;
@@ -109,6 +111,7 @@ final class SetupView extends View {
 
     private final Listener listener;
     private final GameSettings gameSettings;
+    private final DiagnosticTourCode tourCode = new DiagnosticTourCode();
     private final Bitmap[] slides = new Bitmap[4];
     private final Bitmap icon;
     private final Typeface medium;
@@ -126,6 +129,7 @@ final class SetupView extends View {
     private final RectF settingsListBounds = new RectF();
     private final RectF driverBounds = new RectF();
     private final RectF headerDriverBounds = new RectF();
+    private final RectF logoBounds = new RectF();
     private final RectF updateBounds = new RectF();
     private final RectF updateReleasesBounds = new RectF();
     private final RectF updateWarningConfirmBounds = new RectF();
@@ -162,6 +166,7 @@ final class SetupView extends View {
     private long splatStartedAt;
     private boolean scrolling;
     private boolean settingsOpen;
+    private boolean tourArmed;
     private float touchStartY;
     private float lastTouchY;
     private float scrollY;
@@ -228,6 +233,12 @@ final class SetupView extends View {
         layoutDirty = true;
         if (focusedAction == ACTION_ALLOW && (next.fileAccess || next.gameFound)) focusedAction = ACTION_NONE;
         if (focusedAction == ACTION_CHECK && next.checking) focusedAction = ACTION_NONE;
+        updateContentDescription();
+        invalidate();
+    }
+
+    void setTourArmed(boolean armed) {
+        tourArmed = armed;
         updateContentDescription();
         invalidate();
     }
@@ -494,6 +505,7 @@ final class SetupView extends View {
     private void drawHeader(Canvas canvas, float left, float right, float top, float u, long now) {
         float iconSize = 46f * u;
         RectF iconBounds = new RectF(left, top, left + iconSize, top + iconSize);
+        logoBounds.set(iconBounds);
         if (icon != null) {
             paint.setShader(new RadialGradient(iconBounds.centerX(), iconBounds.centerY(), iconSize * 0.58f,
                     new int[]{withAlpha(Color.BLACK, 0.80f), withAlpha(Color.BLACK, 0.45f), Color.TRANSPARENT},
@@ -1041,7 +1053,8 @@ final class SetupView extends View {
         checkBounds.set(left + buttonWidth + 8f * u, buttonsTop, left + leftWidth, buttonsTop + 42f * u);
         if (launcherMode()) {
             drawButton(canvas, ACTION_SETTINGS, allowBounds, "SETTINGS", BUTTON_NORMAL, true, false, u, now, dt);
-            drawButton(canvas, ACTION_PLAY, checkBounds, "PLAY", BUTTON_PRIMARY, true, false, u, now, dt);
+            drawButton(canvas, ACTION_PLAY, checkBounds, tourArmed ? "START TOUR" : "PLAY", BUTTON_PRIMARY,
+                    true, false, u, now, dt);
         } else {
             drawButton(canvas, ACTION_ALLOW, allowBounds, "ALLOW FILE ACCESS", BUTTON_PRIMARY,
                     true, false, u, now, dt);
@@ -1103,7 +1116,8 @@ final class SetupView extends View {
         checkBounds.set(left + buttonWidth + 8f * u, y, right, y + 42f * u);
         if (launcherMode()) {
             drawButton(canvas, ACTION_SETTINGS, allowBounds, "SETTINGS", BUTTON_NORMAL, true, false, u, now, dt);
-            drawButton(canvas, ACTION_PLAY, checkBounds, "PLAY", BUTTON_PRIMARY, true, false, u, now, dt);
+            drawButton(canvas, ACTION_PLAY, checkBounds, tourArmed ? "START TOUR" : "PLAY", BUTTON_PRIMARY,
+                    true, false, u, now, dt);
         } else {
             drawButton(canvas, ACTION_ALLOW, allowBounds, "ALLOW FILE ACCESS", BUTTON_PRIMARY,
                     true, false, u, now, dt);
@@ -1320,6 +1334,7 @@ final class SetupView extends View {
             return ACTION_NONE;
         }
         if (exitBounds.contains(x, y)) return ACTION_EXIT;
+        if (!settingsOpen && logoBounds.contains(x, y)) return ACTION_TOUR;
         if (!settingsOpen && headerDriverBounds.contains(x, y)) return ACTION_DRIVERS;
         if (settingsOpen) {
             for (int i = 0; i < presetBounds.length; i++) {
@@ -1408,6 +1423,10 @@ final class SetupView extends View {
 
     private void activate(int action) {
         performClick();
+        if (action == ACTION_TOUR) {
+            if (tourCode.onLogoTap(SystemClock.uptimeMillis())) listener.onDiagnosticTourToggle();
+            return;
+        }
         if (action == ACTION_DRIVERS) {
             listener.onDrivers();
             return;

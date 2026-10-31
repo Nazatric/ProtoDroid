@@ -73,6 +73,8 @@ The launcher’s **Settings** page and the in-game gear menu share the same pref
 
 **GPU driver** offers **Auto**, **System**, **Turnip**, and **Custom**. Auto is the default: it keeps the established Adreno 6xx/7xx order and uses a dedicated Gen8 Turnip build for Adreno 825 (SM8735); other Adreno 8xx models keep the system driver unless you explicitly opt in. System always uses the phone's driver. Turnip is Adreno-only and falls back to System on Mali rather than pretending to be a Mali driver.
 
+If the direct system path cannot run DXVK, Auto can try a bundled Vulkan 1.1 compatibility wrapper after an isolated feature probe. Working direct Vulkan 1.2/1.3 paths and explicit driver choices are not replaced. Physical Mali compatibility remains unverified.
+
 Open **Drivers** on the launcher or beside **Done** in Settings for the dedicated driver center. It explains each mode, shows a scrollable/filterable library, and supports explicit **Select** and two-tap **Remove** actions. Download pinned standard Turnip, Samsung One UI Turnip, Gen8 Turnip, or experimental PanVK-kbase packages from their identified GitHub releases, or import an AdrenoTools/.adpkg ZIP or raw `.so`. Downloads show progress and exact SHA-256 verification; installing one never silently changes Auto into Custom. Packages are private to ProtoDroid, validated as Android/Bionic ARM64, staged before replacement, and tested in a separate process on the next Play. Custom loading requires Android 10 or newer.
 
 PanVK-kbase is loaded through its direct Vulkan ICD entry point, with the same probe and mapped-library checks in the probe and game. It supports only specific Mali generations and the retail `mali_kbase` interface—not every Mali GPU, kernel, or game. ProtoDroid selects its exact BC path rather than optional lossy texture modes. A failed probe uses System. Auto also records a selected driver's startup crash or clean D3D9 initialization failure so the next launch can try System; explicit Turnip/Custom choices remain explicit. A probe or CI build cannot prove every later frame or device. Return to **Auto** or **System** and include the native/DXVK logs in a report.
@@ -153,6 +155,12 @@ Detailed reports include frame and engine timing, worst events, texture and file
 No cache seed is bundled. Startup can recover a populated cache from the shared or app-specific backup locations without replacing a valid private cache. DXVK validates the entries and compiles cached pipeline states as the corresponding game shaders become available; it cannot know variants that have never been encountered.
 
 Backups are copied periodically without blocking the engine thread, with a synchronous final copy during shutdown. Atomic replacement keeps an interrupted backup from truncating the previous one. The live writer stays in app-private storage; the shared copy is a recovery backup, not a power-loss-durability guarantee.
+
+## Diagnostic tour
+
+Type **MERCER** on the launcher or tap its Prototype logo seven times quickly, then choose **START TOUR**. Repeat the code/gesture to disarm it. The tour requests a direct test level and runs ordered gameplay inputs without further interaction; unavailable gameplay, stalls, and other failures are recorded instead of being reported as passes.
+
+Tour saves, logs, and shader cache are isolated from normal Play. Shared results are under `/storage/emulated/0/Prototype/diagnostic-tour/logs/`, including `journal.log`, `phase.txt`, `result.txt`, and `crash.log`. “Tested” means the scripted inputs and rendered dwell completed—not that visuals or audio were verified. Unsupported movie and physical-touch phases are explicitly skipped.
 
 To report a problem or suggest an improvement, use the [guided issue forms](https://github.com/Nazatric/ProtoDroid/issues/new/choose) and choose bug, crash, performance, or feature. Include your phone model, SoC/GPU, Android version, exact APK version or commit, reproduction steps, and the available logs from the failed run. If you have ADB access, `adb logcat -s protodroid` can also help. Please do not attach game installation files, cache files, or save files.
 

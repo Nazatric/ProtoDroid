@@ -11,6 +11,8 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.system.ErrnoException;
 import android.system.Os;
+import android.view.KeyEvent;
+import android.widget.Toast;
 
 import java.io.File;
 
@@ -25,6 +27,8 @@ public class SetupActivity extends Activity {
     private static final int REQUEST_STORAGE = 1;
 
     private SetupView setupView;
+    private final DiagnosticTourCode tourCode = new DiagnosticTourCode();
+    private boolean tourArmed;
     private DriverView driverView;
     private UpdateManager updateManager;
     private DriverManager driverManager;
@@ -97,6 +101,11 @@ public class SetupActivity extends Activity {
                 public void onUpdateReleases() {
                     updateManager.onReleasesPressed();
                 }
+
+                @Override
+                public void onDiagnosticTourToggle() {
+                    toggleDiagnosticTour();
+                }
             });
             setContentView(setupView);
         }
@@ -107,6 +116,10 @@ public class SetupActivity extends Activity {
                 : "/storage/emulated/0/Android/data/" + getPackageName() + "/files/game";
         String status = foundGame != null ? "Ready to play"
                 : access ? "Game files not found. Tap Play to check again" : "Waiting for file access";
+        if (tourArmed) {
+            status = foundGame != null ? "Tour armed: isolated saves and logs" : "Tour armed; game files required";
+        }
+        setupView.setTourArmed(tourArmed);
         setupView.setState(new SetupView.State(
                 access,
                 foundGame != null,
@@ -197,10 +210,20 @@ public class SetupActivity extends Activity {
 
     private void play() {
         check();  // also refreshes after files were copied while this screen remained open
-        if (foundGame != null) launch(foundInApp ? null : foundGame);
+        if (foundGame != null) launch(foundInApp ? null : foundGame, tourArmed);
     }
 
-    private void launch(File gameDir) {
+    private void launch(File gameDir, boolean tour) {
+        try {
+            if (tour) Os.setenv("PROTODROID_DIAGNOSTIC_TOUR", "1", true);
+            else Os.unsetenv("PROTODROID_DIAGNOSTIC_TOUR");
+        } catch (ErrnoException e) {
+            Toast.makeText(this, tour
+                            ? "Could not arm the diagnostic tour; normal Play was not substituted."
+                            : "Could not clear diagnostic-tour mode; Play was cancelled to protect your saves.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
         try {
             if (gameDir == null) Os.unsetenv("PROTODROID_GAME");
             else Os.setenv("PROTODROID_GAME", gameDir.getAbsolutePath(), true);
@@ -223,6 +246,25 @@ public class SetupActivity extends Activity {
         }
         startActivity(new Intent(this, ProtoActivity.class));
         finish();
+    }
+
+    private void toggleDiagnosticTour() {
+        if (driverView != null || setupView == null) return;
+        tourArmed = !tourArmed;
+        setupView.setTourArmed(tourArmed);
+        check();
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (driverView == null && event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+            int unicode = event.getUnicodeChar();
+            if (unicode > 0 && tourCode.onLetter((char) unicode)) {
+                toggleDiagnosticTour();
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     private void requestAccess() {

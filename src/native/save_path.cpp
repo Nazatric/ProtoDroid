@@ -258,6 +258,14 @@ bool ConfigureSaveDirectory(const char* data_dir, const char* shared_dir, const 
     return true;
 }
 
+bool ConfigureIsolatedSaveDirectory(const char* isolated_dir) {
+    g_save_dir.clear();
+    if (!isolated_dir || !*isolated_dir) return false;
+    if (!EnsureDirs(isolated_dir) || !WritableDirectory(isolated_dir)) return false;
+    g_save_dir = isolated_dir;
+    return true;
+}
+
 const std::string& SaveDirectory() { return g_save_dir; }
 
 bool IsGuestSavePath(const std::string& full_path) {

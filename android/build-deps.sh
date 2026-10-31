@@ -3,7 +3,7 @@
 # decoding and DXVK (d3d9 only, SDL2 WSI). Same script locally and on GitHub Actions; nothing here depends on game files.
 #
 # Usage: android/build-deps.sh <abi: arm64-v8a | x86_64> <source dir> <install prefix>
-# Needs ANDROID_NDK_HOME (or ANDROID_NDK_LATEST_HOME), cmake, ninja, meson, glslang, git.
+# Needs ANDROID_NDK_HOME (or ANDROID_NDK_LATEST_HOME), cmake, ninja, meson, glslang, git, mako, PyYAML and packaging.
 set -euo pipefail
 
 ABI=${1:?abi}
@@ -173,6 +173,12 @@ for marker in \
         exit 1
     }
 done
+
+# ARM64 Vulkan 1.1 Auto compatibility route. This is an Android-WSI build from an exact Mesa commit; it is not a
+# prebuilt download and it is never substituted for a working direct 1.2/1.3 path.
+if [ "$ABI" = arm64-v8a ]; then
+    "$(dirname "${BASH_SOURCE[0]}")/build-vulkan-wrapper.sh" "$ABI" "$SRC" "$PREFIX"
+fi
 
 echo "installed to $PREFIX:"
 find "$PREFIX" -name "*.so" | sort

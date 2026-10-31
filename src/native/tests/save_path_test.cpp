@@ -189,6 +189,23 @@ int main() {
     Write(SavePath("slot-E.bin"), "fallback-save");
     Check(Read(fallback_legacy / "slot-E.bin") == "fallback-save", "legacy fallback save was not writable");
 
-    std::puts("save-path tests passed (dedicated folder, v1/v2 migration, add/create/delete, no resurrection, fallback)");
+    // The diagnostic tour has a separate, non-migrating route. Existing normal saves remain byte-for-byte intact,
+    // and an unavailable isolated directory is an error rather than a fallback into those normal saves.
+    const fs::path isolated = temp.path / "diagnostic-tour" / "Saves";
+    Check(native::ConfigureIsolatedSaveDirectory(isolated.c_str()), "writable isolated tour saves were rejected");
+    Check(native::SaveDirectory() == isolated.string(), "isolated tour save directory was not activated");
+    Check(fs::is_empty(isolated), "tour setup migrated normal saves into its isolated directory");
+    Check(Read(fallback_legacy / "slot-E.bin") == "fallback-save", "tour setup changed a normal save");
+    Check(SavePath("slot-tour.bin") == (isolated / "slot-tour.bin").string(), "tour save did not use isolated routing");
+    Write(SavePath("slot-tour.bin"), "tour-only");
+    Check(!Exists(fallback_legacy / "slot-tour.bin"), "tour save leaked into the normal save directory");
+
+    const fs::path blocked_tour = temp.path / "tour-blocked";
+    Write(blocked_tour, "not a directory");
+    Check(!native::ConfigureIsolatedSaveDirectory(blocked_tour.c_str()), "regular file became the tour save directory");
+    Check(native::SaveDirectory().empty(), "failed tour setup silently fell back to normal saves");
+    Check(Read(fallback_legacy / "slot-E.bin") == "fallback-save", "failed tour setup changed normal saves");
+
+    std::puts("save-path tests passed (shared migration/fallback plus isolated non-migrating tour saves)");
     return 0;
 }

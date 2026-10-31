@@ -31,9 +31,11 @@
 #include <thread>
 #include <vector>
 
+#include "diagnostic_tour.h"
 #include "diagnostics.h"
 #include "dxvk_config.h"
 #include "guest.h"
+#include "input.h"
 #include "present_stats.h"
 #include "timing_window.h"
 #include "save_path.h"
@@ -149,6 +151,7 @@ void DescribeAddress(char* out, size_t size, const char* what, uintptr_t address
 }
 
 void OnCrash(int sig, siginfo_t* info, void* context) {
+    DiagnosticTourCrashed(sig);
     VulkanDriverCrashed();  // a crash before the driver is confirmed: auto mode avoids Turnip next time
     char line[512];
     snprintf(line, sizeof(line), "crash: signal %d (%s) code %d addr %p on tid %d", sig, strsignal(sig), info->si_code,
@@ -219,12 +222,14 @@ static bool EnsureDir(const std::string& path) {
 }
 
 [[maybe_unused]] static void MirrorInit(const char* base) {
-    // Try shared storage logs directory
-    const char* candidates[] = {
+    // A tour never falls back to the ordinary shared log directory or the game root.
+    const char* tour_candidates[] = {kDiagnosticTourLogDir, nullptr};
+    const char* normal_candidates[] = {
         "/storage/emulated/0/Prototype/logs",
         "/storage/emulated/0/Prototype",
         nullptr
     };
+    const char** candidates = DiagnosticTourEnabled() ? tour_candidates : normal_candidates;
     for (int i = 0; candidates[i]; ++i) {
         if (EnsureDir(candidates[i])) {
             // Test writability by opening a test file
@@ -275,6 +280,9 @@ static void CopyFile(const std::string& src, const std::string& dst) {
 // symbol. CopyFile and the mirror state remain implementation details of the anonymous namespace above.
 void MirrorCopyDXVKLogs() {
     if (g_mirror_dir.empty() || !g_data_dir) return;
+    // A tour's DXVK logger writes directly into its isolated shared directory. Copying the ordinary app-private log
+    // would overwrite that live tour log with stale normal-Play content; its isolated cache needs no ordinary backup.
+    if (DiagnosticTourEnabled()) return;
     // Periodic work runs on a helper thread; shutdown and crash reports may still request a synchronous copy.
     std::lock_guard<std::mutex> copy_lock(g_mirror_copy_mutex);
     std::string base_log = std::string(g_data_dir) + "/app_process64_d3d9.log";
@@ -284,13 +292,14 @@ void MirrorCopyDXVKLogs() {
     // existing periodic mirror so an external-files wipe does not discard all compiled pipeline state.
     std::string base_cache = std::string(g_data_dir) + "/prototypeenginef.dll.dxvk-cache";
     std::string mirror_cache = g_mirror_dir + "/prototypeenginef.dll.dxvk-cache";
-    // Replace the backup atomically. A process kill or failed write must not truncate the last usable cache, and
-    // the live DXVK writer remains in app-private storage instead of doing shader-cache I/O through shared FUSE.
+    // Replace the ordinary backup atomically. A process kill or failed write must not truncate the last usable cache,
+    // and the live DXVK writer remains in app-private storage instead of doing shader-cache I/O through shared FUSE.
     native::BackupStateCache(base_cache, mirror_cache);
 }
 
 void MirrorCopyDXVKLogsAsync() {
-    if (g_mirror_dir.empty() || !g_data_dir || g_mirror_copy_active.load(std::memory_order_acquire)) return;
+    if (g_mirror_dir.empty() || !g_data_dir || DiagnosticTourEnabled() ||
+        g_mirror_copy_active.load(std::memory_order_acquire)) return;
     if (g_mirror_thread.joinable()) g_mirror_thread.join();
     bool expected = false;
     if (!g_mirror_copy_active.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) return;
@@ -318,6 +327,7 @@ void Fatal(const char* fmt, ...) {
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     Log("FATAL: %s", buf);
+    DiagnosticTourFail("fatal", buf);
     VulkanDriverAbandon();  // not the driver's fault: the next start keeps trying Turnip
     _exit(70);
 }
@@ -326,6 +336,7 @@ void Fatal(const char* fmt, ...) {
 // the same process, on top of this run's guest memory.
 [[noreturn]] void StartupFailure(const char* what) {
     Log("startup failed: %s", what);
+    DiagnosticTourFail("startup", what);
     // End the attempt without blaming ordinary startup errors on the driver. A D3D9 initialization failure may
     // already have recorded its own recovery marker before reaching this common exit path.
     VulkanDriverAbandon();
@@ -345,7 +356,6 @@ void SelectVulkanDriver();  // vulkan_driver.cpp
 void VulkanDriverConfirm();
 void InitInput(uint32_t keyboard_service, uint32_t mouse_service);  // input.cpp
 void ForwardInput(const SDL_Event& e);
-void InjectKey(SDL_Scancode sc, bool down);
 extern SDL_Window* g_sdl_window;
 
 }  // namespace native
@@ -433,6 +443,22 @@ static void RedirectStderrToLogcat() {
 }
 
 int main(int argc, char** argv) {
+    std::string native_log_path = "proto-native.log";
+    std::string native_prev_log_path = "proto-native.prev.log";
+#ifdef __ANDROID__
+    const bool diagnostic_tour = native::DiagnosticTourEnabled();
+    std::string diagnostic_cache_dir;
+    if (!diagnostic_tour) {
+        // These are native implementation details, not launcher settings. Clear any values left by a previous tour
+        // activity in the same process; the user's INI choices are applied again below.
+        unsetenv("PROTODROID_PIPELINE_TRACE");
+        unsetenv("PROTODROID_PIPELINE_TRACE_DIR");
+        unsetenv("PROTODROID_PIPELINE_TIMING");
+        unsetenv("DXVK_LOG_TIMESTAMPS");
+    }
+#else
+    const bool diagnostic_tour = false;
+#endif
 #ifdef __ANDROID__
     RedirectStderrToLogcat();
     setenv("DXVK_LOG_LEVEL", "info", 0);
@@ -450,6 +476,24 @@ int main(int argc, char** argv) {
     }
     if (chdir(base) != 0) return 1;
     g_data_dir = base;
+    if (diagnostic_tour) {
+        diagnostic_cache_dir = std::string(base) + "/diagnostic-tour-cache";
+        if (!native::DiagnosticTourStart(diagnostic_cache_dir.c_str())) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Prototype",
+                                     "The diagnostic tour could not create its isolated log/cache directories.",
+                                     nullptr);
+            return 1;
+        }
+        const std::string private_logs = std::string(base) + "/diagnostic-tour-logs";
+        if (!native::EnsureDir(private_logs)) {
+            native::DiagnosticTourFail("startup", "app-private tour log directory is not writable");
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Prototype",
+                                     "The diagnostic tour could not create its private log directory.", nullptr);
+            return 1;
+        }
+        native_log_path = private_logs + "/proto-native.log";
+        native_prev_log_path = private_logs + "/proto-native.prev.log";
+    }
     // DXVK opens its log lazily, after this setup. Do not point it at a
     // path until the directory has actually been created and checked.
     if (!native::EnsureDir(base)) {
@@ -458,20 +502,23 @@ int main(int argc, char** argv) {
         return 1;
     }
     // DXVK v2.5.3 reads DXVK_STATE_CACHE_PATH and the Android patch resolves prototypeenginef.dll.dxvk-cache within
-    // it. Recover a populated cache from the old app_process64 name or shared storage, but never invent a seed or
-    // overwrite a populated/invalid target. DXVK remains responsible for validating every entry and reporting counts.
-    std::string state_cache = native::StateCacheFile(base, native::kStateCacheFilename);
-    native::StateCacheMigration cache_migration = native::PlanStateCacheMigration(
-        base, {"/storage/emulated/0/Prototype/logs", "/storage/emulated/0/Prototype"});
-    if (!cache_migration.source.empty()) {
-        native::StateCacheMigrationResult migrated = native::MigrateStateCache(cache_migration);
-        if (migrated == native::StateCacheMigrationResult::Migrated)
-            Log("DXVK state cache restored from %s", cache_migration.source.c_str());
-        else
-            Log("DXVK state cache migration from %s failed: %s", cache_migration.source.c_str(), strerror(errno));
+    // it. Ordinary Play recovers a populated cache without inventing a seed. The tour starts with its own cache path
+    // and performs no ordinary migration or backup.
+    const char* cache_dir = diagnostic_tour ? diagnostic_cache_dir.c_str() : base;
+    std::string state_cache = native::StateCacheFile(cache_dir, native::kStateCacheFilename);
+    if (!diagnostic_tour) {
+        native::StateCacheMigration cache_migration = native::PlanStateCacheMigration(
+            base, {"/storage/emulated/0/Prototype/logs", "/storage/emulated/0/Prototype"});
+        if (!cache_migration.source.empty()) {
+            native::StateCacheMigrationResult migrated = native::MigrateStateCache(cache_migration);
+            if (migrated == native::StateCacheMigrationResult::Migrated)
+                Log("DXVK state cache restored from %s", cache_migration.source.c_str());
+            else
+                Log("DXVK state cache migration from %s failed: %s", cache_migration.source.c_str(), strerror(errno));
+        }
     }
-    setenv("DXVK_STATE_CACHE_PATH", base, 1);
-    setenv("DXVK_LOG_PATH", base, 1);
+    setenv("DXVK_STATE_CACHE_PATH", cache_dir, 1);
+    setenv("DXVK_LOG_PATH", diagnostic_tour ? kDiagnosticTourLogDir : base, 1);
     Log("DXVK state cache: %s", state_cache.c_str());
     // Attempt to find game dir across multiple locations (Issue 4)
     if (!g_game_dir || access((std::string(g_game_dir) + "/prototypeenginef.dll").c_str(), R_OK) != 0) {
@@ -486,13 +533,14 @@ int main(int argc, char** argv) {
         }
     }
     if (std::string dll = std::string(g_game_dir) + "/prototypeenginef.dll"; access(dll.c_str(), R_OK) != 0) {
+        native::DiagnosticTourFail("startup", "prototypeenginef.dll is not readable");
         std::string msg = "Cannot read " + dll + " (" + strerror(errno) + ").\nCopy the game files to one of:\n"
             "/storage/emulated/0/Prototype\n/storage/emulated/0/Prototype/game\n" + std::string(base) + "/game";
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Prototype", msg.c_str(), nullptr);
         return 1;
     }
-    // Log rotation + mirroring to shared storage (Issue 3)
-    rename("proto-native.log", "proto-native.prev.log");
+    // Log rotation + mirroring to shared storage (Issue 3). Tour mode rotates only its isolated private log.
+    rename(native_log_path.c_str(), native_prev_log_path.c_str());
     // Also rotate mirror logs if exists
     // MirrorInit will handle mirror rotation
     native::MirrorInit(base);
@@ -512,10 +560,15 @@ int main(int argc, char** argv) {
     }
     // Rename handled above on Android, for desktop do it here
 #ifndef __ANDROID__
-    rename("proto-native.log", "proto-native.prev.log");
+    rename(native_log_path.c_str(), native_prev_log_path.c_str());
 #endif
-    if (!g_log) g_log = fopen("proto-native.log", "w");
+    if (!g_log) g_log = fopen(native_log_path.c_str(), "w");
     InstallCrashHandler();
+#ifdef __ANDROID__
+    if (diagnostic_tour && !g_log) StartupFailure("The diagnostic tour could not open its isolated private log.");
+    if (diagnostic_tour && g_mirror_dir.empty())
+        StartupFailure("The diagnostic tour requires writable shared logs in /Prototype/diagnostic-tour/logs.");
+#endif
     Log("protodroid build %s %s", __DATE__, __TIME__);
     Log("protodroid source %s", PROTODROID_SOURCE_REVISION);
 #ifdef __ANDROID__
@@ -537,17 +590,27 @@ int main(int argc, char** argv) {
     // Log game dir detection
     Log("game dir: %s", g_game_dir);
     Log("data dir: %s", g_data_dir ? g_data_dir : "(none)");
-    native::ConfigureSaveDirectory(base, native::kAndroidSharedSaveDir, native::kAndroidPreviousSharedSaveDir);
+    if (diagnostic_tour) {
+        if (!native::ConfigureIsolatedSaveDirectory(native::kDiagnosticTourSaveDir))
+            StartupFailure("The diagnostic tour requires its isolated shared save directory; normal saves were not selected.");
+        native::DiagnosticTourSaveReady(native::SaveDirectory().c_str());
+    } else {
+        native::ConfigureSaveDirectory(base, native::kAndroidSharedSaveDir, native::kAndroidPreviousSharedSaveDir);
+    }
     Log("save dir: %s", native::HostPath(native::kGuestSaveDir).c_str());
 #endif
-    // Lightweight diagnostics add timestamps and aggregate pipeline timing only. The durable per-pipeline shader
-    // trace remains strictly opt-in and is never needed for an ordinary performance run.
-    const bool detailed_diagnostics = SettingInt("detailed_diagnostics", kDetailedDiagnosticsDefault) != 0;
-    if (detailed_diagnostics) setenv("DXVK_LOG_TIMESTAMPS", "1", 0);
-    setenv("PROTODROID_PIPELINE_TIMING", SettingInt("pipeline_timing", detailed_diagnostics ? 1 : 0) ? "1" : "0", 0);
-    if (SettingInt("pipeline_trace", 0) == 1) {
-        setenv("PROTODROID_PIPELINE_TRACE", "1", 0);
-        Log("DXVK pipeline trace enabled (pipeline_trace = 1)");
+    // Detailed diagnostics and the durable pipeline trace remain opt-in. Arming the tour is an explicit opt-in;
+    // ordinary Play retains the user's settings.
+    const bool detailed_diagnostics = diagnostic_tour ||
+                                      SettingInt("detailed_diagnostics", kDetailedDiagnosticsDefault) != 0;
+    if (detailed_diagnostics) setenv("DXVK_LOG_TIMESTAMPS", "1", diagnostic_tour ? 1 : 0);
+    setenv("PROTODROID_PIPELINE_TIMING",
+           (diagnostic_tour || SettingInt("pipeline_timing", detailed_diagnostics ? 1 : 0)) ? "1" : "0",
+           diagnostic_tour ? 1 : 0);
+    if (diagnostic_tour) setenv("PROTODROID_PIPELINE_TRACE_DIR", kDiagnosticTourLogDir, 1);
+    if (diagnostic_tour || SettingInt("pipeline_trace", 0) == 1) {
+        setenv("PROTODROID_PIPELINE_TRACE", "1", diagnostic_tour ? 1 : 0);
+        Log("DXVK pipeline trace enabled (%s)", diagnostic_tour ? "diagnostic tour" : "pipeline_trace = 1");
     }
     InitGuestMemory();
     AttachThread(8u << 20);
@@ -696,7 +759,9 @@ int main(int argc, char** argv) {
 
     uint32_t hwnd = HostWindow();
     uint32_t params = HeapAlloc(16);
-    W32(params + 0, GuestStrdup(""));  // command line
+    const char* engine_command_line = diagnostic_tour ? kDiagnosticTourCommandLine : "";
+    Log("engine command line: %s", *engine_command_line ? engine_command_line : "(empty)");
+    W32(params + 0, GuestStrdup(engine_command_line));
     W32(params + 4, hwnd);
     W32(params + 8, hwnd);
     Log("EngineInitialize");
@@ -704,6 +769,7 @@ int main(int argc, char** argv) {
     uint32_t r = GuestCall(init, {params}) & 0xff;
     Log("EngineInitialize returned %u after %.3f ms", r, double(MonotonicNanos() - initialize_start_ns) / 1e6);
     if (!r) StartupFailure("EngineInitialize failed (game files incomplete or not the Steam build 19788432?).");
+    DiagnosticTourEngineInitialized();
 
     InitInput(FindExport(g_engine, "EngineKeyboardService"), FindExport(g_engine, "EngineMouseService"));
     bool focused = true;
@@ -763,6 +829,7 @@ int main(int argc, char** argv) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT || e.type == SDL_APP_TERMINATING) {
+                DiagnosticTourAbort("user or Android requested quit");
 #ifdef __ANDROID__
                 // Android closes the activity and waits for this thread on its UI thread: the engine's shutdown
                 // (EngineTerminate waits for its threads) took long enough for "isn't responding". The game saves
@@ -791,6 +858,13 @@ int main(int argc, char** argv) {
             RecordEngineLoop(service_end_ns, service_end_ns - service_start_ns, service_start_ns - pump_start_ns,
                              limiter_ns, focus_end_ns - service_end_ns);
         }
+        if (!keep) {
+            // This is a safe main-loop boundary, unlike a fatal callback from inside the guest. Do not leave tour keys
+            // held while EngineTerminate runs or if Android later reuses this process.
+            if (diagnostic_tour) ReleaseInjectedInput();
+            DiagnosticTourFail("engine_loop", "engine stopped before the diagnostic tour completed");
+        }
+        if (!DiagnosticTourPump()) keep = false;
         if (!keep) break;
     }
     const int64_t terminate_start_ns = MonotonicNanos();
@@ -799,5 +873,7 @@ int main(int argc, char** argv) {
     native::DiagnosticsStop();
     native::WaitForMirrorCopy();
     native::MirrorCopyDXVKLogs();
+    if (diagnostic_tour && DiagnosticTourFailed())
+        StartupFailure("Diagnostic tour failed. See /Prototype/diagnostic-tour/logs/journal.log and result.txt.");
     return 0;
 }

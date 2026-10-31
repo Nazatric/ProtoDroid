@@ -9,6 +9,8 @@
 
 #include "guest.h"
 
+extern SDL_Window* g_sdl_window;  // d3d9.cpp; valid before tour gameplay actions begin
+
 namespace native {
 
 void ClientSize(int* w, int* h);  // user32.cpp
@@ -81,8 +83,15 @@ const KeyMap* FindKey(SDL_Scancode s) {
 
 uint32_t g_keyboard_service = 0, g_mouse_service = 0;
 
+// Keys/buttons held by injection (test scripts): SDL's own device state only follows real devices.
+bool g_injected[SDL_NUM_SCANCODES];
+uint32_t g_injected_mouse = 0;
+
 uint32_t ButtonState() {
     uint32_t b = SDL_GetMouseState(nullptr, nullptr);
+    if (g_injected_mouse & 1u) b |= SDL_BUTTON_LMASK;
+    if (g_injected_mouse & 2u) b |= SDL_BUTTON_RMASK;
+    if (g_injected_mouse & 4u) b |= SDL_BUTTON_MMASK;
     uint32_t mk = 0;
     if (b & SDL_BUTTON_LMASK) mk |= 0x01;
     if (b & SDL_BUTTON_RMASK) mk |= 0x02;
@@ -106,9 +115,6 @@ uint32_t PackPoint(SDL_Window* w, int x, int y) {
 void Mouse(uint32_t msg, uint32_t wparam, uint32_t lparam) {
     if (g_mouse_service) GuestCall(g_mouse_service, {msg, wparam, lparam});
 }
-
-// Keys held by InjectKey (test scripts): SDL's own keyboard state only follows real devices.
-bool g_injected[SDL_NUM_SCANCODES];
 
 // Relative mouse motion since the last DirectInput read (dinput.cpp).
 std::atomic<int32_t> g_mouse_dx{0}, g_mouse_dy{0}, g_mouse_dz{0};
@@ -141,7 +147,7 @@ void TakeMouseMotion(int32_t* dx, int32_t* dy, int32_t* dz) {
 uint32_t MouseButtonMask() {
     uint32_t b = SDL_GetMouseState(nullptr, nullptr);
     return (b & SDL_BUTTON_LMASK ? 1u : 0u) | (b & SDL_BUTTON_RMASK ? 2u : 0u) | (b & SDL_BUTTON_MMASK ? 4u : 0u) |
-           (b & SDL_BUTTON_X1MASK ? 8u : 0u) | (b & SDL_BUTTON_X2MASK ? 16u : 0u);
+           (b & SDL_BUTTON_X1MASK ? 8u : 0u) | (b & SDL_BUTTON_X2MASK ? 16u : 0u) | g_injected_mouse;
 }
 
 void InitInput(uint32_t keyboard_service, uint32_t mouse_service) {
@@ -203,11 +209,65 @@ void ForwardInput(const SDL_Event& e) {
 
 // Presses or releases a key as if it came from the keyboard: window message and DirectInput state.
 void InjectKey(SDL_Scancode sc, bool down) {
+    if (sc < 0 || sc >= SDL_NUM_SCANCODES) return;
     g_injected[sc] = down;
     SDL_Event e{};
     e.type = down ? SDL_KEYDOWN : SDL_KEYUP;
     e.key.keysym.scancode = sc;
     ForwardInput(e);
+}
+
+SDL_Window* InjectionWindow() {
+    // Android need not report keyboard or mouse focus even though its game window is active.
+    if (g_sdl_window) return g_sdl_window;
+    return SDL_GetKeyboardFocus() ? SDL_GetKeyboardFocus() : SDL_GetMouseFocus();
+}
+
+void InjectMouseButton(uint8_t button, bool down) {
+    const uint32_t bit = button == SDL_BUTTON_LEFT ? 1u : button == SDL_BUTTON_RIGHT ? 2u
+                         : button == SDL_BUTTON_MIDDLE ? 4u : 0u;
+    if (!bit) return;
+    if (down) g_injected_mouse |= bit;
+    else g_injected_mouse &= ~bit;
+    SDL_Window* window = InjectionWindow();
+    int x = 0, y = 0;
+    if (window) SDL_GetWindowSize(window, &x, &y);
+    SDL_Event e{};
+    e.type = down ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+    e.button.windowID = window ? SDL_GetWindowID(window) : 0;
+    e.button.button = button;
+    e.button.state = down ? SDL_PRESSED : SDL_RELEASED;
+    e.button.clicks = 1;
+    e.button.x = x / 2;
+    e.button.y = y / 2;
+    ForwardInput(e);
+}
+
+void InjectMouseMotion(int32_t dx, int32_t dy) {
+    SDL_Window* window = InjectionWindow();
+    int x = 0, y = 0;
+    if (window) SDL_GetWindowSize(window, &x, &y);
+    SDL_Event e{};
+    e.type = SDL_MOUSEMOTION;
+    e.motion.windowID = window ? SDL_GetWindowID(window) : 0;
+    e.motion.x = x / 2;
+    e.motion.y = y / 2;
+    e.motion.xrel = dx;
+    e.motion.yrel = dy;
+    ForwardInput(e);
+}
+
+void ReleaseInjectedInput() {
+    for (int sc = 0; sc < SDL_NUM_SCANCODES; ++sc) {
+        if (g_injected[sc]) InjectKey(static_cast<SDL_Scancode>(sc), false);
+    }
+    for (uint8_t button : {uint8_t(SDL_BUTTON_LEFT), uint8_t(SDL_BUTTON_RIGHT), uint8_t(SDL_BUTTON_MIDDLE)}) {
+        const uint32_t bit = button == SDL_BUTTON_LEFT ? 1u : button == SDL_BUTTON_RIGHT ? 2u : 4u;
+        if (g_injected_mouse & bit) InjectMouseButton(button, false);
+    }
+    g_mouse_dx = 0;
+    g_mouse_dy = 0;
+    g_mouse_dz = 0;
 }
 
 }  // namespace native

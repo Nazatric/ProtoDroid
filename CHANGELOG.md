@@ -2,6 +2,8 @@
 
 ## 0.14 - 2026-11-01
 
+- Added an Auto-only Vulkan 1.1 compatibility candidate built from pinned GameNative/Mesa source with Android WSI, isolated capability probes, and direct DXVK ICD handoff. Direct 1.2/1.3 and explicit Turnip/PanVK choices remain in place; physical Mali validation is still required.
+- Added the deliberate **MERCER**/seven-logo-tap diagnostic tour with ordered presented-frame gameplay phases, isolated saves/logs/cache, durable phase/crash markers, and detailed diagnostics. Scripted completion is not visual verification.
 - Applied DXVK's official Prototype workaround explicitly because the native Android host is named `app_process64`, not `prototypef.exe`, so DXVK's built-in game profile did not match. Disabling the broken DF-format exposure targets the original dynamic-shadow and bloom paths without reducing shadow detail, resolution, textures, AA, or render scale. Physical Adreno/Mali visual confirmation is still required.
 - Made launcher downloads resilient to transient empty DownloadManager queries and exceptions: recovery now uses timed rechecks, preserves uncertain downloads, and only replaces confirmed failed or persistently missing rows. Verification retains APK hash, package/version, and signing-certificate checks.
 - Added **GO TO RELEASES** beside updater recovery, with Retry preserved. Launcher resume checks now run after a 15-minute backoff without hiding an existing update card or interrupting active downloads. Kept FIFO presentation and known-pipeline cache warm-up intact; no universal 60 FPS or exhaustive future-shader precompilation claim is made.

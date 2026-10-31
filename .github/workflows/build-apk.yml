@@ -87,6 +87,14 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/present_stats_test
 
+      - name: Compile and run diagnostic-tour plan tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostic_tour_plan_test.cpp -o /tmp/diagnostic_tour_plan_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostic_tour_plan_test
+
       - name: Compile and run detailed diagnostics tests
         run: |
           set -euo pipefail
@@ -156,6 +164,16 @@ jobs:
             android/tests/com/protodroid/UpdateDownloadPolicyTest.java
           java -cp /tmp/protodroid-update-test com.protodroid.UpdateReleaseTest
           java -cp /tmp/protodroid-update-test com.protodroid.UpdateDownloadPolicyTest
+
+      - name: Test diagnostic-tour launcher cheat code
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-tour-code-test
+          mkdir -p /tmp/protodroid-tour-code-test
+          javac --release 11 -d /tmp/protodroid-tour-code-test \
+            android/java/com/protodroid/DiagnosticTourCode.java \
+            android/tests/com/protodroid/DiagnosticTourCodeTest.java
+          java -cp /tmp/protodroid-tour-code-test com.protodroid.DiagnosticTourCodeTest
 
       - name: Test APK signing configurations
         run: android/test-signing.sh
@@ -229,6 +247,16 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/diagnostics_test_arm64
 
+      - name: Compile and run native ARM64 diagnostic-tour tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostic_tour_plan_test.cpp -o /tmp/diagnostic_tour_plan_test_arm64
+          g++ $CXXFLAGS src/native/present_stats.cpp src/native/tests/present_stats_test.cpp -o /tmp/present_stats_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostic_tour_plan_test_arm64
+          /tmp/present_stats_test_arm64
+
       - name: Compile and run native ARM64 CPU affinity tests
         run: |
           set -euo pipefail
@@ -288,17 +316,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/deps-out/${{ matrix.abi }}
-          key: android-deps-bink-ffmpeg-v1-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/patches/**') }}
+          key: android-deps-vulkan-wrapper-v2-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/build-vulkan-wrapper.sh', 'android/patches/**') }}
 
       - name: Install build tools
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip 7zip
-          pip3 install --user --break-system-packages meson==1.5.2
+          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip 7zip bison flex
+          pip3 install --user --break-system-packages meson==1.5.2 mako pyyaml packaging
           echo "NDK at $ANDROID_NDK_LATEST_HOME: $(ls $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt 2>&1 | head)"
 
-      - name: Build third-party deps (SDL2, FAudio, DXVK)
+      - name: Build third-party deps (SDL2, FAudio, DXVK, Android Vulkan wrapper)
         if: steps.cache-deps.outputs.cache-hit != 'true'
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
@@ -924,10 +952,12 @@ jobs:
           ! printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2-2.0.so.0'
           printf '%s\n' "$STRINGS" | grep -F 'vkCreateAndroidSurfaceKHR'
           for marker in \
-            '/storage/emulated/0/Prototype/logs/pipeline_trace.log' \
+            '/storage/emulated/0/Prototype/logs' \
+            'pipeline_trace.log' \
             'last_vs.spv' \
             'last_fs.spv' \
             'PROTODROID_PIPELINE_TRACE' \
+            'PROTODROID_PIPELINE_TRACE_DIR' \
             'pre-created dummy sampler, buffer, and all 14 image views' \
             'dummy image GPU initialization complete' \
             'Disabling maintenance5, EDS3' \
@@ -946,7 +976,8 @@ jobs:
           echo "Verified signed package: com.protodroid $versionName (versionCode $versionCode)"
 
       - name: Upload APK artifact
-        if: always()
+        # Never upload a dummy, prebuilt, unverified, or wrong-revision APK after a failed build/verification step.
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: prototype-apk

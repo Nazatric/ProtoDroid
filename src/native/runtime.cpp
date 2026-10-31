@@ -5,6 +5,7 @@
 #include <cstring>
 #include <mutex>
 
+#include "diagnostic_tour.h"
 #include "guest.h"
 
 extern "C" {
@@ -17,6 +18,7 @@ extern const uint32_t g_recomp_count;
 volatile uint32_t RecompRestrictLo = 0;
 volatile uint32_t RecompRestrictHi = 0xffffffffu;
 volatile uint32_t RecompTestDetours = 0;
+extern volatile uint32_t RecompDiagnosticTour;
 uint8_t* RecompMemoryBase = nullptr;
 }
 
@@ -78,12 +80,18 @@ static uint32_t FollowThunks(uint32_t target) {
 }
 
 extern "C" void RecompDispatch(Ctx* ctx, uint32_t target) {
+    if (RecompDiagnosticTour &&
+        (target == kEngineBase + 0x004e45c0u || target == kEngineBase + 0x004e4ad0u))
+        DiagnosticTourGameplayObserved(target);
     if (RecompFn fn = RecompLookup(target)) {
         fn(ctx);
         return;
     }
     uint32_t real = FollowThunks(target);
     if (real != target) {
+        if (RecompDiagnosticTour &&
+            (real == kEngineBase + 0x004e45c0u || real == kEngineBase + 0x004e4ad0u))
+            DiagnosticTourGameplayObserved(real);
         if (RecompFn fn = RecompLookup(real)) {
             fn(ctx);
             return;

@@ -15,6 +15,10 @@ extern const char* const kAndroidPreviousSharedSaveDir;
 // Completion is recorded so later external deletions are not undone. Returns true when shared storage is active;
 // otherwise the legacy app-specific directory remains active.
 bool ConfigureSaveDirectory(const char* data_dir, const char* shared_dir, const char* previous_shared_dir);
+
+// Diagnostic-tour-only selection. This deliberately performs no legacy/shared migration and never falls back to a
+// normal save directory: failure leaves SaveDirectory() empty so the caller can stop before engine startup.
+bool ConfigureIsolatedSaveDirectory(const char* isolated_dir);
 const std::string& SaveDirectory();
 
 // Matches only the save directory itself or its descendants, case-insensitively like Win32.
