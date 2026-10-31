@@ -154,7 +154,7 @@ bool TurnipWorksInChild(const Driver& d) {
     int fds[2];
     if (pipe(fds) != 0) return !d.custom;
     const char* argv[] = {probe.c_str(), d.hook_dir.c_str(), d.dir.c_str(), d.file.c_str(), d.custom ? "1" : "0",
-                          nullptr};
+                          d.direct_icd ? "1" : "0", nullptr};
     pid_t pid = fork();
     if (pid < 0) {
         close(fds[0]);
@@ -270,7 +270,12 @@ void SelectVulkanDriver() {
     // SM8735 is an A825/KGSL platform even if Android restricts the model/device sysfs node.
     const bool adreno = access("/dev/kgsl-3d0", F_OK) == 0 || StartsWithText(soc, "SM8735");
     const char* custom = getenv("PROTODROID_CUSTOM_DRIVER");
+    const char* custom_backend = getenv("PROTODROID_CUSTOM_DRIVER_BACKEND");
+    const bool direct_custom = custom_backend &&
+            (strcmp(custom_backend, "panvk-kbase") == 0 || strcmp(custom_backend, "panvk") == 0);
     const bool custom_available = custom && *custom && access(custom, R_OK) == 0;
+    Log("vulkan: requested driver mode %s%s", mode.c_str(),
+        mode == "custom" && direct_custom ? " (direct PanVK ICD)" : "");
     if (custom && *custom && !custom_available) Log("vulkan: imported driver is not readable: %s", custom);
 
     if (mode == "system") {
@@ -281,15 +286,22 @@ void SelectVulkanDriver() {
         Log("vulkan: custom mode has no readable imported driver, using automatic driver selection");
         mode = "auto";
     }
-    if (mode == "custom" && custom_available) {
-        // Current PanVK-kbase builds otherwise default to lossy BC transcode/AFRC paths on some Mali GPUs.
-        // These PanVK-only variables are ignored by Turnip; exact decoded shadows preserve the game's textures.
+    if (mode == "custom" && custom_available && direct_custom) {
+        // PanVK-kbase otherwise defaults to lossy BC transcode/AFRC paths on some Mali GPUs. These are PanVK-only
+        // settings: keep exact decoded textures and do not trade the game's accepted rendering quality for speed.
         setenv("PANVK_BC_MODE", "exact", 1);
         setenv("PANVK_BC_AFRC", "0", 1);
         setenv("PANVK_BC_BC6H", "exact", 1);
+        // PanVK is an explicit experimental Custom choice, not an Auto substitution for a working Mali system driver.
+        setenv("PAN_I_WANT_A_BROKEN_VULKAN_DRIVER", "1", 1);
     }
     if (mode == "turnip" && !adreno) {
         Log("vulkan: Turnip is Adreno-only; use custom mode for a compatible Mali/PanVK package");
+        LogSystemDevice();
+        return;
+    }
+    if (mode == "custom" && custom_available && !direct_custom && !adreno) {
+        Log("vulkan: selected package is Turnip/AdrenoTools, which is Adreno-only on this Mali/non-Adreno device; using System");
         LogSystemDevice();
         return;
     }
@@ -328,7 +340,9 @@ void SelectVulkanDriver() {
         std::string path = custom;
         const size_t slash = path.rfind('/');
         if (slash != std::string::npos) {
-            drivers.push_back({hooks, path.substr(0, slash + 1), path.substr(slash + 1), true});
+            drivers.push_back({hooks, path.substr(0, slash + 1), path.substr(slash + 1), true, direct_custom});
+            Log("vulkan: custom package %s, backend %s", path.substr(slash + 1).c_str(),
+                direct_custom ? "panvk-kbase/direct-icd" : "turnip/adrenotools");
         }
     }
     auto add_bundled = [&](const char* file) {

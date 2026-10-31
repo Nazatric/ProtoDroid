@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11 - 2026-10-31
+
+- Replaced the hidden driver-package row and generic dialogs with a dedicated Prototype-styled **Drivers** screen, accessible from the launcher and a fixed Settings button. Auto remains the default; the screen explains Auto/System/Turnip/Custom and Mali fallback behavior.
+- Added a scrollable/filterable multi-package library with explicit Select and two-tap Remove, private legacy migration, hash-deduplicated imports, and in-screen download/progress/error states. Added pinned GitHub downloads for standard, One UI, and Gen8 Turnip plus PanVK-kbase; installing a package never silently selects Custom.
+- Added direct Vulkan ICD loading for explicitly selected PanVK-kbase packages while retaining AdrenoTools for Turnip. Probe and gameplay share backend selection, mapped-library checks, and crash recovery; Turnip is refused on non-Adreno devices. Exact BC texture behavior and accepted rendering quality are preserved.
+- Expanded host/multi-slot tests and added CI validation of every pinned release asset and PanVK's ICD export. Physical Mali PanVK gameplay and the logless S24 Ultra/0.9 black-screen report remain unverified; no universal compatibility, FPS, or black-screen fix is claimed.
+
 ## 0.10 - 2026-10-31
 
 - Added a pinned A825 Gen8 Turnip build and made Auto select it for Adreno 825/SM8735 instead of skipping directly to Qualcomm's driver. Other Adreno 8xx models retain their previous automatic policy.

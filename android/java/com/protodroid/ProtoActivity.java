@@ -62,16 +62,22 @@ public class ProtoActivity extends SDLActivity {
     }
 
     private void prepareVulkanDriver() {
-        DriverPackage.Installed installed = DriverPackage.read(new File(getFilesDir(), "driver"));
+        DriverRepository.Entry selected = DriverManager.selected(this);
+        DriverPackage.Installed installed = selected == null ? null : selected.installed;
         File driver = installed == null ? null : installed.libraryFile();
         if (driver == null && getSharedPreferences("controls", MODE_PRIVATE).getInt("vulkan_driver", 0) == 3) {
             // The in-game restart action comes straight back here, without SetupActivity's migration/recovery path.
             new GameSettings(this).setCustomDriverSelected(false);
-            Toast.makeText(this, "No valid custom driver is installed; Auto was restored.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "No valid custom driver is selected; Auto was restored.", Toast.LENGTH_LONG).show();
         }
         try {
-            if (driver == null) Os.unsetenv("PROTODROID_CUSTOM_DRIVER");
-            else Os.setenv("PROTODROID_CUSTOM_DRIVER", driver.getAbsolutePath(), true);
+            if (driver == null) {
+                Os.unsetenv("PROTODROID_CUSTOM_DRIVER");
+                Os.unsetenv("PROTODROID_CUSTOM_DRIVER_BACKEND");
+            } else {
+                Os.setenv("PROTODROID_CUSTOM_DRIVER", driver.getAbsolutePath(), true);
+                Os.setenv("PROTODROID_CUSTOM_DRIVER_BACKEND", installed.backend, true);
+            }
         } catch (ErrnoException ignored) {
             // Native selection keeps its safe automatic/system fallback.
         }

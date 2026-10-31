@@ -25,6 +25,7 @@ public class SetupActivity extends Activity {
     private static final int REQUEST_STORAGE = 1;
 
     private SetupView setupView;
+    private DriverView driverView;
     private UpdateManager updateManager;
     private DriverManager driverManager;
     private File foundGame;
@@ -44,9 +45,7 @@ public class SetupActivity extends Activity {
                 if (setupView != null) setupView.showUpdateWarning(versionName);
             }
         });
-        driverManager = new DriverManager(this, custom -> {
-            if (setupView != null) setupView.setCustomDriverSelected(custom);
-        });
+        driverManager = new DriverManager(this);
     }
 
     private void showSetup(File app, File shared) {
@@ -70,7 +69,7 @@ public class SetupActivity extends Activity {
 
                 @Override
                 public void onDrivers() {
-                    driverManager.show();
+                    showDrivers();
                 }
 
                 @Override
@@ -111,6 +110,19 @@ public class SetupActivity extends Activity {
                 shared.getAbsolutePath(),
                 appPath,
                 sharedSub.getAbsolutePath()));
+    }
+
+    private void showDrivers() {
+        if (driverView != null || setupView == null) return;
+        driverView = new DriverView(this, setupView.gameSettings(), driverManager, this::closeDrivers);
+        setContentView(driverView);
+    }
+
+    private void closeDrivers() {
+        if (driverView == null) return;
+        driverManager.setObserver(null);
+        driverView = null;
+        setContentView(setupView);
     }
 
     private File appGame() {
@@ -191,9 +203,16 @@ public class SetupActivity extends Activity {
             // the native side falls back to the app folder
         }
         File driver = driverManager.driverForLaunch();
+        DriverRepository.Entry selected = driverManager.selected();
         try {
-            if (driver == null) Os.unsetenv("PROTODROID_CUSTOM_DRIVER");
-            else Os.setenv("PROTODROID_CUSTOM_DRIVER", driver.getAbsolutePath(), true);
+            if (driver == null) {
+                Os.unsetenv("PROTODROID_CUSTOM_DRIVER");
+                Os.unsetenv("PROTODROID_CUSTOM_DRIVER_BACKEND");
+            } else {
+                Os.setenv("PROTODROID_CUSTOM_DRIVER", driver.getAbsolutePath(), true);
+                Os.setenv("PROTODROID_CUSTOM_DRIVER_BACKEND",
+                        selected == null ? DriverCatalog.TURNIP : selected.installed.backend, true);
+            }
         } catch (ErrnoException ignored) {
             // the bundled drivers are used
         }
@@ -230,6 +249,10 @@ public class SetupActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (driverView != null) {
+            closeDrivers();
+            return;
+        }
         if (setupView != null && setupView.closeUpdateWarning()) return;
         if (setupView != null && setupView.closeSettings()) return;
         super.onBackPressed();

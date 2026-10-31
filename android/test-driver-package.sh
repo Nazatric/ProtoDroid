@@ -13,7 +13,14 @@ if [ ! -d "$JSON_SRC/src/main/java/org/json" ]; then
     git -C "$JSON_SRC" checkout -q FETCH_HEAD
 fi
 find "$JSON_SRC/src/main/java/org/json" -name '*.java' -print > "$WORK/sources"
-printf '%s\n' "$ROOT/android/java/com/protodroid/DriverPackage.java" \
+printf '%s\n' "$ROOT/android/java/com/protodroid/DriverCatalog.java" \
+    "$ROOT/android/java/com/protodroid/DriverPackage.java" \
+    "$ROOT/android/java/com/protodroid/DriverRepository.java" \
     "$ROOT/android/tests/com/protodroid/DriverPackageTest.java" >> "$WORK/sources"
 javac --release 11 -d "$WORK/classes" @"$WORK/sources"
 java -cp "$WORK/classes" com.protodroid.DriverPackageTest
+if [ "${DRIVER_CATALOG_ONLINE:-0}" = 1 ]; then
+    printf '%s\n' "$ROOT/android/tests/com/protodroid/DriverCatalogTest.java" > "$WORK/catalog-sources"
+    javac --release 11 -cp "$WORK/classes" -d "$WORK/classes" @"$WORK/catalog-sources"
+    java -cp "$WORK/classes" com.protodroid.DriverCatalogTest
+fi

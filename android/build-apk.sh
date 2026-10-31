@@ -149,6 +149,19 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
         if path not in names or apk.getinfo(path).file_size == 0:
             raise SystemExit("ERROR: signed APK is missing " + path)
         print("Verified " + path)
+    # Both the isolated probe and gameplay must contain the direct-ICD path. These dlsym names survive stripping;
+    # checking only Java metadata or a successful link would not prove that the signed package contains the loader.
+    for library in ("libmain.so", "libturnipprobe.so", "libmain_v80.so"):
+        path = "lib/arm64-v8a/" + library
+        if path not in names:
+            if library == "libmain_v80.so":
+                continue
+            raise SystemExit("ERROR: signed APK is missing native driver consumer " + path)
+        data = apk.read(path)
+        for marker in (b"vk_icdGetInstanceProcAddr", b"vk_icdNegotiateLoaderICDInterfaceVersion"):
+            if marker not in data:
+                raise SystemExit("ERROR: " + path + " lacks direct ICD marker " + marker.decode())
+        print("Verified direct ICD loader in " + path)
 PY
 fi
 # Verify the metadata in the signed APK, not just the source manifest. The release job consumes this only after the

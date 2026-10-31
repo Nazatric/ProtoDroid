@@ -190,8 +190,17 @@ final class GameSettings {
         if (setting.engine) writeEngineSettings(new String[] {setting.key});
     }
 
+    void setDriverMode(int mode) {
+        if (mode < 0 || mode > 3) return;
+        setIndex(settingIndex("vulkan_driver"), mode);
+    }
+
     void setCustomDriverSelected(boolean custom) {
-        setIndex(settingIndex("vulkan_driver"), custom ? 3 : 0);
+        setDriverMode(custom ? 3 : 0);
+    }
+
+    int driverMode() {
+        return settings[settingIndex("vulkan_driver")].index;
     }
 
     /** Rewrites only our engine keys, preserving comments and every unrelated setting in protodroid.ini. */

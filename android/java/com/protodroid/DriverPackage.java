@@ -32,15 +32,20 @@ final class DriverPackage {
 
     static final class Installed {
         final File root;
-        final String name, version, library, source, sha256;
+        final String name, version, library, source, sha256, backend;
 
         Installed(File root, String name, String version, String library, String source, String sha256) {
+            this(root, name, version, library, source, sha256, backendForLibrary(library));
+        }
+
+        Installed(File root, String name, String version, String library, String source, String sha256, String backend) {
             this.root = root;
             this.name = name;
             this.version = version;
             this.library = library;
             this.source = source;
             this.sha256 = sha256;
+            this.backend = normalizeBackend(backend, library);
         }
 
         File libraryFile() {
@@ -67,7 +72,8 @@ final class DriverPackage {
             File binary = new File(root, library);
             if (!binary.isFile() || binary.length() < 64 || binary.length() > MAX_LIBRARY_SIZE) return null;
             return new Installed(root, about.optString("name", "Custom driver"),
-                    about.optString("version"), library, about.optString("source"), about.optString("sha256"));
+                    about.optString("version"), library, about.optString("source"), about.optString("sha256"),
+                    about.optString("backend"));
         } catch (Exception e) {
             return null;
         }
@@ -104,6 +110,7 @@ final class DriverPackage {
             about.put("library", metadata.library);
             about.put("source", metadata.source);
             about.put("sha256", metadata.sha256);
+            about.put("backend", metadata.backend);
             writeText(new File(staging, "driver.json"), about.toString(2));
 
             if (root.exists()) {
@@ -116,7 +123,7 @@ final class DriverPackage {
             }
             if (movedOld) deleteTree(backup);
             return new Installed(root, metadata.name, metadata.version, metadata.library,
-                    metadata.source, metadata.sha256);
+                    metadata.source, metadata.sha256, metadata.backend);
         } catch (JSONException e) {
             throw new IOException("Invalid driver metadata", e);
         } finally {
@@ -139,7 +146,24 @@ final class DriverPackage {
     }
 
     private static final class Metadata {
-        String name, version, library, source, sha256;
+        String name, version, library, source, sha256, backend;
+    }
+
+    static String backendForLibrary(String library) {
+        return normalizeBackend("", library);
+    }
+
+    private static String normalizeBackend(String backend, String library) {
+        String value = backend == null ? "" : backend.trim().toLowerCase(Locale.ROOT);
+        if (value.equals("panvk") || value.equals("panvk-kbase") || value.equals("panfrost")) {
+            return DriverCatalog.PANVK;
+        }
+        if (value.equals("turnip") || value.equals("freedreno") || value.equals("adrenotools")) {
+            return DriverCatalog.TURNIP;
+        }
+        String name = library == null ? "" : baseName(library).toLowerCase(Locale.ROOT);
+        if (name.contains("panfrost") || name.contains("panvk")) return DriverCatalog.PANVK;
+        return DriverCatalog.TURNIP;
     }
 
     private static Metadata installZip(InputStream input, String sourceName, File staging, int currentApi)
@@ -212,8 +236,9 @@ final class DriverPackage {
         result.sha256 = actual;
         result.source = clean(sourceName, "Imported ZIP");
         result.name = clean(meta == null ? "" : meta.optString("name"), removeExtension(result.source));
-        result.version = clean(meta == null ? "" : meta.optString("driverVersion",
-                meta.optString("packageVersion")), "");
+        result.version = clean(meta == null ? "" : meta.optString("packageVersion",
+                meta.optString("driverVersion")), "");
+        result.backend = normalizeBackend(meta == null ? "" : meta.optString("backend"), library);
         return result;
     }
 
@@ -229,6 +254,7 @@ final class DriverPackage {
         result.source = clean(sourceName, "Imported driver");
         result.name = removeExtension(result.source);
         result.version = "";
+        result.backend = backendForLibrary(library);
         return result;
     }
 

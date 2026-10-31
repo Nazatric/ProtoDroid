@@ -116,6 +116,8 @@ public final class DriverPackageTest {
             DriverPackage.Installed read = DriverPackage.read(root);
             check(read != null && read.name.equals("Test Turnip") && read.version.equals("1"),
                     "installed metadata was not preserved");
+            check(read != null && DriverCatalog.TURNIP.equals(read.backend),
+                    "Turnip backend was not inferred from the package");
 
             byte[] originalMetadata = Files.readAllBytes(rootPath.resolve("driver.json"));
             byte[] originalLibrary = Files.readAllBytes(rootPath.resolve("libvulkan_freedreno.so"));
@@ -176,6 +178,53 @@ public final class DriverPackageTest {
             check(!temporary.resolve(".driver-install").toFile().exists()
                             && !temporary.resolve(".driver-previous").toFile().exists(),
                     "staging or backup directory remained after installation");
+
+            // Multi-slot storage: installing or removing one package must not disturb another.
+            java.io.File files = temporary.resolve("files").toFile();
+            DriverRepository.Entry first = DriverRepository.install(files, "first",
+                    new ByteArrayInputStream(valid), "first.zip", 29);
+            DriverRepository.Entry second = DriverRepository.install(files, "second",
+                    new ByteArrayInputStream(valid), "second.zip", 29);
+            check(!first.id.equals(second.id) && DriverRepository.list(files).size() == 2,
+                    "catalog packages did not get independent slots");
+            expectFailure(() -> DriverRepository.install(files, "first",
+                    new ByteArrayInputStream(wrongChecksum), "bad.zip", 29), "failed catalog replacement");
+            check(DriverRepository.find(files, first.id) != null
+                            && DriverRepository.find(files, second.id) != null,
+                    "failed catalog replacement damaged another slot");
+            check(DriverRepository.remove(files, first.id), "catalog package could not be removed");
+            check(DriverRepository.find(files, first.id) == null && DriverRepository.find(files, second.id) != null,
+                    "removing one package removed or changed another");
+
+            DriverRepository.Entry imported = DriverRepository.install(files, "",
+                    new ByteArrayInputStream(good), "libvulkan_custom.so", 29);
+            int afterImport = DriverRepository.list(files).size();
+            DriverRepository.Entry duplicate = DriverRepository.install(files, "",
+                    new ByteArrayInputStream(good), "libvulkan_custom.so", 29);
+            check(imported.id.equals(duplicate.id) && DriverRepository.list(files).size() == afterImport,
+                    "identical raw imports were not deduplicated");
+
+            Map<String, byte[]> panvkEntries = new LinkedHashMap<>();
+            panvkEntries.put("libvulkan_panfrost.so", good);
+            panvkEntries.put("meta.json", ("{\"libraryName\":\"libvulkan_panfrost.so\","
+                    + "\"name\":\"Test PanVK\",\"driverVersion\":\"Mesa devel\","
+                    + "\"packageVersion\":\"26.3.1\",\"backend\":\"panvk-kbase\",\"minApi\":29}")
+                    .getBytes(StandardCharsets.UTF_8));
+            panvkEntries.put("SHA256SUMS.txt", (sha256(good) + "  libvulkan_panfrost.so\n")
+                    .getBytes(StandardCharsets.UTF_8));
+            DriverRepository.Entry panvk = DriverRepository.install(files, "panvk",
+                    new ByteArrayInputStream(zip(panvkEntries)), "panvk.zip", 29);
+            check(DriverCatalog.PANVK.equals(panvk.installed.backend)
+                            && panvk.installed.version.equals("26.3.1"),
+                    "PanVK backend or package version was not preserved");
+
+            DriverPackage.install(new ByteArrayInputStream(good), "libvulkan_custom.so",
+                    DriverRepository.legacyRoot(files), 29);
+            check(DriverRepository.find(files, DriverRepository.LEGACY_ID) != null,
+                    "legacy single-slot package was not readable");
+            check(DriverRepository.remove(files, DriverRepository.LEGACY_ID)
+                            && DriverRepository.find(files, DriverRepository.LEGACY_ID) == null,
+                    "legacy package could not be removed independently");
             System.out.println("driver-package tests passed (" + checks + " checks)");
         } finally {
             DriverPackage.deleteTree(temporary.toFile());

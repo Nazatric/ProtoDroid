@@ -322,7 +322,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Test staged driver imports and rollback
+      - name: Test staged driver imports, rollback, and pinned catalog packages
+        env:
+          DRIVER_CATALOG_ONLINE: '1'
         run: android/test-driver-package.sh
 
   build-turnip:
