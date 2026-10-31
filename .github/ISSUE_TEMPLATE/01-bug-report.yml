@@ -1,0 +1,84 @@
+name: 🐞 Bug report
+description: Report incorrect behavior that does not involve a crash or freeze
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve ProtoDroid. You do not need to diagnose the cause—tell us what you saw and include the available logs.
+
+        Please **reproduce the problem first**, then attach the logs. Do not upload game installation files or save files.
+  - type: input
+    id: version
+    attributes:
+      label: ProtoDroid version
+      description: Release version, CI run, or exact commit you installed.
+      placeholder: For example, 0.9
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone and chip
+      description: Include the device model and SoC/GPU if you know them.
+      placeholder: For example, phone model / Dimensity / Mali or Snapdragon / Adreno
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      placeholder: For example, Android 16
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where is the problem?
+      options:
+        - Launcher or setup
+        - Update or installation
+        - Gameplay
+        - Graphics or video
+        - Audio or Bink cutscenes
+        - Controls or input
+        - Saves or game files
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe what you saw and what you expected instead. Mention an earlier working version if you know one.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: A short sequence is perfect. Include how often it happens and any relevant settings.
+      placeholder: |
+        1. Open ProtoDroid and…
+        2. Select…
+        3. The problem happens…
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Drag `proto-native.log` and `app_process64_d3d9.log` into this field, plus `proto-native.prev.log` when useful. Find them in `/storage/emulated/0/Prototype/logs/` or `/storage/emulated/0/Android/data/com.protodroid/files/`.
+
+        Attach files rather than pasting thousands of lines. If you cannot get them, explain why here.
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots, video, or extra context (optional)
+      description: Add anything that makes the report clearer. Please do not attach game data files or save files.
+    validations:
+      required: false

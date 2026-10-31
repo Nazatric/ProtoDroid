@@ -33,10 +33,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install host test dependency
+      - name: Install host test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends zlib1g-dev
+          sudo apt-get install -y --no-install-recommends zlib1g-dev python3-yaml
 
       - name: Compile and run graphics UBSAN tests
         run: |
@@ -126,6 +126,9 @@ jobs:
 
       - name: Test Android version increments
         run: python3 tools/test_bump_version.py
+
+      - name: Validate GitHub issue forms
+        run: python3 tools/test_issue_templates.py
 
       - name: Test launcher update metadata
         run: |
