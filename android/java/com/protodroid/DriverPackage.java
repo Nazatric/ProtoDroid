@@ -191,8 +191,9 @@ final class DriverPackage {
             }
         }
         if (libraries.isEmpty()) throw new IOException("The ZIP has no Vulkan driver .so");
-        if (meta != null && meta.optInt("minApi", 0) > currentApi) {
-            throw new IOException("This driver needs Android API " + meta.getInt("minApi") + " or newer");
+        int minApi = meta == null ? 0 : meta.optInt("minApi", 0);
+        if (minApi > currentApi) {
+            throw new IOException("This driver needs Android API " + minApi + " or newer");
         }
         String library = pickLibrary(libraries, meta);
         if (library == null) {

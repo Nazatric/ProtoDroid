@@ -428,6 +428,16 @@ jobs:
           mkdir -p $HOME/protodroid-data/android-deps-src
           cp -r /tmp/deps-src/SDL2 $HOME/protodroid-data/android-deps-src/ || true
 
+      - name: Compile Android Java sources early
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-java-classes
+          mkdir -p /tmp/protodroid-java-classes
+          javac --release 11 -nowarn -cp "$ANDROID_SDK_ROOT/platforms/android-35/android.jar" \
+            -d /tmp/protodroid-java-classes \
+            "$HOME"/protodroid-data/android-deps-src/SDL2/android-project/app/src/main/java/org/libsdl/app/*.java \
+            android/java/com/protodroid/*.java
+
       - name: Discover binary assets and prepare libmain.so
         id: discover
         run: |
