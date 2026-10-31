@@ -182,7 +182,7 @@ info:    Sparse   : n/a
 info:  DXVK: Serializing Vulkan pipeline compilation on ARM
 info:  DXVK: ARM pipeline trace disabled; set PROTODROID_PIPELINE_TRACE=1 or pipeline_trace = 1 to enable
 info:  Memory type mask for buffer resources: 0x3, usage: 0x1b7
-info:  DXVK: Read 314 valid state cache entries
+info:  DXVK: Read 318 valid state cache entries
 info:  DXVK: Graphics pipeline libraries not supported
 info:  DxvkUnboundResources: pre-created dummy sampler, buffer, and all 14 image views
 info:  DxvkUnboundResources: dummy image GPU initialization complete
