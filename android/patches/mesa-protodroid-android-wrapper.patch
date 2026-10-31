@@ -358,3 +358,123 @@ index a2af67a..fafe3ec 100644
         vvl_log_file = fopen(vvl_log_filename, "w");
     }
  
+diff --git a/src/vulkan/wsi/wsi_common.c b/src/vulkan/wsi/wsi_common.c
+index 869bc32..a1675fa 100644
+--- a/src/vulkan/wsi/wsi_common.c
++++ b/src/vulkan/wsi/wsi_common.c
+@@ -48,7 +48,7 @@
+ #include <unistd.h>
+ #endif
+ 
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+ #include <android/hardware_buffer.h>
+ #endif
+ 
+@@ -256,7 +256,7 @@ wsi_device_init(struct wsi_device *wsi,
+    WSI_GET_CB(UnmapMemory);
+    if (wsi->khr_present_wait)
+       WSI_GET_CB(WaitSemaphores);
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+    WSI_GET_CB(GetMemoryAndroidHardwareBufferANDROID);
+    WSI_GET_CB(GetAndroidHardwareBufferPropertiesANDROID);
+ #endif
+@@ -425,7 +425,7 @@ get_blit_type(const struct wsi_device *wsi,
+       return wsi_cpu_image_needs_buffer_blit(wsi, cpu_params) ?
+          WSI_SWAPCHAIN_BUFFER_BLIT : WSI_SWAPCHAIN_NO_BLIT;
+    }
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+    case WSI_IMAGE_TYPE_ANDROID: {
+       return wsi_get_android_blit_type(wsi, params, device);
+    }
+@@ -463,7 +463,7 @@ configure_image(const struct wsi_swapchain *chain,
+          container_of(params, const struct wsi_cpu_image_params, base);
+       return wsi_configure_cpu_image(chain, pCreateInfo, cpu_params, info);
+    }
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+    case WSI_IMAGE_TYPE_ANDROID: {
+       return wsi_configure_android_image(chain, pCreateInfo, params, info);
+    }
+@@ -776,7 +776,7 @@ wsi_destroy_image_info(const struct wsi_swapchain *chain,
+       vk_free(&chain->alloc, info->modifier_props);
+       info->modifier_props = NULL;
+    }
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+    if (info->ahardware_buffer_desc != NULL) {
+       vk_free(&chain->alloc, info->ahardware_buffer_desc);
+       info->ahardware_buffer_desc = NULL;
+@@ -800,7 +800,7 @@ wsi_create_image(const struct wsi_swapchain *chain,
+       image->explicit_sync[i].fd = -1;
+ #endif
+ 
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+    if (info->ahardware_buffer_desc && AHardwareBuffer_allocate(info->ahardware_buffer_desc,
+                                 &image->ahardware_buffer) != 0)
+    {
+@@ -859,7 +859,7 @@ wsi_destroy_image(const struct wsi_swapchain *chain,
+ {
+    const struct wsi_device *wsi = chain->wsi;
+ 
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+    if (image->ahardware_buffer)
+       AHardwareBuffer_release(image->ahardware_buffer);
+ #endif
+@@ -893,7 +893,7 @@ wsi_destroy_image(const struct wsi_swapchain *chain,
+       vk_free(&chain->alloc, image->blit.cmd_buffers);
+    }
+ 
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+    if (image->ahb_release_cmd_buffers) {
+       for (uint32_t i = 0; i < wsi->queue_family_count; i++) {
+          if (!chain->cmd_pools[i] ||
+@@ -1617,7 +1617,7 @@ wsi_common_queue_present(const struct wsi_device *wsi,
+             submit_info.pWaitDstStageMask = stage_flags;
+          }
+       }
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+       else if (image->ahb_release_cmd_buffers &&
+                image->ahb_release_cmd_buffers[queue_family_index] != VK_NULL_HANDLE) {
+          /* No blit: an external consumer reads this AHardwareBuffer directly,
+diff --git a/src/vulkan/wsi/wsi_common.h b/src/vulkan/wsi/wsi_common.h
+index 19ed227..19322bf 100644
+--- a/src/vulkan/wsi/wsi_common.h
++++ b/src/vulkan/wsi/wsi_common.h
+@@ -283,7 +283,7 @@ struct wsi_device {
+    WSI_CB(MapMemory);
+    WSI_CB(UnmapMemory);
+    WSI_CB(WaitSemaphores);
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+    WSI_CB(GetMemoryAndroidHardwareBufferANDROID);
+    WSI_CB(GetAndroidHardwareBufferPropertiesANDROID);
+ #endif
+diff --git a/src/vulkan/wsi/wsi_common_private.h b/src/vulkan/wsi/wsi_common_private.h
+index 4905fdb..ac28f7a 100644
+--- a/src/vulkan/wsi/wsi_common_private.h
++++ b/src/vulkan/wsi/wsi_common_private.h
+@@ -88,7 +88,7 @@ struct wsi_image_info {
+    VkExternalMemoryImageCreateInfo ext_mem;
+    VkImageFormatListCreateInfo format_list;
+    VkImageDrmFormatModifierListCreateInfoEXT drm_mod_list;
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+    struct AHardwareBuffer_Desc *ahardware_buffer_desc;
+ #endif
+ 
+@@ -172,7 +172,7 @@ struct wsi_image {
+    int dma_buf_fd;
+ #endif
+    void *cpu_map;
+-#ifdef __TERMUX__
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
+    struct AHardwareBuffer *ahardware_buffer;
+    /* Command buffers, one per queue family, holding the queue-family ownership
+     * release into VK_QUEUE_FAMILY_FOREIGN_EXT. Submitted before the image is
