@@ -4,6 +4,14 @@ ProtoDroid is a native Android port of **Prototype (2009)**. It runs the origina
 
 The Android application ID is **`com.protodroid`**.
 
+## [ SCREENS ]
+
+| [ 01 // SETUP ] **File Access** | [ 02 // LAUNCHER ] **Ready to Play** |
+| :---: | :---: |
+| ![Prototype setup screen requesting file access](.github/assets/readme/01-setup-file-access.webp) | ![Prototype launcher with game data detected](.github/assets/readme/02-launcher-ready.webp) |
+| [ 03 // GAMEPLAY ] **Touch Controls** | [ 04 // MOVIES ] **Bink Playback** |
+| ![Prototype gameplay with touch controls](.github/assets/readme/03-gameplay-controls.webp) | ![Prototype Bink cutscene playback](.github/assets/readme/04-bink-cutscene.webp) |
+
 ## Architecture
 
 - **Static ARM64 recompilation:** `prototypeenginef.dll` is translated from 32-bit x86 into C, generated for the engine's rebased address, and compiled for Android. The runtime provides guest memory, x86-like memory ordering, threads, fibers, and the required Microsoft CRT behavior.
