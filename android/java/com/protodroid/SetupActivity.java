@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
 import android.system.ErrnoException;
@@ -29,8 +30,25 @@ public class SetupActivity extends Activity {
     private static final int REQUEST_STORAGE = 1;
 
     private SetupView setupView;
+    private UpdateManager updateManager;
     private File foundGame;
     private boolean foundInApp;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        updateManager = new UpdateManager(this, new UpdateManager.Callback() {
+            @Override
+            public void onStateChanged(UpdateManager.State state) {
+                if (setupView != null) setupView.setUpdateState(state);
+            }
+
+            @Override
+            public void onUninstallRequired(String versionName) {
+                if (setupView != null) setupView.showUpdateWarning(versionName);
+            }
+        });
+    }
 
     private void showSetup(File app, File shared) {
         if (setupView == null) {
@@ -55,9 +73,26 @@ public class SetupActivity extends Activity {
                 public void onExit() {
                     finish();
                 }
+
+                @Override
+                public void onUpdate() {
+                    updateManager.onUpdatePressed();
+                }
+
+                @Override
+                public void onUpdateConfirm() {
+                    setupView.hideUpdateWarning();
+                    updateManager.confirmUninstall();
+                }
+
+                @Override
+                public void onUpdateCancel() {
+                    setupView.hideUpdateWarning();
+                }
             });
             setContentView(setupView);
         }
+        setupView.setUpdateState(updateManager.currentState());
         File sharedSub = new File(shared, "game");
         boolean access = hasSharedAccess();
         String appPath = app != null ? app.getAbsolutePath()
@@ -100,6 +135,19 @@ public class SetupActivity extends Activity {
     protected void onResume() {
         super.onResume();
         check();  // also after coming back from the permission screen
+        updateManager.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        updateManager.onPause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        updateManager.close();
+        super.onDestroy();
     }
 
     private void check() {
@@ -190,11 +238,20 @@ public class SetupActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(code, permissions, results);
+        updateManager.onRequestPermissionsResult(code, results);
         check();
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        updateManager.onActivityResult(requestCode, resultCode);
+    }
+
+    @Override
     public void onBackPressed() {
+        if (setupView != null && setupView.closeUpdateWarning()) return;
         if (setupView != null && setupView.closeSettings()) return;
         super.onBackPressed();
     }

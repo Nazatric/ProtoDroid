@@ -127,6 +127,18 @@ jobs:
       - name: Test Android version increments
         run: python3 tools/test_bump_version.py
 
+      - name: Test launcher update metadata
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch 20240303 https://github.com/stleary/JSON-java.git /tmp/protodroid-json
+          rm -rf /tmp/protodroid-update-test
+          mkdir -p /tmp/protodroid-update-test
+          javac --release 11 -d /tmp/protodroid-update-test \
+            $(find /tmp/protodroid-json/src/main/java/org/json -name '*.java' -print) \
+            android/java/com/protodroid/UpdateRelease.java \
+            android/tests/com/protodroid/UpdateReleaseTest.java
+          java -cp /tmp/protodroid-update-test com.protodroid.UpdateReleaseTest
+
       - name: Test APK signing configurations
         run: android/test-signing.sh
 

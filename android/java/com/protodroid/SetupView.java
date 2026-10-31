@@ -41,6 +41,9 @@ final class SetupView extends View {
         void onCheckAgain();
         void onPlay();
         void onExit();
+        void onUpdate();
+        void onUpdateConfirm();
+        void onUpdateCancel();
     }
 
     static final class State {
@@ -83,6 +86,9 @@ final class SetupView extends View {
     private static final int ACTION_PRESET_HIGH = 8;
     private static final int ACTION_PRESET_CUSTOM = 9;
     private static final int ACTION_SETTINGS_DONE = 10;
+    private static final int ACTION_UPDATE = 11;
+    private static final int ACTION_UPDATE_CONFIRM = 12;
+    private static final int ACTION_UPDATE_CANCEL = 13;
     private static final int SETTING_ACTION_BASE = 32;
 
     private static final int BUTTON_NORMAL = 0;
@@ -113,6 +119,9 @@ final class SetupView extends View {
     private final RectF[] presetBounds = {new RectF(), new RectF(), new RectF(), new RectF()};
     private final RectF settingsDoneBounds = new RectF();
     private final RectF settingsListBounds = new RectF();
+    private final RectF updateBounds = new RectF();
+    private final RectF updateWarningConfirmBounds = new RectF();
+    private final RectF updateWarningCancelBounds = new RectF();
     private final RectF[] settingLeftBounds;
     private final RectF[] settingRightBounds;
     private final float[] buttonFill = new float[16];
@@ -122,6 +131,12 @@ final class SetupView extends View {
     private final int touchSlop;
 
     private State state = new State(false, false, false, "INITIALIZING...", "", "", "");
+    private UpdateManager.State updateState = UpdateManager.State.hidden();
+    private boolean updateWarningVisible;
+    private String updateWarningVersion = "";
+    private StaticLayout updateWarningLayout;
+    private int updateWarningLayoutWidth = -1;
+    private float updateWarningLayoutUnit = -1f;
     private Shader horizontalShade;
     private Shader verticalShade;
     private int shadeWidth = -1;
@@ -209,16 +224,54 @@ final class SetupView extends View {
         invalidate();
     }
 
+    void setUpdateState(UpdateManager.State next) {
+        updateState = next == null ? UpdateManager.State.hidden() : next;
+        if (updateWarningVisible && updateState.status != UpdateManager.State.READY) hideUpdateWarning();
+        updateContentDescription();
+        invalidate();
+    }
+
+    void showUpdateWarning(String versionName) {
+        updateWarningVersion = versionName == null ? "" : versionName;
+        updateWarningVisible = true;
+        updateWarningLayout = null;
+        focusedAction = ACTION_NONE;
+        pressedAction = ACTION_NONE;
+        updateContentDescription();
+        invalidate();
+    }
+
+    void hideUpdateWarning() {
+        if (!updateWarningVisible) return;
+        updateWarningVisible = false;
+        updateWarningConfirmBounds.setEmpty();
+        updateWarningCancelBounds.setEmpty();
+        focusedAction = ACTION_NONE;
+        pressedAction = ACTION_NONE;
+        updateContentDescription();
+        invalidate();
+    }
+
+    boolean closeUpdateWarning() {
+        if (!updateWarningVisible) return false;
+        hideUpdateWarning();
+        return true;
+    }
+
     private boolean launcherMode() {
         return state.fileAccess || state.gameFound;
     }
 
     private void updateContentDescription() {
-        if (settingsOpen) {
+        if (updateWarningVisible) {
+            setContentDescription("Update " + updateWarningVersion + ". Android requires uninstalling this differently signed copy first. "
+                    + "Shared game saves and files in Prototype remain on device. Choose uninstall and install or cancel.");
+        } else if (settingsOpen) {
             setContentDescription("Prototype settings. Graphics presets and grouped game, control, and interface options. Changes save automatically.");
         } else {
+            String update = updateState.visible() ? ". Update status: " + updateState.detail : "";
             setContentDescription("Prototype setup. " + state.status + ". Storage access "
-                    + (state.fileAccess ? "granted" : "required"));
+                    + (state.fileAccess ? "granted" : "required") + update);
         }
     }
 
@@ -522,6 +575,154 @@ final class SetupView extends View {
                 messageX + messageWidth + (4f * u) + caretWidth, top + 14.5f * u, paint);
     }
 
+    private float updateBannerHeight(float u) {
+        return updateState.visible() ? 64f * u : 0f;
+    }
+
+    private void drawUpdateBanner(Canvas canvas, float left, float top, float width, float u, long now, float dt) {
+        if (!updateState.visible()) {
+            updateBounds.setEmpty();
+            return;
+        }
+        float height = updateBannerHeight(u);
+        float right = left + width;
+        RectF bounds = new RectF(left, top, right, top + height);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xd0080808);
+        canvas.drawPath(cutPath(bounds, 9f * u), paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(1f, u));
+        paint.setColor(withAlpha(RED_HOT, 0.42f));
+        canvas.drawPath(cutPath(bounds, 9f * u), paint);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(RED_HOT);
+        canvas.drawRect(left, top, left + 3f * u, top + height, paint);
+
+        float buttonWidth = Math.min(142f * u, width * 0.36f);
+        updateBounds.set(right - buttonWidth - 8f * u, top + 11f * u,
+                right - 8f * u, top + 53f * u);
+        float textLeft = left + 14f * u;
+        float textWidth = Math.max(1f, updateBounds.left - textLeft - 10f * u);
+        String title;
+        String button;
+        boolean busy = false;
+        switch (updateState.status) {
+            case UpdateManager.State.CHECKING:
+                title = "UPDATE CHECK";
+                button = "CHECKING";
+                busy = true;
+                break;
+            case UpdateManager.State.AVAILABLE:
+                title = "UPDATE " + updateState.versionName + " AVAILABLE";
+                button = "DOWNLOAD";
+                break;
+            case UpdateManager.State.DOWNLOADING:
+                title = "DOWNLOADING " + updateState.versionName;
+                button = updateState.progress >= 0 ? updateState.progress + "%" : "WAIT";
+                busy = true;
+                break;
+            case UpdateManager.State.VERIFYING:
+                title = "VERIFYING " + updateState.versionName;
+                button = "VERIFY";
+                busy = true;
+                break;
+            case UpdateManager.State.READY:
+                title = "UPDATE " + updateState.versionName + " READY";
+                button = "INSTALL";
+                break;
+            case UpdateManager.State.ERROR:
+                title = updateState.versionName.isEmpty() ? "UPDATE CHECK FAILED" : "UPDATE ERROR";
+                button = "RETRY";
+                break;
+            default:
+                title = "UPDATE";
+                button = "UPDATE";
+                break;
+        }
+        drawLine(canvas, title, textLeft, top + 7f * u, 16f * u, 10f, 700, RED_HOT, 1.2f, u, textWidth);
+        drawLine(canvas, updateState.detail, textLeft, top + 26f * u, 22f * u, 12f, 500,
+                BONE, 0.2f, u, textWidth);
+        int variant = updateState.status == UpdateManager.State.AVAILABLE
+                || updateState.status == UpdateManager.State.READY ? BUTTON_PRIMARY : BUTTON_NORMAL;
+        drawButton(canvas, ACTION_UPDATE, updateBounds, button, variant, updateState.canPress(), busy, u, now, dt);
+        if (updateState.status == UpdateManager.State.DOWNLOADING && updateState.progress >= 0) {
+            float barLeft = textLeft;
+            float barRight = Math.max(barLeft, updateBounds.left - 10f * u);
+            float barY = top + height - 4f * u;
+            paint.setColor(withAlpha(Color.WHITE, 0.16f));
+            canvas.drawRect(barLeft, barY, barRight, barY + 2f * u, paint);
+            paint.setColor(RED_HOT);
+            canvas.drawRect(barLeft, barY, barLeft + (barRight - barLeft) * updateState.progress / 100f,
+                    barY + 2f * u, paint);
+        }
+    }
+
+    private String updateWarningMessage() {
+        return "Android must uninstall this copy before installing " + updateWarningVersion + ".\n\n"
+                + "Shared saves/game files: /storage/emulated/0/Prototype (kept).\n"
+                + "Private settings may reset. APK: Downloads.\n\n"
+                + "If ProtoDroid closes, open the completed download notification.";
+    }
+
+    private void ensureUpdateWarningLayout(float width, float u) {
+        int textWidth = Math.max(1, Math.round(width - 40f * u));
+        if (updateWarningLayout != null && updateWarningLayoutWidth == textWidth
+                && Math.abs(updateWarningLayoutUnit - u) < 0.01f) return;
+        TextPaint layoutPaint = newText(12f, 500, BONE, 0.15f, u);
+        String message = updateWarningMessage();
+        updateWarningLayout = StaticLayout.Builder.obtain(message, 0, message.length(), layoutPaint, textWidth)
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setIncludePad(false)
+                .setLineSpacing(0f, 1f)
+                .setMaxLines(12)
+                .build();
+        updateWarningLayoutWidth = textWidth;
+        updateWarningLayoutUnit = u;
+    }
+
+    private void drawUpdateWarning(Canvas canvas, long now, float dt) {
+        boolean portrait = getHeight() > getWidth();
+        float u = unit(portrait);
+        float width = Math.min(560f * u, getWidth() - insetLeft - insetRight - 32f * u);
+        width = Math.max(1f, width);
+        ensureUpdateWarningLayout(width, u);
+        float height = 14f * u + 24f * u + 6f * u + updateWarningLayout.getHeight()
+                + 10f * u + 38f * u + 14f * u;
+        float maxHeight = Math.max(1f, getHeight() - insetTop - insetBottom - 24f * u);
+        height = Math.min(height, maxHeight);
+        float left = (getWidth() - width) / 2f;
+        float top = (getHeight() - height) / 2f;
+        float right = left + width;
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(withAlpha(Color.BLACK, 0.82f));
+        canvas.drawRect(0f, 0f, getWidth(), getHeight(), paint);
+        RectF panel = new RectF(left, top, right, top + height);
+        paint.setColor(0xf0080808);
+        canvas.drawPath(cutPath(panel, 12f * u), paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(1f, u));
+        paint.setColor(withAlpha(RED_HOT, 0.72f));
+        canvas.drawPath(cutPath(panel, 12f * u), paint);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(RED_HOT);
+        canvas.drawRect(left, top, left + 4f * u, top + height, paint);
+        float contentLeft = left + 20f * u;
+        float contentWidth = width - 40f * u;
+        drawLine(canvas, "SIGNATURE CHANGE  /  UPDATE " + updateWarningVersion,
+                contentLeft, top + 12f * u, 22f * u, 16f, 700, BONE, 0.5f, u, contentWidth);
+        drawStatic(canvas, updateWarningLayout, contentLeft, top + 44f * u);
+        float buttonsTop = top + height - 52f * u;
+        float gap = 8f * u;
+        float buttonWidth = (contentWidth - gap) / 2f;
+        updateWarningCancelBounds.set(contentLeft, buttonsTop, contentLeft + buttonWidth, buttonsTop + 38f * u);
+        updateWarningConfirmBounds.set(contentLeft + buttonWidth + gap, buttonsTop, right - 20f * u,
+                buttonsTop + 38f * u);
+        drawButton(canvas, ACTION_UPDATE_CANCEL, updateWarningCancelBounds, "CANCEL", BUTTON_GHOST,
+                true, false, u, now, dt);
+        drawButton(canvas, ACTION_UPDATE_CONFIRM, updateWarningConfirmBounds, "UNINSTALL & INSTALL", BUTTON_PRIMARY,
+                true, false, u, now, dt);
+    }
+
     private void drawButtonLabel(Canvas canvas, RectF bounds, String label, int color, float u) {
         // Keep the full action name visible on narrower phones instead of truncating it with an ellipsis.
         float size = 13.5f;
@@ -766,6 +967,13 @@ final class SetupView extends View {
         float leftWidth = columns * 1.08f / 2f;
         float rightWidth = columns * 0.92f / 2f;
         float rightLeft = left + leftWidth + gap;
+        float updateHeight = updateBannerHeight(u);
+        if (updateHeight > 0f) {
+            drawUpdateBanner(canvas, left, contentTop, leftWidth, u, now, dt);
+            contentTop += updateHeight + 8f * u;
+        } else {
+            updateBounds.setEmpty();
+        }
 
         float headline = getHeight() / u < 300f ? 26f : (getHeight() / u < 340f ? 31f : 38f);
         float groupHeight = 46f * u + 10f * u + headline * 2f * u + 10f * u + 18f * u
@@ -813,8 +1021,10 @@ final class SetupView extends View {
         float width = Math.max(1f, right - left);
         ensurePanelLayouts(width, u);
         float headline = width / u < 380f ? 30f : 36f;
+        float updateHeight = updateBannerHeight(u);
         float contentHeight = 46f * u + 14f * u + 2f * u + 14f * u + 46f * u + 14f * u
                 + headline * 2f * u + 14f * u + 18f * u + 14f * u + 42f * u + 14f * u
+                + updateHeight + (updateHeight > 0f ? 8f * u : 0f)
                 + panelHeight(u) + 14f * u + chipsHeight(width, u);
         float available = getHeight() - insetTop - insetBottom - 32f * u;
         maxScrollY = Math.max(0f, contentHeight - available);
@@ -825,6 +1035,12 @@ final class SetupView extends View {
         y += 60f * u;
         drawHud(canvas, left, right, y, u, now);
         y += 16f * u;
+        if (updateHeight > 0f) {
+            drawUpdateBanner(canvas, left, y, width, u, now, dt);
+            y += updateHeight + 8f * u;
+        } else {
+            updateBounds.setEmpty();
+        }
         float tileWidth = (width - 8f * u) / 2f;
         drawTile(canvas, new RectF(left, y, left + tileWidth, y + 46f * u),
                 "STORAGE ACCESS", state.fileAccess ? "GRANTED" : "REQUIRED", state.fileAccess, u, now);
@@ -1041,12 +1257,18 @@ final class SetupView extends View {
             if (settingsOpen) drawSettings(canvas, now, dt);
             else if (getHeight() > getWidth()) drawPortrait(canvas, now, dt);
             else drawLandscape(canvas, now, dt);
+            if (updateWarningVisible) drawUpdateWarning(canvas, now, dt);
             drawBootCurtain(canvas, now);
         }
         if (getWindowVisibility() == VISIBLE && isAttachedToWindow()) postInvalidateOnAnimation();
     }
 
     private int actionAt(float x, float y) {
+        if (updateWarningVisible) {
+            if (updateWarningConfirmBounds.contains(x, y)) return ACTION_UPDATE_CONFIRM;
+            if (updateWarningCancelBounds.contains(x, y)) return ACTION_UPDATE_CANCEL;
+            return ACTION_NONE;
+        }
         if (exitBounds.contains(x, y)) return ACTION_EXIT;
         if (settingsOpen) {
             for (int i = 0; i < presetBounds.length; i++) {
@@ -1061,6 +1283,7 @@ final class SetupView extends View {
             }
             return ACTION_NONE;
         }
+        if (updateState.visible() && updateState.canPress() && updateBounds.contains(x, y)) return ACTION_UPDATE;
         if (launcherMode()) {
             if (allowBounds.contains(x, y)) return ACTION_SETTINGS;
             if (checkBounds.contains(x, y)) return ACTION_PLAY;
@@ -1092,7 +1315,7 @@ final class SetupView extends View {
                 invalidate();
                 return true;
             case MotionEvent.ACTION_MOVE:
-                if ((settingsOpen || getHeight() > getWidth()) && !scrolling
+                if (!updateWarningVisible && (settingsOpen || getHeight() > getWidth()) && !scrolling
                         && Math.abs(y - touchStartY) > touchSlop) {
                     scrolling = true;
                     pressedAction = ACTION_NONE;
@@ -1126,6 +1349,18 @@ final class SetupView extends View {
 
     private void activate(int action) {
         performClick();
+        if (action == ACTION_UPDATE) {
+            listener.onUpdate();
+            return;
+        }
+        if (action == ACTION_UPDATE_CONFIRM) {
+            listener.onUpdateConfirm();
+            return;
+        }
+        if (action == ACTION_UPDATE_CANCEL) {
+            listener.onUpdateCancel();
+            return;
+        }
         if (action >= SETTING_ACTION_BASE) {
             int index = (action - SETTING_ACTION_BASE) / 2;
             int delta = (action - SETTING_ACTION_BASE) % 2 == 0 ? -1 : 1;
@@ -1165,13 +1400,19 @@ final class SetupView extends View {
 
     private int nextFocusable(int current, int direction) {
         int[] order;
-        if (settingsOpen) {
+        if (updateWarningVisible) {
+            order = new int[] {ACTION_UPDATE_CONFIRM, ACTION_UPDATE_CANCEL};
+        } else if (settingsOpen) {
             order = new int[] {ACTION_PRESET_LOW, ACTION_PRESET_MEDIUM, ACTION_PRESET_HIGH,
                     ACTION_PRESET_CUSTOM, ACTION_SETTINGS_DONE, ACTION_EXIT};
         } else if (launcherMode()) {
-            order = new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_EXIT};
+            order = updateState.visible() && updateState.canPress()
+                    ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_EXIT}
+                    : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_EXIT};
         } else {
-            order = new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_EXIT};
+            order = updateState.visible() && updateState.canPress()
+                    ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_EXIT}
+                    : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_EXIT};
         }
         int index = -1;
         for (int i = 0; i < order.length; i++) if (order[i] == current) index = i;
