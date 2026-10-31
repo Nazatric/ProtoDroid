@@ -208,6 +208,16 @@ UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 /tmp/graphics_test
 
 The production Bink harness and minimal FFmpeg setup run in `.github/workflows/build-apk.yml`. `src/native/tests/run_hot_test.sh` performs the audio and skinning differential tests and requires the original engine binary. CI runs those tests on ARM64, including 2,000 randomized skinning batches with different record counts and output alignments.
 
+## Launcher updates
+
+The launcher checks the latest published GitHub release in the background and compares its integer `versionCode`, not just the visible version string. An update card appears only for a newer release with the official `prototype.apk`, release APK SHA-256, and signing-certificate metadata. Downloads use Android's system DownloadManager, show progress, and are checked against the release hash and APK package/version before installation is offered.
+
+- **Same signing certificate:** Android opens the normal in-place installer.
+- **Different signing certificate:** the launcher explains why Android requires uninstalling the old copy first, then chains the system uninstall and install prompts where the device permits it. Shared game saves and files under `/storage/emulated/0/Prototype` are not deleted. App-private settings and data may be removed, so back up anything important outside that shared folder.
+- **If Android closes ProtoDroid during uninstall:** open the completed ProtoDroid download notification or the APK in the public **Downloads** folder to continue. This fallback is intentional: an ordinary app cannot silently uninstall itself and guarantee that it can launch another activity afterward.
+
+The updater never downloads game content, changes graphics or controls, or installs an unverified APK. Automatic checks are rate-limited and failures do not block Play.
+
 ## CI and releases
 
 - **`build-apk`** runs host and ARM64 tests, builds dependencies, generates and compiles the real engine, packages and signs the APK, and uploads `prototype-apk` with diagnostic artifacts.
