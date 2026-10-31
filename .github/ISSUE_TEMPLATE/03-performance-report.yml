@@ -1,0 +1,89 @@
+name: 📉 Performance or frame pacing
+description: Report stutter, FPS drops, heat, throttling, or unusual battery use
+title: "[Performance] "
+labels: ["bug", "performance"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tell us where and when it happens. A matched comparison—same scene, settings, FPS cap, and approximate cache state—is much more useful than an FPS number alone.
+
+        Reproduce the issue before collecting logs. Leave `pipeline_trace` off unless a maintainer specifically asks for it.
+  - type: input
+    id: version
+    attributes:
+      label: ProtoDroid version
+      description: Release version, CI run, or exact commit you installed.
+      placeholder: For example, 0.9
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone and chip
+      description: Include the device model and SoC/GPU if you know them.
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      placeholder: For example, Android 16
+    validations:
+      required: true
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: What are you seeing?
+      options:
+        - Stutter or long frame spikes
+        - Low or unstable FPS
+        - Loading or pipeline compilation stalls
+        - Heat or thermal throttling
+        - Unusual battery use
+        - Other performance behavior
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: When and where does it happen?
+      description: Include the scene/menu/cutscene, graphics settings, FPS cap, whether it recovers, and any earlier version that behaved differently under the same conditions.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps or comparison method
+      description: Describe how to reproduce it. If you compared versions, explain how you kept the scene and settings matched.
+    validations:
+      required: true
+  - type: dropdown
+    id: diagnostics
+    attributes:
+      label: Diagnostics used for this report
+      description: Normal logs are fine for a first report. Detailed diagnostics can be added during investigation.
+      options:
+        - Normal logs only
+        - detailed_diagnostics = 1
+        - detailed_diagnostics = 1 and import_profile = 1
+        - I can retest with diagnostics if needed
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Attach `proto-native.log` and `app_process64_d3d9.log` after reproducing the issue. Use `/storage/emulated/0/Prototype/logs/` or `/storage/emulated/0/Android/data/com.protodroid/files/`.
+
+        Attach files rather than pasting thousands of lines. Do not upload cache files, game installation files, or save files.
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Video or extra context (optional)
+      description: A short recording can help with frame-pacing reports. Please keep game installation files and save files out of the report.
+    validations:
+      required: false

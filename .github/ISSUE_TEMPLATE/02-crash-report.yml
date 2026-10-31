@@ -1,0 +1,81 @@
+name: 💥 Crash, freeze, or black screen
+description: Report a crash, ANR, freeze, restart, or graphics device loss
+title: "[Crash] "
+labels: ["bug", "crash"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sorry you hit a crash. A clear reproduction and the logs from the failed run give us the best chance to fix it.
+
+        If ProtoDroid restarts after crashing, include **`proto-native.prev.log`** as well as the current logs. Do not upload game installation files or save files.
+  - type: input
+    id: version
+    attributes:
+      label: ProtoDroid version
+      description: Release version, CI run, or exact commit you installed.
+      placeholder: For example, 0.9
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone and chip
+      description: Include the device model and SoC/GPU if you know them.
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      placeholder: For example, Android 16
+    validations:
+      required: true
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: What best describes the failure?
+      options:
+        - Closes to the home screen
+        - Freezes or Android says the app is not responding
+        - Black or blank screen
+        - Restarts or returns to the launcher
+        - Graphics/Vulkan/Turnip failure
+        - Other crash or lockup
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: When does it happen?
+      description: Tell us what you were doing, whether an error appeared, and if an earlier version worked.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include startup, menu, cutscene, gameplay, or reset details as relevant. Say if it only happens sometimes.
+      placeholder: |
+        1. Start with these settings…
+        2. Do this…
+        3. The crash/freeze happens…
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Crash logs
+      description: |
+        Attach `proto-native.log`, `proto-native.prev.log`, and `app_process64_d3d9.log` from `/storage/emulated/0/Prototype/logs/` or `/storage/emulated/0/Android/data/com.protodroid/files/`. Include `turnip_failed` only when it exists.
+
+        If you already use ADB, `adb logcat -s protodroid` from the failure is also useful. Attach files rather than pasting thousands of lines, or explain why they are unavailable.
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshot or extra context (optional)
+      description: Add a photo of the error or any detail that may help. Please do not attach game data files or save files.
+    validations:
+      required: false

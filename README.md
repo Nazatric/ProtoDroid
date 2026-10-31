@@ -146,7 +146,7 @@ No cache seed is bundled. Startup can recover a populated cache from the shared 
 
 Backups are copied periodically without blocking the engine thread, with a synchronous final copy during shutdown. Atomic replacement keeps an interrupted backup from truncating the previous one. The live writer stays in app-private storage; the shared copy is a recovery backup, not a power-loss-durability guarantee.
 
-For bug reports, include both logs, your phone model, SoC/GPU, Android version, APK commit, and exact reproduction steps. If you have ADB access, also include `adb logcat -s protodroid`.
+To report a problem or suggest an improvement, use the [guided issue forms](https://github.com/Nazatric/ProtoDroid/issues/new/choose) and choose bug, crash, performance, or feature. Include your phone model, SoC/GPU, Android version, exact APK version or commit, reproduction steps, and the available logs from the failed run. If you have ADB access, `adb logcat -s protodroid` can also help. Please do not attach game installation files, cache files, or save files.
 
 ## Under the hood
 

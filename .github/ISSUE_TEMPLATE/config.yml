@@ -1,1 +1,11 @@
 blank_issues_enabled: false
+contact_links:
+  - name: 📖 Setup, settings, and log guide
+    url: https://github.com/Nazatric/ProtoDroid#readme
+    about: Check installation, controls, save locations, diagnostics, and where to find logs.
+  - name: 📥 Releases and update notes
+    url: https://github.com/Nazatric/ProtoDroid/releases
+    about: Get the latest APK or check whether a newer release already addresses the problem.
+  - name: 🔎 Search existing reports
+    url: https://github.com/Nazatric/ProtoDroid/issues
+    about: Find known bugs, crashes, performance investigations, and feature ideas before opening a duplicate.
