@@ -155,6 +155,12 @@ public final class DriverPackageTest {
                     "glibc dependency");
             unchanged.run();
 
+            final byte[] overflowing = elf(183, "libc.so");
+            ByteBuffer.wrap(overflowing).order(ByteOrder.LITTLE_ENDIAN).putLong(32, Long.MAX_VALUE);
+            expectFailure(() -> DriverPackage.install(new ByteArrayInputStream(overflowing), "overflow.so", root, 29),
+                    "overflowing ELF program-header offset");
+            unchanged.run();
+
             Map<String, byte[]> ambiguousEntries = new LinkedHashMap<>();
             ambiguousEntries.put("libvulkan_one.so", good);
             ambiguousEntries.put("libvulkan_two.so", good);

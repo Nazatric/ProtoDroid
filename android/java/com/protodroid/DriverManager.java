@@ -131,8 +131,8 @@ final class DriverManager {
     private void openPicker() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
+        // Some document providers report .so or ZIP files with vendor-specific MIME types; validate content, not labels.
         intent.setType("*/*");
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"application/zip", "application/octet-stream"});
         activity.startActivityForResult(intent, REQUEST_IMPORT);
     }
 

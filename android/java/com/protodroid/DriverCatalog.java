@@ -113,6 +113,9 @@ final class DriverCatalog {
                 String actual = hex(digest.digest());
                 if (!actual.equals(entry.sha256)) throw new IOException("The driver's SHA-256 checksum does not match");
                 progress.update(done, entry.size);
+            } catch (IOException e) {
+                if (cancelled) throw new CancellationException();
+                throw e;
             } catch (java.security.NoSuchAlgorithmException e) {
                 throw new IOException("SHA-256 is unavailable", e);
             } finally {

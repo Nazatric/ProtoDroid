@@ -264,8 +264,9 @@ final class DriverPackage {
             long phoff = elf.getLong(32);
             int entrySize = elf.getShort(54) & 0xffff;
             int entryCount = elf.getShort(56) & 0xffff;
+            long programBytes = (long) entrySize * entryCount;
             if (entrySize < 56 || entryCount > 1024 || phoff < 0
-                    || phoff + (long) entrySize * entryCount > length) {
+                    || phoff > length || programBytes > length - phoff) {
                 throw new IOException("The driver's ELF program headers are damaged");
             }
             List<long[]> loads = new ArrayList<>();
@@ -273,13 +274,19 @@ final class DriverPackage {
             for (int i = 0; i < entryCount; ++i) {
                 int at = Math.toIntExact(phoff + (long) i * entrySize);
                 int type = elf.getInt(at);
-                if (type == 1) loads.add(new long[] {elf.getLong(at + 8), elf.getLong(at + 16), elf.getLong(at + 32)});
+                if (type == 1) {
+                    long offset = elf.getLong(at + 8), address = elf.getLong(at + 16), size = elf.getLong(at + 32);
+                    if (offset < 0 || address < 0 || size < 0 || offset > length || size > length - offset) {
+                        throw new IOException("The driver's ELF load segments are damaged");
+                    }
+                    loads.add(new long[] {offset, address, size});
+                }
                 if (type == 2) {
                     dynamic = elf.getLong(at + 8);
                     dynamicSize = elf.getLong(at + 32);
                 }
             }
-            if (dynamic < 0 || dynamicSize < 16 || dynamic + dynamicSize > length) {
+            if (dynamic < 0 || dynamicSize < 16 || dynamic > length || dynamicSize > length - dynamic) {
                 throw new IOException("The driver has no valid dynamic section");
             }
             long stringAddress = -1, stringSize = -1;
@@ -293,14 +300,18 @@ final class DriverPackage {
                 else if (tag == 10) stringSize = value;
             }
             long strings = -1;
-            for (long[] load : loads) {
-                long offset = load[0], address = load[1], size = load[2];
-                if (stringAddress >= address && stringSize >= 0 && stringAddress + stringSize <= address + size) {
-                    strings = offset + stringAddress - address;
-                    break;
+            if (stringAddress >= 0 && stringSize >= 0) {
+                for (long[] load : loads) {
+                    long offset = load[0], address = load[1], size = load[2];
+                    if (stringAddress < address) continue;
+                    long relative = stringAddress - address;
+                    if (relative <= size && stringSize <= size - relative) {
+                        strings = offset + relative;
+                        break;
+                    }
                 }
             }
-            if (strings < 0 || stringSize < 0 || strings + stringSize > length) {
+            if (strings < 0 || stringSize < 0 || strings > length || stringSize > length - strings) {
                 throw new IOException("The driver's dynamic string table is damaged");
             }
             for (long offset : neededOffsets) {
