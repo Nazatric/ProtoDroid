@@ -213,7 +213,7 @@ Protected releases require these repository Actions secrets:
 - `PROTODROID_ANDROID_KEY_ALIAS`
 - `PROTODROID_ANDROID_KEY_PASSWORD`
 
-Keep an offline backup of the original keystore and passwords; never commit them. The release workflow refuses a missing/incomplete signing configuration, records the certificate SHA-256 digest, and rejects dummy, prebuilt, or ephemerally signed APKs. Once configured, subsequent releases keep the same identity and can update each other in place.
+Keep an offline backup of the original keystore and passwords; never commit them. The release workflow refuses a missing/incomplete protected signing configuration, records the certificate SHA-256 digest, and rejects dummy or prebuilt native inputs. Ephemeral signing is rejected by default and requires a separate explicit release-dispatch override. Once protected signing is configured, subsequent releases keep the same identity and can update each other in place.
 
 Version 0.7 and earlier CI artifacts were signed with per-run keys whose private keys are not available. A newly signed APK cannot directly update a differently signed installation: Android requires a one-time uninstall first. Shared saves under `/storage/emulated/0/Prototype` are separate from the app and remain there; back up any important app-specific data before uninstalling.
 
