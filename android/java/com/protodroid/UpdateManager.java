@@ -17,8 +17,10 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
@@ -41,6 +43,7 @@ import java.util.concurrent.RejectedExecutionException;
 final class UpdateManager {
     private static final String TAG = "ProtoDroidUpdate";
     private static final String API_URL = "https://api.github.com/repos/Nazatric/ProtoDroid/releases/latest";
+    private static final String RELEASES_URL = "https://github.com/Nazatric/ProtoDroid/releases/latest";
     private static final String PREFS = "launcher_updates";
     private static final String KEY_DOWNLOAD_ID = "download_id";
     private static final String KEY_VERSION_NAME = "version_name";
@@ -50,7 +53,7 @@ final class UpdateManager {
     private static final String KEY_APK_SHA256 = "apk_sha256";
     private static final String KEY_CERTIFICATE_SHA256 = "certificate_sha256";
     private static final String KEY_LAST_CHECK = "last_check";
-    private static final long CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L;
+    private static final long CHECK_INTERVAL_MS = 15L * 60L * 1000L;
     private static final int MAX_METADATA_BYTES = 2 * 1024 * 1024;
 
     static final int REQUEST_INSTALL = 40;
@@ -112,6 +115,26 @@ final class UpdateManager {
         String path;
     }
 
+    private static final class DownloadQuery {
+        final int outcome;
+        final DownloadInfo info;
+
+        DownloadQuery(int outcome, DownloadInfo info) {
+            this.outcome = outcome;
+            this.info = info;
+        }
+    }
+
+    private static final class DownloadQueryException extends IOException {
+        final int outcome;
+
+        DownloadQueryException(int outcome) {
+            super(outcome == UpdateDownloadPolicy.EMPTY
+                    ? "download query returned no row" : "download query failed");
+            this.outcome = outcome;
+        }
+    }
+
     private final Activity activity;
     private final Context context;
     private final Callback callback;
@@ -128,6 +151,8 @@ final class UpdateManager {
     private boolean checking;
     private boolean verifying;
     private boolean pendingUninstall;
+    private long queryUnknownSince = UpdateDownloadPolicy.NO_UNKNOWN_QUERY;
+    private boolean downloadCanBeReplaced;
 
     UpdateManager(Activity activity, Callback callback) {
         this.activity = activity;
@@ -151,11 +176,13 @@ final class UpdateManager {
             return;
         }
         if (downloadId < 0L) restoreDownload();
-        if (state.status == State.HIDDEN || (state.status == State.ERROR && release == null)) {
-            checkForUpdates(false);
-        } else if (isDownloadActive(state.status)) {
+        if (downloadId >= 0L && release != null
+                && (isDownloadActive(state.status) || (state.status == State.ERROR && !downloadCanBeReplaced))) {
             refreshDownload();
         }
+        // A visible update or recovery card must not block later resume checks. Existing downloads and verified APKs
+        // keep their state; metadata checks for those releases are unnecessary until the user resolves the card.
+        if (downloadId < 0L && state.status != State.READY) checkForUpdates(false);
         schedulePoll();
     }
 
@@ -187,6 +214,18 @@ final class UpdateManager {
                 break;
             default:
                 break;
+        }
+    }
+
+    void onReleasesPressed() {
+        if (closed) return;
+        Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL));
+        browser.addCategory(Intent.CATEGORY_BROWSABLE);
+        try {
+            activity.startActivity(browser);
+        } catch (Exception e) {
+            Log.w(TAG, "Unable to open GitHub releases", e);
+            Toast.makeText(context, "No browser is available for GitHub Releases", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -234,13 +273,17 @@ final class UpdateManager {
     }
 
     private void checkForUpdates(boolean manual) {
-        if (checking || verifying || closed || downloads == null) return;
-        if (!manual && (state.visible() || System.currentTimeMillis() - prefs.getLong(KEY_LAST_CHECK, 0L)
-                < CHECK_INTERVAL_MS)) return;
+        if (checking || verifying || closed) return;
+        long sinceCheck = System.currentTimeMillis() - prefs.getLong(KEY_LAST_CHECK, 0L);
+        if (!manual && ((sinceCheck >= 0L && sinceCheck < CHECK_INTERVAL_MS) || isDownloadActive(state.status)
+                || state.status == State.READY)) return;
         checking = true;
+        final boolean showChecking = manual || !state.visible();
         // Back off failed/rate-limited automatic checks too; a visible Retry remains an explicit user action.
         prefs.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply();
-        publish(new State(State.CHECKING, null, -1, 0L, 0L, "Checking GitHub releases", false));
+        if (showChecking) {
+            publish(new State(State.CHECKING, null, -1, 0L, 0L, "Checking GitHub releases", false));
+        }
         try {
             worker.execute(() -> {
                 try {
@@ -250,9 +293,14 @@ final class UpdateManager {
                         if (closed) return;
                         prefs.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply();
                         if (latest == null || !latest.isNewerThan(installedVersionCode)) {
-                            release = null;
-                            publish(State.hidden());
+                            // Never let a background metadata response discard an active download or verified APK.
+                            if (downloadId < 0L && !isDownloadActive(state.status) && state.status != State.READY) {
+                                release = null;
+                                publish(State.hidden());
+                            }
                         } else {
+                            // The user may have tapped DOWNLOAD while a silent resume check was in flight.
+                            if (!manual && isDownloadActive(state.status)) return;
                             release = latest;
                             restoreMatchingDownload();
                             if (downloadId < 0L) publishAvailable();
@@ -263,14 +311,18 @@ final class UpdateManager {
                     main.post(() -> {
                         checking = false;
                         if (closed) return;
-                        if (manual) publishError("Could not check GitHub; tap retry", false);
-                        else publish(State.hidden());
+                        if (manual || showChecking) {
+                            publishError("Could not check GitHub; tap retry or open Releases", false);
+                        }
+                        // Silent resume checks leave an existing AVAILABLE/ERROR card untouched on failure.
                     });
                 }
             });
         } catch (RejectedExecutionException e) {
             checking = false;
-            if (!closed) publish(State.hidden());
+            if (!closed && showChecking) {
+                publishError("Could not check GitHub; tap retry or open Releases", false);
+            }
         }
     }
 
@@ -310,7 +362,11 @@ final class UpdateManager {
     }
 
     private void beginDownload() {
-        if (release == null || closed || downloads == null || verifying) return;
+        if (release == null || closed || verifying) return;
+        if (downloads == null) {
+            publishError("Android downloader is unavailable; open Releases", true);
+            return;
+        }
         if (Build.VERSION.SDK_INT <= 28
                 && context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -319,12 +375,16 @@ final class UpdateManager {
             return;
         }
         if (downloadId >= 0L) {
-            DownloadInfo existing = queryDownload(downloadId);
-            if (existing != null && existing.status != DownloadManager.STATUS_FAILED) {
+            DownloadQuery existing = queryDownload(downloadId);
+            if (existing.outcome == UpdateDownloadPolicy.ROW
+                    && existing.info.status == DownloadManager.STATUS_FAILED) {
+                downloadCanBeReplaced = true;
+                removeDownload();
+            } else {
+                // Empty results and exceptions are not proof that the system download died. Reuse/recheck its ID.
                 refreshDownload();
                 return;
             }
-            removeDownload();
         }
         try {
             String filename = "protodroid-" + release.versionName + "-" + release.versionCode + "-"
@@ -339,6 +399,8 @@ final class UpdateManager {
             request.setVisibleInDownloadsUi(true);
             request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename);
             downloadId = downloads.enqueue(request);
+            queryUnknownSince = UpdateDownloadPolicy.NO_UNKNOWN_QUERY;
+            downloadCanBeReplaced = false;
             saveDownloadPrefs();
             publishDownloading(0L, release.sizeBytes, "Starting download");
             schedulePoll();
@@ -353,6 +415,15 @@ final class UpdateManager {
             checkForUpdates(true);
             return;
         }
+        if (downloadId >= 0L && !downloadCanBeReplaced) {
+            // A query exception can outlive the grace period without proving data loss. Retry the query first.
+            queryUnknownSince = UpdateDownloadPolicy.NO_UNKNOWN_QUERY;
+            publishDownloading(state.downloadedBytes,
+                    state.totalBytes > 0L ? state.totalBytes : release.sizeBytes, "Rechecking system download");
+            refreshDownload();
+            schedulePoll();
+            return;
+        }
         if (downloadId >= 0L) removeDownload();
         beginDownload();
     }
@@ -364,14 +435,12 @@ final class UpdateManager {
             clearDownloadPrefs();
             return;
         }
-        DownloadInfo info = queryDownload(savedId);
-        if (info == null) {
-            clearDownloadPrefs();
-            return;
-        }
+        // Restore identity before querying so an empty cursor/exception can enter grace instead of losing the download.
         release = saved;
         downloadId = savedId;
-        applyDownloadInfo(info);
+        queryUnknownSince = UpdateDownloadPolicy.NO_UNKNOWN_QUERY;
+        downloadCanBeReplaced = false;
+        refreshDownload();
     }
 
     private void restoreMatchingDownload() {
@@ -381,39 +450,55 @@ final class UpdateManager {
                 || !saved.downloadUrl.equals(release.downloadUrl)) {
             clearDownloadPrefs();
             downloadId = -1L;
+            queryUnknownSince = UpdateDownloadPolicy.NO_UNKNOWN_QUERY;
+            downloadCanBeReplaced = false;
             return;
         }
         downloadId = savedId;
         release = saved;
-        DownloadInfo info = queryDownload(savedId);
-        if (info == null) {
-            clearDownloadPrefs();
-            downloadId = -1L;
-        } else {
-            applyDownloadInfo(info);
-        }
+        refreshDownload();
     }
 
     private void applyDownloadInfo(DownloadInfo info) {
+        queryUnknownSince = UpdateDownloadPolicy.NO_UNKNOWN_QUERY;
         if (info.status == DownloadManager.STATUS_SUCCESSFUL) {
+            downloadCanBeReplaced = false;
             verifyDownload();
         } else if (info.status == DownloadManager.STATUS_FAILED) {
-            publishError("Download failed (" + info.reason + "); tap retry", true);
+            downloadCanBeReplaced = true;
+            publishError("Download failed (" + info.reason + "); tap retry or open Releases", true);
         } else {
+            downloadCanBeReplaced = false;
             String detail = info.status == DownloadManager.STATUS_PAUSED
                     ? "Paused; waiting for network" : "Downloading official APK";
             publishDownloading(info.downloaded, info.total > 0L ? info.total : release.sizeBytes, detail);
         }
     }
 
-    private void refreshDownload() {
-        if (downloadId < 0L || release == null || verifying || closed) return;
-        DownloadInfo info = queryDownload(downloadId);
-        if (info == null) {
-            publishError("Download is no longer available; tap retry", true);
+    private void handleUnknownQuery(int outcome) {
+        long now = SystemClock.elapsedRealtime();
+        queryUnknownSince = UpdateDownloadPolicy.nextUnknownSince(outcome, queryUnknownSince, now);
+        if (!UpdateDownloadPolicy.graceExpired(outcome, queryUnknownSince, now)) {
+            publishDownloading(state.downloadedBytes,
+                    state.totalBytes > 0L ? state.totalBytes : release.sizeBytes,
+                    outcome == UpdateDownloadPolicy.EMPTY
+                            ? "Download query was empty; rechecking" : "Android downloader unavailable; rechecking");
             return;
         }
-        applyDownloadInfo(info);
+        downloadCanBeReplaced = UpdateDownloadPolicy.mayReplaceAfterUnknown(outcome, queryUnknownSince, now);
+        publishError(outcome == UpdateDownloadPolicy.EMPTY
+                ? "Download is no longer available; tap retry or open Releases"
+                : "Android downloader is not responding; tap retry or open Releases", true);
+    }
+
+    private void refreshDownload() {
+        if (downloadId < 0L || release == null || verifying || closed) return;
+        DownloadQuery query = queryDownload(downloadId);
+        if (query.outcome != UpdateDownloadPolicy.ROW) {
+            handleUnknownQuery(query.outcome);
+            return;
+        }
+        applyDownloadInfo(query.info);
     }
 
     private void verifyDownload() {
@@ -425,24 +510,28 @@ final class UpdateManager {
                 "Verifying APK and package identity", false));
         try {
             worker.execute(() -> {
-                String error = null;
+                Exception error = null;
                 try {
                     verifyBytes(id, expected);
                     verifyPackage(id, expected);
                 } catch (Exception e) {
                     Log.w(TAG, "Downloaded update failed verification", e);
-                    error = e.getMessage() == null ? "verification failed" : e.getMessage();
+                    error = e;
                 }
-                final String failure = error;
+                final Exception failure = error;
                 main.post(() -> {
                     if (closed || id != downloadId || release == null
                             || release.versionCode != expected.versionCode) return;
                     verifying = false;
                     if (failure == null) {
                         publishReady("Verified official APK; ready to install");
+                    } else if (failure instanceof DownloadQueryException) {
+                        // Verification shares the same grace policy; a transient query must not delete a valid APK.
+                        handleUnknownQuery(((DownloadQueryException) failure).outcome);
+                        schedulePoll();
                     } else {
                         removeDownload();
-                        publishError("APK verification failed; tap retry", true);
+                        publishError("APK verification failed; tap retry or open Releases", true);
                     }
                 });
             });
@@ -452,10 +541,10 @@ final class UpdateManager {
     }
 
     private void verifyBytes(long id, UpdateRelease expected) throws Exception {
-        DownloadInfo info = queryDownload(id);
-        if (info == null || info.status != DownloadManager.STATUS_SUCCESSFUL) {
-            throw new IOException("download is incomplete");
-        }
+        DownloadQuery query = queryDownload(id);
+        if (query.outcome != UpdateDownloadPolicy.ROW) throw new DownloadQueryException(query.outcome);
+        DownloadInfo info = query.info;
+        if (info.status != DownloadManager.STATUS_SUCCESSFUL) throw new IOException("download is incomplete");
         if (info.total > 0L && info.total != expected.sizeBytes) throw new IOException("APK size differs");
         ParcelFileDescriptor descriptor = downloads.openDownloadedFile(id);
         if (descriptor == null) throw new IOException("downloaded APK is unavailable");
@@ -476,8 +565,10 @@ final class UpdateManager {
     }
 
     private void verifyPackage(long id, UpdateRelease expected) throws Exception {
-        DownloadInfo info = queryDownload(id);
-        if (info == null || info.path == null || info.path.isEmpty()) {
+        DownloadQuery query = queryDownload(id);
+        if (query.outcome != UpdateDownloadPolicy.ROW) throw new DownloadQueryException(query.outcome);
+        DownloadInfo info = query.info;
+        if (info.path == null || info.path.isEmpty()) {
             throw new IOException("APK path is unavailable for package verification");
         }
         int flags = Build.VERSION.SDK_INT >= 28
@@ -495,12 +586,14 @@ final class UpdateManager {
         }
     }
 
-    private DownloadInfo queryDownload(long id) {
-        if (downloads == null) return null;
+    private DownloadQuery queryDownload(long id) {
+        if (downloads == null) return new DownloadQuery(UpdateDownloadPolicy.ERROR, null);
         Cursor cursor = null;
         try {
             cursor = downloads.query(new DownloadManager.Query().setFilterById(id));
-            if (cursor == null || !cursor.moveToFirst()) return null;
+            if (cursor == null || !cursor.moveToFirst()) {
+                return new DownloadQuery(UpdateDownloadPolicy.EMPTY, null);
+            }
             DownloadInfo info = new DownloadInfo();
             info.status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
             info.reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON));
@@ -509,12 +602,18 @@ final class UpdateManager {
             info.total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
             int pathColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_FILENAME);
             if (pathColumn >= 0 && !cursor.isNull(pathColumn)) info.path = cursor.getString(pathColumn);
-            return info;
+            return new DownloadQuery(UpdateDownloadPolicy.ROW, info);
         } catch (Exception e) {
             Log.w(TAG, "Unable to query download " + id, e);
-            return null;
+            return new DownloadQuery(UpdateDownloadPolicy.ERROR, null);
         } finally {
-            if (cursor != null) cursor.close();
+            if (cursor != null) {
+                try {
+                    cursor.close();
+                } catch (Exception e) {
+                    Log.w(TAG, "Unable to close download query " + id, e);
+                }
+            }
         }
     }
 
@@ -676,6 +775,8 @@ final class UpdateManager {
             }
         }
         downloadId = -1L;
+        queryUnknownSince = UpdateDownloadPolicy.NO_UNKNOWN_QUERY;
+        downloadCanBeReplaced = false;
         clearDownloadPrefs();
     }
 

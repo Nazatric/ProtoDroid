@@ -46,6 +46,7 @@ final class SetupView extends View {
         void onUpdate();
         void onUpdateConfirm();
         void onUpdateCancel();
+        void onUpdateReleases();
     }
 
     static final class State {
@@ -92,6 +93,7 @@ final class SetupView extends View {
     private static final int ACTION_UPDATE_CONFIRM = 12;
     private static final int ACTION_UPDATE_CANCEL = 13;
     private static final int ACTION_DRIVERS = 14;
+    private static final int ACTION_UPDATE_RELEASES = 15;
     private static final int SETTING_ACTION_BASE = 32;
 
     private static final int BUTTON_NORMAL = 0;
@@ -125,6 +127,7 @@ final class SetupView extends View {
     private final RectF driverBounds = new RectF();
     private final RectF headerDriverBounds = new RectF();
     private final RectF updateBounds = new RectF();
+    private final RectF updateReleasesBounds = new RectF();
     private final RectF updateWarningConfirmBounds = new RectF();
     private final RectF updateWarningCancelBounds = new RectF();
     private final RectF[] settingLeftBounds;
@@ -596,12 +599,14 @@ final class SetupView extends View {
     }
 
     private float updateBannerHeight(float u) {
-        return updateState.visible() ? 64f * u : 0f;
+        if (!updateState.visible()) return 0f;
+        return (updateState.status == UpdateManager.State.ERROR ? 94f : 64f) * u;
     }
 
     private void drawUpdateBanner(Canvas canvas, float left, float top, float width, float u, long now, float dt) {
         if (!updateState.visible()) {
             updateBounds.setEmpty();
+            updateReleasesBounds.setEmpty();
             return;
         }
         float height = updateBannerHeight(u);
@@ -618,11 +623,24 @@ final class SetupView extends View {
         paint.setColor(RED_HOT);
         canvas.drawRect(left, top, left + 3f * u, top + height, paint);
 
-        float buttonWidth = Math.min(142f * u, width * 0.36f);
-        updateBounds.set(right - buttonWidth - 8f * u, top + 11f * u,
-                right - 8f * u, top + 53f * u);
+        boolean recovery = updateState.status == UpdateManager.State.ERROR;
         float textLeft = left + 14f * u;
-        float textWidth = Math.max(1f, updateBounds.left - textLeft - 10f * u);
+        float textWidth;
+        updateReleasesBounds.setEmpty();
+        if (recovery) {
+            float buttonGap = 8f * u;
+            float buttonWidth = (width - 28f * u - buttonGap) / 2f;
+            float buttonTop = top + 51f * u;
+            updateBounds.set(textLeft, buttonTop, textLeft + buttonWidth, buttonTop + 35f * u);
+            updateReleasesBounds.set(updateBounds.right + buttonGap, buttonTop,
+                    right - 14f * u, buttonTop + 35f * u);
+            textWidth = Math.max(1f, width - 28f * u);
+        } else {
+            float buttonWidth = Math.min(142f * u, width * 0.36f);
+            updateBounds.set(right - buttonWidth - 8f * u, top + 11f * u,
+                    right - 8f * u, top + 53f * u);
+            textWidth = Math.max(1f, updateBounds.left - textLeft - 10f * u);
+        }
         String title;
         String button;
         boolean busy = false;
@@ -665,6 +683,10 @@ final class SetupView extends View {
         int variant = updateState.status == UpdateManager.State.AVAILABLE
                 || updateState.status == UpdateManager.State.READY ? BUTTON_PRIMARY : BUTTON_NORMAL;
         drawButton(canvas, ACTION_UPDATE, updateBounds, button, variant, updateState.canPress(), busy, u, now, dt);
+        if (recovery) {
+            drawButton(canvas, ACTION_UPDATE_RELEASES, updateReleasesBounds, "GO TO RELEASES",
+                    BUTTON_PRIMARY, true, false, u, now, dt);
+        }
         if (updateState.status == UpdateManager.State.DOWNLOADING && updateState.progress >= 0) {
             float barLeft = textLeft;
             float barRight = Math.max(barLeft, updateBounds.left - 10f * u);
@@ -993,6 +1015,7 @@ final class SetupView extends View {
             contentTop += updateHeight + 8f * u;
         } else {
             updateBounds.setEmpty();
+            updateReleasesBounds.setEmpty();
         }
 
         float headline = getHeight() / u < 300f ? 26f : (getHeight() / u < 340f ? 31f : 38f);
@@ -1060,6 +1083,7 @@ final class SetupView extends View {
             y += updateHeight + 8f * u;
         } else {
             updateBounds.setEmpty();
+            updateReleasesBounds.setEmpty();
         }
         float tileWidth = (width - 8f * u) / 2f;
         drawTile(canvas, new RectF(left, y, left + tileWidth, y + 46f * u),
@@ -1311,6 +1335,9 @@ final class SetupView extends View {
             }
             return ACTION_NONE;
         }
+        if (updateState.status == UpdateManager.State.ERROR && updateReleasesBounds.contains(x, y)) {
+            return ACTION_UPDATE_RELEASES;
+        }
         if (updateState.visible() && updateState.canPress() && updateBounds.contains(x, y)) return ACTION_UPDATE;
         if (launcherMode()) {
             if (allowBounds.contains(x, y)) return ACTION_SETTINGS;
@@ -1389,6 +1416,10 @@ final class SetupView extends View {
             listener.onUpdate();
             return;
         }
+        if (action == ACTION_UPDATE_RELEASES) {
+            listener.onUpdateReleases();
+            return;
+        }
         if (action == ACTION_UPDATE_CONFIRM) {
             listener.onUpdateConfirm();
             return;
@@ -1442,13 +1473,23 @@ final class SetupView extends View {
             order = new int[] {ACTION_PRESET_LOW, ACTION_PRESET_MEDIUM, ACTION_PRESET_HIGH,
                     ACTION_PRESET_CUSTOM, ACTION_DRIVERS, ACTION_SETTINGS_DONE, ACTION_EXIT};
         } else if (launcherMode()) {
-            order = updateState.visible() && updateState.canPress()
-                    ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_DRIVERS, ACTION_EXIT}
-                    : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_DRIVERS, ACTION_EXIT};
+            if (updateState.status == UpdateManager.State.ERROR) {
+                order = new int[] {ACTION_UPDATE, ACTION_UPDATE_RELEASES, ACTION_SETTINGS, ACTION_PLAY,
+                        ACTION_DRIVERS, ACTION_EXIT};
+            } else {
+                order = updateState.visible() && updateState.canPress()
+                        ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_DRIVERS, ACTION_EXIT}
+                        : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_DRIVERS, ACTION_EXIT};
+            }
         } else {
-            order = updateState.visible() && updateState.canPress()
-                    ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_DRIVERS, ACTION_EXIT}
-                    : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_DRIVERS, ACTION_EXIT};
+            if (updateState.status == UpdateManager.State.ERROR) {
+                order = new int[] {ACTION_UPDATE, ACTION_UPDATE_RELEASES, ACTION_ALLOW, ACTION_CHECK,
+                        ACTION_DRIVERS, ACTION_EXIT};
+            } else {
+                order = updateState.visible() && updateState.canPress()
+                        ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_DRIVERS, ACTION_EXIT}
+                        : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_DRIVERS, ACTION_EXIT};
+            }
         }
         int index = -1;
         for (int i = 0; i < order.length; i++) if (order[i] == current) index = i;

@@ -124,7 +124,7 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `import_profile` | `1` profiles guest and Win32/D3D9 wall time per thread every ten seconds. |
 | `watchdog` | Enables hang diagnostics. |
 
-Android presentation is fixed to **FIFO, interval 1** for both device creation and reset. An explicit FPS cap uses the host limiter; unlimited mode leaves pacing to FIFO. Desktop builds retain the optional presentation-mode settings.
+Android presentation is fixed to **FIFO, interval 1** for both device creation and reset. An explicit FPS cap uses the host limiter; unlimited mode leaves pacing to FIFO. Desktop builds retain the optional presentation-mode settings. DXVK's official Prototype DF-format workaround is applied explicitly because the native host does not use the `prototypef.exe` process name; graphics-quality settings are unchanged.
 
 ## Logs and shader cache
 
@@ -203,7 +203,7 @@ android/build-apk.sh arm64-v8a
 
 ## Tests
 
-Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler and lock rules, presentation normalization, save paths and migration, state-cache behavior, settings, and version increments.
+Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler and lock rules, presentation normalization, the Prototype DXVK profile, save paths and migration, state-cache behavior, updater recovery policy, settings, and version increments.
 
 ```sh
 # Graphics helpers and DXT differential tests.
@@ -226,7 +226,7 @@ The launcher checks the latest published GitHub release in the background and co
 - **Different signing certificate:** the launcher explains why Android requires uninstalling the old copy first, then chains the system uninstall and install prompts where the device permits it. Shared game saves and files under `/storage/emulated/0/Prototype` are not deleted. App-private settings and data may be removed, so back up anything important outside that shared folder.
 - **If Android closes ProtoDroid during uninstall:** open the completed ProtoDroid download notification or the APK in the public **Downloads** folder to continue. This fallback is intentional: an ordinary app cannot silently uninstall itself and guarantee that it can launch another activity afterward.
 
-The updater never downloads game content, changes graphics or controls, or installs an unverified APK. Automatic checks are rate-limited and failures do not block Play.
+The updater never downloads game content, changes graphics or controls, or installs an unverified APK. Automatic checks use a 15-minute backoff and failures do not block Play. Transient download queries are rechecked before failure; the error card offers **Retry** and **GO TO RELEASES** for manual browser recovery.
 
 ## CI and releases
 

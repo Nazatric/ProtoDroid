@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14 - 2026-11-01
+
+- Applied DXVK's official Prototype workaround explicitly because the native Android host is named `app_process64`, not `prototypef.exe`, so DXVK's built-in game profile did not match. Disabling the broken DF-format exposure targets the original dynamic-shadow and bloom paths without reducing shadow detail, resolution, textures, AA, or render scale. Physical Adreno/Mali visual confirmation is still required.
+- Made launcher downloads resilient to transient empty DownloadManager queries and exceptions: recovery now uses timed rechecks, preserves uncertain downloads, and only replaces confirmed failed or persistently missing rows. Verification retains APK hash, package/version, and signing-certificate checks.
+- Added **GO TO RELEASES** beside updater recovery, with Retry preserved. Launcher resume checks now run after a 15-minute backoff without hiding an existing update card or interrupting active downloads. Kept FIFO presentation and known-pipeline cache warm-up intact; no universal 60 FPS or exhaustive future-shader precompilation claim is made.
+
 ## 0.13 - 2026-10-31
 
 - Fixed the Drivers screen's **BACK** crash: touch tracking is now released before closing the screen can detach its view, with null-safe cleanup shared by touch cancellation and detachment. Both the on-screen BACK action and Android system Back return to the existing launcher homepage instead of terminating it. Added entry/exit and cleanup-order regression coverage; gameplay and native driver behavior are unchanged.

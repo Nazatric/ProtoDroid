@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "diagnostics.h"
+#include "dxvk_config.h"
 #include "guest.h"
 #include "present_stats.h"
 #include "timing_window.h"
@@ -640,6 +641,12 @@ int main(int argc, char** argv) {
             Log("anisotropy: bridge maximum %dx; DXVK option unchanged", max_anisotropy);
         }
     }
+
+    // Apply last so stale user configuration cannot undo the official Prototype workaround. DXVK keys its own
+    // profile to prototypef.exe, which never matches this native host process (app_process64 on Android).
+    setenv("DXVK_CONFIG", PrototypeDxvkConfig(
+        getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "").c_str(), 1);
+    Log("game profile: Prototype DF formats disabled for dynamic shadows and effects");
 
     // The game window: DXVK's native WSI takes the SDL window as HWND.
 #ifdef __ANDROID__

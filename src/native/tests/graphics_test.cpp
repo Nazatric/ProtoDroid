@@ -1,12 +1,14 @@
 // Host UBSAN tests for production DXT decoding, effective sampler values, and lock/upload semantics.
 #include "d3d9_dxt.h"
 #include "d3d9_state.h"
+#include "dxvk_config.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 using namespace native;
@@ -166,6 +168,22 @@ void TestPresentationInterval() {
           "desktop presentation interval was overwritten");
 }
 
+void TestPrototypeDxvkProfile() {
+    const std::string workaround = "d3d9.supportDFFormats = False";
+    Check(PrototypeDxvkConfig("") == workaround, "empty DXVK config lost the Prototype profile");
+    std::string config = PrototypeDxvkConfig(
+        "d3d9.presentInterval = 1,d3d9.samplerAnisotropy = 16,d3d9.supportDFFormats = True");
+    Check(config.find("d3d9.presentInterval = 1;d3d9.samplerAnisotropy = 16") != std::string::npos,
+          "Prototype profile changed FIFO or texture filtering");
+    Check(config.rfind(workaround) == config.size() - workaround.size(),
+          "Prototype workaround was not the final effective DXVK option");
+    Check(config.rfind(workaround) > config.find("d3d9.supportDFFormats = True"),
+          "stale user configuration can re-enable broken DF formats");
+    Check(PrototypeDxvkConfig("d3d9.numBackBuffers = 3; ") ==
+                  "d3d9.numBackBuffers = 3; " + workaround,
+          "terminated DXVK config gained an invalid separator");
+}
+
 void TestLockSemantics() {
     constexpr uint32_t read_only = 0x10, no_overwrite = 0x1000, discard = 0x2000;
     D3D9LockPlan plan = D3D9ShadowLockPlan(0);
@@ -208,8 +226,9 @@ int main() {
         TestDxt1EndpointsExhaustive();
         TestSamplerTransform();
         TestPresentationInterval();
+        TestPrototypeDxvkProfile();
         TestLockSemantics();
-        std::puts("graphics tests passed (DXT, samplers, presentation interval, read-only and ranged locks)");
+        std::puts("graphics tests passed (DXT, samplers, presentation, Prototype profile, and locks)");
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "graphics test failed: %s\n", e.what());

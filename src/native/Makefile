@@ -100,6 +100,7 @@ $(OUT)/hot_audio.o $(OUT)/hot_skin.o: CXXFLAGS += -ffp-contract=off
 
 $(OUT)/perf_hint.o: perf_hint_session.h
 $(OUT)/main.o $(OUT)/state_cache.o: state_cache.h
+$(OUT)/main.o: dxvk_config.h
 $(OUT)/main.o $(OUT)/path.o $(OUT)/save_path.o: save_path.h
 $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/present_stats.o $(OUT)/diagnostics.o: present_stats.h timing_window.h
 $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/diagnostics.o: diagnostics.h

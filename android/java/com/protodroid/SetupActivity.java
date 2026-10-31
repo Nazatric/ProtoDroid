@@ -92,6 +92,11 @@ public class SetupActivity extends Activity {
                 public void onUpdateCancel() {
                     setupView.hideUpdateWarning();
                 }
+
+                @Override
+                public void onUpdateReleases() {
+                    updateManager.onReleasesPressed();
+                }
             });
             setContentView(setupView);
         }
