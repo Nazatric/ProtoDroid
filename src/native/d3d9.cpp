@@ -758,11 +758,18 @@ M(IDirect3D9, CreateDevice) {
         }
         break;  // failed with the window on screen: a real driver problem
     }
-    Log("CreateDevice %ux%u fmt %u windowed %u msaa %u/%u interval %u -> %08x in %.3f ms", pp.BackBufferWidth,
-        pp.BackBufferHeight, pp.BackBufferFormat, pp.Windowed, pp.MultiSampleType, pp.MultiSampleQuality,
-        pp.PresentationInterval, uint32_t(hr), double(MonotonicNanos() - create_device_start_ns) / 1e6);
+    const UINT adapters = Host<IDirect3D9>(Arg(c, 0))->GetAdapterCount();
+    Log("CreateDevice %ux%u fmt %u windowed %u msaa %u/%u interval %u swap %u buffers %u behavior %08x "
+        "adapters %u -> %08x in %.3f ms", pp.BackBufferWidth, pp.BackBufferHeight, pp.BackBufferFormat,
+        pp.Windowed, pp.MultiSampleType, pp.MultiSampleQuality, pp.PresentationInterval, pp.SwapEffect,
+        pp.BackBufferCount, uint32_t(Arg(c, 4)), adapters, uint32_t(hr),
+        double(MonotonicNanos() - create_device_start_ns) / 1e6);
     // The engine does not check: without a device it crashes on the next call. The DXVK log says why it failed.
     if (FAILED(hr)) {
+        if (!adapters) {
+            StartupFailure("DXVK found no compatible Vulkan GPU with the selected driver. "
+                           "See app_process64_d3d9.log for the missing driver or features.");
+        }
         StartupFailure("The graphics driver could not create the D3D9 device (DXVK on Vulkan). "
                        "See app_process64_d3d9.log for the reason.");
     }

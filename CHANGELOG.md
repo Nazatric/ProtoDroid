@@ -5,7 +5,8 @@
 - Added a pinned A825 Gen8 Turnip build and made Auto select it for Adreno 825/SM8735 instead of skipping directly to Qualcomm's driver. Other Adreno 8xx models retain their previous automatic policy.
 - Added **Auto / System / Turnip / Custom** driver settings and a **Driver packages** manager with ZIP/raw-SO import, removal, and hash-pinned in-app Turnip Gen8 and experimental PanVK-kbase downloads. PanVK uses exact BC modes, not its optional lossy texture paths.
 - Added staged ELF/metadata/checksum validation, rollback-safe replacement, legacy import migration, isolated custom-driver probes, and mapped-library checks against silent stock fallback. Missing custom packages restore Auto; System remains available for recovery.
-- Wired the required Gen8 driver and probe into exact-commit ARM64 APK builds and added host package/policy tests. Physical A825 and Mali gameplay still require device validation; no universal compatibility or FPS claim is made.
+- Backported DXVK's upstream unified-memory type-selection fix for Qualcomm's driver and clarified no-compatible-GPU failures. Rendering and texture quality are unchanged.
+- Wired the required Gen8 driver and probe into exact-commit ARM64 APK builds and added host package/policy tests. Signed-APK checks now require the exact source revision and linked driver-selection code. Physical A825 and Mali gameplay still require device validation; no universal compatibility or FPS claim is made.
 
 ## 0.9 - 2026-10-31
 

@@ -103,7 +103,7 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/gpu_profile_test
 
-      - name: Compile and run DXVK state-cache behavior tests
+      - name: Test DXVK memory selection and state-cache behavior
         run: |
           set -euo pipefail
           git clone -q --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/protodroid-dxvk-test
@@ -111,6 +111,7 @@ jobs:
             git -C /tmp/protodroid-dxvk-test apply --check "$patch"
             git -C /tmp/protodroid-dxvk-test apply "$patch"
           done
+          python3 tools/test_dxvk_unified_memory.py /tmp/protodroid-dxvk-test/src/dxvk/dxvk_memory.cpp
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-test/src/dxvk"
           g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
@@ -890,10 +891,18 @@ jobs:
           SDL=/tmp/protodroid-apk-check/lib/arm64-v8a/libSDL2.so
           MAIN=/tmp/protodroid-apk-check/lib/arm64-v8a/libmain.so
           test "$(stat -c%s "$MAIN")" -gt 100000
+          source build/apk/native-build.txt
+          test "$nativeBuild" = compiled
+          test "$sourceRevision" = "$SOURCE_REVISION"
           $TOOLS/llvm-readelf -d "$MAIN" | tee /tmp/libmain-dynamic.txt
           ! grep -E 'libav(format|codec|util)|libswresample' /tmp/libmain-dynamic.txt
-          $TOOLS/llvm-strings "$MAIN" | grep -F 'binkw32.dll'
-          $TOOLS/llvm-strings "$MAIN" | grep -F 'unlock_menu_fps'
+          MAIN_STRINGS=$($TOOLS/llvm-strings "$MAIN")
+          printf '%s\n' "$MAIN_STRINGS" | grep -Fx "$SOURCE_REVISION"
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'vulkan: Adreno 825: trying the A8xx Turnip build'
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'DXVK found no compatible Vulkan GPU'
+          $TOOLS/llvm-nm -D "$MAIN" | grep -E ' [A-Za-z] protodroid_device_api_level$'
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'binkw32.dll'
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'unlock_menu_fps'
           STRINGS=$($TOOLS/llvm-strings "$DXVK")
           printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2.so'
           ! printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2-2.0.so.0'
