@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13 - 2026-10-31
+
+- Fixed the Drivers screen's **BACK** crash: touch tracking is now released before closing the screen can detach its view, with null-safe cleanup shared by touch cancellation and detachment. Both the on-screen BACK action and Android system Back return to the existing launcher homepage instead of terminating it. Added entry/exit and cleanup-order regression coverage; gameplay and native driver behavior are unchanged.
+- Brings the validated 0.10–0.12 driver updates into this release: the dedicated driver center and verified custom packages, Adreno 825 Turnip selection, Qualcomm unified-memory correction, and automatic startup recovery. Device-specific compatibility still requires physical testing; see the sections below for full details.
+
 ## 0.12 - 2026-10-31
 
 - Fixed the **Drivers** button crash: opening the dedicated screen detaches the launcher view during touch-up, so touch cleanup now retains and null-checks the original parent instead of dereferencing a removed view. Added a regression check for this content-view replacement order; driver rendering, downloads, and game/native behavior are unchanged.

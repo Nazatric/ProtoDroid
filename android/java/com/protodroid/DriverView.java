@@ -828,29 +828,30 @@ final class DriverView extends View implements DriverManager.Observer {
                 }
                 return true;
             case MotionEvent.ACTION_UP:
+                int action = ACTION_NONE;
                 if (scrolling) {
                     velocityTracker.computeCurrentVelocity(1000, ViewConfiguration.get(getContext()).getScaledMaximumFlingVelocity());
                     scroller.fling(0, Math.round(scrollY), 0, Math.round(-velocityTracker.getYVelocity()),
                             0, 0, 0, Math.round(maxScrollY));
-                    invalidate();
                 } else {
-                    int action = actionAt(event.getX(), y);
-                    if (action != ACTION_NONE && action == pressedAction) {
-                        performClick();
-                        activate(action);
-                    }
+                    int releasedAction = actionAt(event.getX(), y);
+                    if (releasedAction != ACTION_NONE && releasedAction == pressedAction) action = releasedAction;
                 }
                 pressedAction = ACTION_NONE;
                 scrolling = false;
-                velocityTracker.recycle();
-                velocityTracker = null;
+                recycleVelocityTracker();
                 invalidate();
+                // BACK replaces the content view and recycles touch state in onDetachedFromWindow(). Activate only
+                // after every operation on this view's tracker is complete, so returning to the launcher cannot crash.
+                if (action != ACTION_NONE) {
+                    performClick();
+                    activate(action);
+                }
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 pressedAction = ACTION_NONE;
                 scrolling = false;
-                velocityTracker.recycle();
-                velocityTracker = null;
+                recycleVelocityTracker();
                 invalidate();
                 return true;
             default:
@@ -887,11 +888,14 @@ final class DriverView extends View implements DriverManager.Observer {
         return super.onKeyDown(keyCode, event);
     }
 
+    private void recycleVelocityTracker() {
+        if (velocityTracker == null) return;
+        velocityTracker.recycle();
+        velocityTracker = null;
+    }
+
     @Override protected void onDetachedFromWindow() {
-        if (velocityTracker != null) {
-            velocityTracker.recycle();
-            velocityTracker = null;
-        }
+        recycleVelocityTracker();
         scroller.forceFinished(true);
         super.onDetachedFromWindow();
     }
