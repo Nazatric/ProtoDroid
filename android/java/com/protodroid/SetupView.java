@@ -40,6 +40,7 @@ final class SetupView extends View {
         void onAllowFileAccess();
         void onCheckAgain();
         void onPlay();
+        void onDrivers();
         void onExit();
         void onUpdate();
         void onUpdateConfirm();
@@ -89,6 +90,7 @@ final class SetupView extends View {
     private static final int ACTION_UPDATE = 11;
     private static final int ACTION_UPDATE_CONFIRM = 12;
     private static final int ACTION_UPDATE_CANCEL = 13;
+    private static final int ACTION_DRIVERS = 14;
     private static final int SETTING_ACTION_BASE = 32;
 
     private static final int BUTTON_NORMAL = 0;
@@ -119,6 +121,7 @@ final class SetupView extends View {
     private final RectF[] presetBounds = {new RectF(), new RectF(), new RectF(), new RectF()};
     private final RectF settingsDoneBounds = new RectF();
     private final RectF settingsListBounds = new RectF();
+    private final RectF driverBounds = new RectF();
     private final RectF updateBounds = new RectF();
     private final RectF updateWarningConfirmBounds = new RectF();
     private final RectF updateWarningCancelBounds = new RectF();
@@ -228,6 +231,11 @@ final class SetupView extends View {
         updateState = next == null ? UpdateManager.State.hidden() : next;
         if (updateWarningVisible && updateState.status != UpdateManager.State.READY) hideUpdateWarning();
         updateContentDescription();
+        invalidate();
+    }
+
+    void setCustomDriverSelected(boolean custom) {
+        gameSettings.setCustomDriverSelected(custom);
         invalidate();
     }
 
@@ -1116,6 +1124,35 @@ final class SetupView extends View {
         drawCentered(canvas, "\u203a", settingRightBounds[index], 22f, 500, RED_HOT, 0f, u, 0f);
     }
 
+    private static boolean hasDriverManagerRow(GameSettings.Setting setting) {
+        return "vulkan_driver".equals(setting.key);
+    }
+
+    private void drawDriverRow(Canvas canvas, RectF bounds, float u) {
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(pressedAction == ACTION_DRIVERS || focusedAction == ACTION_DRIVERS
+                ? 0xb83a1417 : 0xa6080808);
+        canvas.drawPath(cutPath(bounds, 7f * u), paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(1f, 0.7f * u));
+        paint.setColor(withAlpha(Color.WHITE, 0.13f));
+        canvas.drawPath(cutPath(bounds, 7f * u), paint);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(withAlpha(RED_HOT, 0.42f));
+        canvas.drawRect(bounds.left, bounds.top + 5f * u, bounds.left + 2f * u,
+                bounds.bottom - 5f * u, paint);
+
+        float arrowWidth = Math.min(32f * u, bounds.width() * 0.12f);
+        RectF arrow = new RectF(bounds.right - arrowWidth - 4f * u, bounds.top,
+                bounds.right - 4f * u, bounds.bottom);
+        float valueWidth = Math.min(104f * u, bounds.width() * 0.30f);
+        RectF value = new RectF(arrow.left - valueWidth, bounds.top, arrow.left - 2f * u, bounds.bottom);
+        drawLine(canvas, "Driver packages", bounds.left + 12f * u, bounds.top, bounds.height(),
+                12.5f, 500, BONE, 0.4f, u, Math.max(1f, value.left - bounds.left - 20f * u));
+        drawCentered(canvas, "MANAGE", value, 11.5f, 600, 0xfff3eee7, 0.5f, u, 3f * u);
+        drawCentered(canvas, "\u203a", arrow, 22f, 500, RED_HOT, 0f, u, 0f);
+    }
+
     private void drawSettings(Canvas canvas, long now, float dt) {
         boolean portrait = getHeight() > getWidth();
         float u = unit(portrait);
@@ -1175,7 +1212,9 @@ final class SetupView extends View {
             for (int category = firstCategory; category < endCategory; category++) {
                 height += headerHeight;
                 for (GameSettings.Setting setting : gameSettings.settings) {
-                    if (GameSettings.categoryOf(setting) == category) height += rowHeight;
+                    if (GameSettings.categoryOf(setting) != category) continue;
+                    height += rowHeight;
+                    if (hasDriverManagerRow(setting)) height += rowHeight;
                 }
             }
             contentHeight = Math.max(contentHeight, height);
@@ -1183,6 +1222,7 @@ final class SetupView extends View {
         maxScrollY = Math.max(0f, contentHeight - settingsListBounds.height());
         scrollY = Math.max(0f, Math.min(scrollY, maxScrollY));
 
+        driverBounds.setEmpty();
         int clipped = canvas.save();
         canvas.clipRect(settingsListBounds);
         for (int column = 0; column < columns; column++) {
@@ -1210,6 +1250,14 @@ final class SetupView extends View {
                         drawSettingRow(canvas, i, rowBounds, u);
                     }
                     y += rowHeight;
+                    if (hasDriverManagerRow(setting)) {
+                        RectF row = new RectF(x, y + 2f * u, x + columnWidth, y + rowHeight - 2f * u);
+                        if (row.bottom >= settingsListBounds.top && row.top <= settingsListBounds.bottom) {
+                            driverBounds.set(row);
+                            drawDriverRow(canvas, row, u);
+                        }
+                        y += rowHeight;
+                    }
                 }
             }
         }
@@ -1276,6 +1324,7 @@ final class SetupView extends View {
             }
             if (settingsDoneBounds.contains(x, y)) return ACTION_SETTINGS_DONE;
             if (settingsListBounds.contains(x, y)) {
+                if (driverBounds.contains(x, y)) return ACTION_DRIVERS;
                 for (int i = 0; i < gameSettings.settings.length; i++) {
                     if (settingLeftBounds[i].contains(x, y)) return SETTING_ACTION_BASE + i * 2;
                     if (settingRightBounds[i].contains(x, y)) return SETTING_ACTION_BASE + i * 2 + 1;
@@ -1349,6 +1398,10 @@ final class SetupView extends View {
 
     private void activate(int action) {
         performClick();
+        if (action == ACTION_DRIVERS) {
+            listener.onDrivers();
+            return;
+        }
         if (action == ACTION_UPDATE) {
             listener.onUpdate();
             return;
@@ -1404,7 +1457,7 @@ final class SetupView extends View {
             order = new int[] {ACTION_UPDATE_CONFIRM, ACTION_UPDATE_CANCEL};
         } else if (settingsOpen) {
             order = new int[] {ACTION_PRESET_LOW, ACTION_PRESET_MEDIUM, ACTION_PRESET_HIGH,
-                    ACTION_PRESET_CUSTOM, ACTION_SETTINGS_DONE, ACTION_EXIT};
+                    ACTION_PRESET_CUSTOM, ACTION_DRIVERS, ACTION_SETTINGS_DONE, ACTION_EXIT};
         } else if (launcherMode()) {
             order = updateState.visible() && updateState.canPress()
                     ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_EXIT}

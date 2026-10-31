@@ -313,9 +313,60 @@ jobs:
             deps-out/${{ matrix.abi }}/include
           retention-days: 14
 
+  driver-package-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test staged driver imports and rollback
+        run: android/test-driver-package.sh
+
+  build-turnip:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Turnip and AdrenoTools
+        id: cache-turnip
+        uses: actions/cache@v4
+        with:
+          path: turnip-out
+          key: android-turnip-gen8-v1-${{ hashFiles('android/build-turnip.sh', 'android/patches/turnip-gen8/**') }}
+
+      - name: Install Turnip build tools
+        if: steps.cache-turnip.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools bison flex python3-pip
+          pip3 install --user --break-system-packages meson==1.5.2 mako pyyaml packaging
+
+      - name: Build stable, next, and patched A825 Gen8 Turnip
+        if: steps.cache-turnip.outputs.cache-hit != 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        run: |
+          set -euo pipefail
+          export PATH=$HOME/.local/bin:$PATH
+          android/build-turnip.sh /tmp/protodroid-turnip-src turnip-out
+          for library in libvulkan_freedreno.so libvulkan_freedreno_next.so libvulkan_freedreno_gen8.so libadrenotools.a; do
+            test -s "turnip-out/lib/$library"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-turnip-arm64-v8a
+          path: |
+            turnip-out/lib
+            turnip-out/include
+          retention-days: 14
+
   build-apk:
     runs-on: ubuntu-24.04
-    needs: [build-deps, bink-tests, arm64-graphics-tests]
+    needs: [build-deps, build-turnip, bink-tests, arm64-graphics-tests, driver-package-tests]
     env:
       SOURCE_REVISION: ${{ github.sha }}
     steps:
@@ -347,12 +398,23 @@ jobs:
           name: android-deps-arm64-v8a
           path: deps-out/arm64-v8a
 
+      - name: Download Turnip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-turnip-arm64-v8a
+          path: turnip-out
+
       - name: Prepare deps layout
         run: |
           mkdir -p $HOME/protodroid-data/android-deps/arm64-v8a
           cp -r deps-out/arm64-v8a/* $HOME/protodroid-data/android-deps/arm64-v8a/ || true
           for archive in libavformat.a libavcodec.a libavutil.a libswresample.a; do
             test -s "$HOME/protodroid-data/android-deps/arm64-v8a/lib/$archive"
+          done
+          mkdir -p $HOME/protodroid-data/android-turnip
+          cp -r turnip-out/* $HOME/protodroid-data/android-turnip/
+          for library in libvulkan_freedreno.so libvulkan_freedreno_next.so libvulkan_freedreno_gen8.so libadrenotools.a; do
+            test -s "$HOME/protodroid-data/android-turnip/lib/$library"
           done
           mkdir -p $HOME/protodroid-data/android-deps-src/SDL2
           # SDL src was used in build-apk.sh for Java, we keep minimal

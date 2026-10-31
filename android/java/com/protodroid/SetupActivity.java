@@ -13,11 +13,6 @@ import android.system.ErrnoException;
 import android.system.Os;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 
 /**
  * Launcher: finds the game files, provides Play and Settings, or explains where to put them. The game can live in the
@@ -31,6 +26,7 @@ public class SetupActivity extends Activity {
 
     private SetupView setupView;
     private UpdateManager updateManager;
+    private DriverManager driverManager;
     private File foundGame;
     private boolean foundInApp;
 
@@ -47,6 +43,9 @@ public class SetupActivity extends Activity {
             public void onUninstallRequired(String versionName) {
                 if (setupView != null) setupView.showUpdateWarning(versionName);
             }
+        });
+        driverManager = new DriverManager(this, custom -> {
+            if (setupView != null) setupView.setCustomDriverSelected(custom);
         });
     }
 
@@ -67,6 +66,11 @@ public class SetupActivity extends Activity {
                 @Override
                 public void onPlay() {
                     play();
+                }
+
+                @Override
+                public void onDrivers() {
+                    driverManager.show();
                 }
 
                 @Override
@@ -146,6 +150,7 @@ public class SetupActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        driverManager.close();
         updateManager.close();
         super.onDestroy();
     }
@@ -185,7 +190,7 @@ public class SetupActivity extends Activity {
         } catch (ErrnoException ignored) {
             // the native side falls back to the app folder
         }
-        File driver = installCustomDriver();
+        File driver = driverManager.driverForLaunch();
         try {
             if (driver == null) Os.unsetenv("PROTODROID_CUSTOM_DRIVER");
             else Os.setenv("PROTODROID_CUSTOM_DRIVER", driver.getAbsolutePath(), true);
@@ -194,33 +199,6 @@ public class SetupActivity extends Activity {
         }
         startActivity(new Intent(this, ProtoActivity.class));
         finish();
-    }
-
-    /**
-     * A user-supplied Vulkan driver (an Adreno driver .so, e.g. a Turnip build made for emulators) in
-     * Android/data/com.protodroid/files/driver/: copied into the app's private storage, where the linker may load
-     * it from (not from shared storage). Returns the private copy, or null when there is none (the copy is removed
-     * when the user removes the driver).
-     */
-    private File installCustomDriver() {
-        File base = getExternalFilesDir(null);
-        File[] found = base == null ? null : new File(base, "driver").listFiles((d, name) -> name.endsWith(".so"));
-        File dest = new File(new File(getFilesDir(), "driver"), "libvulkan_custom.so");
-        if (found == null || found.length == 0) {
-            dest.delete();
-            return null;
-        }
-        File src = found[0];
-        if (dest.exists() && dest.length() == src.length() && dest.lastModified() >= src.lastModified()) return dest;
-        dest.getParentFile().mkdirs();
-        try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dest)) {
-            byte[] buf = new byte[1 << 16];
-            for (int n; (n = in.read(buf)) > 0;) out.write(buf, 0, n);
-        } catch (IOException e) {
-            dest.delete();
-            return null;
-        }
-        return dest;
     }
 
     private void requestAccess() {
@@ -246,6 +224,7 @@ public class SetupActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (driverManager.onActivityResult(requestCode, resultCode, data)) return;
         updateManager.onActivityResult(requestCode, resultCode);
     }
 

@@ -31,6 +31,10 @@ texture_skip_min_size = 512
 # This avoids the Mali mailbox crash and presentation-interval changes that caused post-cutscene stalls.
 # Desktop builds may still use present_mode = fifo, present_fifo = 1, or vsync = 1.
 
+# Vulkan driver: auto (default), system, turnip, or custom. Custom requires a validated package from
+# launcher Settings > Driver packages and takes effect on the next game start.
+#vulkan_driver = auto
+
 # DXVK extra config: d3d9.presentInterval, d3d9.numBackBuffers etc. Comma as separator (semicolon in DXVK).
 #dxvk_config = d3d9.presentInterval = 1
 

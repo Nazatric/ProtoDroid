@@ -31,19 +31,29 @@ final class GameSettings {
         final String label, key;
         final String[] names;
         final int[] values;
+        final String[] engineValues;
         final boolean engine;
         int index;
 
         Setting(String label, String key, String[] names, int[] values, boolean engine) {
+            this(label, key, names, values, engine, null);
+        }
+
+        Setting(String label, String key, String[] names, int[] values, boolean engine, String[] engineValues) {
             this.label = label;
             this.key = key;
             this.names = names;
             this.values = values;
             this.engine = engine;
+            this.engineValues = engineValues;
         }
 
         int value() {
             return values[index];
+        }
+
+        String engineValue() {
+            return engineValues == null ? Integer.toString(value()) : engineValues[index];
         }
     }
 
@@ -70,6 +80,8 @@ final class GameSettings {
                     new int[] {0, 30, 45, 60}, true),
             new Setting("Battery saver", "battery_saver", new String[] {"Off", "On"}, new int[] {0, 1}, true),
             new Setting("Unlock menu FPS", "unlock_menu_fps", new String[] {"Off", "On"}, new int[] {0, 1}, true),
+            new Setting("GPU driver", "vulkan_driver", new String[] {"Auto", "System", "Turnip", "Custom"},
+                    new int[] {0, 1, 2, 3}, true, new String[] {"auto", "system", "turnip", "custom"}),
             // The game's own GameDB video settings. -1 leaves its device-dependent default untouched.
             new Setting("Anti-Alias Level", "game_aa_level", new String[] {"Game default", "Off", "2x", "4x"},
                     new int[] {-1, 0, 1, 2}, true),
@@ -93,7 +105,7 @@ final class GameSettings {
             new Setting("Show FPS", "ui_fps", new String[] {"Off", "On"}, new int[] {0, 1}, false),
     };
 
-    private static final int[] DEFAULTS = {1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 2, 0, 0, 2, 0};
+    private static final int[] DEFAULTS = {1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 2, 0, 0, 2, 0};
 
     // Presets cover both port and game video options. FPS, battery and every control preference stay untouched.
     private static final int[][] PRESET_VALUES = {
@@ -178,6 +190,10 @@ final class GameSettings {
         if (setting.engine) writeEngineSettings(new String[] {setting.key});
     }
 
+    void setCustomDriverSelected(boolean custom) {
+        setIndex(settingIndex("vulkan_driver"), custom ? 3 : 0);
+    }
+
     /** Rewrites only our engine keys, preserving comments and every unrelated setting in protodroid.ini. */
     void writeEngineSettings() {
         writeEngineSettings(null);
@@ -207,7 +223,7 @@ final class GameSettings {
             }
             for (Setting setting : settings) {
                 if (setting.engine && containsKey(keys, setting.key)) {
-                    out.append(setting.key).append(" = ").append(setting.value()).append('\n');
+                    out.append(setting.key).append(" = ").append(setting.engineValue()).append('\n');
                 }
             }
             try (FileWriter writer = new FileWriter(ini)) {

@@ -62,12 +62,20 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 
 The launcher’s **Settings** page and the in-game gear menu share the same preferences. Changes made in the launcher are saved automatically; engine options are applied when you press **Play**. In-game rows marked with `*` take effect after a restart, while the FPS limit changes immediately.
 
-- **Graphics:** Resolution, Textures, Anisotropy, FPS limit, Battery saver, and Unlock menu FPS.
+- **Graphics:** Resolution, Textures, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
 - **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **Game default** leaves the engine’s own device-dependent choice intact.
 - **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons.
 - **Interface:** Opacity and Show FPS.
 
 **Low, Medium, and High presets** update only the graphics and game-video options. Your FPS and control preferences stay as they are. Choose **Custom** after changing an individual graphics row.
+
+### Vulkan drivers
+
+**GPU driver** offers **Auto**, **System**, **Turnip**, and **Custom**. Auto keeps the established Adreno 6xx/7xx order and uses a dedicated Gen8 Turnip build for Adreno 825 (SM8735); other Adreno 8xx models keep the system driver unless you explicitly opt in. System always uses the phone's driver. Turnip is Adreno-only.
+
+Open **Driver packages** in launcher Settings to import an AdrenoTools-style ZIP or raw `.so`, remove a custom driver, or download a pinned Turnip Gen8 or experimental PanVK-kbase package without visiting a website. Downloads are checked against exact release hashes. Imports are private to ProtoDroid, validated as Android/Bionic ARM64, staged before replacement, and tested in a separate process on the next Play; a failed import keeps the previous installation. Custom loading requires Android 10 or newer.
+
+PanVK-kbase supports only specific Mali generations and the retail `mali_kbase` interface—not every Mali GPU, kernel, or game. ProtoDroid selects its exact BC path rather than its optional lossy texture modes. A probe cannot prove that every later frame will render correctly. If a driver causes trouble, return to **Auto** or **System** and include the native/DXVK logs in a report.
 
 Use **LAYOUT** to drag controls into place, resize them, or reset the layout.
 
@@ -105,7 +113,7 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `unlock_menu_fps` | `1` keeps menu movies responsive without blocking waits. Default: `1`. |
 | `audio_driver` | `aaudio` or `openslES`. |
 | `audio_master_reuse` | Reuses the retained mastering output when voices are recreated. |
-| `vulkan_driver` | `auto`, `system`, or `turnip`. |
+| `vulkan_driver` | `auto`, `system`, `turnip`, or `custom`; Custom uses the validated package installed in launcher Settings. |
 | `present_stats` | Enables DXVK presentation diagnostics. |
 | `audio_stats` | `1` logs real underruns, `2` logs every timing window, `0` disables audio diagnostics. |
 | `detailed_diagnostics` | `1` enables detailed native/device timing. Default: `0`; shared log mirroring still works. |
@@ -131,7 +139,7 @@ Depending on storage access, logs are available in:
 | `proto-native.prev.log` | Previous native run. |
 | `app_process64_d3d9.log` | DXVK and Vulkan messages. |
 | `prototypeenginef.dll.dxvk-cache` | Persistent pipeline state cache. |
-| `turnip_failed` | Present only after a Turnip initialization failure. |
+| `turnip_failed` | Crash-guard marker for an unconfirmed custom/bundled driver startup; explicit selection retries it. |
 
 For stall investigations, enable:
 
@@ -169,7 +177,7 @@ android/build-deps.sh arm64-v8a \
   "$HOME/protodroid-data/android-deps-src" \
   "$HOME/protodroid-data/android-deps/arm64-v8a"
 
-# Optional: build Turnip for Adreno.
+# Build stable/next Turnip, patched A825 Gen8 Turnip, and AdrenoTools (required for ARM64 APKs).
 android/build-turnip.sh \
   "$HOME/protodroid-data/android-deps-src" \
   "$HOME/protodroid-data/android-turnip"
@@ -206,6 +214,8 @@ g++ -std=c++17 -O1 -g -Wall -Wextra -Werror \
 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 /tmp/graphics_test
 ```
 
+Run `android/test-driver-package.sh` with a JDK to test real staged driver imports, ELF/metadata validation, checksums, and rollback on a host. The script fetches a pinned JSON-java source tree for tests only; Android provides `org.json` in the APK.
+
 The production Bink harness and minimal FFmpeg setup run in `.github/workflows/build-apk.yml`. `src/native/tests/run_hot_test.sh` performs the audio and skinning differential tests and requires the original engine binary. CI runs those tests on ARM64, including 2,000 randomized skinning batches with different record counts and output alignments.
 
 ## Launcher updates
@@ -220,7 +230,7 @@ The updater never downloads game content, changes graphics or controls, or insta
 
 ## CI and releases
 
-- **`build-apk`** runs host and ARM64 tests, builds dependencies, generates and compiles the real engine, packages and signs the APK, and uploads `prototype-apk` with diagnostic artifacts.
+- **`build-apk`** runs host and ARM64 tests, builds dependencies and all three Turnip variants, tests driver packages, generates and compiles the real engine, verifies the signed driver payload, and uploads `prototype-apk` with diagnostic artifacts.
 - **`android-deps`** independently builds the ARM64 and x86_64 dependency sets and the Adreno Turnip package.
 
 Ordinary pushes do not publish releases. A release requires an exact-commit green run on `main` and an explicitly approved release dispatch. The workflow rejects dummy or prebuilt native fallbacks, mismatched source revisions, reused versions, and out-of-order `versionCode` values.

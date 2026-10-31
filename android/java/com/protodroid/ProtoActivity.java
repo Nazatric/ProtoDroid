@@ -6,8 +6,10 @@ import android.system.ErrnoException;
 import android.system.Os;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.Toast;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Arrays;
@@ -59,8 +61,25 @@ public class ProtoActivity extends SDLActivity {
         super.onDestroy();
     }
 
+    private void prepareVulkanDriver() {
+        DriverPackage.Installed installed = DriverPackage.read(new File(getFilesDir(), "driver"));
+        File driver = installed == null ? null : installed.libraryFile();
+        if (driver == null && getSharedPreferences("controls", MODE_PRIVATE).getInt("vulkan_driver", 0) == 3) {
+            // The in-game restart action comes straight back here, without SetupActivity's migration/recovery path.
+            new GameSettings(this).setCustomDriverSelected(false);
+            Toast.makeText(this, "No valid custom driver is installed; Auto was restored.", Toast.LENGTH_LONG).show();
+        }
+        try {
+            if (driver == null) Os.unsetenv("PROTODROID_CUSTOM_DRIVER");
+            else Os.setenv("PROTODROID_CUSTOM_DRIVER", driver.getAbsolutePath(), true);
+        } catch (ErrnoException ignored) {
+            // Native selection keeps its safe automatic/system fallback.
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        prepareVulkanDriver();
         // The native side loads the bundled Vulkan driver (Turnip, on Adreno) from the extracted libraries.
         try {
             Os.setenv("PROTODROID_NATIVE_LIB_DIR", getApplicationInfo().nativeLibraryDir, true);

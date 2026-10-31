@@ -26,6 +26,18 @@ static_assert(native::NegotiateVulkanApi(native::MakeVulkanApi(1, 4), native::Ma
 static_assert(native::NegotiateVulkanApi(native::kVulkanApi12, native::MakeVulkanApi(1, 1)) == 0,
               "Vulkan 1.1 device was accepted");
 
+static_assert(native::PreferGen8Turnip("Adreno825"), "A825 did not select its Gen8 candidate");
+static_assert(native::PreferGen8Turnip("Adreno825v1"), "A825 revision did not select its Gen8 candidate");
+static_assert(native::PreferGen8Turnip("Adreno (TM) 825"), "Vulkan-style A825 name was not recognized");
+static_assert(!native::PreferGen8Turnip("Adreno840v2"), "A840 automatic policy was broadened");
+static_assert(!native::PreferGen8Turnip("Adreno830"), "A830 automatic policy was broadened");
+static_assert(!native::PreferGen8Turnip("Adreno (TM) 750"), "A7xx was sent to the Gen8-only driver");
+static_assert(!native::PreferGen8Turnip(""), "missing GPU model selected Gen8");
+static_assert(native::PreferGen8Turnip("", "SM8735"), "SM8735 fallback did not select A825 Gen8");
+static_assert(native::PreferGen8Turnip("", "SM8735-AB"), "SM8735 variant did not select A825 Gen8");
+static_assert(!native::PreferGen8Turnip("", "SM8750"), "another Snapdragon SoC selected A825 Gen8");
+static_assert(!native::PreferGen8Turnip("", ""), "empty SoC identity selected Gen8");
+
 void TestProfiles() {
     const auto mali = native::GetGpuProfile(native::kVendorArm);
     Check(mali.family == native::GpuFamily::MaliImmortalis && !mali.prefer_turnip,

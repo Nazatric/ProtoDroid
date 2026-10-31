@@ -4,6 +4,7 @@
 #pragma once
 
 #include <dlfcn.h>
+#include <sys/stat.h>
 
 #include <adrenotools/driver.h>
 #include <vulkan/vulkan.h>
@@ -112,8 +113,29 @@ inline std::string ProbeDevice(PFN_vkGetInstanceProcAddr gipa, const char* drive
 // A driver to try: adrenotools' hook libraries live in the APK's library folder (hook_dir), the driver in dir.
 struct Driver {
     std::string hook_dir, dir, file;
-    bool custom;  // the user's own driver: any device name is accepted (it may be a Qualcomm build)
+    bool custom;  // an explicitly imported driver: any vendor's Vulkan device may be accepted after validation
 };
+
+// AdrenoTools can silently return the system driver when a custom library fails to load. A successful Vulkan
+// probe alone cannot distinguish that fallback from a real custom Qualcomm driver. Confirm that the imported
+// inode is actually mapped in this process; the path may differ through /data/data and /data/user/0 symlinks.
+inline bool CustomDriverMapped(const Driver& d) {
+    struct stat expected = {};
+    if (stat((d.dir + d.file).c_str(), &expected) != 0) return false;
+    FILE* maps = fopen("/proc/self/maps", "r");
+    if (!maps) return false;
+    bool found = false;
+    char line[1024];
+    while (!found && fgets(line, sizeof(line), maps)) {
+        unsigned long long inode = 0;
+        if (sscanf(line, "%*s %*s %*s %*s %llu", &inode) == 1 && inode == expected.st_ino &&
+            ContainsText(line, d.file.c_str())) {
+            found = true;
+        }
+    }
+    fclose(maps);
+    return found;
+}
 
 inline PFN_vkGetInstanceProcAddr LoadTurnip(const Driver& d, std::string& device, std::string& report) {
     // adrenotools joins the directory and the file name as is, so the directories need the trailing slash.
@@ -138,6 +160,11 @@ inline PFN_vkGetInstanceProcAddr LoadTurnip(const Driver& d, std::string& device
     }
     if (device.empty() || (!d.custom && !IsTurnipIdentity(info.driver_id, device.c_str()))) {
         report += device.empty() ? "" : " (not Turnip: the driver did not load)";
+        device.clear();
+        return nullptr;
+    }
+    if (d.custom && !CustomDriverMapped(d)) {
+        report += " (the imported library was not mapped; AdrenoTools fell back to the system driver)";
         device.clear();
         return nullptr;
     }
