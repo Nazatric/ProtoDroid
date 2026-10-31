@@ -62,12 +62,15 @@ endian = 'little'
 [built-in options]
 # Keep __ANDROID__ defined. In particular, do not copy GameNative's -U__ANDROID__/__TERMUX__/X11 settings.
 c_args = ['-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__', '-D__USE_GNU', '-include', 'fcntl.h', '-include', 'unistd.h']
-cpp_args = ['-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__', '-D__USE_GNU', '-static-libstdc++', '-include', 'fcntl.h', '-include', 'unistd.h']
+cpp_args = ['-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__', '-D__USE_GNU', '-include', 'fcntl.h', '-include', 'unistd.h']
 cpp_link_args = ['-static-libstdc++']
 EOF
 
 BUILD=$SRC/build/mesa-wrapper-$ABI
 rm -rf "$BUILD"
+# Cross dependency discovery must never resolve desktop x86 packages. With no host pkg-config entries available,
+# Meson can use the NDK system zlib or Mesa's pinned fallback; optional zstd is disabled below.
+PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" \
 meson setup "$BUILD" "$MESA" --cross-file "$CROSS" --buildtype release --prefix "$PREFIX" \
     -Dcpp_rtti=false \
     -Dgbm=disabled \
@@ -79,6 +82,7 @@ meson setup "$BUILD" "$MESA" --cross-file "$CROSS" --buildtype release --prefix 
     -Dandroid-libbacktrace=disabled \
     -Dgallium-drivers= \
     -Dxmlconfig=disabled \
+    -Dzstd=disabled \
     -Dvulkan-drivers=wrapper
 ninja -C "$BUILD" -j "$JOBS" src/vulkan/wrapper/libvulkan_wrapper.so
 

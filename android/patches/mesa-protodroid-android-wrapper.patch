@@ -1,3 +1,44 @@
+diff --git a/meson.build b/meson.build
+index b9edca3..156eb61 100644
+--- a/meson.build
++++ b/meson.build
+@@ -582,6 +582,17 @@ if with_vulkan_icd_dir == ''
+ endif
+ 
+ with_dri2 = (with_dri or with_any_vk) and (with_dri_platform == 'drm' or with_dri_platform == 'apple')
++# The Android compatibility wrapper uses Android WSI around the system Vulkan
++# loader, not DRM/KMS. A wrapper-only build has no DRI driver or GBM consumer,
++# so do not require a desktop libdrm development package merely because Mesa
++# maps Android to system_has_kms_drm.
++with_android_wrapper_only = (
++  host_machine.system() == 'android' and with_wrapper_vk and
++  _vulkan_drivers.length() == 1 and not with_dri and not with_gbm
++)
++if with_android_wrapper_only
++  with_dri2 = false
++endif
+ 
+ with_x11_dri2 = with_dri2 and get_option('legacy-x11').contains('dri2')
+ 
+@@ -1674,10 +1685,14 @@ endforeach
+ 
+ with_gallium_drisw_kms = false
+ if system_has_kms_drm
+-  dep_libdrm = dependency(
+-    'libdrm', version : '>=' + _drm_ver,
+-    required : with_dri2 or with_dri or with_gbm
+-  )
++  if with_android_wrapper_only
++    dep_libdrm = null_dep
++  else
++    dep_libdrm = dependency(
++      'libdrm', version : '>=' + _drm_ver,
++      required : with_dri2 or with_dri or with_gbm
++    )
++  endif
+ else
+   # We should prevent libdrm from being available when the target doesn't have it to avoid transitive
+   # dependencies (such as vk-runtime) linking to it
 diff --git a/src/vulkan/wrapper/meson.build b/src/vulkan/wrapper/meson.build
 index d1b3b19..465edc6 100644
 --- a/src/vulkan/wrapper/meson.build
