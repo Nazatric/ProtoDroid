@@ -5,6 +5,7 @@
 - Made detailed engine, Present, texture, and DXVK pipeline diagnostics opt-in. Normal gameplay skips their timing and sampling work while ordinary FPS tracking, ADPF, and shared log/cache mirroring remain active.
 - Kept detailed diagnostics and per-thread import profiling available for matched stall investigations without enabling them for every player.
 - Added the exact source revision to native startup logs and APK provenance metadata. Release verification now requires it to match the commit being built.
+- Corrected texture diagnostics to count successful creations and label cumulative top-level estimates as non-resident; decoding and texture quality are unchanged.
 - No graphics, Bink, control, save, presentation, or cache-behavior changes; no FPS improvement is claimed without matched device runs.
 
 ## 0.8 - 2026-10-31

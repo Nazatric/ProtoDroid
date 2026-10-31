@@ -465,13 +465,21 @@ TexAdapt PlanTexture(UINT w, UINT h, UINT levels, DWORD usage, D3DFORMAT format)
     }
     a.decode = plain && g_decode_dxt && IsDxt(format);
     if (a.decode && g_decode_16bit && format == D3DFMT_DXT1) a.decode_format = D3DFMT_A1R5G5B5;
-    // Statistics: GPU memory of the top level as the guest asked for it and as created.
+    return a;
+}
+
+// Record only successful host creations. These are cumulative top-level estimates for workload analysis, not a
+// live/resident GPU-memory measurement: released textures are not subtracted and the remaining mip levels are not
+// included. Keep that distinction explicit because a growing creation total is not evidence of a texture leak.
+void RecordTextureCreated(const TexAdapt& a) {
+    static std::mutex mutex;
     static uint64_t count = 0, reduced = 0, decoded = 0, guest_bytes = 0, host_bytes = 0;
-    UINT bb = BlockBytes(format);
+    std::lock_guard<std::mutex> lock(mutex);
+    const UINT bb = BlockBytes(a.format);
     if (bb) {
-        uint64_t px = uint64_t(w) * h;
-        uint64_t g = IsDxt(format) ? px * bb / 16 : px * bb;
-        uint64_t hpx = px >> (2 * a.skip);
+        const uint64_t px = uint64_t(a.width) * a.height;
+        const uint64_t g = IsDxt(a.format) ? px * bb / 16 : px * bb;
+        const uint64_t hpx = px >> (2 * a.skip);
         guest_bytes += g;
         host_bytes += a.decode ? hpx * (a.decode_format == D3DFMT_A1R5G5B5 ? 2 : 4) : g >> (2 * a.skip);
     }
@@ -479,11 +487,10 @@ TexAdapt PlanTexture(UINT w, UINT h, UINT levels, DWORD usage, D3DFORMAT format)
     reduced += a.skip != 0;
     decoded += a.decode;
     if ((count & 1023) == 0) {
-        Log("textures: %llu created, %llu reduced, %llu decoded; top levels %llu MiB -> %llu MiB",
+        Log("textures: %llu created, %llu reduced, %llu decoded; cumulative top levels %llu MiB -> %llu MiB (not resident)",
             (unsigned long long)count, (unsigned long long)reduced, (unsigned long long)decoded,
             (unsigned long long)(guest_bytes >> 20), (unsigned long long)(host_bytes >> 20));
     }
-    return a;
 }
 
 // ---- locks of adapted textures ----
@@ -1010,9 +1017,12 @@ M(IDirect3DDevice9, CreateTexture) {
         w >> a.skip, h >> a.skip, levels ? levels - a.skip : 0, usage, a.decode ? a.decode_format : format,
         D3DPOOL(Arg(c, 6)), &tex, nullptr);
     if (timing) RecordTextureTiming(g_create_timing, std::chrono::steady_clock::now() - create_start);
-    if (SUCCEEDED(hr) && (a.skip || a.decode)) {
-        std::lock_guard<std::recursive_mutex> lock(g_mutex);
-        g_adapt[tex] = a;
+    if (SUCCEEDED(hr)) {
+        RecordTextureCreated(a);
+        if (a.skip || a.decode) {
+            std::lock_guard<std::recursive_mutex> lock(g_mutex);
+            g_adapt[tex] = a;
+        }
     }
     W32(Arg(c, 7), SUCCEEDED(hr) ? Wrap(tex) : 0);
     Return(c, uint32_t(hr), 9);
@@ -1030,9 +1040,12 @@ M(IDirect3DDevice9, CreateCubeTexture) {
         edge >> a.skip, levels ? levels - a.skip : 0, usage, a.decode ? a.decode_format : format, D3DPOOL(Arg(c, 5)),
         &tex, nullptr);
     if (timing) RecordTextureTiming(g_create_timing, std::chrono::steady_clock::now() - create_start);
-    if (SUCCEEDED(hr) && (a.skip || a.decode)) {
-        std::lock_guard<std::recursive_mutex> lock(g_mutex);
-        g_adapt[tex] = a;
+    if (SUCCEEDED(hr)) {
+        RecordTextureCreated(a);
+        if (a.skip || a.decode) {
+            std::lock_guard<std::recursive_mutex> lock(g_mutex);
+            g_adapt[tex] = a;
+        }
     }
     W32(Arg(c, 6), SUCCEEDED(hr) ? Wrap(tex) : 0);
     Return(c, uint32_t(hr), 8);
