@@ -46,6 +46,14 @@ for proj in SDL2 FAudio dxvk; do
     done
 done
 
+# The Qualcomm 90,808-byte allocation reports are addressed by this exact upstream backport. Do not allow a local or CI
+# dependency rebuild to continue with the order-dependent DXVK 2.5.3 memory mask accidentally left unpatched.
+grep -F 'm_memTypesByPropertyFlags[i] = sysmemMask ? sysmemMask : vidmemMask;' \
+    "$SRC/dxvk/src/dxvk/dxvk_memory.cpp" >/dev/null || {
+    echo "DXVK unified-memory type-selection fix is missing" >&2
+    exit 1
+}
+
 CMAKE_ANDROID=(-G Ninja -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" -DANDROID_ABI="$ABI"
                -DANDROID_PLATFORM=android-$API -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX"
                -DCMAKE_PREFIX_PATH="$PREFIX" -DCMAKE_FIND_ROOT_PATH="$PREFIX")

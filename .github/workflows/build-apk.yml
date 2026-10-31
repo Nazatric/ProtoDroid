@@ -103,6 +103,14 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/gpu_profile_test
 
+      - name: Compile and run driver recovery marker tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/driver_recovery_test.cpp -o /tmp/driver_recovery_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/driver_recovery_test
+
       - name: Test DXVK memory selection and state-cache behavior
         run: |
           set -euo pipefail

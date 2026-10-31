@@ -75,7 +75,7 @@ The launcher’s **Settings** page and the in-game gear menu share the same pref
 
 Open **Drivers** on the launcher or beside **Done** in Settings for the dedicated driver center. It explains each mode, shows a scrollable/filterable library, and supports explicit **Select** and two-tap **Remove** actions. Download pinned standard Turnip, Samsung One UI Turnip, Gen8 Turnip, or experimental PanVK-kbase packages from their identified GitHub releases, or import an AdrenoTools/.adpkg ZIP or raw `.so`. Downloads show progress and exact SHA-256 verification; installing one never silently changes Auto into Custom. Packages are private to ProtoDroid, validated as Android/Bionic ARM64, staged before replacement, and tested in a separate process on the next Play. Custom loading requires Android 10 or newer.
 
-PanVK-kbase is loaded through its direct Vulkan ICD entry point, with the same probe and mapped-library checks in the probe and game. It supports only specific Mali generations and the retail `mali_kbase` interface—not every Mali GPU, kernel, or game. ProtoDroid selects its exact BC path rather than optional lossy texture modes. A failed probe uses System; a startup crash is guarded on the next launch. A probe or CI build cannot prove every later frame or device, including the separate S24 Ultra black-screen report. Return to **Auto** or **System** and include the native/DXVK logs in a report.
+PanVK-kbase is loaded through its direct Vulkan ICD entry point, with the same probe and mapped-library checks in the probe and game. It supports only specific Mali generations and the retail `mali_kbase` interface—not every Mali GPU, kernel, or game. ProtoDroid selects its exact BC path rather than optional lossy texture modes. A failed probe uses System. Auto also records a selected driver's startup crash or clean D3D9 initialization failure so the next launch can try System; explicit Turnip/Custom choices remain explicit. A probe or CI build cannot prove every later frame or device. Return to **Auto** or **System** and include the native/DXVK logs in a report.
 
 Use **LAYOUT** to drag controls into place, resize them, or reset the layout.
 
@@ -139,7 +139,7 @@ Depending on storage access, logs are available in:
 | `proto-native.prev.log` | Previous native run. |
 | `app_process64_d3d9.log` | DXVK and Vulkan messages. |
 | `prototypeenginef.dll.dxvk-cache` | Persistent pipeline state cache. |
-| `turnip_failed` | Crash-guard marker for an unconfirmed custom/bundled driver startup; explicit selection retries it. |
+| `turnip_failed` | Crash/initialization-failure marker for an unconfirmed custom/bundled driver startup; explicit selection retries it. |
 
 For stall investigations, enable:
 

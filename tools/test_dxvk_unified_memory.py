@@ -76,19 +76,23 @@ void SetTypes(Allocator& allocator, std::initializer_list<VkMemoryPropertyFlags>
 }
 
 int main() {
-    // Exact type flags from the Adreno 740 / Qualcomm 0.676.1 failure report.
-    Allocator adreno;
-    SetTypes(adreno, {0x1, 0x1, 0x1, 0xb, 0x7, 0x7, 0xf, 0x21, 0x11});
     const uint32_t hostCoherent = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    const uint32_t selected = adreno.m_memTypesByPropertyFlags[hostCoherent];
-    Check(selected == 0x70, "all compatible device-local types must remain candidates");
-    // The failing transfer-source buffer accepted types 0 and 6 (mask 0x41). DXVK 2.5.3 selected only type 4,
-    // producing an empty intersection and a false out-of-memory error. The fixed selection retains type 6.
-    Check((selected & 0x41) == 0x40, "reported Adreno transfer buffer has no usable memory type");
     const uint32_t hostCachedCoherent = hostCoherent | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-    Check(adreno.m_memTypesByPropertyFlags[hostCachedCoherent] == 0x40,
-          "cached coherent fallback changed");
+    // Exact memory-type flags shared by the 0.9 Adreno 740 report and the newer Adreno 710 (#18) and
+    // Adreno 750 (#17) reports. Each stopped on the same 90,808-byte transfer-source allocation.
+    for (const char* report : {"Adreno 740 / 0.676.1", "Adreno 710 / 0.800.58", "Adreno 750 / 0.762.1"}) {
+        Allocator adreno;
+        SetTypes(adreno, {0x1, 0x1, 0x1, 0xb, 0x7, 0x7, 0xf, 0x21, 0x11});
+        const uint32_t selected = adreno.m_memTypesByPropertyFlags[hostCoherent];
+        Check(selected == 0x70, "all compatible device-local types must remain candidates");
+        // The failing buffer accepted types 0 and 6 (mask 0x41). DXVK 2.5.3 selected only type 4, producing an empty
+        // intersection and a false out-of-memory error. The fixed selection retains type 6.
+        Check((selected & 0x41) == 0x40, "reported Adreno transfer buffer has no usable memory type");
+        Check(adreno.m_memTypesByPropertyFlags[hostCachedCoherent] == 0x40,
+              "cached coherent fallback changed");
+        std::printf("validated Qualcomm unified-memory report: %s\n", report);
+    }
 
     // Preserve the other half of upstream's contract: when real system memory exists, prefer it over host-visible
     // device-local memory for requests that do not explicitly require DEVICE_LOCAL.

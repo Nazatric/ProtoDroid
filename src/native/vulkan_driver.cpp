@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "turnip_load.h"
+#include "driver_recovery.h"
 
 // libadrenotools is built for API 29, where libc exports android_get_device_api_level; libmain targets API 26,
 // whose headers only have an inline version, so the Makefile points the symbol here (--defsym).
@@ -223,40 +224,46 @@ std::string GpuModel() {
 constexpr const char* kFailed = "turnip_failed";
 constexpr const char* kBuild = __DATE__ " " __TIME__;  // a failure recorded by another build is retried
 bool g_turnip_pending = false;
+bool g_auto_recovery_pending = false;
 
 // The recorded reason if Turnip failed with this build, "" otherwise.
 std::string FailedBefore() {
-    FILE* f = fopen(kFailed, "r");
-    if (!f) return "";
-    char build[64] = {}, reason[256] = {};
-    fgets(build, sizeof(build), f);
-    fgets(reason, sizeof(reason), f);
-    fclose(f);
-    build[strcspn(build, "\n")] = 0;
-    reason[strcspn(reason, "\n")] = 0;
-    if (strcmp(build, kBuild) != 0) return "";
-    return reason[0] ? reason : "unknown";
+    return ReadDriverFailureMarker(kFailed, kBuild);
 }
 
 }  // namespace
 
-void VulkanDriverAbandon() { g_turnip_pending = false; }
+void VulkanDriverAbandon() {
+    g_turnip_pending = false;
+    g_auto_recovery_pending = false;
+}
 
 void VulkanDriverConfirm() {
     if (!g_turnip_pending) return;
     g_turnip_pending = false;
+    g_auto_recovery_pending = false;
     Log("vulkan: custom/bundled driver startup ok");
+}
+
+// A graceful DXVK initialization failure is just as much a failed driver attempt as a native crash. Record it before
+// StartupFailure abandons the active attempt; only Auto promises a system-driver retry on the next launch.
+bool VulkanDriverStartupFailed(const char* reason) {
+    if (!g_turnip_pending) return false;
+    const bool automatic = g_auto_recovery_pending;
+    if (!WriteDriverFailureMarker(kFailed, kBuild, reason)) {
+        Log("vulkan: could not record the selected driver's initialization failure");
+        return false;
+    }
+    Log("vulkan: recorded selected-driver initialization failure: %s", reason);
+    if (automatic) Log("vulkan: Auto will try the system driver on the next launch");
+    return automatic;
 }
 
 // From the crash handler: only open/write/close.
 void VulkanDriverCrashed() {
     if (!g_turnip_pending) return;
-    int fd = open(kFailed, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return;
-    static const char reason[] = "\nthe game crashed during startup on a custom/bundled Vulkan driver (see proto-native.prev.log)\n";
-    (void)!write(fd, kBuild, strlen(kBuild));
-    (void)!write(fd, reason, sizeof(reason) - 1);
-    close(fd);
+    WriteDriverFailureMarker(kFailed, kBuild,
+                             "the game crashed during startup on a custom/bundled Vulkan driver (see proto-native.prev.log)");
 }
 
 void SelectVulkanDriver() {
@@ -386,6 +393,7 @@ void SelectVulkanDriver() {
     snprintf(hex, sizeof(hex), "%llx", (unsigned long long)reinterpret_cast<uintptr_t>(gipa));
     setenv("DXVK_VK_GIPA", hex, 1);
     Log("vulkan: using %s", device.c_str());
+    g_auto_recovery_pending = mode == "auto";
     g_turnip_pending = true;
 }
 
@@ -398,6 +406,7 @@ namespace native {
 void SelectVulkanDriver() {}
 void VulkanDriverConfirm() {}
 void VulkanDriverAbandon() {}
+bool VulkanDriverStartupFailed(const char*) { return false; }
 void VulkanDriverCrashed() {}
 
 }  // namespace native

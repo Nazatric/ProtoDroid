@@ -36,6 +36,7 @@ namespace native {
 
 SDL_Window* g_sdl_window = nullptr;
 uint32_t HostWindow();
+bool VulkanDriverStartupFailed(const char* reason);  // vulkan_driver.cpp
 void ClientSize(int* w, int* h);     // user32.cpp
 void SetClientSize(int w, int h);
 
@@ -766,12 +767,15 @@ M(IDirect3D9, CreateDevice) {
         double(MonotonicNanos() - create_device_start_ns) / 1e6);
     // The engine does not check: without a device it crashes on the next call. The DXVK log says why it failed.
     if (FAILED(hr)) {
-        if (!adapters) {
-            StartupFailure("DXVK found no compatible Vulkan GPU with the selected driver. "
-                           "See app_process64_d3d9.log for the missing driver or features.");
-        }
-        StartupFailure("The graphics driver could not create the D3D9 device (DXVK on Vulkan). "
-                       "See app_process64_d3d9.log for the reason.");
+        const bool autoRecovery = VulkanDriverStartupFailed(
+                adapters ? "D3D9 CreateDevice failed" : "DXVK found no compatible Vulkan GPU");
+        std::string message = adapters
+                ? "The graphics driver could not create the D3D9 device (DXVK on Vulkan). "
+                  "See app_process64_d3d9.log for the reason."
+                : "DXVK found no compatible Vulkan GPU with the selected driver. "
+                  "See app_process64_d3d9.log for the missing driver or features.";
+        if (autoRecovery) message += " Auto will try System on the next launch.";
+        StartupFailure(message.c_str());
     }
     if (OverrideModes()) SetClientSize(int(pp.BackBufferWidth), int(pp.BackBufferHeight));
     ToGuest(pp, Arg(c, 5));
