@@ -90,6 +90,7 @@ final class DriverView extends View implements DriverManager.Observer {
     private final OverScroller scroller;
     private final RectF[] actionBounds = new RectF[MAX_ACTION];
     private final ArrayList<Integer> usedActions = new ArrayList<>();
+    private final Map<String, StaticLayout> paragraphCache = new HashMap<>();
     private final Set<String> catalogInstalledIds = new HashSet<>();
     private final ArrayList<DriverRepository.Entry> installed = new ArrayList<>();
     private final ArrayList<DriverRepository.Entry> visibleInstalled = new ArrayList<>();
