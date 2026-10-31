@@ -39,6 +39,10 @@
 #include "state_cache.h"
 #include "win.h"
 
+#ifndef PROTODROID_SOURCE_REVISION
+#define PROTODROID_SOURCE_REVISION "unknown"
+#endif
+
 namespace native {
 
 const char* g_game_dir = nullptr;
@@ -510,12 +514,14 @@ int main(int argc, char** argv) {
     if (!g_log) g_log = fopen("proto-native.log", "w");
     InstallCrashHandler();
     Log("protodroid build %s %s", __DATE__, __TIME__);
+    Log("protodroid source %s", PROTODROID_SOURCE_REVISION);
 #ifdef __ANDROID__
     if (!g_mirror_dir.empty()) {
         Log("logs mirrored to %s", g_mirror_dir.c_str());
         if (g_log_mirror) {
             // Ensure mirror has header too
             fprintf(g_log_mirror, "protodroid build %s %s\n", __DATE__, __TIME__);
+            fprintf(g_log_mirror, "protodroid source %s\n", PROTODROID_SOURCE_REVISION);
             fflush(g_log_mirror);
         }
         // Also set DXVK log path to mirror for immediate visibility, but keep state cache in base
@@ -533,7 +539,7 @@ int main(int argc, char** argv) {
 #endif
     // Lightweight diagnostics add timestamps and aggregate pipeline timing only. The durable per-pipeline shader
     // trace remains strictly opt-in and is never needed for an ordinary performance run.
-    const bool detailed_diagnostics = SettingInt("detailed_diagnostics", 1) != 0;
+    const bool detailed_diagnostics = SettingInt("detailed_diagnostics", kDetailedDiagnosticsDefault) != 0;
     if (detailed_diagnostics) setenv("DXVK_LOG_TIMESTAMPS", "1", 0);
     setenv("PROTODROID_PIPELINE_TIMING", SettingInt("pipeline_timing", detailed_diagnostics ? 1 : 0) ? "1" : "0", 0);
     if (SettingInt("pipeline_trace", 0) == 1) {
@@ -743,7 +749,8 @@ int main(int argc, char** argv) {
         }
         if ((frame & (frame - 1)) == 0) Log("frame %llu", (unsigned long long)frame);
         bool quit = false;
-        const int64_t pump_start_ns = MonotonicNanos();
+        const bool timing = DetailedDiagnosticsEnabled();
+        const int64_t pump_start_ns = timing ? MonotonicNanos() : 0;
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT || e.type == SDL_APP_TERMINATING) {
@@ -766,13 +773,15 @@ int main(int argc, char** argv) {
                 ForwardInput(e);
             }
         }
-        const int64_t service_start_ns = MonotonicNanos();
+        const int64_t service_start_ns = timing ? MonotonicNanos() : 0;
         bool keep = (GuestCall(service, {quit ? 1u : 0u, focused ? 0u : 1u}) & 0xff) != 0;
-        const int64_t service_end_ns = MonotonicNanos();
+        const int64_t service_end_ns = timing ? MonotonicNanos() : 0;
         GuestCall(focus, {focused ? 1u : 0u});
-        const int64_t focus_end_ns = MonotonicNanos();
-        RecordEngineLoop(service_end_ns, service_end_ns - service_start_ns, service_start_ns - pump_start_ns, limiter_ns,
-                         focus_end_ns - service_end_ns);
+        if (timing) {
+            const int64_t focus_end_ns = MonotonicNanos();
+            RecordEngineLoop(service_end_ns, service_end_ns - service_start_ns, service_start_ns - pump_start_ns,
+                             limiter_ns, focus_end_ns - service_end_ns);
+        }
         if (!keep) break;
     }
     const int64_t terminate_start_ns = MonotonicNanos();

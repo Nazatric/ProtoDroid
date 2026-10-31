@@ -600,8 +600,12 @@ void RunDiagnosticsWorker() noexcept {
 
 }  // namespace
 
+bool DetailedDiagnosticsEnabled() {
+    return g_active.load(std::memory_order_relaxed) && g_detailed.load(std::memory_order_relaxed);
+}
+
 void RecordEngineLoop(int64_t at_ns, int64_t service_ns, int64_t event_pump_ns, int64_t limiter_ns, int64_t focus_ns) {
-    if (!g_active.load(std::memory_order_relaxed) || !g_detailed.load(std::memory_order_relaxed)) return;
+    if (!DetailedDiagnosticsEnabled()) return;
     thread_local const int tid = int(gettid());
     std::lock_guard<std::mutex> lock(g_engine_mutex);
     g_service_timing.Add(at_ns, service_ns, tid);
@@ -613,7 +617,7 @@ void RecordEngineLoop(int64_t at_ns, int64_t service_ns, int64_t event_pump_ns, 
 void DiagnosticsStart() {
     std::lock_guard<std::mutex> lock(g_lifecycle_mutex);
     if (g_thread.joinable() || g_active.load()) return;
-    const bool detailed = SettingInt("detailed_diagnostics", 1) != 0;
+    const bool detailed = SettingInt("detailed_diagnostics", kDetailedDiagnosticsDefault) != 0;
     g_detailed.store(detailed, std::memory_order_release);
     SetPresentDetailedEnabled(detailed);
     g_interval_seconds = detailed ? std::clamp(SettingInt("detailed_diagnostics_interval", 5), 1, 60) : 0;

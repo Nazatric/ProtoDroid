@@ -94,14 +94,15 @@ Frequently used keys include:
 | `vulkan_driver` | `auto`, `system`, or `turnip`. |
 | `present_stats` | Enables DXVK presentation diagnostics. |
 | `audio_stats` | `1` logs real output underruns (default), `2` logs every timing window, `0` disables audio diagnostics. |
-| `detailed_diagnostics` | Enables timestamped five-second native/device diagnostics by default; `0` disables metrics but retains log mirroring. |
+| `detailed_diagnostics` | `1` enables timestamped native/device diagnostics; default `0` avoids their timing/sample overhead. Shared log mirroring continues either way. |
 | `detailed_diagnostics_interval` | Diagnostic window in seconds, clamped to 1–60. Default: `5`. |
 | `pipeline_timing` | Lightweight DXVK pipeline-call timing; defaults to the detailed-diagnostics setting. |
 | `pipeline_trace` | Enables expensive Mali pipeline tracing and shader dumps for debugging only. |
 | `dxvk_config` | Additional DXVK options; separate entries with commas in this file. |
-| `watchdog`, `import_profile` | Hang and import profiling diagnostics. |
+| `import_profile` | `1` profiles per-thread guest and Win32/D3D9 wall time every ten seconds for stall investigation. |
+| `watchdog` | Hang diagnostics. |
 
-Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds retain the optional presentation-mode settings. An explicitly selected FPS cap continues to use the host limiter, while unlimited mode leaves presentation pacing to FIFO. Periodic diagnostics report Present-to-Present timing separately from Present() wall time so vsync waits are not mistaken for measured CPU work.
+Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds retain the optional presentation-mode settings. An explicitly selected FPS cap continues to use the host limiter, while unlimited mode leaves presentation pacing to FIFO. With detailed diagnostics enabled, periodic reports separate Present-to-Present timing from Present() wall time so vsync waits are not mistaken for measured CPU work. Each native startup log also records the exact source revision supplied by CI.
 
 ## Launcher and In-Game Settings
 

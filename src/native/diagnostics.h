@@ -4,7 +4,10 @@
 
 namespace native {
 
-// Detailed, read-only diagnostics. A worker performs proc/file reads and log I/O; hot paths only record timings.
+// Detailed, read-only diagnostics are opt-in. A worker performs proc/file reads and log I/O; when enabled, hot
+// paths record bounded timing samples. Ordinary Present/FPS tracking and shared log mirroring remain independent.
+constexpr int kDetailedDiagnosticsDefault = 0;
+bool DetailedDiagnosticsEnabled();
 void DiagnosticsStart();
 void DiagnosticsStop();
 

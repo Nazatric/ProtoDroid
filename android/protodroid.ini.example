@@ -34,11 +34,16 @@ texture_skip_min_size = 512
 # DXVK extra config: d3d9.presentInterval, d3d9.numBackBuffers etc. Comma as separator (semicolon in DXVK).
 #dxvk_config = d3d9.presentInterval = 1
 
-# Timestamped five-second frame/system diagnostics are enabled by default. The interval accepts 1-60 seconds.
+# Timestamped frame/system diagnostics are opt-in so normal gameplay does not pay their timing/sample overhead.
+# Set detailed_diagnostics = 1 for five-second native/device metrics; the interval accepts 1-60 seconds.
 # Lightweight pipeline-call timing follows detailed_diagnostics unless pipeline_timing is set independently.
+# Shared log mirroring and ordinary FPS tracking remain active when detailed diagnostics are off.
 #detailed_diagnostics = 1
 #detailed_diagnostics_interval = 5
 #pipeline_timing = 1
+
+# Per-thread guest/Win32/D3D9 wall-time profiling for stall investigation. This is opt-in and not an FPS benchmark mode.
+#import_profile = 1
 
 # Low-level Mali pipeline diagnostics. Disabled by default because every traced pipeline performs
 # SPIR-V analysis plus durable file/fsync writes. Enables pipeline_trace.log and last_vs/last_fs.spv.

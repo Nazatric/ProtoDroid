@@ -133,7 +133,7 @@ printf 'versionName=%s\nversionCode=%s\n' "$VERSION_NAME" "$VERSION_CODE" > "$OU
 if [ -f "$ROOT/build/native-build.txt" ]; then
     cp "$ROOT/build/native-build.txt" "$OUT/native-build.txt"
 else
-    printf 'nativeBuild=unknown\n' > "$OUT/native-build.txt"
+    printf 'nativeBuild=unknown\nsourceRevision=unknown\n' > "$OUT/native-build.txt"
 fi
 echo "=== Final APK ==="
 ls -lh "$OUT/prototype.apk"
