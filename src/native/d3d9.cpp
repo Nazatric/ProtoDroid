@@ -29,6 +29,7 @@
 #include "win.h"
 #include "d3d9_dxt.h"
 #include "d3d9_state.h"
+#include "diagnostics.h"
 #include "present_stats.h"
 
 namespace native {
@@ -85,6 +86,7 @@ void RecordPresentTiming(int64_t at_ns, int64_t duration_ns) {
 
 template <typename Upload>
 HRESULT TimedTextureUpload(Upload upload) {
+    if (!DetailedDiagnosticsEnabled()) return upload();
     const auto start = std::chrono::steady_clock::now();
     HRESULT hr = upload();
     RecordTextureTiming(g_upload_timing, std::chrono::steady_clock::now() - start);
@@ -463,13 +465,21 @@ TexAdapt PlanTexture(UINT w, UINT h, UINT levels, DWORD usage, D3DFORMAT format)
     }
     a.decode = plain && g_decode_dxt && IsDxt(format);
     if (a.decode && g_decode_16bit && format == D3DFMT_DXT1) a.decode_format = D3DFMT_A1R5G5B5;
-    // Statistics: GPU memory of the top level as the guest asked for it and as created.
+    return a;
+}
+
+// Record only successful host creations. These are cumulative top-level estimates for workload analysis, not a
+// live/resident GPU-memory measurement: released textures are not subtracted and the remaining mip levels are not
+// included. Keep that distinction explicit because a growing creation total is not evidence of a texture leak.
+void RecordTextureCreated(const TexAdapt& a) {
+    static std::mutex mutex;
     static uint64_t count = 0, reduced = 0, decoded = 0, guest_bytes = 0, host_bytes = 0;
-    UINT bb = BlockBytes(format);
+    std::lock_guard<std::mutex> lock(mutex);
+    const UINT bb = BlockBytes(a.format);
     if (bb) {
-        uint64_t px = uint64_t(w) * h;
-        uint64_t g = IsDxt(format) ? px * bb / 16 : px * bb;
-        uint64_t hpx = px >> (2 * a.skip);
+        const uint64_t px = uint64_t(a.width) * a.height;
+        const uint64_t g = IsDxt(a.format) ? px * bb / 16 : px * bb;
+        const uint64_t hpx = px >> (2 * a.skip);
         guest_bytes += g;
         host_bytes += a.decode ? hpx * (a.decode_format == D3DFMT_A1R5G5B5 ? 2 : 4) : g >> (2 * a.skip);
     }
@@ -477,11 +487,10 @@ TexAdapt PlanTexture(UINT w, UINT h, UINT levels, DWORD usage, D3DFORMAT format)
     reduced += a.skip != 0;
     decoded += a.decode;
     if ((count & 1023) == 0) {
-        Log("textures: %llu created, %llu reduced, %llu decoded; top levels %llu MiB -> %llu MiB",
+        Log("textures: %llu created, %llu reduced, %llu decoded; cumulative top levels %llu MiB -> %llu MiB (not resident)",
             (unsigned long long)count, (unsigned long long)reduced, (unsigned long long)decoded,
             (unsigned long long)(guest_bytes >> 20), (unsigned long long)(host_bytes >> 20));
     }
-    return a;
 }
 
 // ---- locks of adapted textures ----
@@ -545,10 +554,11 @@ bool AdaptedUnlock(void* tex, uint32_t sub, bool* host_locked) {
     *host_locked = l.host != nullptr;
     if (l.host) {
         if (l.write_back) {
-            const auto start = std::chrono::steady_clock::now();
+            const bool timing = DetailedDiagnosticsEnabled();
+            const auto start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
             DecodeDxt(l.format, Ptr<uint8_t>(l.guest), l.pitch, l.width, l.height, l.host, l.host_pitch,
                       l.decode_format);
-            RecordTextureTiming(g_decode_timing, std::chrono::steady_clock::now() - start);
+            if (timing) RecordTextureTiming(g_decode_timing, std::chrono::steady_clock::now() - start);
         }
         l.host = nullptr;
     }
@@ -867,10 +877,13 @@ HRESULT GuardedPresent(F present) {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return D3D_OK;
     }
-    const int64_t present_start_ns = MonotonicNanos();
+    const bool timing = DetailedDiagnosticsEnabled();
+    const int64_t present_start_ns = timing ? MonotonicNanos() : 0;
     HRESULT hr = present();
-    const int64_t present_end_ns = MonotonicNanos();
-    RecordPresentTiming(present_end_ns, present_end_ns - present_start_ns);
+    if (timing) {
+        const int64_t present_end_ns = MonotonicNanos();
+        RecordPresentTiming(present_end_ns, present_end_ns - present_start_ns);
+    }
     if (SUCCEEDED(hr)) {
         // Both IDirect3DDevice9 and IDirect3DSwapChain9 presents converge here. A real Present contributes one
         // complete end-to-end interval; empty guest pump iterations and skipped surface-less presents do not.
@@ -998,14 +1011,18 @@ M(IDirect3DDevice9, CreateTexture) {
     D3DFORMAT format = D3DFORMAT(Arg(c, 5));
     TexAdapt a = PlanTexture(w, h, levels, usage, format);
     IDirect3DTexture9* tex = nullptr;
-    const auto create_start = std::chrono::steady_clock::now();
+    const bool timing = DetailedDiagnosticsEnabled();
+    const auto create_start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->CreateTexture(
         w >> a.skip, h >> a.skip, levels ? levels - a.skip : 0, usage, a.decode ? a.decode_format : format,
         D3DPOOL(Arg(c, 6)), &tex, nullptr);
-    RecordTextureTiming(g_create_timing, std::chrono::steady_clock::now() - create_start);
-    if (SUCCEEDED(hr) && (a.skip || a.decode)) {
-        std::lock_guard<std::recursive_mutex> lock(g_mutex);
-        g_adapt[tex] = a;
+    if (timing) RecordTextureTiming(g_create_timing, std::chrono::steady_clock::now() - create_start);
+    if (SUCCEEDED(hr)) {
+        RecordTextureCreated(a);
+        if (a.skip || a.decode) {
+            std::lock_guard<std::recursive_mutex> lock(g_mutex);
+            g_adapt[tex] = a;
+        }
     }
     W32(Arg(c, 7), SUCCEEDED(hr) ? Wrap(tex) : 0);
     Return(c, uint32_t(hr), 9);
@@ -1017,14 +1034,18 @@ M(IDirect3DDevice9, CreateCubeTexture) {
     D3DFORMAT format = D3DFORMAT(Arg(c, 4));
     TexAdapt a = PlanTexture(edge, edge, levels, usage, format);
     IDirect3DCubeTexture9* tex = nullptr;
-    const auto create_start = std::chrono::steady_clock::now();
+    const bool timing = DetailedDiagnosticsEnabled();
+    const auto create_start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->CreateCubeTexture(
         edge >> a.skip, levels ? levels - a.skip : 0, usage, a.decode ? a.decode_format : format, D3DPOOL(Arg(c, 5)),
         &tex, nullptr);
-    RecordTextureTiming(g_create_timing, std::chrono::steady_clock::now() - create_start);
-    if (SUCCEEDED(hr) && (a.skip || a.decode)) {
-        std::lock_guard<std::recursive_mutex> lock(g_mutex);
-        g_adapt[tex] = a;
+    if (timing) RecordTextureTiming(g_create_timing, std::chrono::steady_clock::now() - create_start);
+    if (SUCCEEDED(hr)) {
+        RecordTextureCreated(a);
+        if (a.skip || a.decode) {
+            std::lock_guard<std::recursive_mutex> lock(g_mutex);
+            g_adapt[tex] = a;
+        }
     }
     W32(Arg(c, 6), SUCCEEDED(hr) ? Wrap(tex) : 0);
     Return(c, uint32_t(hr), 8);

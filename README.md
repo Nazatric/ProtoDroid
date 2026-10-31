@@ -1,151 +1,167 @@
-# ProtoDroid
+<div align="center">
+  <img src="android/icon-512.png" width="104" alt="ProtoDroid icon">
+  <h1>[ PROTODROID ]</h1>
+  <p><strong>Prototype (2009), running natively on Android.</strong></p>
+  <p>The original engine rebuilt for ARM64. No Wine. No full x86 emulator.</p>
+  <p>
+    <a href="https://github.com/Nazatric/ProtoDroid/releases/latest">Download</a> ·
+    <a href="#get-playing">Get playing</a> ·
+    <a href="#-screens-">Screenshots</a> ·
+    <a href="#configuration">Settings</a> ·
+    <a href="#building">Build</a>
+  </p>
+</div>
 
-ProtoDroid is a native Android port of **Prototype (2009)**. It runs the original game engine as ARM64 code rather than using Wine or a full x86 emulator. The APK contains the port and its open-source dependencies; you must provide your own legally obtained game files.
+> **Bring your own game.** You need a legally obtained PC copy of **Prototype (2009)**. The APK contains the port, not the game data. The Android application ID is **`com.protodroid`**.
 
-The Android application ID is **`com.protodroid`**.
+## Get playing
 
-## Architecture
+### What you need
 
-- **Static ARM64 recompilation:** `prototypeenginef.dll` is translated from 32-bit x86 into C, generated for the engine's rebased address, and compiled for Android. The runtime provides guest memory, x86-like memory ordering, threads, fibers, and the required Microsoft CRT behavior.
-- **Custom Win32 and input bridge:** native implementations cover the Win32, DirectInput 8, XAudio2 2.3, Bink 1.9, and launcher interfaces used by the game.
-- **Direct3D 9 on Vulkan:** a generated D3D9 bridge forwards drawing directly to DXVK. Android patches address Mali and Adreno driver behavior, descriptor compatibility, pipeline compilation, presentation, and persistent shader caching.
-- **Bink through FFmpeg:** loose files and RCF-resident movies are decoded by a minimal FFmpeg build. Registered YUV planes are copied directly into the textures supplied by the game.
-- **XAudio2 through FAudio:** FAudio provides the audio engine and voice processing, with SDL audio output and an Android-friendly pacing/mixing configuration.
-- **SDL2 and Android UI:** SDL owns the window and platform events. A native Android touch layer provides menu controls, gameplay controls, gamepad support, a layout editor, and performance settings.
+- An **ARM64 Android device** with working Vulkan support. Android 10 or newer is recommended.
+- **Prototype (2009)** on PC: Steam app **10150**, build **19788432**.
+- Enough storage for the game files, shader cache, and logs.
 
-## Current Features and Optimization Work
+### Install and play
 
-### Graphics and performance
+1. Install `prototype.apk` and open **Prototype**.
+2. Copy your PC game files to one of these folders:
+   - **Recommended:** `/storage/emulated/0/Prototype/`
+   - **Also supported:** `/storage/emulated/0/Prototype/game/`
+   - **App-specific:** `/storage/emulated/0/Android/data/com.protodroid/files/game/`
+3. Make sure the folder contains `prototypeenginef.dll` and the original archives and game folders. Grant file access if you use shared storage.
+4. Return to the launcher and tap **Check Again** if needed. When your game is detected, tap **Play**.
 
-- Direct DXVK draw dispatch without minimap relocation, draw inspection, or manual per-draw wrappers.
-- Read-only locks never copy back or dirty DXVK resources. Ranged vertex/index buffer locks upload only the requested range.
-- Optimized DXT1/DXT3/DXT5 decoding, including ARM64 NEON paths and randomized differential tests against the scalar decoder.
-- Texture mip reduction, optional 16-bit DXT1 output, effective 1x sampler handling, and configurable anisotropy.
-- Stable FIFO presentation on Android. `CreateDevice` and every `Reset` use interval `1`, preventing post-cutscene presentation-mode changes.
-- Persistent DXVK state caching with a stable filename, migration from the former `app_process64` filename, flushed headers/entries, and writer-queue draining during shutdown.
-- Mali-specific descriptor and pipeline workarounds, including support for GPUs without BC texture compression or robust null descriptors.
-- Turnip support for Adreno through libadrenotools, with system-driver fallback and an optional user-supplied driver.
-- ADPF performance hints, unrestricted CPU scheduling, hot-function ARM64 replacements, I/O timing, and optional frame/audio diagnostics.
+On Android 11 or above, copy to the app-specific `Android/data` folder from a PC over USB. On Android 10 or below, a file manager with storage access also works. You do not need to keep two copies of the game.
 
-### Movies and audio
+## [ SCREENS ]
 
-- Full-screen Bink playback, including NIS cutscenes and ambient menu movies.
-- Neutral black initialization for unused movie planes without clearing valid decoded frames during close or re-registration.
-- Direct host `pread64` streaming for loose files and RCF slices, without holding a global mutex during disk reads.
-- Bounded decode work, retained presentation frames, contiguous plane copies, negative-pitch support, and correct Bink ABI behavior.
-- **Unlock menu FPS**, enabled by default: silent/ambient movies keep their normal video timing while `BinkWait` uses the guest's non-blocking poll branch instead of sleeping the menu render thread.
-- Retained-master audio output to avoid unnecessary output-thread recreation, plus source-voice and engine-shutdown cleanup.
+<p align="center"><strong>[ 01 // SETUP ] File Access</strong></p>
+<img src=".github/assets/readme/01-setup-file-access.webp" width="100%" alt="Prototype setup screen requesting file access">
 
-### Controls
+<p align="center"><strong>[ 02 // LAUNCHER ] Ready to Play</strong></p>
+<img src=".github/assets/readme/02-launcher-ready.webp" width="100%" alt="Prototype launcher with game data detected">
 
-- MENU-mode absolute mouse clicks, plus separate GAME-mode camera look, virtual joystick, action buttons, and power wheels.
-- Configurable button opacity, size, positions, vibration, camera speed, invert Y, edge sprint, and optional extra buttons for disguise powers, Web of Intrigue, disguise, and Alex form.
-- Gamepad detection and an option to hide touch controls while a gamepad is connected.
+<p align="center"><strong>[ 03 // GAMEPLAY ] Touch Controls</strong></p>
+<img src=".github/assets/readme/03-gameplay-controls.webp" width="100%" alt="Prototype gameplay with touch controls">
 
-## Requirements
+<p align="center"><strong>[ 04 // MOVIES ] Bink Playback</strong></p>
+<img src=".github/assets/readme/04-bink-cutscene.webp" width="100%" alt="Prototype Bink cutscene playback">
 
-- An ARM64 Android device with working Vulkan support. Android 10 or newer is recommended.
-- A PC copy of **Prototype (2009)**, Steam app 10150, build 19788432, for the game data and rebuild inputs.
-- Enough free storage for the game files, shader cache, and logs.
+## What’s inside
 
-## Installation
+| Area | What you get |
+| --- | --- |
+| **Graphics** | The original renderer through D3D9 and DXVK, with resolution, texture, anisotropy, AA, shadow, and game-quality settings. Mali and Adreno receive device-specific compatibility handling without a shared visual downgrade. |
+| **Movies and audio** | Full-screen Bink videos, ambient menu movies, RCF-resident files, and XAudio2 through FAudio. **Unlock menu FPS** is on by default. |
+| **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. |
+| **Performance** | ARM64 hot-path replacements, optimized DXT decoding, stable FIFO presentation, ADPF hints, unrestricted CPU scheduling, and persistent DXVK state caching. |
+| **Saves** | Shared profiles and saves that you can back up, replace, or delete with a file manager. Existing saves migrate without being overwritten. |
 
-1. Install the signed `prototype.apk` and launch **Prototype**.
-2. Copy the game files to one of these locations:
-   - **Recommended shared-storage location:** `/storage/emulated/0/Prototype/`
-   - A supported subdirectory: `/storage/emulated/0/Prototype/game/`
-   - App-specific storage: `/storage/emulated/0/Android/data/com.protodroid/files/game/`
-3. The game directory must include `prototypeenginef.dll` and the original archives, folders, and other data from your copy of the game. The APK does not supply those files.
-4. When using shared storage, grant file access on the setup screen. For the app-specific `Android/data` location, copy from a PC over USB on Android 11 or above; on Android 10 or below, a file manager with storage access can be used.
-5. Open the app after copying the files. Once file access is granted, the setup actions become **Settings** and **Play**. The launcher detects game data automatically; press **Play** when you are ready to start it.
+## Launcher and in-game settings
 
-The application ID and app-specific directory are both `com.protodroid`. The shared game directory remains `/storage/emulated/0/Prototype`, so game files do not need to be duplicated.
+The launcher’s **Settings** page and the in-game gear menu share the same preferences. Changes made in the launcher are saved automatically; engine options are applied when you press **Play**. In-game rows marked with `*` take effect after a restart, while the FPS limit changes immediately.
 
-## Saves and Profiles
+- **Graphics:** Resolution, Textures, Anisotropy, FPS limit, Battery saver, and Unlock menu FPS.
+- **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **Game default** leaves the engine’s own device-dependent choice intact.
+- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons.
+- **Interface:** Opacity and Show FPS.
 
-With shared file access granted, profiles and saves such as `profile.bin` and `slot-*.bin` are read and written in `/storage/emulated/0/Prototype/Saves/`. The folder is created automatically. Files added, replaced, or deleted there by a file manager are used by the game.
+**Low, Medium, and High presets** update only the graphics and game-video options. Your FPS and control preferences stay as they are. Choose **Custom** after changing an individual graphics row.
 
-The first run with this folder migrates existing saves from the previous shared `/storage/emulated/0/Prototype/` location and from `/storage/emulated/0/Android/data/com.protodroid/files/native_c/Users/Player/Documents/Prototype/`, without overwriting files already in `Saves`. Current shared saves take priority over retained app-specific backups. Migration runs only once, so later deletion of a save does not restore an old copy. Previous files remain as backups. Without shared access, the legacy app-specific save directory continues to be used.
+Use **LAYOUT** to drag controls into place, resize them, or reset the layout.
+
+## Saves and profiles
+
+With shared file access granted, saves and profiles live in:
+
+```text
+/storage/emulated/0/Prototype/Saves/
+```
+
+The game reads and writes files such as `profile.bin` and `slot-*.bin` there. You can add, replace, back up, or delete them with a file manager.
+
+On the first run, ProtoDroid migrates saves from the old shared `/storage/emulated/0/Prototype/` location and the legacy app-specific folder. It never overwrites files already in `Saves`, and migration runs only once, so deleting a save does not bring an old copy back. Previous files remain as backups. If shared storage is unavailable, the app-specific save folder is still used.
 
 ## Configuration
 
-The optional `protodroid.ini` file can be placed at:
+Most options are available in the UI. For advanced settings, copy [`android/protodroid.ini.example`](android/protodroid.ini.example) to one of these locations:
 
 - `/storage/emulated/0/Prototype/protodroid.ini`
 - `/storage/emulated/0/Prototype/game/protodroid.ini`
 - `/storage/emulated/0/Android/data/com.protodroid/files/protodroid.ini`
-- The detected game directory or its parent directory
+- The detected game folder or its parent folder
 
-Start with [`android/protodroid.ini.example`](android/protodroid.ini.example). Keys use `key = value` syntax. Every key can also be supplied as `PROTODROID_<KEY>` in uppercase; an environment value overrides the file.
+Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase as an environment variable; environment values take priority.
 
-Frequently used keys include:
-
-| Key | Purpose |
+| Key | What it does |
 | --- | --- |
-| `render_height` | Internal render height; Android defaults to 720. Width follows the display aspect ratio. |
+| `render_height` | Internal render height. Android defaults to 720; width follows the display aspect ratio. |
 | `texture_skip_mips` | `0` full textures, `1` half resolution, `2` quarter resolution. |
 | `texture_skip_min_size` | Minimum texture size eligible for mip reduction. |
-| `max_anisotropy` | Texture anisotropy limit: 1, 2, 4, 8, or another supported value. |
-| `fps_limit` | Host frame limit: 0/off, 30, 45, or 60. |
+| `max_anisotropy` | Texture anisotropy: 1, 2, 4, 8, or another supported value. |
+| `fps_limit` | Host frame limit: `0`/off, 30, 45, or 60. |
 | `battery_saver` | Enables the battery-saving frame policy. |
-| `unlock_menu_fps` | `1` enables non-blocking silent/ambient movie polls; `0` restores blocking waits. Default: `1`. |
+| `unlock_menu_fps` | `1` keeps menu movies responsive without blocking waits. Default: `1`. |
 | `audio_driver` | `aaudio` or `openslES`. |
-| `audio_master_reuse` | Reuses the retained mastering output when the game recreates voices. |
+| `audio_master_reuse` | Reuses the retained mastering output when voices are recreated. |
 | `vulkan_driver` | `auto`, `system`, or `turnip`. |
 | `present_stats` | Enables DXVK presentation diagnostics. |
-| `audio_stats` | `1` logs real output underruns (default), `2` logs every timing window, `0` disables audio diagnostics. |
-| `detailed_diagnostics` | Enables timestamped five-second native/device diagnostics by default; `0` disables metrics but retains log mirroring. |
-| `detailed_diagnostics_interval` | Diagnostic window in seconds, clamped to 1–60. Default: `5`. |
-| `pipeline_timing` | Lightweight DXVK pipeline-call timing; defaults to the detailed-diagnostics setting. |
-| `pipeline_trace` | Enables expensive Mali pipeline tracing and shader dumps for debugging only. |
-| `dxvk_config` | Additional DXVK options; separate entries with commas in this file. |
-| `watchdog`, `import_profile` | Hang and import profiling diagnostics. |
+| `audio_stats` | `1` logs real underruns, `2` logs every timing window, `0` disables audio diagnostics. |
+| `detailed_diagnostics` | `1` enables detailed native/device timing. Default: `0`; shared log mirroring still works. |
+| `detailed_diagnostics_interval` | Diagnostic interval from 1–60 seconds. Default: `5`. |
+| `pipeline_timing` | Lightweight DXVK pipeline timing; follows `detailed_diagnostics` unless set separately. |
+| `pipeline_trace` | Expensive Mali pipeline tracing and shader dumps. Debugging only. |
+| `dxvk_config` | Extra DXVK options, separated by commas in this file. |
+| `import_profile` | `1` profiles guest and Win32/D3D9 wall time per thread every ten seconds. |
+| `watchdog` | Enables hang diagnostics. |
 
-Android presentation is intentionally fixed to FIFO/interval `1`; desktop builds retain the optional presentation-mode settings. An explicitly selected FPS cap continues to use the host limiter, while unlimited mode leaves presentation pacing to FIFO. Periodic diagnostics report Present-to-Present timing separately from Present() wall time so vsync waits are not mistaken for measured CPU work.
+Android presentation is fixed to **FIFO, interval 1** for both device creation and reset. An explicit FPS cap uses the host limiter; unlimited mode leaves pacing to FIFO. Desktop builds retain the optional presentation-mode settings.
 
-## Launcher and In-Game Settings
+## Logs and shader cache
 
-The launcher's **Settings** page and the in-game gear overlay share the same saved options. Launcher changes are saved automatically and engine options apply when **Play** starts the game. In the in-game overlay, settings marked with `*` apply after restart; the FPS limit applies immediately.
-
-The launcher groups options into **Graphics**, **Game Video**, **Controls**, and **Interface**. It also provides **Low**, **Medium**, and **High** graphics presets. They change Resolution, Textures, Anisotropy, Anti-Alias Level, Shadow Detail, and Graphic Quality together, leaving FPS, battery, menu-FPS, and control preferences untouched. Choose **Custom** or adjust any preset-covered row to keep an individual combination.
-
-- **Graphics:** Resolution, Textures, Anisotropy, FPS limit, Battery saver, and Unlock menu FPS (default **On**).
-- **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. These use the game's own GameDB settings and render paths. **Game default** preserves the engine's device-dependent choice; explicit levels apply on the next Play or restart.
-- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons (default **Off**).
-- **Interface:** Opacity and Show FPS.
-
-The **LAYOUT** button opens the control-layout editor. Drag controls to reposition them, select a control to resize it, or reset the layout.
-
-## Logs and Shader Cache
-
-Depending on storage access, logs are available in the app-specific directory and mirrored to shared storage:
+Depending on storage access, logs are available in:
 
 - `/storage/emulated/0/Android/data/com.protodroid/files/`
 - `/storage/emulated/0/Prototype/logs/`
 
-Important files:
+| File | Purpose |
+| --- | --- |
+| `proto-native.log` | Current native and engine run, including the exact CI source revision. |
+| `proto-native.prev.log` | Previous native run. |
+| `app_process64_d3d9.log` | DXVK and Vulkan messages. |
+| `prototypeenginef.dll.dxvk-cache` | Persistent pipeline state cache. |
+| `turnip_failed` | Present only after a Turnip initialization failure. |
 
-- `proto-native.log`: current native/engine run
-- `proto-native.prev.log`: previous run
-- `app_process64_d3d9.log`: DXVK and Vulkan diagnostics
-- `prototypeenginef.dll.dxvk-cache`: persistent pipeline state cache
-- `turnip_failed`: present only after a Turnip initialization failure
+For stall investigations, enable:
 
-Detailed diagnostics timestamp native and DXVK events with monotonic seconds and thread IDs. Five-second windows include Present and engine timing percentiles, fixed long-frame thresholds and worst events, texture and file I/O, process/per-thread CPU, memory, ADPF, and Android thermal/headroom data where supported. Slow file events above 50 ms retain their path and thread. Present() wall time is not labeled as GPU time, and threshold counts are not claimed to be physical display-drop counts. The lightweight pipeline log does not dump shaders or enable the expensive `pipeline_trace` path.
+```ini
+detailed_diagnostics = 1
+import_profile = 1
+```
 
-No state-cache seed is bundled. If the app-private cache is missing or header-only, startup can restore a populated `prototypeenginef.dll.dxvk-cache` (or legacy `app_process64.dxvk-cache`) from the app-specific directory or the shared locations above. Existing populated or invalid private caches are not overwritten by recovery; DXVK performs the final entry validation and reports the actual count read. DXVK queues cached pipelines for early compilation as their game shaders become available; variants that have never been encountered cannot be known or preloaded in advance.
+Detailed reports include frame and engine timing, worst events, texture and file I/O, CPU threads, memory, ADPF, and thermal information where Android provides it. Use profiling to find a problem—not as an FPS benchmark. Leave these options off for ordinary play.
 
-Populated private caches are mirrored periodically to shared storage with atomic replacement, using a single-flight helper thread rather than blocking the engine thread. Shutdown retains a synchronous final copy. An interrupted backup does not truncate the previous copy. The live DXVK writer stays in app-private storage; the mirror is a recovery backup, not a power-loss-durability guarantee.
+No cache seed is bundled. Startup can recover a populated cache from the shared or app-specific backup locations without replacing a valid private cache. DXVK validates the entries and compiles cached pipeline states as the corresponding game shaders become available; it cannot know variants that have never been encountered.
 
-The 30-second native performance report includes presented-frame statistics plus interval texture timing: DXT decode, host texture creation, and host upload calls with call count, total milliseconds, and worst-call milliseconds. These measurements help distinguish CPU conversion, allocation, and upload/sync stalls; they do not claim that any one counter is the sole cause of a frame spike.
+Backups are copied periodically without blocking the engine thread, with a synchronous final copy during shutdown. Atomic replacement keeps an interrupted backup from truncating the previous one. The live writer stays in app-private storage; the shared copy is a recovery backup, not a power-loss-durability guarantee.
 
-For bug reports, include the complete logs, phone model, SoC/GPU, Android version, APK commit, and exact steps that reproduce the issue. Also use `adb logcat -s protodroid` when logcat access is available.
+For bug reports, include both logs, your phone model, SoC/GPU, Android version, APK commit, and exact reproduction steps. If you have ADB access, also include `adb logcat -s protodroid`.
+
+## Under the hood
+
+- **Static ARM64 recompilation:** `prototypeenginef.dll` is translated from 32-bit x86 into C and compiled for Android. The runtime supplies guest memory, x86-like memory ordering, threads, fibers, and the Microsoft CRT behavior the engine expects.
+- **A native Win32 and input bridge:** ProtoDroid implements the Win32, DirectInput 8, XAudio2 2.3, Bink 1.9, and launcher interfaces used by the game rather than shipping Wine.
+- **D3D9 on Vulkan:** a generated bridge forwards drawing to DXVK. Android patches cover Mali and Adreno behavior, descriptor compatibility, pipeline compilation, presentation, and persistent caching.
+- **Bink through FFmpeg:** a minimal FFmpeg build decodes loose and RCF-resident movies. Decoded YUV planes are copied directly into the textures supplied by the game.
+- **XAudio2 through FAudio:** FAudio handles voice processing and mixing, with SDL audio output and Android-friendly pacing.
+- **SDL2 and Android UI:** SDL owns the window and platform events. A native Android layer provides the launcher, touch controls, gamepad support, layout editor, and settings.
 
 ## Building
 
-A Linux build environment needs the Android SDK/NDK, JDK, SDK build-tools, CMake, Ninja, Meson, Python 3, `capstone`, and `pefile`. Turnip additionally requires the tools listed in `android/build-turnip.sh`.
+You need a Linux environment with the Android SDK/NDK, JDK, SDK build-tools, CMake, Ninja, Meson, Python 3, `capstone`, and `pefile`. Turnip also needs the tools listed in `android/build-turnip.sh`.
 
-Set `PROTODROID_ENGINE` to the original `prototypeenginef.dll` when it is not in the default location. The engine must be generated for base `0x7c000000`, matching `src/native/guest.h`.
+Set `PROTODROID_ENGINE` to your original `prototypeenginef.dll` when it is not in the default location. The engine must be generated for base `0x7c000000`, matching `src/native/guest.h`.
 
 ```sh
 # Build SDL2, FAudio, minimal FFmpeg, and patched DXVK.
@@ -153,12 +169,12 @@ android/build-deps.sh arm64-v8a \
   "$HOME/protodroid-data/android-deps-src" \
   "$HOME/protodroid-data/android-deps/arm64-v8a"
 
-# Optional Adreno Turnip build.
+# Optional: build Turnip for Adreno.
 android/build-turnip.sh \
   "$HOME/protodroid-data/android-deps-src" \
   "$HOME/protodroid-data/android-turnip"
 
-# Generate ARM64-bound recompiled engine sources.
+# Generate the ARM64-bound engine sources.
 python3 -I tools/recomp/data_entries.py
 python3 -I tools/recomp/recomp.py \
   --functions all --base 0x7c000000 --split 400 \
@@ -167,7 +183,7 @@ python3 -I tools/recomp/recomp.py \
 # Build the primary ARMv8.2 native library.
 tools/cool_make.sh -C src/native PLATFORM=android ABI=arm64-v8a
 
-# Build the ARMv8.0 compatibility library used on older cores.
+# Build the ARMv8.0 compatibility library for older cores.
 tools/cool_make.sh -C src/native PLATFORM=android ABI=arm64-v8a \
   ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80
 
@@ -175,11 +191,11 @@ tools/cool_make.sh -C src/native PLATFORM=android ABI=arm64-v8a \
 android/build-apk.sh arm64-v8a
 ```
 
-`tools/cool_make.sh` runs a parallel build and pauses when the host temperature reaches its configured limit. Ordinary `make` with the same variables also works.
+`tools/cool_make.sh` runs a parallel build and pauses when the host reaches its configured temperature limit. Ordinary `make` with the same variables works too. Local native builds record the checked-out Git commit when available; CI embeds the exact workflow commit and verifies it before a release.
 
 ## Tests
 
-Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler/lock rules, presentation normalization, state-cache resolution/migration, Android version increments, and Bink input/ABI/planes/audio/pacing.
+Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler and lock rules, presentation normalization, save paths and migration, state-cache behavior, settings, and version increments.
 
 ```sh
 # Graphics helpers and DXT differential tests.
@@ -188,36 +204,37 @@ g++ -std=c++17 -O1 -g -Wall -Wextra -Werror \
   src/native/d3d9_dxt.cpp src/native/tests/graphics_test.cpp \
   -o /tmp/graphics_test
 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 /tmp/graphics_test
-
 ```
 
-The production Bink harness and its minimal FFmpeg setup are automated in `.github/workflows/build-apk.yml`. The additional hot audio/skinning differential tests use `src/native/tests/run_hot_test.sh` and require the original engine binary. CI runs them on native ARM64 with the original DLL fetched read-only from `TestingFiles`; the skinning suite compares 2,000 randomized batches, including larger record counts and both output alignments.
+The production Bink harness and minimal FFmpeg setup run in `.github/workflows/build-apk.yml`. `src/native/tests/run_hot_test.sh` performs the audio and skinning differential tests and requires the original engine binary. CI runs those tests on ARM64, including 2,000 randomized skinning batches with different record counts and output alignments.
 
-## CI/CD
+## CI and releases
 
-- **`build-apk`**: runs host UBSAN tests, builds ARM64 dependencies, generates the real recompiled engine, compiles native libraries, packages and signs the APK, verifies embedded libraries/DXVK and the signed package version, and uploads `prototype-apk` plus diagnostic artifacts. Ordinary pushes, including log-only uploads to `main`, do not publish releases.
-- **`android-deps`**: independently builds the ARM64 and x86_64 dependency sets and the Adreno Turnip package.
+- **`build-apk`** runs host and ARM64 tests, builds dependencies, generates and compiles the real engine, packages and signs the APK, and uploads `prototype-apk` with diagnostic artifacts.
+- **`android-deps`** independently builds the ARM64 and x86_64 dependency sets and the Adreno Turnip package.
 
-`android/AndroidManifest.xml` is the version source of truth. Before each new approved release cycle, run `python3 tools/bump_version.py` once, add the version's notes to `CHANGELOG.md`, and commit both changes. The version tool advances both values together (`0.1`/code `1` → `0.2`/code `2` → `0.3`/code `3`). Packaging verifies those exact values in the signed APK. After an exact-commit green run on `main`, an explicitly approved manual workflow dispatch with **Publish a new versioned GitHub release** enabled creates `protodroid-v<version>` using the matching changelog section. The release job refuses reused or out-of-order visible versions and `versionCode` values instead of replacing an existing release.
+Ordinary pushes do not publish releases. A release requires an exact-commit green run on `main` and an explicitly approved release dispatch. The workflow rejects dummy or prebuilt native fallbacks, mismatched source revisions, reused versions, and out-of-order `versionCode` values.
 
-A release candidate should have an exact-commit green workflow, real native compilation rather than a dummy/prebuilt fallback, successful `apksigner verify`, and a verified `prototype.apk` artifact. Compilation and host tests do not replace on-device gameplay and visual testing. A version bump does not by itself resolve signature conflicts or every Android installation error.
+`android/AndroidManifest.xml` is the version source of truth. Before an approved release cycle, run `python3 tools/bump_version.py` once and commit it with the matching `CHANGELOG.md` entry. The tool advances the visible version and integer `versionCode` together.
+
+A green CI run is not a substitute for playing on a real device. Graphics, movies, controls, saves, and update behavior still need on-device validation.
 
 ### Signing and in-place updates
 
-Local packaging uses the Android debug keystore by default. Set `KEYSTORE`, `KEYSTORE_PASS`, `KEY_ALIAS`, and optionally `KEY_PASS` to use another key. `KEY_PASS` defaults to the store password (normally required for PKCS#12); JKS also supports a distinct key password. Ordinary branch/PR CI artifacts use a disposable identity and are not release-eligible; protected release secrets are read only for an explicitly approved release dispatch on `main`.
+Local packaging uses the Android debug keystore by default. Set `KEYSTORE`, `KEYSTORE_PASS`, `KEY_ALIAS`, and optionally `KEY_PASS` to use another identity. `KEY_PASS` defaults to the store password; JKS also supports a separate key password.
 
-Protected releases require these repository Actions secrets:
+Protected releases use these repository Actions secrets:
 
-- `PROTODROID_ANDROID_KEYSTORE_BASE64`: the keystore encoded with `base64 -w 0` (Linux) or `base64` without line wrapping (macOS).
+- `PROTODROID_ANDROID_KEYSTORE_BASE64`
 - `PROTODROID_ANDROID_KEYSTORE_PASSWORD`
 - `PROTODROID_ANDROID_KEY_ALIAS`
 - `PROTODROID_ANDROID_KEY_PASSWORD`
 
-Keep an offline backup of the original keystore and passwords; never commit them. The release workflow refuses a missing/incomplete protected signing configuration, records the certificate SHA-256 digest, and rejects dummy or prebuilt native inputs. Ephemeral signing is rejected by default and requires a separate explicit release-dispatch override. Once protected signing is configured, subsequent releases keep the same identity and can update each other in place.
+Encode the keystore with `base64 -w 0` on Linux or `base64` without line wrapping on macOS. Keep an offline backup of the original keystore and passwords, and never commit them. Once protected signing is configured, later releases keep the same identity and can update in place.
 
-Version 0.7 and earlier CI artifacts were signed with per-run keys whose private keys are not available. A newly signed APK cannot directly update a differently signed installation: Android requires a one-time uninstall first. Shared saves under `/storage/emulated/0/Prototype` are separate from the app and remain there; back up any important app-specific data before uninstalling.
+Branch and PR artifacts use disposable CI identities and are not release-eligible. Ephemeral releases are rejected unless explicitly approved. Some existing builds, including 0.8 and older CI artifacts, use certificates whose private keys are unavailable. Android cannot install a differently signed build over them; a one-time uninstall is required. Shared saves under `/storage/emulated/0/Prototype` remain separate from the app, but back up any important app-specific data first.
 
-## Credits and Legal
+## Credits and legal
 
 Original Android port and recompilation research by **[VinTeRuS](https://github.com/VinTeRuS)**. ProtoDroid continues with contributions from the community.
 

@@ -301,6 +301,8 @@ jobs:
   build-apk:
     runs-on: ubuntu-24.04
     needs: [build-deps, bink-tests, arm64-graphics-tests]
+    env:
+      SOURCE_REVISION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -594,7 +596,13 @@ jobs:
           cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
           ls -lh build/symbols/
           du -sh build/symbols/
-          printf 'nativeBuild=compiled\n' > build/native-build.txt
+          for LIB in build/android/arm64-v8a/libmain.so build/android/arm64-v8a-v80/libmain.so; do
+            if ! grep -a -q "$SOURCE_REVISION" "$LIB"; then
+              echo "ERROR: $LIB does not contain the exact source revision $SOURCE_REVISION"
+              exit 1
+            fi
+          done
+          printf 'nativeBuild=compiled\nsourceRevision=%s\n' "$SOURCE_REVISION" > build/native-build.txt
 
       - name: Upload make logs
         if: always()
@@ -669,7 +677,7 @@ jobs:
           # Now rebuild libmain.so with patched DXVK? Actually we will still need to rebuild libdxvk_d3d9.so with patch
           # But we already have deps built with patched DXVK (via build-deps)
           echo "Using prebuilt libmain.so, but deps are rebuilt with Mali fix"
-          printf 'nativeBuild=prebuilt\n' > build/native-build.txt
+          printf 'nativeBuild=prebuilt\nsourceRevision=unknown\n' > build/native-build.txt
 
       - name: DXVK symbolization diagnostics
         run: |
@@ -888,6 +896,10 @@ jobs:
           fi
           if [ "$nativeBuild" != "compiled" ]; then
             echo "::error::Release APK does not contain native code compiled from this exact commit"
+            exit 1
+          fi
+          if [ "${sourceRevision:-}" != "$GITHUB_SHA" ]; then
+            echo "::error::Release APK source revision ${sourceRevision:-missing} does not match $GITHUB_SHA"
             exit 1
           fi
           if ! printf '%s' "$certificateSha256" | grep -Eq '^[0-9a-f]{64}$'; then

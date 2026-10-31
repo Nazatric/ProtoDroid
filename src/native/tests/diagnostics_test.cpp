@@ -1,3 +1,4 @@
+#include "diagnostics.h"
 #include "proc_stats.h"
 #include "timing_window.h"
 
@@ -17,6 +18,11 @@ void Check(bool condition, const char* message) {
 }
 
 bool Near(double a, double b, double tolerance = 0.02) { return std::fabs(a - b) <= tolerance; }
+
+void TestDetailedDiagnosticsAreOptIn() {
+    Check(native::kDetailedDiagnosticsDefault == 0,
+          "normal gameplay must not enable detailed timing and sample collection by default");
+}
 
 void TestDistributionThresholdsAndWorstEvents() {
     native::TimingWindow window;
@@ -104,10 +110,11 @@ void TestProcStatParser() {
 }  // namespace
 
 int main() {
+    TestDetailedDiagnosticsAreOptIn();
     TestDistributionThresholdsAndWorstEvents();
     TestWorstEventTiesAndZeroDuration();
     TestCpuBusyAvailability();
     TestProcStatParser();
-    std::puts("diagnostics tests passed (timing windows, CPU availability, worst events, /proc parsing)");
+    std::puts("diagnostics tests passed (opt-in default, timing windows, CPU availability, worst events, /proc parsing)");
     return 0;
 }

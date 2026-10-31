@@ -7,9 +7,13 @@ PLATFORM ?= linux
 # Generated for the rebased engine: recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native (see guest.h)
 RECOMP_DIR ?= ../../build/recomp/native
 DXVK ?= $(HOME)/protodroid-data/deps/dxvk
+# CI supplies SOURCE_REVISION=${{ github.sha }}; local builds identify their checked-out commit when Git is available.
+# Keep this in the native binary as well as the APK metadata so a device log cannot be tied to the wrong source tree.
+SOURCE_REVISION ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unknown)
 # Guest memory: a 4 GiB window at 64 GiB (guest.h kGuestBase), clear of the low 4 GiB that Android's Java heap and
 # Qualcomm's GPU driver use.
-COMMON_FLAGS := -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -fsigned-char -I../recomp
+COMMON_FLAGS := -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -fsigned-char -I../recomp \
+                -DPROTODROID_SOURCE_REVISION=\"$(SOURCE_REVISION)\"
 # Generated code: flat memory turns G() into plain pointers. -O1 on the desktop keeps rebuilds quick; Android gets
 # -O2, matching the upstream port and avoiding the code-size/register-pressure regression of globally optimizing the
 # recompiled engine at -O3. Keep the established TSO ordering flags unchanged.
@@ -98,7 +102,7 @@ $(OUT)/perf_hint.o: perf_hint_session.h
 $(OUT)/main.o $(OUT)/state_cache.o: state_cache.h
 $(OUT)/main.o $(OUT)/path.o $(OUT)/save_path.o: save_path.h
 $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/present_stats.o $(OUT)/diagnostics.o: present_stats.h timing_window.h
-$(OUT)/main.o $(OUT)/diagnostics.o: diagnostics.h
+$(OUT)/main.o $(OUT)/d3d9.o $(OUT)/diagnostics.o: diagnostics.h
 $(OUT)/diagnostics.o: proc_stats.h
 $(OUT)/vulkan_driver.o: gpu_profile.h
 $(OUT)/video_settings.o: video_settings.h
