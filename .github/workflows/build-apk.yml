@@ -24,6 +24,8 @@ on:
         required: true
         default: false
         type: boolean
+  repository_dispatch:
+    types: [publish-apk-release]
 
 jobs:
   bink-tests:
@@ -848,11 +850,15 @@ jobs:
           if-no-files-found: warn
 
   # Ordinary pushes (including log-only uploads to main) never publish. A release requires an explicitly approved
-  # workflow dispatch on main after all host tests and the real ARM64 build have passed for this exact commit.
+  # dispatch on main after all host tests and the real ARM64 build have passed for this exact commit.
   release:
     runs-on: ubuntu-24.04
     needs: build-apk
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
+    if: >
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
+      (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release &&
+      github.event.client_payload.allow_ephemeral_release))
     steps:
       - name: Check out release notes
         uses: actions/checkout@v4
@@ -866,7 +872,7 @@ jobs:
       - name: Verify this is a new sequential release version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ALLOW_EPHEMERAL: ${{ inputs.allow_ephemeral_release }}
+          ALLOW_EPHEMERAL: ${{ inputs.allow_ephemeral_release || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_ephemeral_release) }}
         run: |
           set -euo pipefail
           test -s release-apk/prototype.apk
