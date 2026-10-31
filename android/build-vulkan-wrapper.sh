@@ -104,6 +104,14 @@ printf '%s\n' "$STRINGS" | grep -F 'vkCreateAndroidSurfaceKHR' >/dev/null || {
     echo "wrapper lacks Android surface WSI" >&2
     exit 1
 }
+"$TC/llvm-nm" "$INSTALLED" | grep -E '[[:space:]]wsi_configure_android_image$' >/dev/null || {
+    echo "wrapper lacks the linked Android WSI image implementation" >&2
+    exit 1
+}
+if "$TC/llvm-nm" "$INSTALLED" | grep -E '[[:space:]]wsi_x11_init_wsi$' >/dev/null; then
+    echo "wrapper contains the X11 WSI implementation" >&2
+    exit 1
+fi
 printf '%s\n' "$STRINGS" | grep -F '/system/lib64/libvulkan.so' >/dev/null || {
     echo "wrapper does not contain the Android system-loader path" >&2
     exit 1
@@ -124,7 +132,9 @@ printf '%s\n' "$STRINGS" | grep -F '/storage/emulated/0/Android/data/com.protodr
     echo "wrapper lacks ProtoDroid's app-specific cache fallback" >&2
     exit 1
 }
-for forbidden in vkCreateXcbSurfaceKHR vkCreateXlibSurfaceKHR adrenotools_open_libvulkan /data/data/com.termux /data/data/app.gamenative /sdcard/wrapper; do
+# Vulkan XML generation may retain Xcb/Xlib API names without compiling those WSIs. Reject actual implementation
+# references and dependencies instead; the X11 implementation symbol and DT_NEEDED checks remain independent.
+for forbidden in xcb_connect XOpenDisplay XCloseDisplay adrenotools_open_libvulkan /data/data/com.termux /data/data/app.gamenative /sdcard/wrapper; do
     if printf '%s\n' "$STRINGS" | grep -F "$forbidden" >/dev/null; then
         echo "wrapper contains forbidden Termux/X11/adrenotools marker: $forbidden" >&2
         exit 1

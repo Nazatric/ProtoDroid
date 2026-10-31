@@ -139,9 +139,10 @@ with zipfile.ZipFile(apk) as archive:
 PY
 # The A825 fix is part of the native package, not an optional download. Verify it in the signed APK itself.
 if [[ " ${ABIS[*]} " == *" arm64-v8a "* ]]; then
-python3 - "$OUT/prototype.apk" <<'PY'
+python3 - "$OUT/prototype.apk" "$OUT/pkg/lib/arm64-v8a/libvulkan_wrapper.so" <<'PY'
 import sys
 import zipfile
+from pathlib import Path
 required = (
     "libvulkan_freedreno.so", "libvulkan_freedreno_next.so", "libvulkan_freedreno_gen8.so",
     "libturnipprobe.so", "libvulkan_wrapper.so", "libhook_impl.so", "libmain_hook.so",
@@ -170,13 +171,17 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
 
     wrapper_path = "lib/arm64-v8a/libvulkan_wrapper.so"
     wrapper = apk.read(wrapper_path)
+    if wrapper != Path(sys.argv[2]).read_bytes():
+        raise SystemExit("ERROR: signed Android wrapper differs from the staged verified artifact")
     for marker in (b"vk_icdGetInstanceProcAddr", b"vkCreateAndroidSurfaceKHR", b"/system/lib64/libvulkan.so",
                    b"ProtoDroid DXVK instance request", b"WRAPPER_WORK_DIR",
                    b"/storage/emulated/0/Android/data/com.protodroid/files/vulkan-wrapper-cache"):
         if marker not in wrapper:
             raise SystemExit("ERROR: signed Android wrapper lacks marker " + marker.decode())
-    for forbidden in (b"adrenotools_open_libvulkan", b"vkCreateXcbSurfaceKHR", b"/data/data/com.termux",
-                      b"/data/data/app.gamenative", b"/sdcard/wrapper"):
+    # Generated Vulkan API names are not proof of X11 linkage. The build script checks WSI symbols and DT_NEEDED;
+    # this signed-package check compares exact staged bytes and rejects actual X11/reference and Termux markers.
+    for forbidden in (b"xcb_connect", b"XOpenDisplay", b"XCloseDisplay", b"adrenotools_open_libvulkan",
+                      b"/data/data/com.termux", b"/data/data/app.gamenative", b"/sdcard/wrapper"):
         if forbidden in wrapper:
             raise SystemExit("ERROR: signed Android wrapper contains forbidden marker " + forbidden.decode())
     print("Verified Android-WSI system compatibility wrapper")
