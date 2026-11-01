@@ -683,17 +683,7 @@ jobs:
             echo "::error::MAKE FAILED with $MAKE_EXIT - posting to issue 1"
             # Log artifacts and issue posting may be unavailable to read-only consumers. Keep the actual compiler
             # diagnostics in check annotations as well, rather than exposing only a generic make exit code.
-            python3 - <<'PY'
-            from pathlib import Path
-            lines = Path('/tmp/make.log').read_text(errors='replace').splitlines()
-            markers = ('error:', 'fatal error:', 'undefined reference', 'No such file')
-            selected = [line for line in lines if any(marker in line for marker in markers)]
-            if not selected:
-                selected = lines[-40:]
-            for line in selected[-40:]:
-                message = line[:1800].replace('%', '%25').replace('\r', '%0D')
-                print(f'::error::native build: {message}')
-            PY
+            python3 -c 'from pathlib import Path; lines = Path("/tmp/make.log").read_text(errors="replace").splitlines(); markers = ("error:", "fatal error:", "undefined reference", "No such file"); selected = [line for line in lines if any(marker in line for marker in markers)] or lines[-40:]; print("\n".join("::error::native build: " + line[:1800].replace("%", "%25").replace("\r", "%0D") for line in selected[-40:]))'
             echo "GH_TOKEN len ${#GH_TOKEN}"
             which gh 2>&1 | head || true
             # Post via curl (more reliable than gh in this shell)
