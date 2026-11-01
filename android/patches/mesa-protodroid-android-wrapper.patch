@@ -39,6 +39,34 @@ index b9edca3..156eb61 100644
  else
    # We should prevent libdrm from being available when the target doesn't have it to avoid transitive
    # dependencies (such as vk-runtime) linking to it
+diff --git a/src/vulkan/wrapper/graphicsenv_hook.cpp b/src/vulkan/wrapper/graphicsenv_hook.cpp
+index 776f93b..a194588 100644
+--- a/src/vulkan/wrapper/graphicsenv_hook.cpp
++++ b/src/vulkan/wrapper/graphicsenv_hook.cpp
+@@ -8,7 +8,6 @@
+ #include "wrapper_log.h"
+ 
+ #define LIBNAME "/system/lib64/libgraphicsenv.so"
+-#define WRAPPER_LAYERS_PATH "/data/data/com.winlator.cmod/files/imagefs/usr/lib:/data/data/com.termux/files/usr/lib"
+ 
+ static void *graphicsenv_handle = nullptr;
+ static std::string env_layers_path;
+@@ -54,10 +53,12 @@ bool set_layer_paths() {
+ 
+    if (env_layers_path.empty()) {
+       const char *env = getenv("WRAPPER_LAYER_PATH");
+-      if (env)
++      if (env && *env)
+          env_layers_path = env;
+-      if (env_layers_path.empty())
+-         env_layers_path = WRAPPER_LAYERS_PATH;
++      if (env_layers_path.empty()) {
++         WRAPPER_LOG(error, "WRAPPER_LAYER_PATH is required for explicit layer setup");
++         return false;
++      }
+    }
+ 
+    setLayerPaths(instance, app_namespace, env_layers_path);
 diff --git a/src/vulkan/wrapper/meson.build b/src/vulkan/wrapper/meson.build
 index d1b3b19..465edc6 100644
 --- a/src/vulkan/wrapper/meson.build

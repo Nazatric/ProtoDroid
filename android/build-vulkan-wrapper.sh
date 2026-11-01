@@ -134,7 +134,7 @@ printf '%s\n' "$STRINGS" | grep -F '/storage/emulated/0/Android/data/com.protodr
 }
 # Vulkan XML generation may retain Xcb/Xlib API names without compiling those WSIs. Reject actual implementation
 # references and dependencies instead; the X11 implementation symbol and DT_NEEDED checks remain independent.
-for forbidden in xcb_connect XOpenDisplay XCloseDisplay adrenotools_open_libvulkan /data/data/com.termux /data/data/app.gamenative /sdcard/wrapper; do
+for forbidden in xcb_connect XOpenDisplay XCloseDisplay adrenotools_open_libvulkan /data/data/com.termux /data/data/com.winlator.cmod /data/data/app.gamenative /sdcard/wrapper; do
     if printf '%s\n' "$STRINGS" | grep -F "$forbidden" >/dev/null; then
         echo "wrapper contains forbidden Termux/X11/adrenotools marker: $forbidden" >&2
         exit 1

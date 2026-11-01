@@ -181,7 +181,8 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
     # Generated Vulkan API names are not proof of X11 linkage. The build script checks WSI symbols and DT_NEEDED;
     # this signed-package check compares exact staged bytes and rejects actual X11/reference and Termux markers.
     for forbidden in (b"xcb_connect", b"XOpenDisplay", b"XCloseDisplay", b"adrenotools_open_libvulkan",
-                      b"/data/data/com.termux", b"/data/data/app.gamenative", b"/sdcard/wrapper"):
+                      b"/data/data/com.termux", b"/data/data/com.winlator.cmod",
+                      b"/data/data/app.gamenative", b"/sdcard/wrapper"):
         if forbidden in wrapper:
             raise SystemExit("ERROR: signed Android wrapper contains forbidden marker " + forbidden.decode())
     print("Verified Android-WSI system compatibility wrapper")
