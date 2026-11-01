@@ -42,6 +42,7 @@ final class SetupView extends View {
         void onCheckAgain();
         void onPlay();
         void onDrivers();
+        void onMods();
         void onExit();
         void onUpdate();
         void onUpdateConfirm();
@@ -96,6 +97,7 @@ final class SetupView extends View {
     private static final int ACTION_DRIVERS = 14;
     private static final int ACTION_UPDATE_RELEASES = 15;
     private static final int ACTION_TOUR = 16;
+    private static final int ACTION_MODS = 17;
     private static final int SETTING_ACTION_BASE = 32;
 
     private static final int BUTTON_NORMAL = 0;
@@ -128,7 +130,9 @@ final class SetupView extends View {
     private final RectF settingsDoneBounds = new RectF();
     private final RectF settingsListBounds = new RectF();
     private final RectF driverBounds = new RectF();
+    private final RectF modBounds = new RectF();
     private final RectF headerDriverBounds = new RectF();
+    private final RectF headerModBounds = new RectF();
     private final RectF logoBounds = new RectF();
     private final RectF updateBounds = new RectF();
     private final RectF updateReleasesBounds = new RectF();
@@ -136,7 +140,7 @@ final class SetupView extends View {
     private final RectF updateWarningCancelBounds = new RectF();
     private final RectF[] settingLeftBounds;
     private final RectF[] settingRightBounds;
-    private final float[] buttonFill = new float[16];
+    private final float[] buttonFill = new float[24];
     private final long startedAt = SystemClock.uptimeMillis();
     private final float density;
     private final float fontScale;
@@ -525,8 +529,13 @@ final class SetupView extends View {
 
         exitBounds.set(right - 96f * u, top + 8f * u, right, top + 38f * u);
         headerDriverBounds.setEmpty();
-        if (!settingsOpen && right - left >= 400f * u) {
+        headerModBounds.setEmpty();
+        if (!settingsOpen && right - left >= 520f * u) {
             headerDriverBounds.set(exitBounds.left - 102f * u, top + 8f * u, exitBounds.left - 8f * u, top + 38f * u);
+            headerModBounds.set(headerDriverBounds.left - 88f * u, top + 8f * u,
+                    headerDriverBounds.left - 8f * u, top + 38f * u);
+            drawButton(canvas, ACTION_MODS, headerModBounds, "MODS", BUTTON_GHOST,
+                    true, false, u, now, 13f);
             drawButton(canvas, ACTION_DRIVERS, headerDriverBounds, "DRIVERS", BUTTON_GHOST,
                     true, false, u, now, 13f);
         }
@@ -1210,15 +1219,20 @@ final class SetupView extends View {
 
         float listTop = presetTop + presetRows * presetHeight + (presetRows - 1) * presetGap + 12f * u;
         float doneWidth = Math.min(160f * u, width * 0.30f);
-        float driverWidth = Math.min(150f * u, width * 0.28f);
+        float driverWidth = Math.min(150f * u, width * 0.25f);
+        float modWidth = Math.min(120f * u, width * 0.21f);
         settingsDoneBounds.set(right - doneWidth, bottom - 38f * u, right, bottom);
         driverBounds.set(settingsDoneBounds.left - driverWidth - 8f * u, bottom - 38f * u,
                 settingsDoneBounds.left - 8f * u, bottom);
+        modBounds.set(driverBounds.left - modWidth - 8f * u, bottom - 38f * u,
+                driverBounds.left - 8f * u, bottom);
+        drawButton(canvas, ACTION_MODS, modBounds, "MODS", BUTTON_NORMAL,
+                true, false, u, now, dt);
         drawButton(canvas, ACTION_DRIVERS, driverBounds, "DRIVERS", BUTTON_PRIMARY,
                 true, false, u, now, dt);
         drawButton(canvas, ACTION_SETTINGS_DONE, settingsDoneBounds, "DONE", BUTTON_NORMAL,
                 true, false, u, now, dt);
-        float noteWidth = Math.max(1f, driverBounds.left - left - 12f * u);
+        float noteWidth = Math.max(1f, modBounds.left - left - 12f * u);
         drawLine(canvas, "SAVED AUTOMATICALLY", left, bottom - 36f * u, 14f * u,
                 9.5f, 600, DIM, 1.2f, u, noteWidth);
         drawLine(canvas, "ENGINE OPTIONS APPLY ON PLAY", left, bottom - 19f * u, 14f * u,
@@ -1336,12 +1350,14 @@ final class SetupView extends View {
         if (exitBounds.contains(x, y)) return ACTION_EXIT;
         if (!settingsOpen && logoBounds.contains(x, y)) return ACTION_TOUR;
         if (!settingsOpen && headerDriverBounds.contains(x, y)) return ACTION_DRIVERS;
+        if (!settingsOpen && headerModBounds.contains(x, y)) return ACTION_MODS;
         if (settingsOpen) {
             for (int i = 0; i < presetBounds.length; i++) {
                 if (presetBounds[i].contains(x, y)) return ACTION_PRESET_LOW + i;
             }
             if (settingsDoneBounds.contains(x, y)) return ACTION_SETTINGS_DONE;
             if (driverBounds.contains(x, y)) return ACTION_DRIVERS;
+            if (modBounds.contains(x, y)) return ACTION_MODS;
             if (settingsListBounds.contains(x, y)) {
                 for (int i = 0; i < gameSettings.settings.length; i++) {
                     if (settingLeftBounds[i].contains(x, y)) return SETTING_ACTION_BASE + i * 2;
@@ -1431,6 +1447,10 @@ final class SetupView extends View {
             listener.onDrivers();
             return;
         }
+        if (action == ACTION_MODS) {
+            listener.onMods();
+            return;
+        }
         if (action == ACTION_UPDATE) {
             listener.onUpdate();
             return;
@@ -1490,24 +1510,24 @@ final class SetupView extends View {
             order = new int[] {ACTION_UPDATE_CONFIRM, ACTION_UPDATE_CANCEL};
         } else if (settingsOpen) {
             order = new int[] {ACTION_PRESET_LOW, ACTION_PRESET_MEDIUM, ACTION_PRESET_HIGH,
-                    ACTION_PRESET_CUSTOM, ACTION_DRIVERS, ACTION_SETTINGS_DONE, ACTION_EXIT};
+                    ACTION_PRESET_CUSTOM, ACTION_MODS, ACTION_DRIVERS, ACTION_SETTINGS_DONE, ACTION_EXIT};
         } else if (launcherMode()) {
             if (updateState.status == UpdateManager.State.ERROR) {
                 order = new int[] {ACTION_UPDATE, ACTION_UPDATE_RELEASES, ACTION_SETTINGS, ACTION_PLAY,
-                        ACTION_DRIVERS, ACTION_EXIT};
+                        ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
             } else {
                 order = updateState.visible() && updateState.canPress()
-                        ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_DRIVERS, ACTION_EXIT}
-                        : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_DRIVERS, ACTION_EXIT};
+                        ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
+                        : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
             }
         } else {
             if (updateState.status == UpdateManager.State.ERROR) {
                 order = new int[] {ACTION_UPDATE, ACTION_UPDATE_RELEASES, ACTION_ALLOW, ACTION_CHECK,
-                        ACTION_DRIVERS, ACTION_EXIT};
+                        ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
             } else {
                 order = updateState.visible() && updateState.canPress()
-                        ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_DRIVERS, ACTION_EXIT}
-                        : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_DRIVERS, ACTION_EXIT};
+                        ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
+                        : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
             }
         }
         int index = -1;

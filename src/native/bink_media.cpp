@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "guest.h"
+#include "mod_platform.h"
 #include "win.h"
 
 namespace native::bink {
@@ -535,6 +536,21 @@ std::unique_ptr<Source> OpenFileSource(const char* guest_name, uint32_t open_fla
     // rest of the Windows emulation; RCF lookup below additionally normalizes slashes and case in member names.
     std::string loose = HostPath(guest_name);
     struct stat st {};
+    if (ModFilesHaveOverlays()) {
+        std::string mod_loose = ModFilesResolveReadPath(guest_name, loose);
+        if (mod_loose != loose && stat(mod_loose.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
+            auto source = FinishSource(FileSlice(mod_loose, 0, uint64_t(st.st_size), mod_loose, error), error);
+            if (source) return source;
+        }
+        std::string rz_path = loose + ".rz";
+        std::string rz_guest = std::string(guest_name) + ".rz";
+        std::string mod_rz = ModFilesResolveReadPath(rz_guest.c_str(), rz_path);
+        if (mod_rz != rz_path && stat(mod_rz.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
+            auto source = FinishSource(FileSlice(mod_rz, 0, uint64_t(st.st_size), mod_rz, error), error);
+            if (source) return source;
+        }
+    }
+    // No mod matched (or a replacement could not be decoded): retain the established loose, .rz, then archive order.
     if (stat(loose.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
         auto source = FinishSource(FileSlice(loose, 0, uint64_t(st.st_size), loose, error), error);
         if (source) return source;

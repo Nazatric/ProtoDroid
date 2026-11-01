@@ -135,6 +135,11 @@ extern "C" void RecompUnimplemented(Ctx* ctx, uint32_t va, const char* what) {
     Fatal("trap at %08x (%s), esp=%08x", va, what, ctx->esp);
 }
 
+extern "C" int RecompRemoveTickRateLimit() {
+    static const int enabled = SettingInt("remove_tick_rate_limit", 0);
+    return enabled != 0;
+}
+
 extern "C" void RecompBridgeSave(uint8_t state[32]) { memset(state, 0, 32); }
 extern "C" void RecompBridgeRestore(const uint8_t[32]) {}
 
@@ -223,6 +228,26 @@ uint32_t GuestCallNested(Ctx* outer, uint32_t va, std::initializer_list<uint32_t
     const uint32_t result = GuestCall(va, args, ecx);
     tl_ctx = saved;
     return result;
+}
+
+uint32_t GuestCallArray(Ctx* outer, uint32_t va, const uint32_t* args, size_t count, uint32_t ecx) {
+    RecompFn fn = RecompLookup(va);
+    if (!fn || (count && !args)) return 0;
+    GuestThread* t = CurrentThread();
+    Ctx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    if (outer) ctx.esp = (outer->esp - 256) & ~15u;
+    else ctx.esp = (tl_ctx ? tl_ctx->esp - 256 : t->stack_hi - 64) & ~15u;
+    for (size_t i = count; i > 0; --i) Push32(&ctx, args[i - 1]);
+    Push32(&ctx, 0xfffffff0u);  // return address; never jumped to
+    ctx.fs_base = t->teb;
+    ctx.fpu_cw = 0x027f;
+    ctx.ecx = ecx;
+    Ctx* saved = tl_ctx;
+    tl_ctx = nullptr;
+    fn(&ctx);
+    tl_ctx = saved;
+    return ctx.eax;
 }
 
 }  // namespace native

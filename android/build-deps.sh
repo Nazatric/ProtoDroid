@@ -1,6 +1,7 @@
 #!/bin/bash
 # Builds the third-party native libraries of the Android port for one ABI: SDL2, FAudio, minimal FFmpeg Bink
-# decoding and DXVK (d3d9 only, SDL2 WSI). Same script locally and on GitHub Actions; nothing here depends on game files.
+# decoding, DXVK (d3d9 only, SDL2 WSI), and static Dobby for optional native mod detours. Same script locally and on
+# GitHub Actions; nothing here depends on game files.
 #
 # Usage: android/build-deps.sh <abi: arm64-v8a | x86_64> <source dir> <install prefix>
 # Needs ANDROID_NDK_HOME (or ANDROID_NDK_LATEST_HOME), cmake, ninja, meson, glslang, git, mako, PyYAML and packaging.
@@ -17,6 +18,7 @@ SDL2_TAG=release-2.30.9
 FAUDIO_TAG=25.10
 FFMPEG_TAG=n7.1.1
 DXVK_TAG=v2.5.3
+DOBBY_COMMIT=5dfc8546954ce3b3198132ab13fddb89ee92cdd7
 
 case $ABI in
     arm64-v8a) TRIPLE=aarch64-linux-android; CPU_FAMILY=aarch64; CPU=armv8-a ;;
@@ -27,11 +29,20 @@ esac
 fetch() {  # fetch <dir> <url> <tag>
     [ -d "$SRC/$1" ] || git clone -q --depth 1 --branch "$3" --recurse-submodules --shallow-submodules "$2" "$SRC/$1"
 }
-mkdir -p "$SRC" "$PREFIX"
+mkdir -p "$SRC" "$PREFIX/lib" "$PREFIX/include"
 fetch SDL2 https://github.com/libsdl-org/SDL.git $SDL2_TAG
 fetch FAudio https://github.com/FNA-XNA/FAudio.git $FAUDIO_TAG
 fetch FFmpeg https://github.com/FFmpeg/FFmpeg.git $FFMPEG_TAG
 fetch dxvk https://github.com/doitsujin/dxvk.git $DXVK_TAG
+if [ ! -d "$SRC/Dobby/.git" ]; then
+    mkdir -p "$SRC/Dobby"
+    git -C "$SRC/Dobby" init -q
+    git -C "$SRC/Dobby" remote add origin https://github.com/jmpews/Dobby.git
+fi
+git -C "$SRC/Dobby" cat-file -e "$DOBBY_COMMIT^{commit}" 2>/dev/null || \
+    git -C "$SRC/Dobby" fetch -q --depth 1 origin "$DOBBY_COMMIT"
+git -C "$SRC/Dobby" checkout -q --detach "$DOBBY_COMMIT"
+test "$(git -C "$SRC/Dobby" rev-parse HEAD)" = "$DOBBY_COMMIT"
 
 # Android patches (android/patches/<project>-*.patch), applied once.
 # git -C changes the working directory, so patch paths must be absolute.
@@ -57,6 +68,18 @@ grep -F 'm_memTypesByPropertyFlags[i] = sysmemMask ? sysmemMask : vidmemMask;' \
 CMAKE_ANDROID=(-G Ninja -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" -DANDROID_ABI="$ABI"
                -DANDROID_PLATFORM=android-$API -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX"
                -DCMAKE_PREFIX_PATH="$PREFIX" -DCMAKE_FIND_ROOT_PATH="$PREFIX")
+
+# Dobby function detours for optional native mods. Build from the pinned source and package only the static archive;
+# libmain.so supplies log/dl and no libdobby.so is added to the APK. Save all FP registers across a detour.
+rm -rf "$SRC/build/Dobby-$ABI"
+cmake -S "$SRC/Dobby" -B "$SRC/build/Dobby-$ABI" "${CMAKE_ANDROID[@]}" \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DDOBBY_DEBUG=OFF -DDOBBY_BUILD_EXAMPLE=OFF -DDOBBY_BUILD_TEST=OFF \
+    -DFullFloatingPointRegisterPack=ON -DPlugin.SymbolResolver=OFF -DPlugin.ImportTableReplace=OFF \
+    -DPlugin.Android.BionicLinkerUtil=OFF
+cmake --build "$SRC/build/Dobby-$ABI" --target dobby_static -j "$JOBS"
+test -s "$SRC/build/Dobby-$ABI/libdobby.a"
+install -m 644 "$SRC/build/Dobby-$ABI/libdobby.a" "$PREFIX/lib/libdobby.a"
+install -m 644 "$SRC/Dobby/include/dobby.h" "$PREFIX/include/dobby.h"
 
 # SDL2 (also installs SDL2.pc, which DXVK's meson build looks up).
 cmake -S "$SRC/SDL2" -B "$SRC/build/SDL2-$ABI" "${CMAKE_ANDROID[@]}" -DSDL_STATIC=OFF -DSDL_TEST=OFF

@@ -36,6 +36,7 @@
 #include "dxvk_config.h"
 #include "guest.h"
 #include "input.h"
+#include "mod_platform.h"
 #include "present_stats.h"
 #include "timing_window.h"
 #include "save_path.h"
@@ -705,6 +706,17 @@ int main(int argc, char** argv) {
         }
     }
 
+    int vram_report_mb = SettingInt("vram_report_mb", 0);
+    if (vram_report_mb < 0) Log("mods: negative vram_report_mb ignored");
+    if (vram_report_mb > 0) {
+        vram_report_mb = vram_report_mb < 128 ? 128 : vram_report_mb > 16384 ? 16384 : vram_report_mb;
+        std::string merged = getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "";
+        if (!merged.empty()) merged += ";";
+        merged += "d3d9.maxAvailableMemory = " + std::to_string(vram_report_mb);
+        setenv("DXVK_CONFIG", merged.c_str(), 1);
+        Log("mods: DXVK memory report capped at %d MiB (not a physical VRAM measurement)", vram_report_mb);
+    }
+
     // Apply last so stale user configuration cannot undo the official Prototype workaround. DXVK keys its own
     // profile to prototypef.exe, which never matches this native host process (app_process64 on Android).
     setenv("DXVK_CONFIG", PrototypeDxvkConfig(
@@ -744,6 +756,7 @@ int main(int argc, char** argv) {
     if (!loaded) StartupFailure("Cannot load prototypeenginef.dll.");
     g_engine_lo = g_engine.base;
     g_engine_hi = g_engine.base + g_engine.size;
+    ModPlatformInitialize();  // optional packages, detours and plugins: before DllMain/EngineInitialize
 
     uint32_t init = FindExport(g_engine, "EngineInitialize");
     uint32_t service = FindExport(g_engine, "EngineService");
@@ -858,6 +871,7 @@ int main(int argc, char** argv) {
             RecordEngineLoop(service_end_ns, service_end_ns - service_start_ns, service_start_ns - pump_start_ns,
                              limiter_ns, focus_end_ns - service_end_ns);
         }
+        ModPlatformFrame();
         if (!keep) {
             // This is a safe main-loop boundary, unlike a fatal callback from inside the guest. Do not leave tour keys
             // held while EngineTerminate runs or if Android later reuses this process.
@@ -883,6 +897,7 @@ int main(int argc, char** argv) {
     }
 
     // Ordinary Play retains the engine's normal termination path.
+    ModPlatformShutdown();
     const int64_t terminate_start_ns = MonotonicNanos();
     GuestCall(terminate, {});
     Log("EngineTerminate done after %.3f ms", double(MonotonicNanos() - terminate_start_ns) / 1e6);

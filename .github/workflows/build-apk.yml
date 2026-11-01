@@ -46,6 +46,45 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test
 
+      - name: Compile and run keyed texture-mod tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_texture_test.cpp -o /tmp/mod_texture_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_texture_test
+
+      - name: Compile and run native detour-chain tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_hook_test.cpp -o /tmp/mod_hook_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_hook_test
+
+      - name: Compile and run real native plugin-loader tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-plugin-test
+          mkdir -p /tmp/protodroid-plugin-test/native/example /tmp/protodroid-plugin-test/native/custom
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include modding/example/plugin.c \
+            -o /tmp/protodroid-plugin-test/native/example/libexample.so
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin.c \
+            -o /tmp/protodroid-plugin-test/native/custom/libtest.so
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_plugin_test.cpp -ldl -o /tmp/mod_plugin_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_plugin_test
+
+      - name: Compile and run loose-file overlay tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/mod_files.cpp \
+            src/native/tests/mod_files_test.cpp -o /tmp/mod_files_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_files_test
+
       - name: Compile and run shared-save path tests
         id: save
         run: |
@@ -178,6 +217,23 @@ jobs:
             android/tests/com/protodroid/GameFilesTest.java
           java -cp /tmp/protodroid-game-files-test com.protodroid.GameFilesTest
 
+      - name: Compile and run mod package and lifecycle tests
+        run: |
+          set -euo pipefail
+          ANDROID_JAR=$(find "$ANDROID_SDK_ROOT/platforms" -name android.jar | sort -V | tail -n 1)
+          test -s "$ANDROID_JAR"
+          rm -rf /tmp/protodroid-mod-test
+          mkdir -p /tmp/protodroid-mod-test
+          javac --release 11 -cp "$ANDROID_JAR" -d /tmp/protodroid-mod-test \
+            android/java/com/protodroid/ModManifest.java \
+            android/java/com/protodroid/ModManager.java \
+            android/java/com/protodroid/ModsActivity.java \
+            android/tests/com/protodroid/ModPlatformTest.java
+          java -cp "/tmp/protodroid-mod-test:$ANDROID_JAR" com.protodroid.ModPlatformTest
+
+      - name: Test native mod generated-source and default policies
+        run: python3 tools/test_native_mod_platform.py
+
       - name: Test diagnostic-tour launcher cheat code
         run: |
           set -euo pipefail
@@ -243,6 +299,45 @@ jobs:
           g++ $CXXFLAGS src/native/d3d9_dxt.cpp src/native/tests/graphics_test.cpp -o /tmp/graphics_test_arm64
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test_arm64
+
+      - name: Compile and run native ARM64 keyed texture-mod tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_texture_test.cpp -o /tmp/mod_texture_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_texture_test_arm64
+
+      - name: Compile and run native ARM64 detour-chain tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_hook_test.cpp -o /tmp/mod_hook_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_hook_test_arm64
+
+      - name: Compile and run native ARM64 real plugin-loader tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-plugin-test
+          mkdir -p /tmp/protodroid-plugin-test/native/example /tmp/protodroid-plugin-test/native/custom
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include modding/example/plugin.c \
+            -o /tmp/protodroid-plugin-test/native/example/libexample.so
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin.c \
+            -o /tmp/protodroid-plugin-test/native/custom/libtest.so
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_plugin_test.cpp -ldl -o /tmp/mod_plugin_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_plugin_test_arm64
+
+      - name: Compile and run native ARM64 loose-file overlay tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/mod_files.cpp \
+            src/native/tests/mod_files_test.cpp -o /tmp/mod_files_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_files_test_arm64
 
       - name: Compile and run native ARM64 GameDB video-setting tests
         run: |
@@ -575,7 +670,7 @@ jobs:
         id: cache-recomp
         with:
           path: build/recomp/native
-          key: recomp-${{ hashFiles('re/functions.csv', 're/extra_functions.txt', 'tools/recomp/recomp.py', 'tools/recomp/data_entries.py') }}-${{ hashFiles('prototypeenginef.dll') }}
+          key: recomp-${{ hashFiles('re/functions.csv', 're/extra_functions.txt', 'tools/recomp/recomp.py', 'tools/recomp/data_entries.py', 'tools/patch_native_recomp.py') }}-${{ hashFiles('prototypeenginef.dll') }}
 
       - name: List recomp after cache
         run: |
@@ -623,6 +718,10 @@ jobs:
             cat /tmp/recomp.log 2>&1 | tail -n 100 || true
             exit 1
           fi
+
+      - name: Apply optional native feature policies
+        if: env.HAS_DLL == '1'
+        run: python3 tools/patch_native_recomp.py build/recomp/native
 
       - name: Verify generated video-setting hooks
         if: env.HAS_DLL == '1'
@@ -751,6 +850,17 @@ jobs:
             fi
           done
           printf 'nativeBuild=compiled\nsourceRevision=%s\n' "$SOURCE_REVISION" > build/native-build.txt
+
+      - name: Build source ARM64 example plugin
+        if: env.HAS_DLL == '1'
+        run: |
+          set -euo pipefail
+          modding/example/build-package.sh "$PWD/build/mod-example"
+          TOOLS="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "$TOOLS/llvm-readelf" -h build/mod-example/libprotodroid_example.so | grep -E 'Class:|Machine:|Type:'
+          "$TOOLS/llvm-readelf" -h build/mod-example/libprotodroid_example.so | grep -q 'AArch64'
+          "$TOOLS/llvm-nm" -D build/mod-example/libprotodroid_example.so | grep -q 'ProtoDroidPluginInit'
+          unzip -l build/protodroid-example-arm64.zip
 
       - name: Upload make logs
         if: always()
@@ -962,6 +1072,15 @@ jobs:
           grep -F "package: name='com.protodroid' versionCode='$versionCode' versionName='$versionName'" \
             /tmp/protodroid-badging.txt
           echo "Verified signed package: com.protodroid $versionName (versionCode $versionCode)"
+
+      - name: Upload source-built mod example
+        if: success() && env.HAS_DLL == '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: protodroid-mod-example
+          path: build/protodroid-example-arm64.zip
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Upload APK artifact
         # Never upload a dummy, prebuilt, unverified, or wrong-revision APK after a failed build/verification step.

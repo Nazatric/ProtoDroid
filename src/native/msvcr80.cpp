@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "win.h"
+#include "mod_platform.h"
 
 namespace native {
 
@@ -221,6 +222,7 @@ uint32_t OpenGuestFile(const char* name, const char* mode) {
     for (const char* p = mode; *p; ++p)
         if (strchr("rwab+", *p)) m += *p;
     std::string host = HostPath(name);
+    if (m.find_first_of("wa+") == std::string::npos) host = ModFilesResolveReadPath(name, host);
     FILE* f = fopen(host.c_str(), m.c_str());
     if (!f) return 0;
     uint32_t g = HeapAlloc(32);
@@ -604,8 +606,10 @@ C(fputc) {
     Return(c, f ? uint32_t(fputc(int(Arg(c, 0)), f)) : 0xffffffffu);
 }
 C(_stat64) {
+    const char* name = Str(Arg(c, 0));
+    std::string host = ModFilesResolveReadPath(name, HostPath(name));
     struct stat st;
-    if (stat(HostPath(Str(Arg(c, 0))).c_str(), &st) != 0) {
+    if (stat(host.c_str(), &st) != 0) {
         Errno() = 2;
         Return(c, 0xffffffffu);
         return;

@@ -77,6 +77,11 @@ public class SetupActivity extends Activity {
                 }
 
                 @Override
+                public void onMods() {
+                    startActivity(new Intent(SetupActivity.this, ModsActivity.class));
+                }
+
+                @Override
                 public void onExit() {
                     finish();
                 }
