@@ -41,14 +41,14 @@ if [ ! -d "$SRC/Dobby/.git" ]; then
 fi
 git -C "$SRC/Dobby" cat-file -e "$DOBBY_COMMIT^{commit}" 2>/dev/null || \
     git -C "$SRC/Dobby" fetch -q --depth 1 origin "$DOBBY_COMMIT"
-git -C "$SRC/Dobby" checkout -q --detach "$DOBBY_COMMIT"
+git -C "$SRC/Dobby" checkout -q --detach --force "$DOBBY_COMMIT"
 test "$(git -C "$SRC/Dobby" rev-parse HEAD)" = "$DOBBY_COMMIT"
 
 # Android patches (android/patches/<project>-*.patch), applied once.
 # git -C changes the working directory, so patch paths must be absolute.
 # Never silently continue with unpatched upstream source.
 PATCH_DIR=$(realpath "$(dirname "${BASH_SOURCE[0]}")/patches")
-for proj in SDL2 FAudio dxvk; do
+for proj in SDL2 FAudio dxvk Dobby; do
     for p in "$PATCH_DIR/${proj,,}"-*.patch; do
         [ -e "$p" ] || continue
         echo "applying $(basename "$p") to $proj"
@@ -56,6 +56,11 @@ for proj in SDL2 FAudio dxvk; do
         git -C "$SRC/$proj" apply "$p"
     done
 done
+# Fail closed if the pinned Android compatibility patch is absent from a reused source tree.
+grep -Fq ':lo12:cdecl(common_closure_bridge_handler)' "$SRC/Dobby/source/TrampolineBridge/ClosureTrampolineBridge/arm64/closure_bridge_arm64.asm"
+grep -Fq 'void *load_address;' "$SRC/Dobby/source/PlatformUtil/ProcessRuntime.h"
+grep -Fq 'a.start() < b.start()' "$SRC/Dobby/source/Backend/UserMode/PlatformUtil/Linux/ProcessRuntime.cc"
+grep -Fq 'mprotect(page, static_cast<size_t>(page_size)' "$SRC/Dobby/common/os_arch_features.h"
 
 # The Qualcomm 90,808-byte allocation reports are addressed by this exact upstream backport. Do not allow a local or CI
 # dependency rebuild to continue with the order-dependent DXVK 2.5.3 memory mask accidentally left unpatched.
