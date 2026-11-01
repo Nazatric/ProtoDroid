@@ -1,0 +1,148 @@
+[mono=14655.429 tid=26567] protodroid build Nov  1 2026 10:29:45
+[mono=14655.429 tid=26567] protodroid source fa8b6e55079ea29f6be00fa0cf6baea57ee56cf7
+[mono=14655.429 tid=26567] logs mirrored to /storage/emulated/0/Prototype/logs
+protodroid build Nov  1 2026 10:29:45
+protodroid source fa8b6e55079ea29f6be00fa0cf6baea57ee56cf7
+[mono=14655.429 tid=26567] DXVK logs mirrored to /storage/emulated/0/Prototype/logs
+[mono=14655.429 tid=26567] game dir: /storage/emulated/0/Prototype
+[mono=14655.429 tid=26567] data dir: /storage/emulated/0/Android/data/com.protodroid/files
+[mono=14655.436 tid=26567] save dir: /storage/emulated/0/Prototype/Saves
+[mono=14655.436 tid=26567] config: loaded protodroid.ini
+[mono=14655.436 tid=26567] config: fps_limit = 60
+[mono=14655.436 tid=26567] config: texture_skip_mips = 0
+[mono=14655.436 tid=26567] config: max_anisotropy = 8
+[mono=14655.436 tid=26567] config: game_shadow_detail = 2
+[mono=14655.436 tid=26567] config: game_graphic_quality = 2
+[mono=14655.436 tid=26567] config: game_aa_level = 0
+[mono=14655.436 tid=26567] config: render_height = 1080
+[mono=14655.436 tid=26567] config: fov_offset = 20
+[mono=14655.436 tid=26567] config: vulkan_driver = system
+[mono=14655.436 tid=26567] config: vram_report_mb = 1024
+[mono=14655.436 tid=26567] config: dump_textures = 0
+[mono=14655.437 tid=26567] memory: guest window at 1000000000, arena 2000 MiB
+[mono=14655.438 tid=26567] vulkan: requested driver mode system
+[mono=14655.438 tid=26567] vulkan: system vkGetInstanceProcAddr resolved (RTLD_GLOBAL)
+[mono=14655.439 tid=26567] vulkan: system driver sees Adreno (TM) 840 (profile qualcomm-adreno, device Vulkan 1.4.295, requested 1.3, loader 1.4, usable 1.3, driver 8034a01b, driverID 8, vendor 5143 device 44050a31)
+[mono=14655.439 tid=26567] present mode: FIFO (vsync), interval 1 for CreateDevice and Reset
+[mono=14655.439 tid=26567] anisotropy: bridge/DXVK maximum 8x
+[mono=14655.439 tid=26567] mods: DXVK memory report capped at 1024 MiB (not a physical VRAM measurement)
+[mono=14655.439 tid=26567] game profile: Prototype DF formats disabled for dynamic shadows and effects
+[mono=14655.440 tid=26567] render size 2344x1080 (window 2608x1200)
+[mono=14655.440 tid=26567] diagnostics: detailed metrics disabled; shared log mirroring remains active
+[mono=14655.452 tid=26567] loader: rebased to 7c000000 (418563 fixups)
+[mono=14655.452 tid=26567] loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
+[mono=14655.452 tid=26567] timing: LoadImage 11.939 ms (success=1)
+[mono=14655.452 tid=26567] mods: 0 active package(s), root /storage/emulated/0/Prototype/mods
+[mono=14655.452 tid=26567] mods: 0 loose-file overlay source(s)
+[mono=14655.452 tid=26567] mods: texture replacement disabled, 0 key(s), dumping=0
+[mono=14655.455 tid=26567] mods: hooked guest function 7c6dcfe0 (chain depth 1)
+[mono=14655.455 tid=26567] DllMain(PROCESS_ATTACH)
+[mono=14655.456 tid=26567] DllMain returned 1 after 1.663 ms
+[mono=14655.456 tid=26567] engine command line: (empty)
+[mono=14655.456 tid=26567] EngineInitialize
+[mono=14655.456 tid=26567] SetThreadPriority(0) -> nice 0 on tid 26567
+[mono=14655.458 tid=26567] SetThreadPriority(2) -> nice -4 on tid 26573
+[mono=14655.458 tid=26567] process affinity: reporting mask 000000ff (8 low CPUs) to the engine
+[mono=14655.458 tid=26567] SetThreadPriority(0) -> nice 0 on tid 26574
+[mono=14655.458 tid=26567] SetThreadPriority(0) -> nice 0 on tid 26575
+[mono=14655.458 tid=26567] SetThreadPriority(0) -> nice 0 on tid 26576
+[mono=14655.458 tid=26567] SetThreadPriority(0) -> nice 0 on tid 26577
+[mono=14655.458 tid=26567] SetThreadPriority(0) -> nice 0 on tid 26578
+[mono=14655.459 tid=26567] SetThreadPriority(0) -> nice 0 on tid 26579
+[mono=14655.459 tid=26567] SetThreadPriority(0) -> nice 0 on tid 26580
+[mono=14655.459 tid=26567] SetThreadPriority(15) -> nice -10 on tid 26581
+[mono=14655.461 tid=26567] SetThreadPriority(1) -> nice -2 on tid 26582
+[mono=14655.461 tid=26567] SetThreadPriority(1) -> nice -2 on tid 26583
+[mono=14655.461 tid=26567] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+[mono=14655.465 tid=26567] Direct3DCreate9(32) -> 0xb400007b54258030 in 3.803 ms
+[mono=14655.465 tid=26567] GPU BC (DXT) textures: supported, decoding off
+[mono=14655.491 tid=26567] CreateDevice 2344x1080 fmt 22 windowed 1 msaa 0/0 interval 1 swap 1 buffers 1 behavior 00000044 adapters 1 -> 00000000 in 25.684 ms
+[mono=14655.496 tid=26567] textures: skip 0 mip level(s) of textures >= 512, decode DXT off
+[mono=14655.530 tid=26567] SetThreadPriority(0) -> nice 0 on tid 26601
+[mono=14655.537 tid=26567] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+[mono=14655.537 tid=26567] dinput: CreateDevice(Keyboard)
+[mono=14655.537 tid=26567] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+[mono=14655.537 tid=26567] dinput: CreateDevice(Mouse)
+[mono=14655.539 tid=26567] xaudio2: Initialize(flags 0) -> 0
+[mono=14655.549 tid=26567] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) created retained output -> 0 in 10.384 ms
+[mono=14655.549 tid=26567] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+[mono=14655.549 tid=26567] SetThreadPriority(15) -> nice -10 on tid 26606
+[mono=14655.549 tid=26567] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.001 ms
+[mono=14655.549 tid=26567] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+[mono=14655.550 tid=26567] SetThreadPriority(15) -> nice -10 on tid 26607
+[mono=14655.553 tid=26567] SetThreadPriority(15) -> nice -10 on tid 26608
+[mono=14655.564 tid=26567] SetThreadPriority(1) -> nice -2 on tid 26609
+[mono=14655.575 tid=26567] SetThreadPriority(1) -> nice -2 on tid 26610
+[mono=14655.579 tid=26567] video settings: Anti-Alias Level = 0 (GameDB setter returned)
+[mono=14655.579 tid=26567] video settings: Shadow Detail = 2 (GameDB setter returned)
+[mono=14655.579 tid=26567] video settings: Graphic Quality = 2 (GameDB setter returned)
+[mono=14655.609 tid=26567] EngineInitialize returned 1 after 153.090 ms
+[mono=14655.611 tid=26567] perf hint: session (target 16.7 ms, 6 threads)
+[mono=14655.628 tid=26567] frame 0
+[mono=14655.632 tid=26567] Reset 2344x1080 msaa 0/0 interval 1 -> 00000000 in 2.938 ms
+[mono=14655.634 tid=26601] samplers: effective DXVK forwarding maximum 8x
+[mono=14655.645 tid=26567] frame 1
+[mono=14655.655 tid=26567] Reset 2344x1080 msaa 0/0 interval 1 -> 00000000 in 4.162 ms
+[mono=14655.662 tid=26567] frame 2
+[mono=14655.695 tid=26567] frame 4
+[mono=14655.762 tid=26567] frame 8
+[mono=14655.896 tid=26567] frame 16
+[mono=14656.164 tid=26567] frame 32
+[mono=14656.701 tid=26567] frame 64
+[mono=14656.892 tid=26567] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.005 ms
+[mono=14656.892 tid=26567] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+[mono=14656.892 tid=26567] SetThreadPriority(15) -> nice -10 on tid 26613
+[mono=14656.904 tid=26567] Reset 2344x1080 msaa 0/0 interval 1 -> 00000000 in 8.379 ms
+[mono=14657.786 tid=26567] frame 128
+[mono=14659.942 tid=26567] frame 256
+[mono=14660.564 tid=26605] audio: 241 passes, max gap 30.1 ms, guest 12.8 ms (max 1.43), refill requests 238, underruns 1, submits 988
+[mono=14663.315 tid=26601] [bink] SDL movie audio: 48000 Hz, stereo float
+
+[mono=14663.377 tid=26609] [bink] indexed 18044 RCF paths from 11 archives
+
+[mono=14663.377 tid=26609] [bink] RCF input movies/activisionRadicalLogos.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik +841885696 (21244780 bytes)
+
+[mono=14663.378 tid=26609] [bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: 21244780 bytes, AVIO 256 KiB
+
+[mono=14663.379 tid=26609] [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: 1280x720, 427 frames, 4 audio tracks, video threads=1 type=0x0 active=0x0, wait=paced
+
+[mono=14665.142 tid=26567] frame 512
+[mono=14668.625 tid=26609] [bink] RCF input movies/fe_ambientMovie_start.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik +1016276992 (13275304 bytes)
+
+[mono=14668.626 tid=26609] [bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 13275304 bytes, AVIO 256 KiB
+
+[mono=14668.629 tid=26609] [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 1280x720, 612 frames, 0 audio tracks, video threads=1 type=0x0 active=0x0, wait=non-blocking menu
+
+[mono=14670.978 tid=26609] [bink] RCF input movies/fe_ambientMovie_1.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik +958214144 (58061816 bytes)
+
+[mono=14670.979 tid=26609] [bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 58061816 bytes, AVIO 256 KiB
+
+[mono=14670.983 tid=26609] [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 1280x720, 1808 frames, 0 audio tracks, video threads=1 type=0x0 active=0x0, wait=non-blocking menu
+
+[mono=14675.676 tid=26567] frame 1024
+[mono=14677.177 tid=26567] LoadLibraryA(RPCRT4): not provided
+[mono=14680.073 tid=26567] LoadLibraryA(RPCRT4): not provided
+[mono=14681.346 tid=26583] textures: 1024 created, 0 reduced, 0 decoded; cumulative top levels 319 MiB -> 319 MiB (not resident)
+[mono=14688.408 tid=26609] [bink] RCF input movies/NIS_0_1_FMV.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik +4096 (311658208 bytes)
+
+[mono=14688.409 tid=26609] [bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik: 311658208 bytes, AVIO 256 KiB
+
+[mono=14688.423 tid=26609] [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik: 1280x544, 5721 frames, 4 audio tracks, video threads=1 type=0x0 active=0x0, wait=paced
+
+[mono=14694.208 tid=26567] frame 2048
+[mono=14728.813 tid=26567] frame 4096
+[mono=14755.375 tid=26609] [bink] RCF input movies/fe_ambientMovie_1.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik +958214144 (58061816 bytes)
+
+[mono=14755.377 tid=26609] [bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 58061816 bytes, AVIO 256 KiB
+
+[mono=14755.379 tid=26609] [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 1280x720, 1808 frames, 0 audio tracks, video threads=1 type=0x0 active=0x0, wait=non-blocking menu
+
+[mono=14759.754 tid=26567] LoadLibraryA(RPCRT4): not provided
+[mono=14759.893 tid=26583] textures: 2048 created, 0 reduced, 0 decoded; cumulative top levels 351 MiB -> 351 MiB (not resident)
+[mono=14763.446 tid=26567] LoadLibraryA(RPCRT4): not provided
+[mono=14767.753 tid=26609] [bink] RCF input movies/NIS_0_1_FMV.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik +4096 (311658208 bytes)
+
+[mono=14767.755 tid=26609] [bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik: 311658208 bytes, AVIO 256 KiB
+
+[mono=14767.766 tid=26609] [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/nis_0_1_fmv.bik: 1280x544, 5721 frames, 4 audio tracks, video threads=1 type=0x0 active=0x0, wait=paced
+
