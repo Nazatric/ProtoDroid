@@ -1,0 +1,6 @@
+result=failed
+reason=InGameState dispatch was not observed within 120 seconds
+phase=gameplay_wait
+present=4034
+visual_verification=not-performed
+script_completion_is_not_visual_correctness=true

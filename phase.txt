@@ -1,4 +1,5 @@
-phase=gameplay_wait
-status=failed
-reason=InGameState dispatch was not observed within 120 seconds
-present=4856
+phase=complete
+status=complete
+reason=all requested phases reached a recorded tested or skipped outcome
+present=3008
+gameplay_dispatches=4934

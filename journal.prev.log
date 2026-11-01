@@ -1,0 +1,23 @@
+[mono=113017.465 present=0] run status=requested source=ca9e365bc30969963f473f868738e88d5a55955d command_line=Level=manhattanTest NoAutoSave logs=/storage/emulated/0/Prototype/diagnostic-tour/logs saves=/storage/emulated/0/Prototype/diagnostic-tour/saves cache=/storage/emulated/0/Android/data/com.protodroid/files/diagnostic-tour-cache
+[mono=113017.468 present=0] policy normal_play_unchanged=true normal_save_migration=false normal_cache_migration=false visual_verification=not-performed
+[mono=113017.469 present=0] phase=render_shaders_pipelines index=0 status=requested coverage=initial gameplay rendering, shader/pipeline creation, DF shadow profile; actions only
+[mono=113017.469 present=0] phase=camera_orbit index=1 status=requested coverage=camera-relative rendering, lighting angles, culling and input
+[mono=113017.469 present=0] phase=shadow_ground_view index=2 status=requested coverage=dynamic-shadow view toward the ground while stationary; no visual pass claim
+[mono=113017.469 present=0] phase=shadow_motion index=3 status=requested coverage=dynamic shadows and DF-format effects during movement; no visual pass claim
+[mono=113017.469 present=0] phase=movement_directions index=4 status=requested coverage=W/A/S/D movement, animation, collision, camera and character rendering
+[mono=113017.469 present=0] phase=jump_sprint index=5 status=requested coverage=sprint, jumping, animation state, timing and input release
+[mono=113017.469 present=0] phase=combat_primary index=6 status=requested coverage=primary/secondary combat inputs, hit effects, animation and audio
+[mono=113017.469 present=0] phase=powers_and_abilities index=7 status=requested coverage=1/2/3/4/Q/E/F physical inputs; activated power/result remains unverified
+[mono=113017.469 present=0] phase=particles_effects index=8 status=requested coverage=combat/movement particles, effects, shader variants and audio
+[mono=113017.469 present=0] phase=lighting_exposure index=9 status=requested coverage=opposite camera angles for lighting, shadows, culling and exposure
+[mono=113017.469 present=0] phase=assets_streaming index=10 status=requested coverage=sustained sprint/camera asset requests and streaming; distance covered is unverified
+[mono=113017.469 present=0] phase=audio_mix index=11 status=requested coverage=gameplay/combat audio timing, underruns, SDL mixer and worker activity
+[mono=113017.469 present=0] phase=bink_video index=12 status=requested coverage=Bink audio/video playback
+[mono=113017.469 present=0] phase=android_touch_overlay index=13 status=requested coverage=physical Android touch and overlay widgets
+[mono=113017.469 present=0] phase=save_isolation index=14 status=requested coverage=NoAutoSave command, isolated guest save route and durable tour markers
+[mono=113017.469 present=0] phase=memory_thread_stress index=15 status=requested coverage=combined rendering/input work with memory, thread, CPU and timing diagnostics
+[mono=113017.469 present=0] phase=recovery_idle index=16 status=requested coverage=all injected inputs released; post-activity rendering, audio and memory recovery
+[mono=113017.564 present=0] save_isolation status=tested path=/storage/emulated/0/Prototype/diagnostic-tour/saves normal_save_migration=false write_probe=passed game_save_write=not-requested
+[mono=113018.481 present=2] engine status=tested EngineInitialize=returned-success gameplay_wait=InGameState-dispatch
+[mono=113138.490 present=4034] phase=gameplay_wait status=failed reason=InGameState dispatch was not observed within 120 seconds
+[mono=113138.494 present=4034] result=failed reason=InGameState dispatch was not observed within 120 seconds visual_verification=not-performed physical_device_validation=not-performed
