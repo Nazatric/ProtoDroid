@@ -9,10 +9,9 @@
 
 #include "guest.h"
 
-extern SDL_Window* g_sdl_window;  // d3d9.cpp; valid before tour gameplay actions begin
-
 namespace native {
 
+extern SDL_Window* g_sdl_window;  // d3d9.cpp; valid before tour gameplay actions begin
 void ClientSize(int* w, int* h);  // user32.cpp
 
 namespace {
