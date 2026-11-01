@@ -85,6 +85,7 @@ private:
 
 // Process-wide thread-safe adapter used by D3D9 Present, the main-loop logger, and the Android overlay.
 int64_t RecordPresent();  // monotonic clock read and tracker update; returns the ADPF interval, or zero
+uint64_t PresentedFrameCount();  // cumulative successful Presents; unlike Snapshot().frames, never resets each window
 PresentStatsSnapshot GetPresentStats();
 void SetPresentDetailedEnabled(bool enabled);
 bool PresentDetailedEnabled();

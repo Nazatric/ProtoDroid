@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdarg>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <initializer_list>
@@ -62,6 +63,8 @@ void RegisterGuestThread();
 uint32_t GuestCall(uint32_t va, std::initializer_list<uint32_t> args, uint32_t ecx = 0, uint32_t* edx_out = nullptr);
 // Variant for a native hook entered from recompiled code: nests the guest call below the supplied active context.
 uint32_t GuestCallNested(Ctx* outer, uint32_t va, std::initializer_list<uint32_t> args, uint32_t ecx = 0);
+// Dynamic-argument variant used by the versioned native plugin ABI. `outer` is optional for an engine-thread call.
+uint32_t GuestCallArray(Ctx* outer, uint32_t va, const uint32_t* args, size_t count, uint32_t ecx = 0);
 
 // ---- imports (imports.cpp) ----
 // An import handler runs with the guest return address at [esp] and the arguments above it.

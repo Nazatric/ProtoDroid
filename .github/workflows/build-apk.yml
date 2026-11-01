@@ -46,6 +46,53 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test
 
+      - name: Compile and run Prototype Fix policy tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_feature_policy_test.cpp -o /tmp/mod_feature_policy_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_feature_policy_test
+
+      - name: Compile and run keyed texture-mod tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_texture_test.cpp -o /tmp/mod_texture_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_texture_test
+
+      - name: Compile and run native detour-chain tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_hook_test.cpp -o /tmp/mod_hook_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_hook_test
+
+      - name: Compile and run real native plugin-loader tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-plugin-test
+          mkdir -p /tmp/protodroid-plugin-test/native/example /tmp/protodroid-plugin-test/native/custom
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include modding/example/plugin.c \
+            -o /tmp/protodroid-plugin-test/native/example/libexample.so
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin.c \
+            -o /tmp/protodroid-plugin-test/native/custom/libtest.so
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_plugin_test.cpp -ldl -o /tmp/mod_plugin_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_plugin_test
+
+      - name: Compile and run loose-file overlay tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/mod_files.cpp \
+            src/native/tests/mod_files_test.cpp -o /tmp/mod_files_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_files_test
+
       - name: Compile and run shared-save path tests
         id: save
         run: |
@@ -86,6 +133,17 @@ jobs:
           g++ $CXXFLAGS src/native/present_stats.cpp src/native/tests/present_stats_test.cpp -o /tmp/present_stats_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/present_stats_test
+
+      - name: Compile and run diagnostic-tour plan tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostic_tour_plan_test.cpp -o /tmp/diagnostic_tour_plan_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostic_tour_plan_test
+
+      - name: Test diagnostic-tour binary probe and isolated-exit policy
+        run: python3 tools/test_diagnostic_tour_runtime.py
 
       - name: Compile and run detailed diagnostics tests
         run: |
@@ -142,7 +200,7 @@ jobs:
       - name: Test Drivers navigation touch cleanup
         run: python3 tools/test_driver_screen_navigation.py
 
-      - name: Test launcher update metadata
+      - name: Test launcher update metadata and recovery policy
         run: |
           set -euo pipefail
           git clone -q --depth 1 --branch 20240303 https://github.com/stleary/JSON-java.git /tmp/protodroid-json
@@ -151,8 +209,51 @@ jobs:
           javac --release 11 -d /tmp/protodroid-update-test \
             $(find /tmp/protodroid-json/src/main/java/org/json -name '*.java' -print) \
             android/java/com/protodroid/UpdateRelease.java \
-            android/tests/com/protodroid/UpdateReleaseTest.java
+            android/java/com/protodroid/UpdateDownloadPolicy.java \
+            android/tests/com/protodroid/UpdateReleaseTest.java \
+            android/tests/com/protodroid/UpdateDownloadPolicyTest.java
           java -cp /tmp/protodroid-update-test com.protodroid.UpdateReleaseTest
+          java -cp /tmp/protodroid-update-test com.protodroid.UpdateDownloadPolicyTest
+
+      - name: Test required game-file detection
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-game-files-test
+          mkdir -p /tmp/protodroid-game-files-test
+          javac --release 11 -d /tmp/protodroid-game-files-test \
+            android/java/com/protodroid/GameFiles.java \
+            android/tests/com/protodroid/GameFilesTest.java
+          java -cp /tmp/protodroid-game-files-test com.protodroid.GameFilesTest
+
+      - name: Compile and run mod package and lifecycle tests
+        run: |
+          set -euo pipefail
+          ANDROID_JAR=$(find "$ANDROID_SDK_ROOT/platforms" -name android.jar | sort -V | tail -n 1)
+          test -s "$ANDROID_JAR"
+          rm -rf /tmp/protodroid-mod-test
+          mkdir -p /tmp/protodroid-mod-test
+          javac --release 11 -cp "$ANDROID_JAR" -d /tmp/protodroid-mod-test \
+            android/java/com/protodroid/ModManifest.java \
+            android/java/com/protodroid/ModManager.java \
+            android/java/com/protodroid/GameSettings.java \
+            android/java/com/protodroid/LauncherMotion.java \
+            android/java/com/protodroid/ModsView.java \
+            android/java/com/protodroid/ModsActivity.java \
+            android/tests/com/protodroid/ModPlatformTest.java
+          java -cp "/tmp/protodroid-mod-test:$ANDROID_JAR" com.protodroid.ModPlatformTest
+
+      - name: Test native mod generated-source and default policies
+        run: python3 tools/test_native_mod_platform.py
+
+      - name: Test diagnostic-tour launcher cheat code
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-tour-code-test
+          mkdir -p /tmp/protodroid-tour-code-test
+          javac --release 11 -d /tmp/protodroid-tour-code-test \
+            android/java/com/protodroid/DiagnosticTourCode.java \
+            android/tests/com/protodroid/DiagnosticTourCodeTest.java
+          java -cp /tmp/protodroid-tour-code-test com.protodroid.DiagnosticTourCodeTest
 
       - name: Test APK signing configurations
         run: android/test-signing.sh
@@ -210,6 +311,53 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test_arm64
 
+      - name: Compile and run native ARM64 Prototype Fix policy tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_feature_policy_test.cpp -o /tmp/mod_feature_policy_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_feature_policy_test_arm64
+
+      - name: Compile and run native ARM64 keyed texture-mod tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_texture_test.cpp -o /tmp/mod_texture_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_texture_test_arm64
+
+      - name: Compile and run native ARM64 detour-chain tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_hook_test.cpp -o /tmp/mod_hook_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_hook_test_arm64
+
+      - name: Compile and run native ARM64 real plugin-loader tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-plugin-test
+          mkdir -p /tmp/protodroid-plugin-test/native/example /tmp/protodroid-plugin-test/native/custom
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include modding/example/plugin.c \
+            -o /tmp/protodroid-plugin-test/native/example/libexample.so
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin.c \
+            -o /tmp/protodroid-plugin-test/native/custom/libtest.so
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_plugin_test.cpp -ldl -o /tmp/mod_plugin_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_plugin_test_arm64
+
+      - name: Compile and run native ARM64 loose-file overlay tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/mod_files.cpp \
+            src/native/tests/mod_files_test.cpp -o /tmp/mod_files_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_files_test_arm64
+
       - name: Compile and run native ARM64 GameDB video-setting tests
         run: |
           set -euo pipefail
@@ -225,6 +373,16 @@ jobs:
           g++ $CXXFLAGS src/native/tests/diagnostics_test.cpp -o /tmp/diagnostics_test_arm64
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/diagnostics_test_arm64
+
+      - name: Compile and run native ARM64 diagnostic-tour tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostic_tour_plan_test.cpp -o /tmp/diagnostic_tour_plan_test_arm64
+          g++ $CXXFLAGS src/native/present_stats.cpp src/native/tests/present_stats_test.cpp -o /tmp/present_stats_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostic_tour_plan_test_arm64
+          /tmp/present_stats_test_arm64
 
       - name: Compile and run native ARM64 CPU affinity tests
         run: |
@@ -285,17 +443,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/deps-out/${{ matrix.abi }}
-          key: android-deps-bink-ffmpeg-v1-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/patches/**') }}
+          key: android-deps-vulkan-wrapper-v2-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/build-vulkan-wrapper.sh', 'android/patches/**') }}
 
       - name: Install build tools
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip 7zip
-          pip3 install --user --break-system-packages meson==1.5.2
+          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip 7zip bison flex
+          pip3 install --user --break-system-packages meson==1.5.2 mako pyyaml packaging
           echo "NDK at $ANDROID_NDK_LATEST_HOME: $(ls $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt 2>&1 | head)"
 
-      - name: Build third-party deps (SDL2, FAudio, DXVK)
+      - name: Build third-party deps (SDL2, FAudio, DXVK, Android Vulkan wrapper)
         if: steps.cache-deps.outputs.cache-hit != 'true'
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
@@ -531,7 +689,7 @@ jobs:
         id: cache-recomp
         with:
           path: build/recomp/native
-          key: recomp-${{ hashFiles('re/functions.csv', 're/extra_functions.txt', 'tools/recomp/recomp.py', 'tools/recomp/data_entries.py') }}-${{ hashFiles('prototypeenginef.dll') }}
+          key: recomp-${{ hashFiles('re/functions.csv', 're/extra_functions.txt', 'tools/recomp/recomp.py', 'tools/recomp/data_entries.py', 'tools/patch_native_recomp.py') }}-${{ hashFiles('prototypeenginef.dll') }}
 
       - name: List recomp after cache
         run: |
@@ -579,6 +737,10 @@ jobs:
             cat /tmp/recomp.log 2>&1 | tail -n 100 || true
             exit 1
           fi
+
+      - name: Apply optional native feature policies
+        if: env.HAS_DLL == '1'
+        run: python3 tools/patch_native_recomp.py build/recomp/native
 
       - name: Verify generated video-setting hooks
         if: env.HAS_DLL == '1'
@@ -650,6 +812,9 @@ jobs:
           ls -lh ./make.log 2>&1 || true
           if [ "$MAKE_EXIT" != "0" ]; then
             echo "::error::MAKE FAILED with $MAKE_EXIT - posting to issue 1"
+            # Log artifacts and issue posting may be unavailable to read-only consumers. Keep the actual compiler
+            # diagnostics in check annotations as well, rather than exposing only a generic make exit code.
+            python3 -c 'from pathlib import Path; lines = Path("/tmp/make.log").read_text(errors="replace").splitlines(); markers = ("error:", "fatal error:", "undefined reference", "No such file"); selected = [line for line in lines if any(marker in line for marker in markers)] or lines[-40:]; print("\n".join("::error::native build: " + line[:1800].replace("%", "%25").replace("\r", "%0D") for line in selected[-40:]))'
             echo "GH_TOKEN len ${#GH_TOKEN}"
             which gh 2>&1 | head || true
             # Post via curl (more reliable than gh in this shell)
@@ -705,6 +870,17 @@ jobs:
           done
           printf 'nativeBuild=compiled\nsourceRevision=%s\n' "$SOURCE_REVISION" > build/native-build.txt
 
+      - name: Build source ARM64 example plugin
+        if: env.HAS_DLL == '1'
+        run: |
+          set -euo pipefail
+          modding/example/build-package.sh "$PWD/build/mod-example"
+          TOOLS="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "$TOOLS/llvm-readelf" -h build/mod-example/libprotodroid_example.so | grep -E 'Class:|Machine:|Type:'
+          "$TOOLS/llvm-readelf" -h build/mod-example/libprotodroid_example.so | grep -q 'AArch64'
+          "$TOOLS/llvm-nm" -D build/mod-example/libprotodroid_example.so | grep -q 'ProtoDroidPluginInit'
+          unzip -l build/protodroid-example-arm64.zip
+
       - name: Upload make logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -737,34 +913,6 @@ jobs:
             } catch(e) {
               console.log("No make.log: " + e);
             }
-
-      - name: Fallback dummy libmain.so if build failed
-        if: failure()
-        run: |
-          echo "Build failed - checking libmain.so"
-          if [ -f build/android/arm64-v8a/libmain.so ] && [ -s build/android/arm64-v8a/libmain.so ]; then
-            SZ=$(stat -c%s build/android/arm64-v8a/libmain.so 2>/dev/null || wc -c < build/android/arm64-v8a/libmain.so)
-            echo "libmain.so exists size $SZ, not overwriting"
-            ls -lh build/android/arm64-v8a/libmain.so
-            if [ "$SZ" -gt 100000 ]; then
-              echo "Real libmain.so present - keeping"
-              exit 0
-            fi
-            echo "libmain.so too small ($SZ), will recreate fallback"
-          fi
-          echo "Creating fallback dummy libmain.so for APK packaging"
-          mkdir -p build/android/arm64-v8a build/symbols
-          if [ -x "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang" ]; then
-            echo "int dummy=0;" | $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang -shared -o build/android/arm64-v8a/libmain.so -x c - -fPIC || echo "dummy" > build/android/arm64-v8a/libmain.so
-          else
-            echo "dummy libmain for CI" > build/android/arm64-v8a/libmain.so
-          fi
-          ls -lh build/android/arm64-v8a/libmain.so
-          cp build/android/arm64-v8a/libmain.so build/symbols/libmain.so.unstripped || true
-          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libdxvk_d3d9.so build/symbols/libdxvk_d3d9.so.unstripped || true
-          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libSDL2.so build/symbols/libSDL2.so.unstripped || true
-          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
-          ls -lh build/symbols/ || true
 
       - name: Prepare prebuilt libmain.so symbols if DLL not present
         if: env.HAS_DLL == '0'
@@ -921,10 +1069,12 @@ jobs:
           ! printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2-2.0.so.0'
           printf '%s\n' "$STRINGS" | grep -F 'vkCreateAndroidSurfaceKHR'
           for marker in \
-            '/storage/emulated/0/Prototype/logs/pipeline_trace.log' \
+            '/storage/emulated/0/Prototype/logs' \
+            'pipeline_trace.log' \
             'last_vs.spv' \
             'last_fs.spv' \
             'PROTODROID_PIPELINE_TRACE' \
+            'PROTODROID_PIPELINE_TRACE_DIR' \
             'pre-created dummy sampler, buffer, and all 14 image views' \
             'dummy image GPU initialization complete' \
             'Disabling maintenance5, EDS3' \
@@ -942,8 +1092,18 @@ jobs:
             /tmp/protodroid-badging.txt
           echo "Verified signed package: com.protodroid $versionName (versionCode $versionCode)"
 
+      - name: Upload source-built mod example
+        if: success() && env.HAS_DLL == '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: protodroid-mod-example
+          path: build/protodroid-example-arm64.zip
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Upload APK artifact
-        if: always()
+        # Never upload a dummy, prebuilt, unverified, or wrong-revision APK after a failed build/verification step.
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: prototype-apk

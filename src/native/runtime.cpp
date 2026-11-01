@@ -5,6 +5,8 @@
 #include <cstring>
 #include <mutex>
 
+#include "diagnostic_tour.h"
+#include "diagnostic_tour_probe.h"
 #include "guest.h"
 
 extern "C" {
@@ -17,6 +19,7 @@ extern const uint32_t g_recomp_count;
 volatile uint32_t RecompRestrictLo = 0;
 volatile uint32_t RecompRestrictHi = 0xffffffffu;
 volatile uint32_t RecompTestDetours = 0;
+extern volatile uint32_t RecompDiagnosticTour;
 uint8_t* RecompMemoryBase = nullptr;
 }
 
@@ -78,12 +81,22 @@ static uint32_t FollowThunks(uint32_t target) {
 }
 
 extern "C" void RecompDispatch(Ctx* ctx, uint32_t target) {
+    if (RecompDiagnosticTour) {
+        // Vtable thunks are recompiled and use RecompDirect on Android, so checking only their final task addresses
+        // here misses the normal gameplay route. The cold tour-only classifier recognizes both forms.
+        if (const uint32_t task = DiagnosticTourGameplayTaskTarget(target, kEngineBase))
+            DiagnosticTourGameplayObserved(task);
+    }
     if (RecompFn fn = RecompLookup(target)) {
         fn(ctx);
         return;
     }
     uint32_t real = FollowThunks(target);
     if (real != target) {
+        if (RecompDiagnosticTour) {
+            if (const uint32_t task = DiagnosticTourGameplayTaskTarget(real, kEngineBase))
+                DiagnosticTourGameplayObserved(task);
+        }
         if (RecompFn fn = RecompLookup(real)) {
             fn(ctx);
             return;
@@ -120,6 +133,11 @@ extern "C" void RecompCpuid(Ctx* ctx) {
 
 extern "C" void RecompUnimplemented(Ctx* ctx, uint32_t va, const char* what) {
     Fatal("trap at %08x (%s), esp=%08x", va, what, ctx->esp);
+}
+
+extern "C" int RecompRemoveTickRateLimit() {
+    static const int enabled = SettingInt("remove_tick_rate_limit", 0);
+    return enabled != 0;
 }
 
 extern "C" void RecompBridgeSave(uint8_t state[32]) { memset(state, 0, 32); }
@@ -210,6 +228,26 @@ uint32_t GuestCallNested(Ctx* outer, uint32_t va, std::initializer_list<uint32_t
     const uint32_t result = GuestCall(va, args, ecx);
     tl_ctx = saved;
     return result;
+}
+
+uint32_t GuestCallArray(Ctx* outer, uint32_t va, const uint32_t* args, size_t count, uint32_t ecx) {
+    RecompFn fn = RecompLookup(va);
+    if (!fn || (count && !args)) return 0;
+    GuestThread* t = CurrentThread();
+    Ctx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    if (outer) ctx.esp = (outer->esp - 256) & ~15u;
+    else ctx.esp = (tl_ctx ? tl_ctx->esp - 256 : t->stack_hi - 64) & ~15u;
+    for (size_t i = count; i > 0; --i) Push32(&ctx, args[i - 1]);
+    Push32(&ctx, 0xfffffff0u);  // return address; never jumped to
+    ctx.fs_base = t->teb;
+    ctx.fpu_cw = 0x027f;
+    ctx.ecx = ecx;
+    Ctx* saved = tl_ctx;
+    tl_ctx = nullptr;
+    fn(&ctx);
+    tl_ctx = saved;
+    return ctx.eax;
 }
 
 }  // namespace native

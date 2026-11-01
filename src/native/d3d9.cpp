@@ -30,6 +30,7 @@
 #include "d3d9_dxt.h"
 #include "d3d9_state.h"
 #include "diagnostics.h"
+#include "mod_platform.h"
 #include "present_stats.h"
 
 namespace native {
@@ -334,6 +335,7 @@ struct Shadow {
     uint32_t guest = 0, capacity = 0, size = 0;
     void* host = nullptr;
     bool write_back = false;
+    bool full = true;
 };
 std::map<std::pair<void*, uint32_t>, Shadow> g_shadows;  // (object, subresource) -> shadow
 
@@ -343,7 +345,7 @@ bool IsBlockCompressed(D3DFORMAT f) {
 }
 
 // Maps the host's locked memory into a guest buffer. Read-only locks never copy back; discard locks need no input.
-uint32_t ShadowLock(void* object, uint32_t sub, void* host, uint32_t size, DWORD flags) {
+uint32_t ShadowLock(void* object, uint32_t sub, void* host, uint32_t size, DWORD flags, bool full = true) {
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
     Shadow& s = g_shadows[{object, sub}];
     if (s.capacity < size) {
@@ -355,15 +357,25 @@ uint32_t ShadowLock(void* object, uint32_t sub, void* host, uint32_t size, DWORD
     s.host = host;
     const D3D9LockPlan plan = D3D9ShadowLockPlan(flags);
     s.write_back = plan.write_back;
+    s.full = full;
     if (plan.copy_in) memcpy(Ptr<void>(s.guest), host, size);
     return s.guest;
 }
 
-void ShadowUnlock(void* object, uint32_t sub) {
+void ShadowUnlock(void* object, uint32_t sub, const D3DSURFACE_DESC* texture_desc = nullptr) {
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
     auto it = g_shadows.find({object, sub});
     if (it == g_shadows.end() || !it->second.host) return;
     Shadow& s = it->second;
+    if (texture_desc && s.full) {
+        uint32_t rows = IsBlockCompressed(texture_desc->Format) ? (texture_desc->Height + 3) / 4
+                                                                : texture_desc->Height;
+        uint32_t pitch = rows ? s.size / rows : 0;
+        if (rows && pitch * rows == s.size) {
+            ModTexturesReplace(object, sub, uint32_t(texture_desc->Format), texture_desc->Width,
+                               texture_desc->Height, pitch, Ptr<void>(s.guest), s.write_back);
+        }
+    }
     D3D9ShadowCopyBack(s.host, Ptr<void>(s.guest), s.size, s.write_back);
     s.host = nullptr;
 }
@@ -387,7 +399,7 @@ void LockRectCommon(Ctx* c, void* object, uint32_t sub, HRESULT hr, const D3DLOC
     if (SUCCEEDED(hr)) {
         uint32_t size = uint32_t(lr.Pitch) * RectRows(desc, rect);
         W32(out, uint32_t(lr.Pitch));
-        W32(out + 4, ShadowLock(object, sub, lr.pBits, size, flags));
+        W32(out + 4, ShadowLock(object, sub, lr.pBits, size, flags, rect == nullptr));
     }
     Return(c, uint32_t(hr), args);
 }
@@ -501,6 +513,7 @@ struct AdaptedLock {
     D3DFORMAT format = D3DFMT_UNKNOWN, decode_format = D3DFMT_A8R8G8B8;
     UINT width = 0, height = 0;         // region being written
     bool write_back = false;             // read-only locks must not decode into or dirty the host texture
+    bool full = true;
     uint8_t* host = nullptr;            // locked host memory (decode target), null for dropped levels
     INT host_pitch = 0;
 };
@@ -521,7 +534,7 @@ HRESULT AdaptedLockRect(void* tex, uint32_t sub, const TexAdapt& a, UINT level, 
         if (FAILED(hr)) return hr;
         if (!a.decode) {  // same format and size on the host: plain shadow
             W32(out, uint32_t(lr.Pitch));
-            W32(out + 4, ShadowLock(tex, sub, lr.pBits, uint32_t(lr.Pitch) * rows, flags));
+            W32(out + 4, ShadowLock(tex, sub, lr.pBits, uint32_t(lr.Pitch) * rows, flags, rect == nullptr));
             return D3D_OK;
         }
     }
@@ -539,6 +552,7 @@ HRESULT AdaptedLockRect(void* tex, uint32_t sub, const TexAdapt& a, UINT level, 
     l.width = rect ? UINT(rect->right - rect->left) : w;
     l.height = rect ? UINT(rect->bottom - rect->top) : h;
     l.write_back = D3D9ShadowLockPlan(flags).write_back;
+    l.full = rect == nullptr;
     l.host = dropped ? nullptr : static_cast<uint8_t*>(lr.pBits);
     l.host_pitch = lr.Pitch;
     W32(out, pitch);
@@ -547,11 +561,16 @@ HRESULT AdaptedLockRect(void* tex, uint32_t sub, const TexAdapt& a, UINT level, 
 }
 
 // Returns true when the lock was a decoded or dropped one (the host level, if any, must still be unlocked).
-bool AdaptedUnlock(void* tex, uint32_t sub, bool* host_locked) {
+bool AdaptedUnlock(void* tex, uint32_t sub, bool* host_locked, bool texture_2d = false) {
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
     auto it = g_adapted_locks.find({tex, sub});
     if (it == g_adapted_locks.end() || !it->second.guest) return false;
     AdaptedLock& l = it->second;
+    // Decoded/dropped read-only locks do not receive a guest-input copy in this path. Only writable full locks have
+    // authoritative original pixels to hash; read-only locks must never establish identity from scratch memory.
+    if (texture_2d && l.full && l.write_back) {
+        ModTexturesReplace(tex, sub, uint32_t(l.format), l.width, l.height, l.pitch, Ptr<void>(l.guest), true);
+    }
     *host_locked = l.host != nullptr;
     if (l.host) {
         if (l.write_back) {
@@ -568,12 +587,18 @@ bool AdaptedUnlock(void* tex, uint32_t sub, bool* host_locked) {
 
 void ForgetResource(void* host) {
     ForgetShadows(host);
-    std::lock_guard<std::recursive_mutex> lock(g_mutex);
-    g_adapt.erase(host);
-    for (auto it = g_adapted_locks.lower_bound({host, 0}); it != g_adapted_locks.end() && it->first.first == host;) {
-        if (it->second.guest) HeapFree(it->second.guest);
-        it = g_adapted_locks.erase(it);
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+        g_adapt.erase(host);
+        for (auto it = g_adapted_locks.lower_bound({host, 0});
+             it != g_adapted_locks.end() && it->first.first == host;) {
+            if (it->second.guest) HeapFree(it->second.guest);
+            it = g_adapted_locks.erase(it);
+        }
     }
+    // Unlock paths hold g_mutex before taking the texture mutex. Clean textures only after releasing g_mutex so
+    // resource destruction cannot invert that order on a multithreaded D3D9 client.
+    ModTexturesForget(host);
 }
 
 // Guest view of a level description: guest size and format.
@@ -1030,6 +1055,7 @@ M(IDirect3DDevice9, CreateTexture) {
     if (timing) RecordTextureTiming(g_create_timing, std::chrono::steady_clock::now() - create_start);
     if (SUCCEEDED(hr)) {
         RecordTextureCreated(a);
+        ModTexturesTrack(tex, usage == 0);  // static 2D uploads only; no dynamic or render-target textures
         if (a.skip || a.decode) {
             std::lock_guard<std::recursive_mutex> lock(g_mutex);
             g_adapt[tex] = a;
@@ -1145,11 +1171,23 @@ M(IDirect3DTexture9, UnlockRect) {
     uint32_t level = Arg(c, 1);
     const TexAdapt* a = AdaptOf(t);
     bool host_locked = true;
-    if (a && AdaptedUnlock(t, level, &host_locked)) {
+    if (a && AdaptedUnlock(t, level, &host_locked, true)) {
         Return(c, host_locked ? uint32_t(TimedTextureUpload([&] { return t->UnlockRect(level - a->skip); })) : 0u, 2);
         return;
     }
-    ShadowUnlock(t, level);
+    if (ModTexturesEnabled()) {
+        D3DSURFACE_DESC guest_desc{};
+        if (a) {
+            guest_desc.Format = a->format;
+            guest_desc.Width = level < 32 ? std::max(1u, a->width >> level) : 1;
+            guest_desc.Height = level < 32 ? std::max(1u, a->height >> level) : 1;
+        } else {
+            t->GetLevelDesc(level, &guest_desc);
+        }
+        ShadowUnlock(t, level, &guest_desc);
+    } else {
+        ShadowUnlock(t, level);  // ordinary Play keeps the original unlock route and avoids a DXVK description query
+    }
     Return(c, uint32_t(TimedTextureUpload([&] { return t->UnlockRect(a ? level - a->skip : level); })), 2);
 }
 M(IDirect3DCubeTexture9, LockRect) {

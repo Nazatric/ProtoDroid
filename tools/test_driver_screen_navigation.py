@@ -57,4 +57,28 @@ recycle_helper = driver.split("private void recycleVelocityTracker()", 1)[1].spl
 assert "if (velocityTracker == null) return;" in recycle_helper, "Tracker cleanup must be safe after detachment"
 assert "velocityTracker = null;" in recycle_helper, "Tracker cleanup must clear the recycled reference"
 
-print("Drivers navigation and touch-detach regression checks passed")
+# The guided layout keeps the common choice simple and puts advanced package management behind explicit disclosure.
+assert "private static final float MIN_TOUCH_DP = 48f;" in driver and \
+       "Math.max(MIN_TOUCH_DP * density, MIN_TOUCH_DP * u)" in driver, (
+    "Custom Canvas controls must retain a physical 48 dp floor even when landscape layout scaling is smaller"
+)
+assert "ACTION_PACKAGES" in driver and "showPackages = settings.driverMode() == 3;" in driver, (
+    "Package management should be collapsed for ordinary Auto/System use and open for Custom"
+)
+assert "ACTION_FILTER" not in driver and "FILTER_NAMES" not in driver, (
+    "The old dense four-filter library should not return"
+)
+assert "ACTION_TAB" in driver and '"INSTALLED (" + installed.size() + ")"' in driver and '"DOWNLOADS"' in driver, (
+    "Package management needs clear Installed and Downloads destinations"
+)
+assert "DriverScreenPolicy.supportsBackend" in driver and "DriverScreenPolicy.showAllByDefault" in driver, (
+    "Compatibility filtering must use the host-tested family policy"
+)
+assert '"Automatic"' in driver or "DriverScreenPolicy.modeName" in driver
+assert '"Phone driver"' in driver or "DriverScreenPolicy.modeName" in driver
+assert "Tap the card to use this driver" in driver and "CONFIRM REMOVE" in driver, (
+    "Selection must be understandable and removal must remain explicitly confirmed"
+)
+assert "SAFE RECOVERY" in driver and "never replace the phone's global driver" in driver
+
+print("Drivers navigation, guided-layout, touch-target, and touch-detach checks passed")

@@ -1,0 +1,7 @@
+result=complete
+reason=all requested phases reached a recorded tested or skipped outcome
+phase=complete
+present=3132
+gameplay_dispatches=4952
+visual_verification=not-performed
+script_completion_is_not_visual_correctness=true

@@ -39,6 +39,8 @@ ARM_ARCH ?= armv8.2-a+rcpc
 TARGET_FLAGS := -fPIC $(if $(filter arm64-v8a,$(ABI)),-march=$(ARM_ARCH) -mtune=cortex-a76 \
                 $(if $(filter armv8-a,$(ARM_ARCH)),-moutline-atomics))
 RECOMP_OPT := -O2
+# Optional native mods use source-built static Dobby on Android; no additional shared library is packaged.
+COMMON_FLAGS += -DPROTODROID_DOBBY
 # arm64 is weakly ordered: guest memory accesses get x86-like ordering (runtime.h RECOMP_TSO); tso=0 to measure.
 TSO ?= 1
 RECOMP_EXTRA := $(if $(filter 1,$(TSO)),-DRECOMP_TSO)
@@ -47,7 +49,7 @@ FFMPEG_LIBS := -Wl,--start-group $(DEPS)/lib/libavformat.a $(DEPS)/lib/libavcode
                $(DEPS)/lib/libswresample.a $(DEPS)/lib/libavutil.a -Wl,--end-group -lz -lm
 # Keep symbol tables for crash stack traces (dladdr) even after strip: --export-dynamic preserves symbols in dynamic table
 LDFLAGS := -shared -Wl,-Bsymbolic -static-libstdc++ -Wl,--no-undefined -Wl,--export-dynamic -L$(DEPS)/lib \
-           -ldxvk_d3d9 -lFAudio -lSDL2 $(FFMPEG_LIBS) -llog -landroid
+           $(DEPS)/lib/libdobby.a -ldxvk_d3d9 -lFAudio -lSDL2 $(FFMPEG_LIBS) -llog -landroid -ldl
 # Adreno: Turnip and libadrenotools from android/build-turnip.sh (arm64 only; built without them otherwise).
 TURNIP ?= $(HOME)/protodroid-data/android-turnip
 ifneq ($(and $(filter arm64-v8a,$(ABI)),$(wildcard $(TURNIP)/lib/libadrenotools.a)),)
@@ -72,13 +74,14 @@ FFMPEG_LIBS ?= -Wl,--start-group $(FFMPEG)/lib/libavformat.a $(FFMPEG)/lib/libav
 TARGET_FLAGS :=
 DEP_INCLUDES := -I$(FAUDIO)/include -I$(FFMPEG)/include
 LDFLAGS := -rdynamic -pthread -L$(DXVK_LIB) -Wl,-rpath,$(DXVK_LIB) -ldxvk_d3d9 -L$(FAUDIO_LIB) -Wl,-rpath,$(FAUDIO_LIB) -lFAudio \
-           -lSDL2 $(FFMPEG_LIBS)
+           -lSDL2 $(FFMPEG_LIBS) -ldl
 BINARY := proto-native
 endif
 
-SRCS := main.cpp diagnostics.cpp memory.cpp loader.cpp imports.cpp runtime.cpp thread.cpp path.cpp save_path.cpp kernel32.cpp msvcr80.cpp user32.cpp \
+SRCS := main.cpp diagnostic_tour.cpp diagnostics.cpp memory.cpp loader.cpp imports.cpp runtime.cpp thread.cpp path.cpp save_path.cpp kernel32.cpp msvcr80.cpp user32.cpp \
         advapi32.cpp misc.cpp d3d9.cpp d3d9_dxt.cpp input.cpp xaudio2.cpp bink.cpp bink_media.cpp bink_blit.cpp dinput.cpp gamepad.cpp config.cpp watchdog.cpp hot_audio.cpp hot_skin.cpp \
-        vulkan_driver.cpp perf_hint.cpp present_stats.cpp state_cache.cpp video_settings.cpp
+        vulkan_driver.cpp perf_hint.cpp present_stats.cpp state_cache.cpp video_settings.cpp \
+        mod_platform.cpp mod_files.cpp mod_textures.cpp mod_hook.cpp mod_features.cpp mod_plugins.cpp
 GEN := $(wildcard $(RECOMP_DIR)/*.c)
 OBJS = $(SRCS:%.cpp=$(OUT)/%.o) $(GEN:$(RECOMP_DIR)/%.c=$(OUT)/gen/%.o)
 
@@ -100,12 +103,21 @@ $(OUT)/hot_audio.o $(OUT)/hot_skin.o: CXXFLAGS += -ffp-contract=off
 
 $(OUT)/perf_hint.o: perf_hint_session.h
 $(OUT)/main.o $(OUT)/state_cache.o: state_cache.h
+$(OUT)/main.o: dxvk_config.h input.h
 $(OUT)/main.o $(OUT)/path.o $(OUT)/save_path.o: save_path.h
 $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/present_stats.o $(OUT)/diagnostics.o: present_stats.h timing_window.h
 $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/diagnostics.o: diagnostics.h
+$(OUT)/main.o $(OUT)/runtime.o $(OUT)/diagnostics.o $(OUT)/vulkan_driver.o $(OUT)/diagnostic_tour.o: diagnostic_tour.h
+$(OUT)/runtime.o: diagnostic_tour_probe.h
+$(OUT)/watchdog.o: diagnostic_tour.h
+$(OUT)/diagnostic_tour.o: diagnostic_tour_plan.h input.h
+$(OUT)/input.o: input.h
 $(OUT)/diagnostics.o: proc_stats.h
 $(OUT)/vulkan_driver.o: gpu_profile.h
 $(OUT)/video_settings.o: video_settings.h
+$(OUT)/main.o $(OUT)/d3d9.o $(OUT)/bink_media.o $(OUT)/kernel32.o $(OUT)/msvcr80.o $(OUT)/mod_platform.o $(OUT)/mod_files.o \
+$(OUT)/mod_textures.o $(OUT)/mod_hook.o $(OUT)/mod_features.o $(OUT)/mod_plugins.o: mod_platform.h
+$(OUT)/mod_plugins.o: ../../modding/include/protodroid_plugin.h
 
 $(OUT)/%.o: %.cpp guest.h win.h turnip_load.h ../recomp/runtime.h d3d9_gen.inc
 	@mkdir -p $(dir $@)

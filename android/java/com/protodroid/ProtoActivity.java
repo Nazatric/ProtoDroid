@@ -86,6 +86,7 @@ public class ProtoActivity extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         prepareVulkanDriver();
+        ModManager.prepareForLaunch(this);
         // The native side loads the bundled Vulkan driver (Turnip, on Adreno) from the extracted libraries.
         try {
             Os.setenv("PROTODROID_NATIVE_LIB_DIR", getApplicationInfo().nativeLibraryDir, true);

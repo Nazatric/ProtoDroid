@@ -461,6 +461,8 @@ extern "C" void RecompLongjmp(Ctx* ctx, uint32_t guest_buf, uint32_t value) {
     longjmp(s->host, 1);
 }
 
+extern "C" int RecompRemoveTickRateLimit(void) { return 0; }  // Android-native optional feature only
+
 extern "C" void RecompUnimplemented(Ctx* ctx, uint32_t va, const char* what) {
     protodroid::Log("recomp: unimplemented instruction at %08x (%s), esp=%08x", va, what, ctx->esp);
     TerminateProcess(GetCurrentProcess(), 0x7e);

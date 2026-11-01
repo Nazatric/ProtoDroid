@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include "diagnostic_tour.h"
 #include "turnip_load.h"
 #include "driver_recovery.h"
 
@@ -43,7 +44,7 @@ namespace {
 // requires DXVK's extension-equivalent path. Older drivers cannot run the game, so say that plainly instead of letting
 // DXVK fail later with "no adapters found".
 // The system driver's GPU and physical-device Vulkan version (0 when it has no device); logged.
-uint32_t SystemDriverApi(std::string& device) {
+uint32_t SystemDriverApi(std::string& device, ProbeInfo* out = nullptr) {
     // Keep the system loader and its dependencies visible to subsequent
     // Vulkan users (including DXVK). The handle is intentionally retained.
     void* lib = dlopen("libvulkan.so", RTLD_NOW | RTLD_GLOBAL);
@@ -58,7 +59,8 @@ uint32_t SystemDriverApi(std::string& device) {
     ProbeInfo info;
     device = ProbeDevice(gipa, "system driver", report, &info);
     Log("%s", report.c_str());
-    return device.empty() ? 0 : info.api_version;
+    if (out) *out = info;
+    return info.api_version;
 }
 
 // Logs the device extensions of the system driver: for drivers below Vulkan 1.3, which DXVK could only use through
@@ -106,16 +108,19 @@ void LogSystemExtensions() {
 
 void LogSystemDevice() {
     std::string device;
-    uint32_t api = SystemDriverApi(device);
-    if (!device.empty() && api < kVulkanApi13) LogSystemExtensions();
-    if (!device.empty() && api < kVulkanApi12) {
+    ProbeInfo info;
+    uint32_t api = SystemDriverApi(device, &info);
+    if (api < kVulkanApi13) LogSystemExtensions();
+    if (device.empty() || info.usable_api < kVulkanApi12) {
         const bool adreno = access("/dev/kgsl-3d0", F_OK) == 0;
-        char msg[512];
+        char msg[768];
         snprintf(msg, sizeof(msg),
-                 "The GPU driver of this phone (%s) supports Vulkan %u.%u; the game needs Vulkan 1.2 with its required extensions, or 1.3. %s",
-                 device.c_str(), VK_API_VERSION_MAJOR(api), VK_API_VERSION_MINOR(api),
-                 adreno ? "The bundled Turnip driver did not work on this GPU either."
-                        : "A system update may bring a newer driver.");
+                 "The direct Vulkan path is unusable (%s, device Vulkan %u.%u, loader %u.%u); the game needs Vulkan 1.2 with its required extensions, or 1.3. %s",
+                 device.empty() ? "no directly negotiated device" : device.c_str(),
+                 VK_API_VERSION_MAJOR(api), VK_API_VERSION_MINOR(api),
+                 VK_API_VERSION_MAJOR(info.loader_api), VK_API_VERSION_MINOR(info.loader_api),
+                 adreno ? "The explicitly selected/bundled driver did not work on this GPU either."
+                        : "A system update may bring a newer driver. Auto mode can also try the compatibility wrapper.");
         StartupFailure(msg);
     }
 }
@@ -150,30 +155,31 @@ bool TurnipWorksInChild(const Driver& d) {
     if (access(probe.c_str(), X_OK) != 0) {
         Log("vulkan: no driver probe program, %s %s", d.custom ? "rejecting imported driver" : "trying",
             d.file.c_str());
-        return !d.custom;  // an imported driver is never loaded into gameplay without a successful probe
+        return !(d.custom || d.compatibility_wrapper);  // imported/wrapper drivers require a successful isolated probe
     }
     int fds[2];
-    if (pipe(fds) != 0) return !d.custom;
+    if (pipe(fds) != 0) return !(d.custom || d.compatibility_wrapper);
     const char* argv[] = {probe.c_str(), d.hook_dir.c_str(), d.dir.c_str(), d.file.c_str(), d.custom ? "1" : "0",
-                          d.direct_icd ? "1" : "0", nullptr};
+                          d.direct_icd ? "1" : "0", d.compatibility_wrapper ? "1" : "0", nullptr};
     pid_t pid = fork();
     if (pid < 0) {
         close(fds[0]);
         close(fds[1]);
-        return !d.custom;
+        return !(d.custom || d.compatibility_wrapper);
     }
     if (pid == 0) {  // only async-signal-safe calls until exec
         dup2(fds[1], 1);
         close(fds[0]);
         close(fds[1]);
-        alarm(5);
+        alarm(d.compatibility_wrapper ? 15 : 5);
         execv(argv[0], const_cast<char* const*>(argv));
         _exit(127);
     }
     close(fds[1]);
     std::string report;
     char buf[256];
-    for (int waited = 0; waited < 4000;) {  // a working driver answers in well under a second
+    const int pipe_wait_ms = d.compatibility_wrapper ? 14000 : 4000;
+    for (int waited = 0; waited < pipe_wait_ms;) {  // ordinary drivers answer quickly; wrapper initialization gets a bounded longer window
         pollfd p = {fds[0], POLLIN, 0};
         int n = poll(&p, 1, 100);
         waited += 100;
@@ -222,8 +228,10 @@ std::string GpuModel() {
 // used to count as one and locked phones whose only usable driver is Turnip out of the game. vulkan_driver = turnip
 // forces Turnip. A failed test in the child process is not recorded: it costs a second and is retried at every start.
 constexpr const char* kFailed = "turnip_failed";
+constexpr const char* kWrapperFailed = "vulkan_wrapper_failed";
 constexpr const char* kBuild = __DATE__ " " __TIME__;  // a failure recorded by another build is retried
 bool g_turnip_pending = false;
+bool g_wrapper_pending = false;
 bool g_auto_recovery_pending = false;
 
 // The recorded reason if Turnip failed with this build, "" otherwise.
@@ -231,14 +239,116 @@ std::string FailedBefore() {
     return ReadDriverFailureMarker(kFailed, kBuild);
 }
 
+// Auto-only last resort for a direct system path below 1.2. This wrapper always sits around Android's system Vulkan
+// loader; it is not a custom Turnip/PanVK route. A child must prove the effective DXVK feature set before the real
+// process repeats the load. The pending marker covers that second, unavoidable in-process portion.
+void ConfigureWrapperLogging(bool probe) {
+    const char* directory = getenv("DXVK_LOG_PATH");
+    const std::string root = directory && *directory ? directory : ".";
+    const std::string path = root + (probe ? "/vulkan_wrapper.probe.log" : "/vulkan_wrapper.log");
+    const std::string diag_path = root + (probe ? "/vulkan_wrapper.probe-diag.txt" : "/vulkan_wrapper.diag.txt");
+    const std::string work_dir = root + (probe ? "/vulkan-wrapper-probe" : "/vulkan-wrapper");
+    const char* cache_directory = getenv("DXVK_STATE_CACHE_PATH");
+    const std::string cache_root = cache_directory && *cache_directory ? cache_directory : ".";
+    const std::string cache_dir = cache_root + (probe ? "/vulkan-wrapper-probe-cache" : "/vulkan-wrapper-cache");
+    const bool tour = DiagnosticTourEnabled();
+    setenv("WRAPPER_LOG_LEVEL", tour ? "info,error,shader,bcn" : "info,error", 1);
+    setenv("WRAPPER_LOG_FILE", path.c_str(), 1);
+    setenv("WRAPPER_WORK_DIR", work_dir.c_str(), 1);
+    setenv("WRAPPER_CACHE_PATH", cache_dir.c_str(), 1);
+    setenv("WRAPPER_DIAG_FILE", diag_path.c_str(), 1);
+    setenv("WRAPPER_DIAG_APPID", "com.protodroid", 1);
+    // GameNative's diagnostic mode includes per-texture output; shader/BC logging adds further large artifacts. Keep
+    // that cost out of ordinary Play; the deliberate tour opts into it and uses its isolated log directory.
+    setenv("WRAPPER_DIAG", tour ? "1" : "0", 1);
+}
+
+bool TryVulkanWrapper(std::string& device, std::string& failure) {
+    if (std::string why = ReadDriverFailureMarker(kWrapperFailed, kBuild); !why.empty()) {
+        failure = "the wrapper previously failed during in-process startup: " + why;
+        Log("vulkan: not automatically retrying the failed compatibility wrapper: %s", why.c_str());
+        return false;
+    }
+    const char* libdir = getenv("PROTODROID_NATIVE_LIB_DIR");
+    if (!libdir || !*libdir) {
+        failure = "the APK native-library directory is unavailable";
+        return false;
+    }
+    const std::string directory = std::string(libdir) + "/";
+    if (access((directory + "libvulkan_wrapper.so").c_str(), R_OK) != 0) {
+        failure = "libvulkan_wrapper.so is missing or unreadable in the APK";
+        Log("vulkan: %s", failure.c_str());
+        return false;
+    }
+    ConfigureWrapperLogging(true);
+    Driver driver{directory, directory, "libvulkan_wrapper.so", false, true, true};
+    if (!TurnipWorksInChild(driver)) {
+        failure = "the isolated wrapper probe did not expose a usable DXVK device (see the probe report and vulkan_wrapper.probe.log)";
+        return false;
+    }
+
+    ConfigureWrapperLogging(false);
+    g_wrapper_pending = true;
+    std::string report;
+    PFN_vkGetInstanceProcAddr gipa = LoadTurnip(driver, device, report);
+    Log("%s (compatibility wrapper)", report.c_str());
+    if (!gipa) {
+        g_wrapper_pending = false;
+        failure = report.empty() ? "the in-process wrapper load failed" : report;
+        return false;
+    }
+    char hex[32];
+    snprintf(hex, sizeof(hex), "%llx", (unsigned long long)reinterpret_cast<uintptr_t>(gipa));
+    setenv("DXVK_VK_GIPA", hex, 1);
+    Log("vulkan: wrapper vk_icdGetInstanceProcAddr handed to DXVK through DXVK_VK_GIPA");
+    return true;
+}
+
+// Probe the direct route first and keep it whenever it is genuinely negotiable. Only the otherwise-unusable Auto path
+// reaches the wrapper. This function is also the final Auto fallback after established Adreno/Turnip attempts.
+void AutomaticSystemDevice() {
+    std::string device;
+    ProbeInfo info;
+    const uint32_t api = SystemDriverApi(device, &info);
+    if (!device.empty() && info.usable_api >= kVulkanApi12) {
+        Log("vulkan: Auto keeps the direct system Vulkan %u.%u path",
+            VK_API_VERSION_MAJOR(info.usable_api), VK_API_VERSION_MINOR(info.usable_api));
+        return;
+    }
+    if (api < kVulkanApi13) LogSystemExtensions();
+
+    std::string wrapper_device, failure;
+    if (ShouldProbeVulkanWrapper(true, device.empty() ? 0 : info.usable_api) &&
+        TryVulkanWrapper(wrapper_device, failure)) {
+        Log("vulkan: Auto uses the compatibility wrapper for %s (base device Vulkan %u.%u; effective device %s)",
+            device.empty() ? "the system GPU" : device.c_str(), VK_API_VERSION_MAJOR(api), VK_API_VERSION_MINOR(api),
+            wrapper_device.c_str());
+        return;
+    }
+
+    char msg[1536];
+    snprintf(msg, sizeof(msg),
+             "No usable Vulkan path was found. Direct system device: %s (device Vulkan %u.%u, loader %u.%u). "
+             "The Auto compatibility wrapper was not used: %s. Check proto-native.log and vulkan_wrapper.log for the missing capability or probe failure.",
+             device.empty() ? "not negotiated" : device.c_str(), VK_API_VERSION_MAJOR(api), VK_API_VERSION_MINOR(api),
+             VK_API_VERSION_MAJOR(info.loader_api), VK_API_VERSION_MINOR(info.loader_api), failure.c_str());
+    StartupFailure(msg);
+}
+
 }  // namespace
 
 void VulkanDriverAbandon() {
     g_turnip_pending = false;
+    g_wrapper_pending = false;
     g_auto_recovery_pending = false;
 }
 
 void VulkanDriverConfirm() {
+    if (g_wrapper_pending) {
+        g_wrapper_pending = false;
+        g_auto_recovery_pending = false;
+        Log("vulkan: compatibility wrapper startup ok");
+    }
     if (!g_turnip_pending) return;
     g_turnip_pending = false;
     g_auto_recovery_pending = false;
@@ -248,6 +358,13 @@ void VulkanDriverConfirm() {
 // A graceful DXVK initialization failure is just as much a failed driver attempt as a native crash. Record it before
 // StartupFailure abandons the active attempt; only Auto promises a system-driver retry on the next launch.
 bool VulkanDriverStartupFailed(const char* reason) {
+    if (g_wrapper_pending) {
+        if (WriteDriverFailureMarker(kWrapperFailed, kBuild, reason))
+            Log("vulkan: recorded compatibility-wrapper initialization failure; Auto will not crash-loop this build");
+        else
+            Log("vulkan: could not record the compatibility wrapper's initialization failure");
+        return false;  // there is no usable direct <1.2 fallback to promise for the next launch
+    }
     if (!g_turnip_pending) return false;
     const bool automatic = g_auto_recovery_pending;
     if (!WriteDriverFailureMarker(kFailed, kBuild, reason)) {
@@ -261,12 +378,20 @@ bool VulkanDriverStartupFailed(const char* reason) {
 
 // From the crash handler: only open/write/close.
 void VulkanDriverCrashed() {
+    if (g_wrapper_pending) {
+        WriteDriverFailureMarker(kWrapperFailed, kBuild,
+                                 "the game crashed during compatibility-wrapper startup (see proto-native.prev.log)");
+        return;
+    }
     if (!g_turnip_pending) return;
     WriteDriverFailureMarker(kFailed, kBuild,
                              "the game crashed during startup on a custom/bundled Vulkan driver (see proto-native.prev.log)");
 }
 
 void SelectVulkanDriver() {
+    // A previous SDL activity in this process may have used Turnip, PanVK, or the wrapper. Never let its function
+    // pointer bypass the direct path selected for this launch.
+    unsetenv("DXVK_VK_GIPA");
     std::string mode = Setting("vulkan_driver", "auto");
     if (mode != "auto" && mode != "system" && mode != "turnip" && mode != "custom") {
         Log("vulkan: unknown vulkan_driver '%s', using auto", mode.c_str());
@@ -313,7 +438,7 @@ void SelectVulkanDriver() {
         return;
     }
     if (mode == "auto" && !adreno) {
-        LogSystemDevice();
+        AutomaticSystemDevice();
         return;
     }
 
@@ -323,7 +448,9 @@ void SelectVulkanDriver() {
     } else if (std::string why = FailedBefore(); !why.empty()) {
         Log("vulkan: a custom/bundled driver failed here before: %s", why.c_str());
         std::string device;
-        if (SystemDriverApi(device) >= kVulkanApi12) {
+        ProbeInfo info;
+        SystemDriverApi(device, &info);
+        if (!device.empty() && info.usable_api >= kVulkanApi12) {
             Log("vulkan: using the system driver (explicit Turnip/custom selection retries)");
             return;
         }
@@ -338,7 +465,8 @@ void SelectVulkanDriver() {
     const bool gen8_auto = mode == "auto" && adreno825;
     const char* libdir = getenv("PROTODROID_NATIVE_LIB_DIR");  // set by ProtoActivity: extracted APK libraries
     if (!libdir) {
-        LogSystemDevice();
+        if (mode == "auto") AutomaticSystemDevice();
+        else LogSystemDevice();
         return;
     }
     const std::string hooks = std::string(libdir) + "/";
@@ -385,8 +513,9 @@ void SelectVulkanDriver() {
         break;  // a second driver in this process after a failed load is not worth the risk
     }
     if (!gipa) {
-        Log("vulkan: no usable custom/bundled driver, using the system driver");
-        LogSystemDevice();
+        Log("vulkan: no usable custom/bundled driver, using the system driver policy");
+        if (mode == "auto") AutomaticSystemDevice();
+        else LogSystemDevice();
         return;
     }
     char hex[32];

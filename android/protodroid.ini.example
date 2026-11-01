@@ -64,3 +64,19 @@ unlock_menu_fps = 1
 #audio_stats = 2
 #fps_limit = 30
 #battery_saver = 1
+
+# Optional Android equivalents of Prototype Fix settings (also available under Settings > Engine fixes).
+# They are independent of imported mods and apply on the next Play. Defaults preserve the ordinary game paths.
+# fov_offset accepts fractional degrees; the resulting field of view is clamped to 30-150.
+#fov_offset = 10.0
+# shadow_map_resolution accepts 512, 1024, 2048, 4096 or 8192. High values can be expensive and remain device-dependent.
+#shadow_map_resolution = 4096
+# Remove only the evidenced 15 ms simulation gate. Button timing applies only when that gate is removed.
+#remove_tick_rate_limit = 1
+#fix_button_tap_tick_rate = 1
+#prefer_loose_files = 1
+#unlock_dev_menu = 1
+# Reported VRAM is a DXVK memory-report cap, not physical memory. 2048 is the Prototype Fix reference value.
+#vram_report_mb = 2048
+# Dump original-format top-level DDS textures and textures.ini under Prototype/texture-dump (or app-specific storage).
+#dump_textures = 1

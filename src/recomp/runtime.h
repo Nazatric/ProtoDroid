@@ -45,6 +45,8 @@ void RecompDispatch(Ctx* ctx, uint32_t target);
 
 /* Native Android host only: emitted at the three integer GameDB reads that feed the original video setters. */
 void RecompVideoSettingRead(Ctx* c);
+/* Native Android optional policy: nonzero removes only the 15 ms simulation skip. Other embedders return zero. */
+int RecompRemoveTickRateLimit(void);
 
 /* Looks up the recompiled implementation of a guest function entry, or null. */
 RecompFn RecompLookup(uint32_t target);

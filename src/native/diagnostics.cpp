@@ -29,6 +29,7 @@
 #include <utility>
 #include <vector>
 
+#include "diagnostic_tour.h"
 #include "guest.h"
 #include "present_stats.h"
 #include "proc_stats.h"
@@ -617,10 +618,11 @@ void RecordEngineLoop(int64_t at_ns, int64_t service_ns, int64_t event_pump_ns, 
 void DiagnosticsStart() {
     std::lock_guard<std::mutex> lock(g_lifecycle_mutex);
     if (g_thread.joinable() || g_active.load()) return;
-    const bool detailed = SettingInt("detailed_diagnostics", kDetailedDiagnosticsDefault) != 0;
+    const bool tour = DiagnosticTourEnabled();
+    const bool detailed = tour || SettingInt("detailed_diagnostics", kDetailedDiagnosticsDefault) != 0;
     g_detailed.store(detailed, std::memory_order_release);
     SetPresentDetailedEnabled(detailed);
-    g_interval_seconds = detailed ? std::clamp(SettingInt("detailed_diagnostics_interval", 5), 1, 60) : 0;
+    g_interval_seconds = detailed ? (tour ? 1 : std::clamp(SettingInt("detailed_diagnostics_interval", 5), 1, 60)) : 0;
     if (detailed) {
         LogDeviceInfo();
         Log("diagnostics: enabled; window=%ds; native/DXVK timestamps are monotonic seconds with thread IDs; "

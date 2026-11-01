@@ -80,6 +80,13 @@ void TestNoLoopCounterLeak() {
           "message-pump iterations leaked into presented-frame statistics");
 }
 
+void TestCumulativePresentCount() {
+    const uint64_t before = native::PresentedFrameCount();
+    native::RecordPresent();
+    native::RecordPresent();
+    Check(native::PresentedFrameCount() == before + 2, "cumulative present count did not track successful Presents");
+}
+
 void TestDisabledDetailedCollection() {
     native::PresentStatsTracker tracker;
     tracker.AddPresent(1000000000ll, 7, false);
@@ -95,6 +102,7 @@ int main() {
     TestSixtyFpsWindow();
     TestAveragePercentileAndOutlier();
     TestNoLoopCounterLeak();
+    TestCumulativePresentCount();
     TestDisabledDetailedCollection();
     std::puts("present-stats tests passed (baseline, ADPF count, FPS, percentiles)");
     return 0;

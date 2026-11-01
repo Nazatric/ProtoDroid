@@ -42,10 +42,13 @@ final class SetupView extends View {
         void onCheckAgain();
         void onPlay();
         void onDrivers();
+        void onMods();
         void onExit();
         void onUpdate();
         void onUpdateConfirm();
         void onUpdateCancel();
+        void onUpdateReleases();
+        void onDiagnosticTourToggle();
     }
 
     static final class State {
@@ -92,6 +95,9 @@ final class SetupView extends View {
     private static final int ACTION_UPDATE_CONFIRM = 12;
     private static final int ACTION_UPDATE_CANCEL = 13;
     private static final int ACTION_DRIVERS = 14;
+    private static final int ACTION_UPDATE_RELEASES = 15;
+    private static final int ACTION_TOUR = 16;
+    private static final int ACTION_MODS = 17;
     private static final int SETTING_ACTION_BASE = 32;
 
     private static final int BUTTON_NORMAL = 0;
@@ -101,12 +107,13 @@ final class SetupView extends View {
 
     private static final long SLIDE_HOLD_MS = 6500L;
     private static final String[] REQUIREMENTS = {
-            "prototypeenginef.dll", ".rcf", ".p3d", "art", "audio", "scripts"
+            GameFiles.DLL, GameFiles.UV, ".rcf", ".p3d", "art", "audio", "scripts"
     };
-    private static final String[] CATEGORY_NAMES = {"GRAPHICS", "GAME VIDEO", "CONTROLS", "INTERFACE"};
+    private static final String[] CATEGORY_NAMES = {"GRAPHICS", "GAME VIDEO", "CONTROLS", "INTERFACE", "ENGINE FIXES"};
 
     private final Listener listener;
     private final GameSettings gameSettings;
+    private final DiagnosticTourCode tourCode = new DiagnosticTourCode();
     private final Bitmap[] slides = new Bitmap[4];
     private final Bitmap icon;
     private final Typeface medium;
@@ -123,17 +130,22 @@ final class SetupView extends View {
     private final RectF settingsDoneBounds = new RectF();
     private final RectF settingsListBounds = new RectF();
     private final RectF driverBounds = new RectF();
+    private final RectF modBounds = new RectF();
     private final RectF headerDriverBounds = new RectF();
+    private final RectF headerModBounds = new RectF();
+    private final RectF logoBounds = new RectF();
     private final RectF updateBounds = new RectF();
+    private final RectF updateReleasesBounds = new RectF();
     private final RectF updateWarningConfirmBounds = new RectF();
     private final RectF updateWarningCancelBounds = new RectF();
     private final RectF[] settingLeftBounds;
     private final RectF[] settingRightBounds;
-    private final float[] buttonFill = new float[16];
+    private final float[] buttonFill = new float[24];
     private final long startedAt = SystemClock.uptimeMillis();
     private final float density;
     private final float fontScale;
     private final int touchSlop;
+    private final boolean motionEnabled;
 
     private State state = new State(false, false, false, "INITIALIZING...", "", "", "");
     private UpdateManager.State updateState = UpdateManager.State.hidden();
@@ -159,6 +171,7 @@ final class SetupView extends View {
     private long splatStartedAt;
     private boolean scrolling;
     private boolean settingsOpen;
+    private boolean tourArmed;
     private float touchStartY;
     private float lastTouchY;
     private float scrollY;
@@ -184,6 +197,7 @@ final class SetupView extends View {
         density = getResources().getDisplayMetrics().density;
         fontScale = getResources().getConfiguration().fontScale;
         touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+        motionEnabled = LauncherMotion.enabled();
         setBackgroundColor(Color.BLACK);
         setClickable(true);
         setFocusable(true);
@@ -225,6 +239,12 @@ final class SetupView extends View {
         layoutDirty = true;
         if (focusedAction == ACTION_ALLOW && (next.fileAccess || next.gameFound)) focusedAction = ACTION_NONE;
         if (focusedAction == ACTION_CHECK && next.checking) focusedAction = ACTION_NONE;
+        updateContentDescription();
+        invalidate();
+    }
+
+    void setTourArmed(boolean armed) {
+        tourArmed = armed;
         updateContentDescription();
         invalidate();
     }
@@ -384,7 +404,7 @@ final class SetupView extends View {
         int width = getWidth();
         int height = getHeight();
         canvas.drawColor(Color.BLACK);
-        long elapsed = Math.max(0L, now - startedAt);
+        long elapsed = motionEnabled ? Math.max(0L, now - startedAt) : 0L;
         int slideNumber = (int) (elapsed / SLIDE_HOLD_MS);
         int index = slideNumber % slides.length;
         long phase = elapsed % SLIDE_HOLD_MS;
@@ -479,7 +499,7 @@ final class SetupView extends View {
     }
 
     private void drawHud(Canvas canvas, float left, float right, float y, float u, long now) {
-        float progress = easeOut((now - startedAt - 700L) / 1100f);
+        float progress = motionEnabled ? easeOut((now - startedAt - 700L) / 1100f) : 1f;
         float width = (right - left) * progress;
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(withAlpha(Color.WHITE, 0.16f));
@@ -491,6 +511,7 @@ final class SetupView extends View {
     private void drawHeader(Canvas canvas, float left, float right, float top, float u, long now) {
         float iconSize = 46f * u;
         RectF iconBounds = new RectF(left, top, left + iconSize, top + iconSize);
+        logoBounds.set(iconBounds);
         if (icon != null) {
             paint.setShader(new RadialGradient(iconBounds.centerX(), iconBounds.centerY(), iconSize * 0.58f,
                     new int[]{withAlpha(Color.BLACK, 0.80f), withAlpha(Color.BLACK, 0.45f), Color.TRANSPARENT},
@@ -510,8 +531,13 @@ final class SetupView extends View {
 
         exitBounds.set(right - 96f * u, top + 8f * u, right, top + 38f * u);
         headerDriverBounds.setEmpty();
-        if (!settingsOpen && right - left >= 400f * u) {
+        headerModBounds.setEmpty();
+        if (!settingsOpen && right - left >= 520f * u) {
             headerDriverBounds.set(exitBounds.left - 102f * u, top + 8f * u, exitBounds.left - 8f * u, top + 38f * u);
+            headerModBounds.set(headerDriverBounds.left - 88f * u, top + 8f * u,
+                    headerDriverBounds.left - 8f * u, top + 38f * u);
+            drawButton(canvas, ACTION_MODS, headerModBounds, "MODS", BUTTON_GHOST,
+                    true, false, u, now, 13f);
             drawButton(canvas, ACTION_DRIVERS, headerDriverBounds, "DRIVERS", BUTTON_GHOST,
                     true, false, u, now, 13f);
         }
@@ -522,7 +548,7 @@ final class SetupView extends View {
     private void drawGlitch(Canvas canvas, String value, float x, float top, float lineHeight, float size, int weight,
                             int color, float spacing, float u, long now) {
         long glitchTime = now - startedAt - 2400L;
-        boolean active = glitchTime >= 0L && glitchTime % 6500L < 220L;
+        boolean active = motionEnabled && glitchTime >= 0L && glitchTime % 6500L < 220L;
         float shift = active ? (((glitchTime % 6500L) / 55L) % 2L == 0L ? -5f : 4f) * u : 0f;
         if (active) {
             configure(text, size, weight, RED_HOT, spacing, u);
@@ -596,12 +622,14 @@ final class SetupView extends View {
     }
 
     private float updateBannerHeight(float u) {
-        return updateState.visible() ? 64f * u : 0f;
+        if (!updateState.visible()) return 0f;
+        return (updateState.status == UpdateManager.State.ERROR ? 94f : 64f) * u;
     }
 
     private void drawUpdateBanner(Canvas canvas, float left, float top, float width, float u, long now, float dt) {
         if (!updateState.visible()) {
             updateBounds.setEmpty();
+            updateReleasesBounds.setEmpty();
             return;
         }
         float height = updateBannerHeight(u);
@@ -618,11 +646,24 @@ final class SetupView extends View {
         paint.setColor(RED_HOT);
         canvas.drawRect(left, top, left + 3f * u, top + height, paint);
 
-        float buttonWidth = Math.min(142f * u, width * 0.36f);
-        updateBounds.set(right - buttonWidth - 8f * u, top + 11f * u,
-                right - 8f * u, top + 53f * u);
+        boolean recovery = updateState.status == UpdateManager.State.ERROR;
         float textLeft = left + 14f * u;
-        float textWidth = Math.max(1f, updateBounds.left - textLeft - 10f * u);
+        float textWidth;
+        updateReleasesBounds.setEmpty();
+        if (recovery) {
+            float buttonGap = 8f * u;
+            float buttonWidth = (width - 28f * u - buttonGap) / 2f;
+            float buttonTop = top + 51f * u;
+            updateBounds.set(textLeft, buttonTop, textLeft + buttonWidth, buttonTop + 35f * u);
+            updateReleasesBounds.set(updateBounds.right + buttonGap, buttonTop,
+                    right - 14f * u, buttonTop + 35f * u);
+            textWidth = Math.max(1f, width - 28f * u);
+        } else {
+            float buttonWidth = Math.min(142f * u, width * 0.36f);
+            updateBounds.set(right - buttonWidth - 8f * u, top + 11f * u,
+                    right - 8f * u, top + 53f * u);
+            textWidth = Math.max(1f, updateBounds.left - textLeft - 10f * u);
+        }
         String title;
         String button;
         boolean busy = false;
@@ -665,6 +706,10 @@ final class SetupView extends View {
         int variant = updateState.status == UpdateManager.State.AVAILABLE
                 || updateState.status == UpdateManager.State.READY ? BUTTON_PRIMARY : BUTTON_NORMAL;
         drawButton(canvas, ACTION_UPDATE, updateBounds, button, variant, updateState.canPress(), busy, u, now, dt);
+        if (recovery) {
+            drawButton(canvas, ACTION_UPDATE_RELEASES, updateReleasesBounds, "GO TO RELEASES",
+                    BUTTON_PRIMARY, true, false, u, now, dt);
+        }
         if (updateState.status == UpdateManager.State.DOWNLOADING && updateState.progress >= 0) {
             float barLeft = textLeft;
             float barRight = Math.max(barLeft, updateBounds.left - 10f * u);
@@ -763,14 +808,18 @@ final class SetupView extends View {
                 || focusedAction == action || busy);
         if (variant != BUTTON_DONE) {
             float target = live ? 1f : 0f;
-            float amount = 1f - (float) Math.exp(-Math.max(0f, dt) / 110f);
-            buttonFill[action] += (target - buttonFill[action]) * amount;
+            if (motionEnabled) {
+                float amount = 1f - (float) Math.exp(-Math.max(0f, dt) / 110f);
+                buttonFill[action] += (target - buttonFill[action]) * amount;
+            } else {
+                buttonFill[action] = target;
+            }
         } else {
             buttonFill[action] = 0f;
         }
 
         int outer = canvas.save();
-        if (pressedAction == action) canvas.scale(0.97f, 0.97f, bounds.centerX(), bounds.centerY());
+        if (motionEnabled && pressedAction == action) canvas.scale(0.97f, 0.97f, bounds.centerX(), bounds.centerY());
         Path shape = cutPath(bounds, Math.min(9f * u, bounds.height() * 0.25f));
         int clipped = canvas.save();
         canvas.clipPath(shape);
@@ -801,7 +850,7 @@ final class SetupView extends View {
             }
         }
 
-        if (splatAction == action) {
+        if (motionEnabled && splatAction == action) {
             float progress = clamp01((now - splatStartedAt) / 600f);
             if (progress < 1f) {
                 float radius = progress * bounds.width() * 0.8f + 1f;
@@ -814,7 +863,7 @@ final class SetupView extends View {
             }
         }
         if (busy) {
-            float sweep = (now % 900L) / 900f;
+            float sweep = motionEnabled ? (now % 900L) / 900f : 0.5f;
             float barWidth = bounds.width() * 0.35f;
             float x = bounds.left - barWidth + sweep * (bounds.width() + barWidth);
             paint.setColor(Color.WHITE);
@@ -993,6 +1042,7 @@ final class SetupView extends View {
             contentTop += updateHeight + 8f * u;
         } else {
             updateBounds.setEmpty();
+            updateReleasesBounds.setEmpty();
         }
 
         float headline = getHeight() / u < 300f ? 26f : (getHeight() / u < 340f ? 31f : 38f);
@@ -1018,7 +1068,8 @@ final class SetupView extends View {
         checkBounds.set(left + buttonWidth + 8f * u, buttonsTop, left + leftWidth, buttonsTop + 42f * u);
         if (launcherMode()) {
             drawButton(canvas, ACTION_SETTINGS, allowBounds, "SETTINGS", BUTTON_NORMAL, true, false, u, now, dt);
-            drawButton(canvas, ACTION_PLAY, checkBounds, "PLAY", BUTTON_PRIMARY, true, false, u, now, dt);
+            drawButton(canvas, ACTION_PLAY, checkBounds, tourArmed ? "START TOUR" : "PLAY", BUTTON_PRIMARY,
+                    true, false, u, now, dt);
         } else {
             drawButton(canvas, ACTION_ALLOW, allowBounds, "ALLOW FILE ACCESS", BUTTON_PRIMARY,
                     true, false, u, now, dt);
@@ -1060,6 +1111,7 @@ final class SetupView extends View {
             y += updateHeight + 8f * u;
         } else {
             updateBounds.setEmpty();
+            updateReleasesBounds.setEmpty();
         }
         float tileWidth = (width - 8f * u) / 2f;
         drawTile(canvas, new RectF(left, y, left + tileWidth, y + 46f * u),
@@ -1079,7 +1131,8 @@ final class SetupView extends View {
         checkBounds.set(left + buttonWidth + 8f * u, y, right, y + 42f * u);
         if (launcherMode()) {
             drawButton(canvas, ACTION_SETTINGS, allowBounds, "SETTINGS", BUTTON_NORMAL, true, false, u, now, dt);
-            drawButton(canvas, ACTION_PLAY, checkBounds, "PLAY", BUTTON_PRIMARY, true, false, u, now, dt);
+            drawButton(canvas, ACTION_PLAY, checkBounds, tourArmed ? "START TOUR" : "PLAY", BUTTON_PRIMARY,
+                    true, false, u, now, dt);
         } else {
             drawButton(canvas, ACTION_ALLOW, allowBounds, "ALLOW FILE ACCESS", BUTTON_PRIMARY,
                     true, false, u, now, dt);
@@ -1172,15 +1225,20 @@ final class SetupView extends View {
 
         float listTop = presetTop + presetRows * presetHeight + (presetRows - 1) * presetGap + 12f * u;
         float doneWidth = Math.min(160f * u, width * 0.30f);
-        float driverWidth = Math.min(150f * u, width * 0.28f);
+        float driverWidth = Math.min(150f * u, width * 0.25f);
+        float modWidth = Math.min(120f * u, width * 0.21f);
         settingsDoneBounds.set(right - doneWidth, bottom - 38f * u, right, bottom);
         driverBounds.set(settingsDoneBounds.left - driverWidth - 8f * u, bottom - 38f * u,
                 settingsDoneBounds.left - 8f * u, bottom);
+        modBounds.set(driverBounds.left - modWidth - 8f * u, bottom - 38f * u,
+                driverBounds.left - 8f * u, bottom);
+        drawButton(canvas, ACTION_MODS, modBounds, "MODS", BUTTON_NORMAL,
+                true, false, u, now, dt);
         drawButton(canvas, ACTION_DRIVERS, driverBounds, "DRIVERS", BUTTON_PRIMARY,
                 true, false, u, now, dt);
         drawButton(canvas, ACTION_SETTINGS_DONE, settingsDoneBounds, "DONE", BUTTON_NORMAL,
                 true, false, u, now, dt);
-        float noteWidth = Math.max(1f, driverBounds.left - left - 12f * u);
+        float noteWidth = Math.max(1f, modBounds.left - left - 12f * u);
         drawLine(canvas, "SAVED AUTOMATICALLY", left, bottom - 36f * u, 14f * u,
                 9.5f, 600, DIM, 1.2f, u, noteWidth);
         drawLine(canvas, "ENGINE OPTIONS APPLY ON PLAY", left, bottom - 19f * u, 14f * u,
@@ -1196,7 +1254,7 @@ final class SetupView extends View {
         for (int column = 0; column < columns; column++) {
             float height = 0f;
             int firstCategory = portrait ? GameSettings.CATEGORY_GRAPHICS : column * 2;
-            int endCategory = portrait ? GameSettings.CATEGORY_COUNT : firstCategory + 2;
+            int endCategory = portrait || column == columns - 1 ? GameSettings.CATEGORY_COUNT : firstCategory + 2;
             for (int category = firstCategory; category < endCategory; category++) {
                 height += headerHeight;
                 for (GameSettings.Setting setting : gameSettings.settings) {
@@ -1215,7 +1273,7 @@ final class SetupView extends View {
             float x = left + column * (columnWidth + rowGap);
             float y = settingsListBounds.top - scrollY;
             int firstCategory = portrait ? GameSettings.CATEGORY_GRAPHICS : column * 2;
-            int endCategory = portrait ? GameSettings.CATEGORY_COUNT : firstCategory + 2;
+            int endCategory = portrait || column == columns - 1 ? GameSettings.CATEGORY_COUNT : firstCategory + 2;
             for (int category = firstCategory; category < endCategory; category++) {
                 if (y + headerHeight >= settingsListBounds.top && y <= settingsListBounds.bottom) {
                     drawLine(canvas, CATEGORY_NAMES[category], x + 3f * u, y, headerHeight - 3f * u,
@@ -1256,6 +1314,7 @@ final class SetupView extends View {
     }
 
     private void drawBootCurtain(Canvas canvas, long now) {
+        if (!motionEnabled) return;
         float progress = clamp01((now - startedAt - 150L) / 1100f);
         if (progress >= 1f) return;
         float eased = progress < 0.5f ? 4f * progress * progress * progress
@@ -1286,7 +1345,7 @@ final class SetupView extends View {
             if (updateWarningVisible) drawUpdateWarning(canvas, now, dt);
             drawBootCurtain(canvas, now);
         }
-        if (getWindowVisibility() == VISIBLE && isAttachedToWindow()) postInvalidateOnAnimation();
+        if (motionEnabled && getWindowVisibility() == VISIBLE && isAttachedToWindow()) postInvalidateOnAnimation();
     }
 
     private int actionAt(float x, float y) {
@@ -1296,13 +1355,16 @@ final class SetupView extends View {
             return ACTION_NONE;
         }
         if (exitBounds.contains(x, y)) return ACTION_EXIT;
+        if (!settingsOpen && logoBounds.contains(x, y)) return ACTION_TOUR;
         if (!settingsOpen && headerDriverBounds.contains(x, y)) return ACTION_DRIVERS;
+        if (!settingsOpen && headerModBounds.contains(x, y)) return ACTION_MODS;
         if (settingsOpen) {
             for (int i = 0; i < presetBounds.length; i++) {
                 if (presetBounds[i].contains(x, y)) return ACTION_PRESET_LOW + i;
             }
             if (settingsDoneBounds.contains(x, y)) return ACTION_SETTINGS_DONE;
             if (driverBounds.contains(x, y)) return ACTION_DRIVERS;
+            if (modBounds.contains(x, y)) return ACTION_MODS;
             if (settingsListBounds.contains(x, y)) {
                 for (int i = 0; i < gameSettings.settings.length; i++) {
                     if (settingLeftBounds[i].contains(x, y)) return SETTING_ACTION_BASE + i * 2;
@@ -1310,6 +1372,9 @@ final class SetupView extends View {
                 }
             }
             return ACTION_NONE;
+        }
+        if (updateState.status == UpdateManager.State.ERROR && updateReleasesBounds.contains(x, y)) {
+            return ACTION_UPDATE_RELEASES;
         }
         if (updateState.visible() && updateState.canPress() && updateBounds.contains(x, y)) return ACTION_UPDATE;
         if (launcherMode()) {
@@ -1331,7 +1396,7 @@ final class SetupView extends View {
                 requestFocus();
                 focusedAction = ACTION_NONE;
                 pressedAction = actionAt(x, y);
-                splatAction = pressedAction;
+                splatAction = motionEnabled ? pressedAction : ACTION_NONE;
                 splatX = x;
                 splatY = y;
                 splatStartedAt = SystemClock.uptimeMillis();
@@ -1381,12 +1446,24 @@ final class SetupView extends View {
 
     private void activate(int action) {
         performClick();
+        if (action == ACTION_TOUR) {
+            if (tourCode.onLogoTap(SystemClock.uptimeMillis())) listener.onDiagnosticTourToggle();
+            return;
+        }
         if (action == ACTION_DRIVERS) {
             listener.onDrivers();
             return;
         }
+        if (action == ACTION_MODS) {
+            listener.onMods();
+            return;
+        }
         if (action == ACTION_UPDATE) {
             listener.onUpdate();
+            return;
+        }
+        if (action == ACTION_UPDATE_RELEASES) {
+            listener.onUpdateReleases();
             return;
         }
         if (action == ACTION_UPDATE_CONFIRM) {
@@ -1440,15 +1517,25 @@ final class SetupView extends View {
             order = new int[] {ACTION_UPDATE_CONFIRM, ACTION_UPDATE_CANCEL};
         } else if (settingsOpen) {
             order = new int[] {ACTION_PRESET_LOW, ACTION_PRESET_MEDIUM, ACTION_PRESET_HIGH,
-                    ACTION_PRESET_CUSTOM, ACTION_DRIVERS, ACTION_SETTINGS_DONE, ACTION_EXIT};
+                    ACTION_PRESET_CUSTOM, ACTION_MODS, ACTION_DRIVERS, ACTION_SETTINGS_DONE, ACTION_EXIT};
         } else if (launcherMode()) {
-            order = updateState.visible() && updateState.canPress()
-                    ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_DRIVERS, ACTION_EXIT}
-                    : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_DRIVERS, ACTION_EXIT};
+            if (updateState.status == UpdateManager.State.ERROR) {
+                order = new int[] {ACTION_UPDATE, ACTION_UPDATE_RELEASES, ACTION_SETTINGS, ACTION_PLAY,
+                        ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
+            } else {
+                order = updateState.visible() && updateState.canPress()
+                        ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
+                        : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
+            }
         } else {
-            order = updateState.visible() && updateState.canPress()
-                    ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_DRIVERS, ACTION_EXIT}
-                    : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_DRIVERS, ACTION_EXIT};
+            if (updateState.status == UpdateManager.State.ERROR) {
+                order = new int[] {ACTION_UPDATE, ACTION_UPDATE_RELEASES, ACTION_ALLOW, ACTION_CHECK,
+                        ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
+            } else {
+                order = updateState.visible() && updateState.canPress()
+                        ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
+                        : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
+            }
         }
         int index = -1;
         for (int i = 0; i < order.length; i++) if (order[i] == current) index = i;

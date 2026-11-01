@@ -14,6 +14,7 @@ inline constexpr uint32_t kDriverMesaTurnip = 18;
 constexpr uint32_t MakeVulkanApi(uint32_t major, uint32_t minor, uint32_t patch = 0) {
     return (major << 22) | (minor << 12) | patch;
 }
+inline constexpr uint32_t kVulkanApi11 = MakeVulkanApi(1, 1);
 inline constexpr uint32_t kVulkanApi12 = MakeVulkanApi(1, 2);
 inline constexpr uint32_t kVulkanApi13 = MakeVulkanApi(1, 3);
 
@@ -38,6 +39,18 @@ constexpr GpuProfile GetGpuProfile(uint32_t vendor_id) {
 constexpr uint32_t NegotiateVulkanApi(uint32_t instance_api, uint32_t device_api) {
     const uint32_t api = std::min(std::min(instance_api, device_api), kVulkanApi13);
     return api >= kVulkanApi12 ? api : 0;
+}
+
+// The compatibility wrapper is an Auto-only fallback, never a replacement for a working direct path or an implicit
+// change to an explicitly selected driver. A zero direct API includes an unavailable/unnegotiable direct loader;
+// the isolated wrapper probe must still prove its own effective device and features before it can be used.
+constexpr bool ShouldProbeVulkanWrapper(bool automatic_mode, uint32_t direct_usable_api) {
+    return automatic_mode && direct_usable_api < kVulkanApi12;
+}
+
+// The adapted wrapper is a Vulkan 1.1+ compatibility route, not an untested Vulkan 1.0 promotion.
+constexpr bool SupportsVulkan11WrapperBase(uint32_t base_loader_api) {
+    return base_loader_api >= kVulkanApi11;
 }
 
 constexpr bool ContainsText(const char* text, const char* needle) {

@@ -20,6 +20,7 @@
 
 #include "win.h"
 #include "cpu_affinity.h"
+#include "mod_platform.h"
 
 namespace native {
 
@@ -800,6 +801,9 @@ K(CreateFileA) {
         case 4: flags |= O_CREAT; break;            // OPEN_ALWAYS
         case 5: flags |= O_TRUNC; break;            // TRUNCATE_EXISTING
     }
+    // Only an existing read-only open can be redirected. Saves, write/create/truncate modes and every path outside
+    // C:\Game retain HostPath's original routing; the overlay itself enforces that guest-directory boundary.
+    if (!write && disposition == 3) host = ModFilesResolveReadPath(name, host);
     struct stat st;
     bool existed = stat(host.c_str(), &st) == 0;
     if (existed && S_ISDIR(st.st_mode)) {
@@ -989,8 +993,10 @@ K(CopyFileA) {
     Return(c, ok, 3);
 }
 K(GetFileAttributesA) {
+    const char* name = Str(Arg(c, 0));
+    std::string host = ModFilesResolveReadPath(name, HostPath(name));
     struct stat st;
-    if (stat(HostPath(Str(Arg(c, 0))).c_str(), &st) != 0) {
+    if (stat(host.c_str(), &st) != 0) {
         SetLastError(ErrnoToWin(errno));
         Return(c, 0xffffffffu, 1);
         return;
@@ -1085,8 +1091,10 @@ K(DeviceIoControl) {
 }
 K(OpenFile) {
     // OFSTRUCT-based open; the engine only probes for existence (OF_EXIST).
+    const char* name = Str(Arg(c, 0));
+    std::string host = ModFilesResolveReadPath(name, HostPath(name));
     struct stat st;
-    bool exists = stat(HostPath(Str(Arg(c, 0))).c_str(), &st) == 0;
+    bool exists = stat(host.c_str(), &st) == 0;
     Return(c, exists ? 1 : 0xffffffffu, 3);
 }
 

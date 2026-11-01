@@ -11,6 +11,8 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.system.ErrnoException;
 import android.system.Os;
+import android.view.KeyEvent;
+import android.widget.Toast;
 
 import java.io.File;
 
@@ -21,15 +23,17 @@ import java.io.File;
  * Also supports /sdcard/Prototype/game subfolder.
  */
 public class SetupActivity extends Activity {
-    private static final String DLL = "prototypeenginef.dll";
     private static final int REQUEST_STORAGE = 1;
 
     private SetupView setupView;
+    private final DiagnosticTourCode tourCode = new DiagnosticTourCode();
+    private boolean tourArmed;
     private DriverView driverView;
     private UpdateManager updateManager;
     private DriverManager driverManager;
     private File foundGame;
     private boolean foundInApp;
+    private boolean missingUv;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,6 +77,12 @@ public class SetupActivity extends Activity {
                 }
 
                 @Override
+                public void onMods() {
+                    startActivity(new Intent(SetupActivity.this, ModsActivity.class));
+                    LauncherMotion.transition(SetupActivity.this);
+                }
+
+                @Override
                 public void onExit() {
                     finish();
                 }
@@ -92,6 +102,16 @@ public class SetupActivity extends Activity {
                 public void onUpdateCancel() {
                     setupView.hideUpdateWarning();
                 }
+
+                @Override
+                public void onUpdateReleases() {
+                    updateManager.onReleasesPressed();
+                }
+
+                @Override
+                public void onDiagnosticTourToggle() {
+                    toggleDiagnosticTour();
+                }
             });
             setContentView(setupView);
         }
@@ -102,6 +122,12 @@ public class SetupActivity extends Activity {
                 : "/storage/emulated/0/Android/data/" + getPackageName() + "/files/game";
         String status = foundGame != null ? "Ready to play"
                 : access ? "Game files not found. Tap Play to check again" : "Waiting for file access";
+        if (missingUv) {
+            status = "Missing proto_uv.dat; copy it from your PC game";
+        } else if (tourArmed) {
+            status = foundGame != null ? "Tour: automatic tests, then app closes" : "Tour armed; game files required";
+        }
+        setupView.setTourArmed(tourArmed);
         setupView.setState(new SetupView.State(
                 access,
                 foundGame != null,
@@ -116,6 +142,10 @@ public class SetupActivity extends Activity {
         if (driverView != null || setupView == null) return;
         driverView = new DriverView(this, setupView.gameSettings(), driverManager, this::closeDrivers);
         setContentView(driverView);
+        if (LauncherMotion.enabled()) {
+            driverView.setAlpha(0f);
+            driverView.animate().alpha(1f).setDuration(220).start();
+        }
     }
 
     private void closeDrivers() {
@@ -123,6 +153,10 @@ public class SetupActivity extends Activity {
         driverManager.setObserver(null);
         driverView = null;
         setContentView(setupView);
+        if (LauncherMotion.enabled()) {
+            setupView.setAlpha(0f);
+            setupView.animate().alpha(1f).setDuration(220).start();
+        }
     }
 
     private File appGame() {
@@ -141,10 +175,6 @@ public class SetupActivity extends Activity {
     private boolean hasSharedAccess() {
         if (Build.VERSION.SDK_INT >= 30) return Environment.isExternalStorageManager();
         return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
-    }
-
-    private static boolean hasGame(File dir) {
-        return dir != null && new File(dir, DLL).canRead();
     }
 
     @Override
@@ -172,30 +202,35 @@ public class SetupActivity extends Activity {
         if (app != null) app.mkdirs();
         File shared = sharedGame();
         File sharedSub = sharedGameSub();
-        if (hasSharedAccess()) {
+        boolean sharedAccess = hasSharedAccess();
+        if (sharedAccess) {
             shared.mkdirs();
             // Also ensure subfolder exists check doesn't create it yet, but ensure parent exists
         }
         // Detection is automatic; launching is deliberate so Settings remains available before every game start.
-        foundGame = null;
-        foundInApp = false;
-        if (hasGame(app)) {
-            foundGame = app;
-            foundInApp = true;
-        } else if (hasSharedAccess() && hasGame(shared)) {
-            foundGame = shared;
-        } else if (hasSharedAccess() && hasGame(sharedSub)) {
-            foundGame = sharedSub;
-        }
+        File[] candidates = sharedAccess ? new File[]{app, shared, sharedSub} : new File[]{app};
+        foundGame = GameFiles.firstComplete(candidates);
+        foundInApp = foundGame != null && foundGame.equals(app);
+        missingUv = foundGame == null && GameFiles.anyMissingUv(candidates);
         showSetup(app, shared);
     }
 
     private void play() {
         check();  // also refreshes after files were copied while this screen remained open
-        if (foundGame != null) launch(foundInApp ? null : foundGame);
+        if (foundGame != null) launch(foundInApp ? null : foundGame, tourArmed);
     }
 
-    private void launch(File gameDir) {
+    private void launch(File gameDir, boolean tour) {
+        try {
+            if (tour) Os.setenv("PROTODROID_DIAGNOSTIC_TOUR", "1", true);
+            else Os.unsetenv("PROTODROID_DIAGNOSTIC_TOUR");
+        } catch (ErrnoException e) {
+            Toast.makeText(this, tour
+                            ? "Could not arm the diagnostic tour; normal Play was not substituted."
+                            : "Could not clear diagnostic-tour mode; Play was cancelled to protect your saves.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
         try {
             if (gameDir == null) Os.unsetenv("PROTODROID_GAME");
             else Os.setenv("PROTODROID_GAME", gameDir.getAbsolutePath(), true);
@@ -218,6 +253,25 @@ public class SetupActivity extends Activity {
         }
         startActivity(new Intent(this, ProtoActivity.class));
         finish();
+    }
+
+    private void toggleDiagnosticTour() {
+        if (driverView != null || setupView == null) return;
+        tourArmed = !tourArmed;
+        setupView.setTourArmed(tourArmed);
+        check();
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (driverView == null && event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+            int unicode = event.getUnicodeChar();
+            if (unicode > 0 && tourCode.onLetter((char) unicode)) {
+                toggleDiagnosticTour();
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     private void requestAccess() {

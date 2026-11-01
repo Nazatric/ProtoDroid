@@ -11,7 +11,9 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <string>
+#include <vector>
 
 #include "gpu_profile.h"
 
@@ -20,49 +22,242 @@ namespace native {
 struct ProbeInfo {
     uint32_t api_version = 0;   // physical device's advertised API, for diagnostics
     uint32_t usable_api = 0;    // instance/device intersection, capped at the tested 1.3 path
-    uint32_t instance_api = 0;
+    uint32_t instance_api = 0;  // requested instance API (kept separate from the loader's advertised maximum)
+    uint32_t loader_api = 0;
     uint32_t vendor_id = 0;
     uint32_t driver_id = 0;
+    bool required_features_ok = false;
 };
+
+inline void AppendProbeReport(std::string& report, const std::string& line) {
+    if (!report.empty()) report += '\n';
+    report += line;
+}
+
+// Required by the patched DXVK 2.5.3 actually shipped here: D3D9DeviceEx::GetDeviceFeatures plus the unconditional
+// core device enables in DxvkAdapter::createDevice. The Android patch makes BC optional (native DXT decoding) and
+// clamps robustness2 (dummy resources replace null descriptors), so those are reported but not grounds for rejection.
+// Query the effective wrapper device rather than inferring support from its base driver or advertised API number.
+inline bool ProbeRequiredDxvkFeatures(PFN_vkGetInstanceProcAddr gipa, VkInstance instance, VkPhysicalDevice device,
+                                      uint32_t effective_api, std::string& report) {
+    if (effective_api < kVulkanApi12) {
+        AppendProbeReport(report, "vulkan: wrapper effective device remains below Vulkan 1.2");
+        return false;
+    }
+    auto enumerate_extensions = reinterpret_cast<PFN_vkEnumerateDeviceExtensionProperties>(
+        gipa(instance, "vkEnumerateDeviceExtensionProperties"));
+    auto get_features = reinterpret_cast<PFN_vkGetPhysicalDeviceFeatures2>(
+        gipa(instance, "vkGetPhysicalDeviceFeatures2"));
+    if (!enumerate_extensions || !get_features) {
+        AppendProbeReport(report, "vulkan: wrapper capability query lacks extension enumeration or features2");
+        return false;
+    }
+
+    uint32_t count = 0;
+    if (enumerate_extensions(device, nullptr, &count, nullptr) < 0) {
+        AppendProbeReport(report, "vulkan: wrapper device-extension enumeration failed");
+        return false;
+    }
+    std::vector<VkExtensionProperties> extensions(count);
+    const VkResult extension_result = count
+        ? enumerate_extensions(device, nullptr, &count, extensions.data()) : VK_SUCCESS;
+    if (extension_result < 0) {
+        AppendProbeReport(report, "vulkan: wrapper device-extension list failed with " +
+                                  std::to_string(extension_result));
+        return false;
+    }
+    extensions.resize(count);
+    auto has_extension = [&](const char* name) {
+        for (const auto& extension : extensions) {
+            if (strcmp(extension.extensionName, name) == 0) return true;
+        }
+        return false;
+    };
+    auto append_name = [](std::string& list, const char* name) {
+        if (!list.empty()) list += ' ';
+        list += name;
+    };
+
+    // Match DXVK's two actual query paths. In particular, a 1.2 device is not queried with the core-1.3 struct:
+    // its KHR/EXT equivalents supply the bits that DxvkAdapter copies into its internal vk13 feature record.
+    const bool compatibility12 = effective_api < kVulkanApi13;
+    VkPhysicalDeviceFeatures2 core{};
+    core.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    VkPhysicalDeviceVulkan11Features f11{};
+    f11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+    VkPhysicalDeviceVulkan12Features f12{};
+    f12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    core.pNext = &f11;
+    f11.pNext = &f12;
+    void** tail = &f12.pNext;
+    auto append_feature = [&](auto* feature) {
+        *tail = feature;
+        tail = &feature->pNext;
+    };
+
+    VkPhysicalDeviceVulkan13Features f13{};
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic12{};
+    VkPhysicalDeviceSynchronization2FeaturesKHR synchronization12{};
+    VkPhysicalDeviceShaderDemoteToHelperInvocationFeaturesEXT demote12{};
+    VkPhysicalDeviceMaintenance4FeaturesKHR maintenance12{};
+    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extended12{};
+    if (!compatibility12) {
+        f13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+        append_feature(&f13);
+    } else {
+        if (has_extension(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)) {
+            dynamic12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+            append_feature(&dynamic12);
+        }
+        if (has_extension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME)) {
+            synchronization12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+            append_feature(&synchronization12);
+        }
+        if (has_extension(VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME)) {
+            demote12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES_EXT;
+            append_feature(&demote12);
+        }
+        if (has_extension(VK_KHR_MAINTENANCE_4_EXTENSION_NAME)) {
+            maintenance12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES_KHR;
+            append_feature(&maintenance12);
+        }
+        if (has_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME)) {
+            extended12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
+            append_feature(&extended12);
+        }
+    }
+    VkPhysicalDeviceRobustness2FeaturesEXT robust{};
+    if (has_extension(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME)) {
+        robust.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
+        append_feature(&robust);
+    }
+    get_features(device, &core);
+
+    const VkBool32 dynamic_rendering = compatibility12 ? dynamic12.dynamicRendering : f13.dynamicRendering;
+    const VkBool32 synchronization2 = compatibility12 ? synchronization12.synchronization2 : f13.synchronization2;
+    const VkBool32 demote = compatibility12 ? demote12.shaderDemoteToHelperInvocation : f13.shaderDemoteToHelperInvocation;
+    const VkBool32 maintenance4 = compatibility12 ? maintenance12.maintenance4 : f13.maintenance4;
+    struct Required { const char* name; VkBool32 supported; };
+    const Required required[] = {
+        {"robustBufferAccess", core.features.robustBufferAccess},
+        {"multiDrawIndirect", core.features.multiDrawIndirect},
+        {"geometryShader", core.features.geometryShader},
+        {"imageCubeArray", core.features.imageCubeArray},
+        {"depthClamp", core.features.depthClamp},
+        {"depthBiasClamp", core.features.depthBiasClamp},
+        {"fillModeNonSolid", core.features.fillModeNonSolid},
+        {"sampleRateShading", core.features.sampleRateShading},
+        {"shaderClipDistance", core.features.shaderClipDistance},
+        {"shaderCullDistance", core.features.shaderCullDistance},
+        {"occlusionQueryPrecise", core.features.occlusionQueryPrecise},
+        {"multiViewport", core.features.multiViewport},
+        {"independentBlend", core.features.independentBlend},
+        {"fullDrawIndexUint32", core.features.fullDrawIndexUint32},
+        {"shaderDrawParameters", f11.shaderDrawParameters},
+        {"samplerMirrorClampToEdge", f12.samplerMirrorClampToEdge},
+        {"vulkanMemoryModel", f12.vulkanMemoryModel},
+        {"hostQueryReset", f12.hostQueryReset},
+        {"timelineSemaphore", f12.timelineSemaphore},
+        {"shaderDemoteToHelperInvocation", demote},
+        {"synchronization2", synchronization2},
+        {"dynamicRendering", dynamic_rendering},
+        // DXVK makes maintenance4 optional only on its explicit 1.2 compatibility path.
+        {"maintenance4", compatibility12 || maintenance4},
+        // Extended dynamic state is a required extension/feature only on that 1.2 path.
+        {"extendedDynamicState", !compatibility12 || extended12.extendedDynamicState},
+    };
+    std::string missing;
+    for (const auto& feature : required) {
+        if (!feature.supported) append_name(missing, feature.name);
+    }
+    std::string missing_extensions;
+    if (!has_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
+        append_name(missing_extensions, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    if (compatibility12) {
+        const char* required_extensions[] = {
+            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+            VK_KHR_COPY_COMMANDS_2_EXTENSION_NAME,
+            VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME,
+        };
+        for (const char* name : required_extensions) {
+            if (!has_extension(name)) append_name(missing_extensions, name);
+        }
+    }
+
+    char line[1024];
+    snprintf(line, sizeof(line),
+             "vulkan: wrapper effective features: required=%s robustness2ext=%u robustBufferAccess2=%u "
+             "nullDescriptor=%u robustImageAccess2=%u textureCompressionBC=%u maintenance4=%u",
+             missing.empty() && missing_extensions.empty() ? "yes" : "NO",
+             has_extension(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME) ? 1u : 0u, robust.robustBufferAccess2 ? 1u : 0u,
+             robust.nullDescriptor ? 1u : 0u, robust.robustImageAccess2 ? 1u : 0u,
+             core.features.textureCompressionBC ? 1u : 0u, maintenance4 ? 1u : 0u);
+    AppendProbeReport(report, line);
+    if (!robust.nullDescriptor)
+        AppendProbeReport(report, "vulkan: nullDescriptor unavailable; patched DXVK will use its dummy-resource path");
+    if (!core.features.textureCompressionBC)
+        AppendProbeReport(report, "vulkan: BC formats unavailable; ProtoDroid's native DXT decode path remains necessary");
+    if (!missing.empty()) AppendProbeReport(report, "vulkan: wrapper missing required features: " + missing);
+    if (!missing_extensions.empty())
+        AppendProbeReport(report, "vulkan: wrapper missing required device extensions: " + missing_extensions);
+    return missing.empty() && missing_extensions.empty();
+}
 
 // Creates a throwaway instance to see which GPU the driver drives; returns the device name ("" if none) and puts a
 // line for the log in `report`. Vulkan 1.3 remains preferred, but a 1.2 loader/device gets a real negotiated instance
 // so DXVK can use its extension-equivalent compatibility path instead of failing during instance creation.
 inline std::string ProbeDevice(PFN_vkGetInstanceProcAddr gipa, const char* driver, std::string& report,
-                               ProbeInfo* probe_info = nullptr) {
+                               ProbeInfo* probe_info = nullptr, bool compatibility_wrapper = false) {
     char line[1024];
     ProbeInfo info;
+    report.clear();
+    auto fail = [&](const std::string& text) {
+        report = text;
+        if (probe_info) *probe_info = info;
+        return std::string();
+    };
+
     auto create = reinterpret_cast<PFN_vkCreateInstance>(gipa(nullptr, "vkCreateInstance"));
     if (!create) {
         snprintf(line, sizeof(line), "vulkan: %s has no vkCreateInstance", driver);
-        report = line;
-        return "";
+        return fail(line);
     }
 
     uint32_t loader_api = VK_API_VERSION_1_0;
     auto instance_version = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(gipa(nullptr, "vkEnumerateInstanceVersion"));
     if (instance_version && instance_version(&loader_api) != VK_SUCCESS) loader_api = VK_API_VERSION_1_0;
-    const uint32_t requested_api = std::min(loader_api, kVulkanApi13);
+    // A wrapper must see DXVK's intended 1.3 request to enable its lowering path, even when the base loader advertises
+    // only 1.1. Direct drivers retain the old guard and never receive an over-versioned request.
+    const uint32_t requested_api = compatibility_wrapper ? kVulkanApi13 : std::min(loader_api, kVulkanApi13);
+    info.loader_api = loader_api;
     info.instance_api = requested_api;
-    if (requested_api < kVulkanApi12) {
+    if (compatibility_wrapper && !SupportsVulkan11WrapperBase(loader_api)) {
+        snprintf(line, sizeof(line),
+                 "vulkan: %s base loader supports only Vulkan %u.%u (the compatibility route requires 1.1 or newer)",
+                 driver, VK_API_VERSION_MAJOR(loader_api), VK_API_VERSION_MINOR(loader_api));
+        return fail(line);
+    }
+    if (!compatibility_wrapper && requested_api < kVulkanApi12) {
         snprintf(line, sizeof(line), "vulkan: %s loader supports only Vulkan %u.%u (1.2 or newer is required)", driver,
                  VK_API_VERSION_MAJOR(loader_api), VK_API_VERSION_MINOR(loader_api));
-        report = line;
-        return "";
+        return fail(line);
     }
 
     VkApplicationInfo app{};
     app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app.pApplicationName = "ProtoDroid";
+    app.pEngineName = "DXVK";  // also selects the wrapper's DXVK lowering route
     app.apiVersion = requested_api;
     VkInstanceCreateInfo ci{};
     ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     ci.pApplicationInfo = &app;
     VkInstance instance = VK_NULL_HANDLE;
     if (VkResult r = create(&ci, nullptr, &instance); r != VK_SUCCESS) {
-        snprintf(line, sizeof(line), "vulkan: %s vkCreateInstance(%u.%u) -> %d", driver,
-                 VK_API_VERSION_MAJOR(requested_api), VK_API_VERSION_MINOR(requested_api), r);
-        report = line;
-        return "";
+        snprintf(line, sizeof(line), "vulkan: %s vkCreateInstance(%u.%u) -> %d (loader advertised %u.%u)", driver,
+                 VK_API_VERSION_MAJOR(requested_api), VK_API_VERSION_MINOR(requested_api), r,
+                 VK_API_VERSION_MAJOR(loader_api), VK_API_VERSION_MINOR(loader_api));
+        return fail(line);
     }
     auto enumerate = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(gipa(instance, "vkEnumeratePhysicalDevices"));
     auto props = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(gipa(instance, "vkGetPhysicalDeviceProperties"));
@@ -95,16 +290,22 @@ inline std::string ProbeDevice(PFN_vkGetInstanceProcAddr gipa, const char* drive
         name = p.deviceName;
         const GpuProfile profile = GetGpuProfile(p.vendorID);
         snprintf(line, sizeof(line),
-                 "vulkan: %s sees %s (profile %s, device Vulkan %u.%u.%u, instance %u.%u, usable %u.%u, driver %08x, driverID %u, vendor %04x device %08x)",
+                 "vulkan: %s sees %s (profile %s, device Vulkan %u.%u.%u, requested %u.%u, loader %u.%u, usable %u.%u, driver %08x, driverID %u, vendor %04x device %08x)",
                  driver, p.deviceName, profile.name, VK_API_VERSION_MAJOR(p.apiVersion),
                  VK_API_VERSION_MINOR(p.apiVersion), VK_API_VERSION_PATCH(p.apiVersion),
                  VK_API_VERSION_MAJOR(requested_api), VK_API_VERSION_MINOR(requested_api),
+                 VK_API_VERSION_MAJOR(loader_api), VK_API_VERSION_MINOR(loader_api),
                  VK_API_VERSION_MAJOR(info.usable_api), VK_API_VERSION_MINOR(info.usable_api), p.driverVersion,
                  info.driver_id, p.vendorID, p.deviceID);
+        report = line;
+        if (compatibility_wrapper) {
+            info.required_features_ok = ProbeRequiredDxvkFeatures(gipa, instance, device, p.apiVersion, report);
+            if (!info.required_features_ok) name.clear();
+        }
     } else {
         snprintf(line, sizeof(line), "vulkan: %s vkEnumeratePhysicalDevices -> %d, %u device(s)", driver, r, count);
+        report = line;
     }
-    report = line;
     if (probe_info) *probe_info = info;
     if (destroy) destroy(instance, nullptr);
     return name;
@@ -114,7 +315,8 @@ inline std::string ProbeDevice(PFN_vkGetInstanceProcAddr gipa, const char* drive
 struct Driver {
     std::string hook_dir, dir, file;
     bool custom;  // an explicitly imported driver: any vendor's Vulkan device may be accepted after validation
-    bool direct_icd = false;  // PanVK-kbase: bypass AdrenoTools and use vk_icdGetInstanceProcAddr
+    bool direct_icd = false;  // PanVK-kbase/wrapper: bypass AdrenoTools and use vk_icdGetInstanceProcAddr
+    bool compatibility_wrapper = false;  // request DXVK/1.3 and verify the wrapper's effective feature set
 };
 
 // AdrenoTools can silently return the system driver when a custom library fails to load. A successful Vulkan
@@ -170,16 +372,19 @@ inline PFN_vkGetInstanceProcAddr LoadDirectIcd(const Driver& d, std::string& dev
         }
     }
     ProbeInfo info;
-    device = ProbeDevice(gipa, d.file.c_str(), report, &info);
+    device = ProbeDevice(gipa, d.file.c_str(), report, &info, d.compatibility_wrapper);
     if (!device.empty() && !info.usable_api) {
         report += " (needs Vulkan 1.2 with required extensions, or 1.3)";
         device.clear();
+    }
+    if (device.empty()) {
+        dlclose(lib);
         return nullptr;
     }
-    if (device.empty()) return nullptr;
     if (d.custom && !CustomDriverMapped(d)) {
         report += " (the direct ICD was not mapped; refusing an ambiguous fallback)";
         device.clear();
+        dlclose(lib);
         return nullptr;
     }
     return gipa;

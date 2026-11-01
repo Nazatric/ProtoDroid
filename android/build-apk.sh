@@ -64,6 +64,11 @@ for abi in "${ABIS[@]}"; do
         ls -lh "$OUT/pkg/lib/$abi/$lib"
     done
     if [ "$abi" = arm64-v8a ]; then
+        if [ ! -s "$DEPS_ROOT/$abi/lib/libvulkan_wrapper.so" ]; then
+            echo "ERROR: missing Android-WSI Vulkan compatibility wrapper; rebuild the pinned dependency batch"
+            exit 1
+        fi
+        cp -v "$DEPS_ROOT/$abi/lib/libvulkan_wrapper.so" "$OUT/pkg/lib/$abi/"
         if [ ! -s "$ROOT/build/android/$abi/libturnipprobe.so" ]; then
             echo "ERROR: missing ARM64 isolated Vulkan driver probe; rebuild with TURNIP_ROOT=$TURNIP_ROOT"
             exit 1
@@ -134,13 +139,14 @@ with zipfile.ZipFile(apk) as archive:
 PY
 # The A825 fix is part of the native package, not an optional download. Verify it in the signed APK itself.
 if [[ " ${ABIS[*]} " == *" arm64-v8a "* ]]; then
-python3 - "$OUT/prototype.apk" <<'PY'
+python3 - "$OUT/prototype.apk" "$OUT/pkg/lib/arm64-v8a/libvulkan_wrapper.so" <<'PY'
 import sys
 import zipfile
+from pathlib import Path
 required = (
     "libvulkan_freedreno.so", "libvulkan_freedreno_next.so", "libvulkan_freedreno_gen8.so",
-    "libturnipprobe.so", "libhook_impl.so", "libmain_hook.so", "libfile_redirect_hook.so",
-    "libgsl_alloc_hook.so",
+    "libturnipprobe.so", "libvulkan_wrapper.so", "libhook_impl.so", "libmain_hook.so",
+    "libfile_redirect_hook.so", "libgsl_alloc_hook.so",
 )
 with zipfile.ZipFile(sys.argv[1]) as apk:
     names = set(apk.namelist())
@@ -162,6 +168,36 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
             if marker not in data:
                 raise SystemExit("ERROR: " + path + " lacks direct ICD marker " + marker.decode())
         print("Verified direct ICD loader in " + path)
+
+    wrapper_path = "lib/arm64-v8a/libvulkan_wrapper.so"
+    wrapper = apk.read(wrapper_path)
+    if wrapper != Path(sys.argv[2]).read_bytes():
+        raise SystemExit("ERROR: signed Android wrapper differs from the staged verified artifact")
+    for marker in (b"vk_icdGetInstanceProcAddr", b"vkCreateAndroidSurfaceKHR", b"/system/lib64/libvulkan.so",
+                   b"ProtoDroid DXVK instance request", b"WRAPPER_WORK_DIR",
+                   b"/storage/emulated/0/Android/data/com.protodroid/files/vulkan-wrapper-cache"):
+        if marker not in wrapper:
+            raise SystemExit("ERROR: signed Android wrapper lacks marker " + marker.decode())
+    # Generated Vulkan API names are not proof of X11 linkage. The build script checks WSI symbols and DT_NEEDED;
+    # this signed-package check compares exact staged bytes and rejects actual X11/reference and Termux markers.
+    for forbidden in (b"xcb_connect", b"XOpenDisplay", b"XCloseDisplay", b"adrenotools_open_libvulkan",
+                      b"/data/data/com.termux", b"/data/data/com.winlator.cmod",
+                      b"/data/data/app.gamenative", b"/sdcard/wrapper"):
+        if forbidden in wrapper:
+            raise SystemExit("ERROR: signed Android wrapper contains forbidden marker " + forbidden.decode())
+    print("Verified Android-WSI system compatibility wrapper")
+
+    for library in ("libmain.so", "libturnipprobe.so", "libmain_v80.so"):
+        path = "lib/arm64-v8a/" + library
+        if path not in names:
+            if library == "libmain_v80.so":
+                continue
+            raise SystemExit("ERROR: signed APK is missing wrapper consumer " + path)
+        data = apk.read(path)
+        for marker in (b"DXVK", b"nullDescriptor", b"vkGetPhysicalDeviceFeatures2"):
+            if marker not in data:
+                raise SystemExit("ERROR: " + path + " lacks effective-wrapper capability marker " + marker.decode())
+        print("Verified wrapper capability probe in " + path)
 PY
 fi
 # Verify the metadata in the signed APK, not just the source manifest. The release job consumes this only after the

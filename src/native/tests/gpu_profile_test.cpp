@@ -24,7 +24,22 @@ static_assert(native::NegotiateVulkanApi(native::MakeVulkanApi(1, 4), native::Ma
                   native::kVulkanApi13,
               "future APIs must stay on the tested 1.3 path");
 static_assert(native::NegotiateVulkanApi(native::kVulkanApi12, native::MakeVulkanApi(1, 1)) == 0,
-              "Vulkan 1.1 device was accepted");
+              "Vulkan 1.1 device was accepted on the direct path");
+static_assert(native::ShouldProbeVulkanWrapper(true, 0), "Auto did not probe the wrapper after direct negotiation failed");
+static_assert(native::ShouldProbeVulkanWrapper(true, native::MakeVulkanApi(1, 1)),
+              "Auto did not probe the wrapper for a direct 1.1 result");
+static_assert(!native::ShouldProbeVulkanWrapper(true, native::kVulkanApi12),
+              "Auto replaced a working direct 1.2 path with the wrapper");
+static_assert(!native::ShouldProbeVulkanWrapper(true, native::kVulkanApi13),
+              "Auto replaced the preferred direct 1.3 path with the wrapper");
+static_assert(!native::ShouldProbeVulkanWrapper(false, 0),
+              "an explicit driver mode silently enabled the compatibility wrapper");
+static_assert(!native::SupportsVulkan11WrapperBase(native::MakeVulkanApi(1, 0)),
+              "Vulkan 1.0 entered the untested wrapper lowering path");
+static_assert(native::SupportsVulkan11WrapperBase(native::kVulkanApi11),
+              "Vulkan 1.1 was rejected by the wrapper base policy");
+static_assert(native::SupportsVulkan11WrapperBase(native::kVulkanApi12),
+              "a newer base loader was rejected by the wrapper base policy");
 
 static_assert(native::PreferGen8Turnip("Adreno825"), "A825 did not select its Gen8 candidate");
 static_assert(native::PreferGen8Turnip("Adreno825v1"), "A825 revision did not select its Gen8 candidate");
