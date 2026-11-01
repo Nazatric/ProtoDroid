@@ -39,7 +39,7 @@ int32_t ProtoDroidPluginInit(const PdHostApi* host, PdPluginInfo* info) {
     info->abi_version = PD_PLUGIN_API_VERSION;
     info->struct_size = sizeof(PdPluginInfo);
     info->name = "ProtoDroid FOV example";
-    info->version = "1.1";
+    info->version = "1.2";
     g_fov_offset = (float)host->get_mod_number(host->context, "fov_offset", 5.0);
     if (!host->get_mod_boolean(host->context, "enabled", true)) {
         ExampleLog(PD_LOG_INFO, "example disabled by its mod options");
@@ -53,16 +53,22 @@ int32_t ProtoDroidPluginInit(const PdHostApi* host, PdPluginInfo* info) {
     if (host->get_mod_string(host->context, "author_note", "", note, sizeof(note)) && note[0]) {
         ExampleLog(PD_LOG_INFO, note);
     }
-    if (!host->hook_engine(host->context, 0x006dcfe0, ExampleAdjustFov, &g_original_adjust_fov) ||
-        !g_original_adjust_fov) {
-        ExampleLog(PD_LOG_ERROR, "could not hook Camera::AdjustFOV");
+    uint32_t fov_rva = 0;
+    if (!host->lookup_symbol(host->context, "FUN_106dcfe0", 1, &fov_rva)) {
+        ExampleLog(PD_LOG_ERROR, "could not resolve FUN_106dcfe0 in the engine symbol inventory");
         return -2;
+    }
+    if (!host->hook_engine(host->context, fov_rva, ExampleAdjustFov, &g_original_adjust_fov) ||
+        !g_original_adjust_fov) {
+        ExampleLog(PD_LOG_ERROR, "could not hook the resolved FOV function");
+        return -3;
     }
     if (!host->on_event(host->context, PD_EVENT_FRAME, ExampleFrame, 0)) {
         ExampleLog(PD_LOG_ERROR, "could not register the frame event");
-        return -3;
+        return -4;
     }
-    ExampleLog(PD_LOG_INFO, "example initialized with configurable FOV offset, clamped to 30..150");
+    host->emit_event(host->context, "protodroid.example.fov_ready", &fov_rva, 1);
+    ExampleLog(PD_LOG_INFO, "example initialized with named symbol lookup and configurable FOV offset, clamped to 30..150");
     return 0;
 }
 

@@ -1,6 +1,6 @@
 # Native mod platform — evidence and implementation contract
 
-Status: 0.14's base contract plus in-progress 0.15 extensions. This document does not claim physical-device validation.
+Status: 0.14's base contract plus in-progress 0.15 Lua/dependency/ABI-v3 extensions. Host tests cover the new implementation; this document does not claim physical-device validation.
 
 ## Research method and provenance
 
@@ -53,7 +53,9 @@ A mod is a directory below the launcher-selected mod root:
 ```ini
 [mod]
 schema = 1
+api = 2
 id = example.textures
+depends = example.library
 name = Example textures
 version = 1.0
 description = Replaces selected original-format textures.
@@ -64,15 +66,18 @@ priority = 100
 [content]
 files = files
 textures = textures.ini
+script = scripts/main.lua
+script_api = 1
 plugin = lib/arm64-v8a/libexample.so
-plugin_api = 2
+plugin_api = 3
 ```
 
-Every content key is optional, but at least one is required. Paths are relative, canonical, and cannot escape the mod directory. Symlinked package roots are rejected for launch/enable, and marker/diagnostic writes do not follow pre-existing links. Higher priority wins file/texture conflicts. Packages retain `mod.api = 1`; `content.plugin_api` selects native ABI 1 (the default) or 2. Native plugins also support an optional exact `engine_sha256` in `[mod]`.
+Every content key is optional, but at least one is required. Paths are relative, canonical, and cannot escape the mod directory. Symlinked package roots are rejected for launch/enable, and marker/diagnostic writes do not follow pre-existing links. Higher priority wins file/texture conflicts. Ordinary packages may retain `mod.api = 1`; scripts, dependencies, and native ABI 3 require `mod.api = 2`. `content.plugin_api` selects native ABI 1, 2, or 3, and `content.script_api` is currently 1. Native plugins and scripts also support an optional exact `engine_sha256` in `[mod]`. Dependencies initialize before dependants; missing, disabled, incompatible, and cyclic graphs are rejected independently by Java and native launch validation.
 
 - `files`: loose-file overlay root. Original game files are never modified. Save paths and write/create/truncate modes are excluded. Read-only Win32/CRT opens and existence/metadata probes resolve replacements; wildcard directory enumeration is not merged.
 - `textures`: line-oriented `hash = relative/file.dds` mapping, optionally in `[hashes]`. The hash is ProtoDroid's versioned SHA-256 texture key, not a PPSSPP hash.
 - `plugin`: ELF64 little-endian AArch64 shared object. Windows ASI/DLL files are rejected with a translation-required error.
+- `script`: bounded text-only Lua 5.4.8 entrypoint with per-state allocator/instruction limits, restricted libraries, guarded engine memory/calls/hooks, named symbols, settings, and lifecycle/custom events. See `modding/README.md` for the complete API and trust boundary.
 - `cover`: PNG/JPEG/WebP decoded with bounded sampling by the launcher.
 - `enabled`: launcher-created marker. Imported mods start disabled. Changes apply on the next Play.
 - `setting.<id>.*`: optional author-defined toggle, bounded/stepped slider, named choice, or bounded text controls. See `modding/README.md` for the schema and limits.
@@ -112,7 +117,11 @@ These `protodroid.ini` keys are independent of imported packages and are off/pre
 
 Existing `fps_limit`, `render_height`, display, driver, audio, save, and default-On `unlock_menu_fps` behavior remains the implementation for those equivalents; no parallel Windows patch path is introduced.
 
-## ARM64 plugin ABI versions 1 and 2
+## Sandboxed Lua and ARM64 plugin ABI versions 1–3
+
+Lua packages use independent states, text-only chunks, per-mod settings, restricted libraries, bounded module loading, allocator/instruction budgets, and protected callbacks. The generated `mod_symbols.inc` index is reproducible from `re/functions.csv`; exact duplicate names use ascending-RVA ordinals. Scripts and native plugins share the dependency-ordered package graph. Uncaught script failures disable only that state, preserve the original detour path when possible, and write a persistent launch error. States and detour storage remain alive through teardown.
+
+Public native source lives in `modding/include/protodroid_plugin.h`; complete native and Lua examples live in `modding/example/` and `modding/script-example/`.
 
 Public source lives in `modding/include/protodroid_plugin.h`; a complete example and packaging metadata live in `modding/example/`.
 
@@ -125,11 +134,12 @@ The versioned C ABI provides only implemented capabilities:
 - mod-relative file overlay registration;
 - engine-frame and shutdown events;
 - mod/game paths, engine identity, legacy global integer configuration, and logging;
-- ABI-v2-only per-mod boolean, number, and string getters, appended after the exact v1 host structure.
+- ABI-v2-only per-mod boolean, number, and string getters, appended after the exact v1 host structure;
+- ABI-v3-only exact named-symbol lookup and native-to-script event emission, appended after the exact v2 host structure.
 
 Registrations occur during `ProtoDroidPluginInit`, before engine startup. Native plugins are process-lifetime optional code; disabling/removing takes effect on the next process. Shutdown callbacks run at the ordinary safe shutdown boundary; libraries are not unloaded while detours could still execute. Hook/registration failures are returned to the plugin and logged, not hidden.
 
-The exact v1 host size is exported as `PD_HOST_API_V1_SIZE`; old plugins keep ABI 1 and that structure size. ABI 2 adds only the implemented per-mod getters. Neither ABI claims source or binary compatibility with Windows ASI plugins. Existing plugins must be translated and rebuilt for AArch64.
+The exact v1/v2 host sizes are exported as `PD_HOST_API_V1_SIZE` and `PD_HOST_API_V2_SIZE`; old plugins keep their original ABI and structure size. ABI 3 adds only the implemented symbol/event functions. No ABI claims source or binary compatibility with Windows ASI plugins. Existing plugins must be translated and rebuilt for AArch64.
 
 ## Launcher contract
 
@@ -139,8 +149,8 @@ A native Android Mods page is reachable beside Drivers. It provides:
 - ZIP/single-file import with clear supported-format guidance;
 - cover, name, version, author, description, content type, and compatibility/load errors;
 - background import, enable/disable, and removal operations with visible progress/error status;
-- default-disabled imports, next-Play application, two-step removal, and separate native-plugin trust confirmation;
-- an explicit warning that native ARM64 plugins are optional code and x86 ASI/DLL files are not loaded;
+- default-disabled imports, next-Play application, two-step removal, and separate executable-content trust confirmation;
+- explicit warnings for native ARM64 plugins and engine-access Lua scripts, plus the fact that x86 ASI/DLL files are not loaded;
 - a Configure action for packages with author-defined options, with reset/discard handling and atomic values;
 - built-in engine policies remain in Setup rather than the mod library.
 
@@ -148,8 +158,8 @@ The page shares Setup's artwork, Barlow Condensed fonts, red/bone palette, and c
 
 ## Validation and release boundaries
 
-1. Host Java tests cover metadata, traversal, collisions, ELF architecture, enable/remove policy, and manifest errors.
-2. Host C++ tests cover texture keys/DDS validation, path policy, plugin ABI layout, and guarded feature policy.
+1. Host Java tests cover metadata, script source/traversal, dependencies/cycles, collisions, ELF architecture, enable/remove policy, and manifest errors.
+2. Host C++ tests cover texture keys/DDS validation, path policy, native dependency ordering, Lua sandbox/memory/events/hooks, the shipped Lua example, and plugin ABI v1/v2/v3 layout.
 3. Python source/signature tests verify the exact generated tick patch, selected engine targets, and no accidental default changes.
 4. Real ARM64 CI builds Dobby, `libmain.so`, and the example plugin at the exact pushed commit; artifact metadata must match that commit.
 5. Existing graphics, Bink, save, driver, tour, UI, and package tests must remain green.

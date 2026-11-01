@@ -23,6 +23,7 @@ public final class ModPlatformTest {
             testTextures(temporary.resolve("textures"));
             testArchives(temporary.resolve("archives"));
             testLegacyWrappedLayouts(temporary.resolve("legacy-wrapped"));
+            testScriptsAndDependencies(temporary.resolve("scripts"));
             testModConfig(temporary.resolve("mod-config"));
             System.out.println("ProtoDroid mod platform tests passed: " + checks + " checks");
         } finally {
@@ -201,6 +202,96 @@ public final class ModPlatformTest {
                 "wrapped ARM64 plugin retains its native layout");
     }
 
+    private static void testScriptsAndDependencies(Path path) throws Exception {
+        File root = Files.createDirectories(path).toFile();
+        File library = createScriptMod(root, "example.library", "", "return { value = 42 }\n");
+        ModManifest parsed = ModManifest.parseValidated(library, true);
+        check(parsed.error.isEmpty() && parsed.api == 2 && parsed.scriptApi == 1 && parsed.hasExecutableContent(),
+                "valid API-2 Lua package: " + parsed.error);
+        check(parsed.contentLabel().contains("Lua script"), "library labels script content");
+
+        File dependent = createScriptMod(root, "example.dependent", "example.library", "pd.log('dependent')\n");
+        ModManager.setEnabled(root, "example.library", true);
+        ModManager.setEnabled(root, "example.dependent", true);
+        check(ModManager.activeCount(ModManager.list(root)) == 2, "enabled dependency graph is active");
+        ModManager.setEnabled(root, "example.library", false);
+        ModManifest blocked = findMod(ModManager.list(root), "example.dependent");
+        check(blocked.error.contains("disabled"), "enabled dependent reports a disabled dependency");
+        expectIOException(() -> ModManager.setEnabled(root, "example.dependent", true),
+                "already-enabled marker is not rewritten across an invalid graph");
+        ModManager.setEnabled(root, "example.library", true);
+        check(ModManager.activeCount(ModManager.list(root)) == 2, "re-enabling dependency restores graph");
+
+        File missing = createScriptMod(root, "example.missing", "not.installed", "pd.log('no')\n");
+        check(findMod(ModManager.list(root), "example.missing").error.contains("Missing dependency"),
+                "missing dependency is visible in library listing");
+        expectIOException(() -> ModManager.setEnabled(root, "example.missing", true), "missing dependency cannot enable");
+
+        createScriptMod(root, "example.cycle.a", "example.cycle.b", "pd.log('a')\n");
+        createScriptMod(root, "example.cycle.b", "example.cycle.a", "pd.log('b')\n");
+        check(findMod(ModManager.list(root), "example.cycle.a").error.contains("cycle")
+                        || findMod(ModManager.list(root), "example.cycle.a").error.contains("unavailable"),
+                "dependency cycle is rejected");
+
+        File apiOne = createMod(root, "example.api1", "script = scripts/main.lua\n", false);
+        writeScript(apiOne, "scripts/main.lua", "pd.log('bad api')\n");
+        check(ModManifest.read(apiOne).error.contains("package API 2"), "API 1 cannot silently ignore scripts");
+
+        File unicode = createScriptMod(root, "example.unicode", "", "pd.log('bad path')\n");
+        File metadata = new File(unicode, ModManifest.FILE_NAME);
+        Files.writeString(metadata.toPath(), Files.readString(metadata.toPath()).replace("scripts/main.lua", "scripts/máin.lua"));
+        check(ModManifest.read(unicode).error.contains("Unsafe characters"), "Unicode script path is rejected consistently");
+
+        File duplicate = createMod(root, "example.duplicate", "files = files\n", true);
+        Files.writeString(new File(duplicate, ModManifest.FILE_NAME).toPath(),
+                Files.readString(new File(duplicate, ModManifest.FILE_NAME).toPath())
+                        .replace("api = 1", "api = 2\ndepends = example.library, example.library"));
+        check(ModManifest.read(duplicate).error.contains("duplicate"), "duplicate dependencies are rejected");
+
+        File declared = createMod(root, "example.declared", "files = files\nscript_api = 1\n", true);
+        check(ModManifest.read(declared).error.contains("match a Lua entrypoint"),
+                "script API cannot be declared without script content");
+
+        File nul = createScriptMod(root, "example.nul", "", "pd.log('before')\n");
+        byte[] nulSource = {'p', 'd', 0, 'x'};
+        Files.write(new File(nul, "scripts/main.lua").toPath(), nulSource);
+        check(ModManifest.read(nul).error.isEmpty(), "shallow listing does not open every script payload");
+        expectIOException(() -> ModManifest.parseValidated(nul, true), "deep validation rejects NUL Lua source");
+
+        File bytecode = createScriptMod(root, "example.bytecode", "", "pd.log('before')\n");
+        Files.write(new File(bytecode, "scripts/main.lua").toPath(), new byte[] {0x1b, 'L', 'u', 'a'});
+        expectIOException(() -> ModManifest.parseValidated(bytecode, true), "deep validation rejects Lua bytecode");
+
+        File oversized = createScriptMod(root, "example.oversized", "", "pd.log('before')\n");
+        Files.write(new File(oversized, "scripts/main.lua").toPath(), new byte[1024 * 1024 + 1]);
+        expectIOException(() -> ModManifest.parseValidated(oversized, true), "deep validation enforces script size");
+
+        ModManifest example = ModManifest.parseValidated(new File("modding/script-example/package"), true);
+        check(example.api == 2 && example.scriptApi == 1 && example.options.size() == 3 && example.hasExecutableContent(),
+                "shipped Lua example is a valid configurable API-2 package");
+    }
+
+    private static ModManifest findMod(java.util.List<ModManifest> mods, String id) {
+        for (ModManifest mod : mods) if (mod.id.equals(id)) return mod;
+        throw new AssertionError("Missing test mod " + id);
+    }
+
+    private static File createScriptMod(File root, String id, String dependencies, String source) throws IOException {
+        File mod = createMod(root, id, "script = scripts/main.lua\nscript_api = 1\n", false);
+        File metadata = new File(mod, ModManifest.FILE_NAME);
+        String text = Files.readString(metadata.toPath()).replace("api = 1", "api = 2");
+        if (!dependencies.isEmpty()) text = text.replace("name = Test mod", "name = Test mod\ndepends = " + dependencies);
+        Files.writeString(metadata.toPath(), text);
+        writeScript(mod, "scripts/main.lua", source);
+        return mod;
+    }
+
+    private static void writeScript(File mod, String relative, String source) throws IOException {
+        File file = new File(mod, relative);
+        if (!file.getParentFile().mkdirs() && !file.getParentFile().isDirectory()) throw new IOException("script directory");
+        Files.writeString(file.toPath(), source, StandardCharsets.UTF_8);
+    }
+
     private static void testModConfig(Path path) throws Exception {
         File root = Files.createDirectories(path).toFile();
         String options = "files = files\n\n"
@@ -243,8 +334,8 @@ public final class ModPlatformTest {
 
         File example = new File("modding/example/package");
         ModManifest exampleManifest = ModManifest.parseValidated(example, false);
-        check(exampleManifest.pluginApi == 2 && exampleManifest.options.size() == 4,
-                " shipped example opts into ABI v2 and demonstrates all option types");
+        check(exampleManifest.pluginApi == 3 && exampleManifest.api == 2 && exampleManifest.options.size() == 4,
+                "shipped example opts into package API 2/native ABI v3 and demonstrates all option types");
     }
 
     private static File createMod(File root, String id, String content, boolean files) throws IOException {

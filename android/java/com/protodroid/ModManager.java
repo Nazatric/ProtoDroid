@@ -25,8 +25,10 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -65,8 +67,16 @@ final class ModManager {
     }
 
     static List<ModManifest> list(Context context) {
+        return list(modsDir(context));
+    }
+
+    static List<ModManifest> list(File root) {
+        return list(root, true);
+    }
+
+    private static List<ModManifest> list(File root, boolean resolve) {
         ArrayList<ModManifest> result = new ArrayList<>();
-        File[] children = modsDir(context).listFiles();
+        File[] children = root.listFiles();
         if (children != null) {
             for (File child : children) {
                 if (!child.isDirectory() || child.getName().startsWith(".")) continue;
@@ -78,7 +88,42 @@ final class ModManager {
             if (priority != 0) return priority;
             return a.name.compareToIgnoreCase(b.name);
         });
+        if (resolve) resolveDependencies(result);
         return result;
+    }
+
+    static void resolveDependencies(List<ModManifest> mods) {
+        Map<String, ModManifest> byId = new HashMap<>();
+        for (ModManifest mod : mods) byId.put(mod.id, mod);
+        Map<String, Integer> states = new HashMap<>();
+        for (ModManifest mod : mods) resolveDependency(mod, byId, states);
+    }
+
+    private static void resolveDependency(ModManifest mod, Map<String, ModManifest> byId,
+                                          Map<String, Integer> states) {
+        if (!mod.error.isEmpty() || Integer.valueOf(2).equals(states.get(mod.id))) return;
+        if (Integer.valueOf(1).equals(states.get(mod.id))) {
+            mod.error = "Dependency cycle involving '" + mod.id + "'";
+            return;
+        }
+        states.put(mod.id, 1);
+        for (String dependencyId : mod.dependencies) {
+            ModManifest dependency = byId.get(dependencyId);
+            if (dependency == null) {
+                mod.error = "Missing dependency '" + dependencyId + "'";
+                break;
+            }
+            resolveDependency(dependency, byId, states);
+            if (!dependency.error.isEmpty()) {
+                mod.error = "Dependency '" + dependencyId + "' is unavailable: " + dependency.error;
+                break;
+            }
+            if (mod.enabled && !dependency.enabled) {
+                mod.error = "Dependency '" + dependencyId + "' is disabled";
+                break;
+            }
+        }
+        states.put(mod.id, 2);
     }
 
     static int activeCount(List<ModManifest> mods) {
@@ -97,6 +142,17 @@ final class ModManager {
         ModManifest current = enabled ? ModManifest.parseValidated(directory, true) : ModManifest.read(directory);
         if (!current.id.equals(id)) throw new IOException("Mod ID does not match its folder name");
         if (enabled && !current.error.isEmpty()) throw new IOException(current.error);
+        if (enabled) {
+            List<ModManifest> installed = list(root, false);
+            for (ModManifest mod : installed) {
+                if (mod.id.equals(id)) {
+                    mod.enabled = true;
+                    resolveDependencies(installed);
+                    if (!mod.error.isEmpty()) throw new IOException(mod.error);
+                    break;
+                }
+            }
+        }
         File marker = new File(directory, ModManifest.ENABLED_NAME);
         if (!enabled) {
             if (marker.exists() && !marker.delete()) throw new IOException("Could not disable mod");

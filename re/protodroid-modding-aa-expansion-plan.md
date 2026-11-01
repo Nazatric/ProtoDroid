@@ -1,6 +1,8 @@
 # ProtoDroid 0.15: AA correctness and mod-platform expansion
 
-Status: active implementation plan for `arena/78b126d7-protodroid`. Keep 0.15 unmerged and unreleased. Original game files remain read-only; probes use copies under `/tmp/protodroid-deep-re`.
+Status: implementation batches 1–3 are source-complete and host-tested; exact-commit ARM64 CI and physical-device AA verification are pending. Keep 0.15 unmerged and unreleased. Original game files remain read-only; probes use copies under `/tmp/protodroid-deep-re`.
+
+Implemented evidence: the DXVK depth-resolve patch applies cleanly; generated symbols contain 105,037 records; the real Lua 5.4.8 runtime, dependency scanner, native ABI v1/v2/v3 fixtures, shipped Lua FOV example, and ASan/UBSan harness pass locally. No physical-device AA or third-party mod claim is made.
 
 ## Evidence and research
 

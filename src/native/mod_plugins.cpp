@@ -17,6 +17,8 @@
 
 #include "../../modding/include/protodroid_plugin.h"
 #include "guest.h"
+#include "mod_settings.h"
+#include "mod_symbols.h"
 
 namespace native {
 namespace {
@@ -27,7 +29,7 @@ struct EventBinding {
     void* userdata;
 };
 
-using PluginSettings = std::map<std::string, std::string, std::less<>>;
+using PluginSettings = ModSettings;
 
 struct Plugin {
     const ModEntry* mod = nullptr;
@@ -63,7 +65,7 @@ uint32_t* RegisterPointer(PdGuestContext* opaque, PdRegister reg) {
 }
 
 bool GuestRange(uint32_t address, uint32_t size) {
-    return uint64_t(address) + uint64_t(size) <= 0x100000000ULL;
+    return size == 0 || (address != 0 && uint64_t(address) + uint64_t(size) <= 0x100000000ULL);
 }
 
 bool SafePluginRelative(const char* value) {
@@ -72,74 +74,6 @@ bool SafePluginRelative(const char* value) {
     }
     for (const char* p = value; *p; ++p) {
         if (static_cast<unsigned char>(*p) < 32 || *p == '\\') return false;
-    }
-    return true;
-}
-
-std::string Trim(std::string value) {
-    size_t first = 0;
-    while (first < value.size() && std::isspace(static_cast<unsigned char>(value[first]))) ++first;
-    size_t last = value.size();
-    while (last > first && std::isspace(static_cast<unsigned char>(value[last - 1]))) --last;
-    return value.substr(first, last - first);
-}
-
-bool SafeConfigKey(const std::string& key) {
-    if (key.empty() || key.size() > 48 ||
-        !(std::islower(static_cast<unsigned char>(key[0])) || std::isdigit(static_cast<unsigned char>(key[0])))) {
-        return false;
-    }
-    for (char c : key) {
-        if (!std::islower(static_cast<unsigned char>(c)) && !std::isdigit(static_cast<unsigned char>(c)) &&
-            c != '.' && c != '_' && c != '-') return false;
-    }
-    return true;
-}
-
-bool LoadSettings(const ModEntry& mod, PluginSettings* output, std::string* error) {
-    const std::string path = mod.root + "/protodroid-settings.ini";
-    struct stat st {};
-    if (lstat(path.c_str(), &st) != 0) {
-        if (errno == ENOENT) return true;
-        *error = "mod settings could not be inspected";
-        return false;
-    }
-    if (!S_ISREG(st.st_mode) || st.st_size > 128 * 1024) {
-        *error = "mod settings are not a bounded regular file";
-        return false;
-    }
-    std::ifstream input(path);
-    if (!input) {
-        *error = "mod settings could not be read";
-        return false;
-    }
-    std::string line;
-    while (std::getline(input, line)) {
-        line = Trim(line);
-        if (line.empty() || line[0] == '#' || line[0] == ';') continue;
-        size_t equals = line.find('=');
-        if (equals == std::string::npos || equals == 0) {
-            *error = "invalid mod settings line";
-            return false;
-        }
-        std::string key = Trim(line.substr(0, equals));
-        std::string value = Trim(line.substr(equals + 1));
-        if (!SafeConfigKey(key) || value.size() > 4096) {
-            *error = "invalid mod settings key or value";
-            return false;
-        }
-        for (char c : value) if (std::iscntrl(static_cast<unsigned char>(c))) {
-            *error = "control character in mod settings";
-            return false;
-        }
-        if (!output->emplace(key, value).second) {
-            *error = "duplicate mod setting " + key;
-            return false;
-        }
-        if (output->size() > 256) {
-            *error = "too many saved mod settings";
-            return false;
-        }
     }
     return true;
 }
@@ -243,9 +177,7 @@ bool SafeConfigKey(const char* key) {
 }
 
 const std::string* ConfigValue(Plugin* plugin, const char* key) {
-    if (!plugin || !SafeConfigKey(key)) return nullptr;
-    auto found = plugin->settings.find(key);
-    return found == plugin->settings.end() ? nullptr : &found->second;
+    return plugin ? ModSettingsValue(plugin->settings, key) : nullptr;
 }
 
 bool EqualsIgnoreCase(const std::string& value, const char* expected) {
@@ -295,6 +227,21 @@ bool ApiGetModString(void* opaque, const char* key, const char* default_value,
     return true;
 }
 
+bool ApiLookupSymbol(void*, const char* name, uint32_t ordinal, uint32_t* rva) {
+    if (!name || !rva) return false;
+    ModSymbolMatch match;
+    if (!ModSymbolResolve(name, ordinal, &match)) return false;
+    *rva = match.rva;
+    return true;
+}
+
+bool ApiEmitEvent(void* opaque, const char* name, const uint32_t* arguments, uint32_t count) {
+    auto* plugin = static_cast<Plugin*>(opaque);
+    if (!plugin || !name || !ModScriptsEmit(name, arguments, count)) return false;
+    Log("mods[%s] queued script event %s (%u arguments)", plugin->mod->id.c_str(), name, count);
+    return true;
+}
+
 void Fail(const ModEntry& mod, const std::string& error) {
     Log("mods: plugin %s: %s", mod.id.c_str(), error.c_str());
     ModWriteLaunchError(mod, error);
@@ -332,13 +279,14 @@ void ModPluginsInitialize(const std::vector<ModEntry>& mods) {
         plugin->handle = handle;
         const uint32_t abi = static_cast<uint32_t>(mod.pluginApi);
         std::string settings_error;
-        if (abi == PD_PLUGIN_API_VERSION && !LoadSettings(mod, &plugin->settings, &settings_error)) {
+        if (abi >= 2 && !ModSettingsLoad(mod, &plugin->settings, &settings_error)) {
             Fail(mod, settings_error.empty() ? "mod settings could not be read" : settings_error);
             g_plugins.push_back(std::move(plugin));
             continue;
         }
         plugin->api.abi_version = abi;
-        plugin->api.struct_size = abi == PD_PLUGIN_API_VERSION_V1 ? PD_HOST_API_V1_SIZE : sizeof(PdHostApi);
+        plugin->api.struct_size = abi == PD_PLUGIN_API_VERSION_V1 ? PD_HOST_API_V1_SIZE
+            : abi == PD_PLUGIN_API_VERSION_V2 ? PD_HOST_API_V2_SIZE : sizeof(PdHostApi);
         plugin->api.context = plugin.get();
         plugin->api.engine_sha256 = kModEngineSha256;
         plugin->api.game_directory = g_game_dir ? g_game_dir : "";
@@ -356,6 +304,8 @@ void ModPluginsInitialize(const std::vector<ModEntry>& mods) {
         plugin->api.get_mod_boolean = ApiGetModBoolean;
         plugin->api.get_mod_number = ApiGetModNumber;
         plugin->api.get_mod_string = ApiGetModString;
+        plugin->api.lookup_symbol = ApiLookupSymbol;
+        plugin->api.emit_event = ApiEmitEvent;
         plugin->info.abi_version = abi;
         plugin->info.struct_size = sizeof(PdPluginInfo);
         plugin->shutdown = reinterpret_cast<void (*)()>(dlsym(handle, PD_PLUGIN_SHUTDOWN_SYMBOL));

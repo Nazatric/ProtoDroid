@@ -4,7 +4,7 @@
 import sys
 from pathlib import Path
 
-path = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/protodroid-dxvk-test/src/d3d9/d3d9_device.cpp")
+path = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/protodroid-dxvk-patch-test/src/d3d9/d3d9_device.cpp")
 source = path.read_text(encoding="utf-8")
 start = source.index("auto EmitResolveCS = [&](const Rc<DxvkImage>& resolveDst, bool intermediate)")
 end = source.index("if (fastPath) {", start)

@@ -145,6 +145,29 @@ bool ParseInt(const std::string& text, int fallback, int minimum, int maximum, i
     return true;
 }
 
+bool ParseDependencies(const std::string& text, const std::string& owner,
+                       std::vector<std::string>* dependencies, std::string* error) {
+    if (text.empty()) return true;
+    if (text.size() > 2048) {
+        *error = "dependency list is too long";
+        return false;
+    }
+    size_t begin = 0;
+    while (begin <= text.size()) {
+        size_t end = text.find(',', begin);
+        std::string id = Trim(text.substr(begin, end == std::string::npos ? std::string::npos : end - begin));
+        if (!SafeId(id) || id == owner || dependencies->size() >= 32 ||
+            std::find(dependencies->begin(), dependencies->end(), id) != dependencies->end()) {
+            *error = "invalid, duplicate, self, or excessive dependency '" + id + "'";
+            return false;
+        }
+        dependencies->push_back(id);
+        if (end == std::string::npos) break;
+        begin = end + 1;
+    }
+    return true;
+}
+
 bool ReadMod(const std::string& root, const std::string& id, ModEntry* mod, std::string* error) {
     if (!SafeId(id)) {
         *error = "unsafe mod ID";
@@ -155,7 +178,7 @@ bool ReadMod(const std::string& root, const std::string& id, ModEntry* mod, std:
     if (!error->empty()) return false;
     std::string schema = Value(values, "mod.schema");
     int api = 1;
-    if ((!schema.empty() && schema != "1") || !ParseInt(Value(values, "mod.api"), 1, 1, 1, &api)) {
+    if ((!schema.empty() && schema != "1") || !ParseInt(Value(values, "mod.api"), 1, 1, 2, &api)) {
         *error = "unsupported mod schema or API";
         return false;
     }
@@ -170,14 +193,22 @@ bool ReadMod(const std::string& root, const std::string& id, ModEntry* mod, std:
     }
     mod->id = id;
     mod->root = root + "/" + id;
+    mod->packageApi = api;
     if (!ParseInt(Value(values, "mod.priority"), 100, -10000, 10000, &mod->priority) ||
-        !ParseInt(Value(values, "content.plugin_api"), 1, 1, 2, &mod->pluginApi)) {
-        *error = "invalid mod priority or plugin API";
+        !ParseInt(Value(values, "content.plugin_api"), 1, 1, 3, &mod->pluginApi) ||
+        !ParseInt(Value(values, "content.script_api"), 1, 1, 1, &mod->scriptApi) ||
+        !ParseDependencies(Value(values, "mod.depends"), id, &mod->dependencies, error)) {
+        if (error->empty()) *error = "invalid mod priority, dependency, or content API";
         return false;
     }
     std::string files = Value(values, "content.files");
     std::string textures = Value(values, "content.textures");
     std::string plugin = Value(values, "content.plugin");
+    std::string script = Value(values, "content.script");
+    if (api < 2 && (!script.empty() || !mod->dependencies.empty() || mod->pluginApi >= 3)) {
+        *error = "scripts, dependencies, and plugin API 3 require package API 2";
+        return false;
+    }
     if (!SafeRelative(files, true) && !files.empty()) {
         *error = "unsafe loose-file path";
         return false;
@@ -190,12 +221,20 @@ bool ReadMod(const std::string& root, const std::string& id, ModEntry* mod, std:
         *error = "unsafe native plugin path";
         return false;
     }
-    if (files.empty() && textures.empty() && plugin.empty()) {
+    if (!SafeRelative(script, false) && !script.empty()) {
+        *error = "unsafe Lua entrypoint path";
+        return false;
+    }
+    if (files.empty() && textures.empty() && plugin.empty() && script.empty()) {
         *error = "mod has no content";
         return false;
     }
     if (plugin.empty() && mod->pluginApi != 1) {
         *error = "plugin API declared without a native plugin";
+        return false;
+    }
+    if (script.empty() && Value(values, "content.script_api").size()) {
+        *error = "script API declared without a Lua entrypoint";
         return false;
     }
     if (!files.empty()) {
@@ -228,7 +267,86 @@ bool ReadMod(const std::string& root, const std::string& id, ModEntry* mod, std:
         }
         mod->plugin = plugin.substr(strlen(prefix));
     }
+    if (!script.empty()) {
+        if (script.size() <= 4 || script.substr(script.size() - 4) != ".lua") {
+            *error = "Lua entrypoint must have a .lua extension";
+            return false;
+        }
+        std::string path = mod->root + "/" + script;
+        struct stat st {};
+        if (lstat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
+            st.st_size > 1024 * 1024 || !Within(mod->root, path)) {
+            *error = "Lua entrypoint is missing, not regular, empty, too large, or unsafe";
+            return false;
+        }
+        mod->script = path;
+    }
     return true;
+}
+
+void OrderMods(std::vector<ModEntry>* mods) {
+    std::sort(mods->begin(), mods->end(), [](const ModEntry& a, const ModEntry& b) {
+        return a.priority != b.priority ? a.priority > b.priority : a.id < b.id;
+    });
+    std::map<std::string, size_t> by_id;
+    for (size_t i = 0; i < mods->size(); ++i) by_id[(*mods)[i].id] = i;
+    std::vector<bool> rejected(mods->size(), false);
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (size_t i = 0; i < mods->size(); ++i) {
+            if (rejected[i]) continue;
+            for (const std::string& dependency : (*mods)[i].dependencies) {
+                auto found = by_id.find(dependency);
+                if (found != by_id.end() && !rejected[found->second]) continue;
+                std::string error = found == by_id.end()
+                    ? "missing, disabled, or incompatible dependency '" + dependency + "'"
+                    : "dependency '" + dependency + "' is unavailable";
+                Log("mods: %s rejected: %s", (*mods)[i].id.c_str(), error.c_str());
+                ModWriteLaunchError((*mods)[i], error);
+                rejected[i] = true;
+                changed = true;
+                break;
+            }
+        }
+    }
+    std::vector<ModEntry> candidates;
+    for (size_t i = 0; i < mods->size(); ++i) {
+        if (!rejected[i]) candidates.push_back(std::move((*mods)[i]));
+    }
+    by_id.clear();
+    for (size_t i = 0; i < candidates.size(); ++i) by_id[candidates[i].id] = i;
+    std::vector<bool> emitted(candidates.size(), false);
+    std::vector<ModEntry> ordered;
+    ordered.reserve(candidates.size());
+    while (ordered.size() < candidates.size()) {
+        bool progress = false;
+        for (size_t i = 0; i < candidates.size(); ++i) {
+            if (emitted[i]) continue;
+            bool ready = true;
+            for (const std::string& dependency : candidates[i].dependencies) {
+                auto found = by_id.find(dependency);
+                if (found == by_id.end() || !emitted[found->second]) {
+                    ready = false;
+                    break;
+                }
+            }
+            if (!ready) continue;
+            ordered.push_back(std::move(candidates[i]));
+            emitted[i] = true;
+            progress = true;
+            break;  // choose the highest-priority currently ready package again
+        }
+        if (progress) continue;
+        for (size_t i = 0; i < candidates.size(); ++i) {
+            if (emitted[i]) continue;
+            std::string error = "dependency cycle or a dependency on a cycle";
+            Log("mods: %s rejected: %s", candidates[i].id.c_str(), error.c_str());
+            ModWriteLaunchError(candidates[i], error);
+        }
+        break;
+    }
+    *mods = std::move(ordered);
 }
 
 void ScanMods() {
@@ -266,14 +384,13 @@ void ScanMods() {
         g_mods.push_back(std::move(mod));
     }
     closedir(dir);
-    std::sort(g_mods.begin(), g_mods.end(), [](const ModEntry& a, const ModEntry& b) {
-        return a.priority != b.priority ? a.priority > b.priority : a.id < b.id;
-    });
+    OrderMods(&g_mods);
     Log("mods: %zu active package(s), root %s", g_mods.size(), g_mods_root.c_str());
     for (const ModEntry& mod : g_mods) {
-        Log("mods: active %s priority=%d files=%s textures=%s plugin=%s", mod.id.c_str(), mod.priority,
-            mod.files.empty() ? "no" : "yes", mod.textures.empty() ? "no" : "yes",
-            mod.plugin.empty() ? "no" : mod.plugin.c_str());
+        Log("mods: active %s priority=%d files=%s textures=%s plugin=%s script=%s dependencies=%zu",
+            mod.id.c_str(), mod.priority, mod.files.empty() ? "no" : "yes", mod.textures.empty() ? "no" : "yes",
+            mod.plugin.empty() ? "no" : mod.plugin.c_str(), mod.script.empty() ? "no" : "yes",
+            mod.dependencies.size());
     }
 }
 
@@ -297,9 +414,16 @@ void ModPlatformInitialize() {
     ModTexturesInitialize(g_mods);
     ModFeaturesInitialize();
     ModPluginsInitialize(g_mods);
+    ModScriptsInitialize(g_mods);
 }
 
-void ModPlatformFrame() { ModPluginsFrame(); }
-void ModPlatformShutdown() { ModPluginsShutdown(); }
+void ModPlatformFrame() {
+    ModPluginsFrame();
+    ModScriptsFrame();
+}
+void ModPlatformShutdown() {
+    ModScriptsShutdown();
+    ModPluginsShutdown();
+}
 
 }  // namespace native

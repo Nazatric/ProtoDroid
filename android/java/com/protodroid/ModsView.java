@@ -509,7 +509,7 @@ final class ModsView extends View {
     }
 
     private float drawEmpty(Canvas canvas, float left, float top, float width, float u) {
-        String body = "Import a ZIP, texture pack, loose game-data file, or Android ARM64 plugin. "
+        String body = "Import a ZIP, texture pack, loose game-data file, Lua package, or Android ARM64 plugin. "
                 + "New mods start disabled; original game files and saves stay untouched.";
         StaticLayout bodyLayout = paragraph(body, width - 28f * u, 13f, 500, DIM, u, 5);
         float height = 43f * u + bodyLayout.getHeight() + 17f * u;
@@ -536,8 +536,8 @@ final class ModsView extends View {
             canvas.drawBitmap(bitmap, source, destination, bitmapPaint);
             canvas.restore();
         } else {
-            drawCentered(canvas, mod.plugin.isEmpty() ? "[ P3D ]" : "[ ARM64 ]", bounds,
-                    17f, 700, RED_HOT, u);
+            drawCentered(canvas, !mod.plugin.isEmpty() ? "[ ARM64 ]" : !mod.script.isEmpty() ? "[ LUA ]" : "[ P3D ]",
+                    bounds, 17f, 700, RED_HOT, u);
         }
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(Math.max(1f, u));
@@ -564,15 +564,22 @@ final class ModsView extends View {
         meta.append(mod.contentLabel().isEmpty() ? "Incompatible package" : mod.contentLabel());
         meta.append("  •  Priority ").append(mod.priority);
         StaticLayout metaLayout = paragraph(meta.toString(), inner, 11.5f, 500, DIM, u, 3);
-        StaticLayout description = mod.description.isEmpty() ? null
-                : paragraph(mod.description, inner, 12.5f, 500, BONE, u, expanded ? 8 : 2);
+        String descriptionText = mod.description;
+        if (expanded && !mod.dependencies.isEmpty()) {
+            if (!descriptionText.isEmpty()) descriptionText += "\n";
+            descriptionText += "Requires: " + String.join(", ", mod.dependencies);
+        }
+        StaticLayout description = descriptionText.isEmpty() ? null
+                : paragraph(descriptionText, inner, 12.5f, 500, BONE, u, expanded ? 8 : 2);
         String diagnostic = !mod.error.isEmpty() ? mod.error : mod.launchError;
         String state = !mod.error.isEmpty() ? "INCOMPATIBLE PACKAGE"
                 : !mod.launchError.isEmpty() ? (mod.enabled ? "LAST LOAD FAILED / RETRY ON PLAY" : "LAST LOAD FAILED")
                 : mod.enabled ? "ACTIVE ON NEXT PLAY" : "INSTALLED / DISABLED";
         if (!diagnostic.isEmpty()) state += "\n" + diagnostic;
         if (pluginArmedId.equals(mod.id)) {
-            state += "\nNative ARM64 code is trusted optional code and can crash the game. Confirm to enable it.";
+            state += mod.script.isEmpty()
+                    ? "\nNative ARM64 code is trusted optional code and can crash the game. Confirm to enable it."
+                    : "\nScripts can call the engine and change guest memory. Enable only code you trust; sandbox limits do not make engine calls safe.";
         }
         if (removeArmedId.equals(mod.id)) state += "\nConfirm removal of this mod folder only; saves stay untouched.";
         StaticLayout stateLayout = paragraph(state, inner, 11.5f, 600,
@@ -593,7 +600,7 @@ final class ModsView extends View {
         drawParagraph(canvas, meta.toString(), textLeft, y, inner, 11.5f, 500, DIM, u, 3);
         y += metaLayout.getHeight() + 5f * u;
         if (description != null) {
-            drawParagraph(canvas, mod.description, textLeft, y, inner, 12.5f, 500, BONE, u, expanded ? 8 : 2);
+            drawParagraph(canvas, descriptionText, textLeft, y, inner, 12.5f, 500, BONE, u, expanded ? 8 : 2);
             y += description.getHeight() + 5f * u;
         }
         drawParagraph(canvas, state, textLeft, y, inner, 11.5f, 600,
@@ -615,7 +622,8 @@ final class ModsView extends View {
         RectF toggle = new RectF(previous.right + gap, buttonTop, previous.right + gap + buttonWidth,
                 buttonTop + touch(u));
         RectF remove = new RectF(toggle.right + gap, buttonTop, left + width - 12f * u, buttonTop + touch(u));
-        String toggleLabel = pluginArmedId.equals(mod.id) ? "CONFIRM ARM64" : mod.enabled ? "DISABLE" : "ENABLE";
+        String toggleLabel = pluginArmedId.equals(mod.id)
+                ? (mod.script.isEmpty() ? "CONFIRM ARM64" : "CONFIRM CODE") : mod.enabled ? "DISABLE" : "ENABLE";
         button(canvas, ACTION_TOGGLE + index, toggle, toggleLabel,
                 !mod.enabled && mod.error.isEmpty() ? BUTTON_PRIMARY : BUTTON_GHOST,
                 !busy && (mod.error.isEmpty() || mod.enabled), u);
@@ -625,7 +633,7 @@ final class ModsView extends View {
     }
 
     private float drawCompatibility(Canvas canvas, float left, float top, float width, float u) {
-        String body = "Windows plugins need an Android ARM64 port. DDS replacements keep the original format and dimensions.";
+        String body = "Lua packages use sandboxed text source. Windows plugins need an Android ARM64 port. DDS replacements keep the original format and dimensions.";
         StaticLayout bodyLayout = paragraph(body, width - 28f * u, 11.5f, 500, DIM, u, 2);
         float height = 36f * u + bodyLayout.getHeight() + 13f * u;
         RectF card = new RectF(left, top, left + width, top + height);
@@ -762,13 +770,14 @@ final class ModsView extends View {
             if (!mod.error.isEmpty() && !mod.enabled) return;
             boolean enable = !mod.enabled;
             long current = now();
-            if (enable && !mod.plugin.isEmpty()
+            if (enable && mod.hasExecutableContent()
                     && (!pluginArmedId.equals(mod.id) || current - pluginArmedAt >= 8000)) {
                 pluginArmedId = mod.id;
                 pluginArmedAt = current;
                 removeArmedId = "";
-                setStatus("Only enable native plugins you trust. Windows plugins need an Android ARM64 port. "
-                        + "Tap CONFIRM ARM64 within 8 seconds.", true);
+                setStatus(mod.script.isEmpty()
+                        ? "Only enable native plugins you trust. Windows plugins need an Android ARM64 port. Tap CONFIRM ARM64 within 8 seconds."
+                        : "Scripts can access engine memory and calls despite host sandboxing. Enable only trusted code; tap CONFIRM CODE within 8 seconds.", true);
                 postInvalidateDelayed(8100);
                 return;
             }

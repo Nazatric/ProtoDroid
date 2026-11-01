@@ -68,7 +68,7 @@ require('SettingInt("vram_report_mb", 0)' in text("src/native/main.cpp"), "VRAM 
 
 platform = text("src/native/mod_platform.cpp")
 order = [platform.index(name) for name in ("ModFilesInitialize", "ModTexturesInitialize", "ModFeaturesInitialize",
-                                          "ModPluginsInitialize")]
+                                          "ModPluginsInitialize", "ModScriptsInitialize")]
 require(order == sorted(order), "mod startup subsystem order changed")
 require("ModPlatformFrame();" in text("src/native/main.cpp"), "plugin frame lifecycle is not wired")
 require("ModPlatformShutdown();" in text("src/native/main.cpp"), "plugin shutdown lifecycle is not wired")
@@ -88,15 +88,24 @@ require("ProtoDroidTextureV1" in text("src/native/mod_textures.cpp")
 require("if (ModTexturesEnabled())" in text("src/native/d3d9.cpp"),
         "ordinary texture unlocks lost the disabled fast path")
 plugin_header = text("modding/include/protodroid_plugin.h")
-require("#define PD_PLUGIN_API_VERSION 2u" in plugin_header and
+require("#define PD_PLUGIN_API_VERSION 3u" in plugin_header and
         "#define PD_PLUGIN_API_VERSION_V1 1u" in plugin_header and
-        "PD_HOST_API_V1_SIZE" in plugin_header,
-        "appended ABI v2 must retain the exact v1 contract")
+        "#define PD_PLUGIN_API_VERSION_V2 2u" in plugin_header and
+        "PD_HOST_API_V1_SIZE" in plugin_header and "PD_HOST_API_V2_SIZE" in plugin_header,
+        "appended ABI v3 must retain the exact v1/v2 contracts")
 plugins = text("src/native/mod_plugins.cpp")
-for getter in ("ApiGetModBoolean", "ApiGetModNumber", "ApiGetModString", "LoadSettings"):
-    require(getter in plugins, f"native per-mod configuration path missing: {getter}")
-require("PD_HOST_API_V1_SIZE" in plugins and "plugin->info.abi_version != abi" in plugins,
+for getter in ("ApiGetModBoolean", "ApiGetModNumber", "ApiGetModString", "ModSettingsLoad",
+               "ApiLookupSymbol", "ApiEmitEvent"):
+    require(getter in plugins, f"native per-mod/extension path missing: {getter}")
+require("PD_HOST_API_V1_SIZE" in plugins and "PD_HOST_API_V2_SIZE" in plugins and
+        "plugin->info.abi_version != abi" in plugins,
         "host does not select and validate the manifest-requested plugin ABI")
+scripts = text("src/native/mod_scripts.cpp")
+for marker in ("lua_newstate", "kLuaMemoryLimit", "kInstructionLimit", "luaL_loadbufferx",
+               "ModSymbolResolve", "GuestCallArray", "ModHookInstall", "ModScriptsEmit"):
+    require(marker in scripts, f"sandboxed script runtime path missing: {marker}")
+require("mod_scripts.cpp" in text("src/native/Makefile") and "mod_symbols.inc" in text("src/native/Makefile"),
+        "script runtime or generated symbols are absent from real native builds")
 textures = text("src/native/mod_textures.cpp")
 require("ReadDdsLevel" in textures and "uint64_t offset" in textures and "std::vector<uint8_t> bytes;" not in textures,
         "DDS replacements must retain offsets rather than permanent whole-file level buffers")
