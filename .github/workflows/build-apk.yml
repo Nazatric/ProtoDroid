@@ -95,6 +95,9 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/diagnostic_tour_plan_test
 
+      - name: Test diagnostic-tour binary probe and isolated-exit policy
+        run: python3 tools/test_diagnostic_tour_runtime.py
+
       - name: Compile and run detailed diagnostics tests
         run: |
           set -euo pipefail

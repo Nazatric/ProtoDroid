@@ -867,13 +867,27 @@ int main(int argc, char** argv) {
         if (!DiagnosticTourPump()) keep = false;
         if (!keep) break;
     }
+    if (diagnostic_tour) {
+        // The supplied G720 tour log showed EngineTerminate waiting indefinitely after an entry-gate failure while
+        // Android input and the last rendered scene stayed visible. A tour already owns an isolated, process-ending
+        // run: finish it at this safe engine-loop boundary instead of entering that shutdown path again.
+        ReleaseInjectedInput();
+        if (DiagnosticTourFailed())
+            StartupFailure("Diagnostic tour failed. See /Prototype/diagnostic-tour/logs/journal.log and result.txt.");
+        Log("diagnostic tour finished; ending the isolated process without EngineTerminate");
+        VulkanDriverAbandon();  // An intentional tour exit is not evidence that the selected driver failed.
+        native::DiagnosticsStop();
+        native::WaitForMirrorCopy();
+        native::MirrorCopyDXVKLogs();
+        _exit(0);
+    }
+
+    // Ordinary Play retains the engine's normal termination path.
     const int64_t terminate_start_ns = MonotonicNanos();
     GuestCall(terminate, {});
     Log("EngineTerminate done after %.3f ms", double(MonotonicNanos() - terminate_start_ns) / 1e6);
     native::DiagnosticsStop();
     native::WaitForMirrorCopy();
     native::MirrorCopyDXVKLogs();
-    if (diagnostic_tour && DiagnosticTourFailed())
-        StartupFailure("Diagnostic tour failed. See /Prototype/diagnostic-tour/logs/journal.log and result.txt.");
     return 0;
 }

@@ -6,6 +6,7 @@
 #include <mutex>
 
 #include "diagnostic_tour.h"
+#include "diagnostic_tour_probe.h"
 #include "guest.h"
 
 extern "C" {
@@ -80,18 +81,22 @@ static uint32_t FollowThunks(uint32_t target) {
 }
 
 extern "C" void RecompDispatch(Ctx* ctx, uint32_t target) {
-    if (RecompDiagnosticTour &&
-        (target == kEngineBase + 0x004e45c0u || target == kEngineBase + 0x004e4ad0u))
-        DiagnosticTourGameplayObserved(target);
+    if (RecompDiagnosticTour) {
+        // Vtable thunks are recompiled and use RecompDirect on Android, so checking only their final task addresses
+        // here misses the normal gameplay route. The cold tour-only classifier recognizes both forms.
+        if (const uint32_t task = DiagnosticTourGameplayTaskTarget(target, kEngineBase))
+            DiagnosticTourGameplayObserved(task);
+    }
     if (RecompFn fn = RecompLookup(target)) {
         fn(ctx);
         return;
     }
     uint32_t real = FollowThunks(target);
     if (real != target) {
-        if (RecompDiagnosticTour &&
-            (real == kEngineBase + 0x004e45c0u || real == kEngineBase + 0x004e4ad0u))
-            DiagnosticTourGameplayObserved(real);
+        if (RecompDiagnosticTour) {
+            if (const uint32_t task = DiagnosticTourGameplayTaskTarget(real, kEngineBase))
+                DiagnosticTourGameplayObserved(task);
+        }
         if (RecompFn fn = RecompLookup(real)) {
             fn(ctx);
             return;

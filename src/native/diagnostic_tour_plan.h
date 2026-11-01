@@ -15,6 +15,10 @@ enum class TourInput : uint8_t {
     D,
     LeftShift,
     Space,
+    Tab,
+    R,
+    F1,
+    F2,
     Num1,
     Num2,
     Num3,
@@ -88,14 +92,37 @@ inline constexpr TourAction kCombat[] = {
     K(70, true, TourInput::LeftMouse), K(85, false, TourInput::LeftMouse),
     K(100, true, TourInput::RightMouse), K(120, false, TourInput::RightMouse),
 };
+inline constexpr TourAction kTargetLock[] = {
+    K(0, true, TourInput::Tab), K(12, false, TourInput::Tab), M(20, 20, 0),
+    K(35, true, TourInput::Tab), K(47, false, TourInput::Tab),
+    K(55, true, TourInput::LeftMouse), K(70, false, TourInput::LeftMouse), M(80, -20, 0),
+    K(90, true, TourInput::Tab), K(102, false, TourInput::Tab),
+};
+inline constexpr TourAction kGrabFollowup[] = {
+    K(0, true, TourInput::E), K(25, false, TourInput::E),
+    K(40, true, TourInput::E), K(65, false, TourInput::E),
+    K(70, true, TourInput::RightMouse), K(85, false, TourInput::RightMouse),
+    K(95, true, TourInput::E), K(110, false, TourInput::E),
+};
 inline constexpr TourAction kPowers[] = {
     K(0, true, TourInput::Num1), K(10, false, TourInput::Num1),
     K(30, true, TourInput::Num2), K(40, false, TourInput::Num2),
     K(60, true, TourInput::Num3), K(70, false, TourInput::Num3),
     K(90, true, TourInput::Num4), K(100, false, TourInput::Num4),
     K(120, true, TourInput::Q), K(130, false, TourInput::Q),
-    K(135, true, TourInput::E), K(145, false, TourInput::E),
-    K(150, true, TourInput::F), K(160, false, TourInput::F),
+};
+inline constexpr TourAction kPowerWheel[] = {
+    K(0, true, TourInput::R), M(15, 24, 0), M(30, 0, 24), M(45, -24, 0),
+    K(60, false, TourInput::R), K(75, true, TourInput::Num1), K(85, false, TourInput::Num1),
+};
+inline constexpr TourAction kDisguiseWheel[] = {
+    K(0, true, TourInput::F), M(15, -24, 0), M(30, 0, 24), M(45, 24, 0),
+    K(60, false, TourInput::F),
+};
+inline constexpr TourAction kDisguiseForms[] = {
+    K(0, true, TourInput::F1), K(12, false, TourInput::F1),
+    K(35, true, TourInput::F2), K(47, false, TourInput::F2),
+    K(70, true, TourInput::F1), K(82, false, TourInput::F1),
 };
 inline constexpr TourAction kParticles[] = {
     K(0, true, TourInput::W),
@@ -135,8 +162,13 @@ inline constexpr TourPhase kTourPhases[] = {
     P("shadow_motion", "dynamic shadows and DF-format effects during movement; no visual pass claim", 120, kShadowMotion),
     P("movement_directions", "W/A/S/D movement, animation, collision, camera and character rendering", 150, kMovement),
     P("jump_sprint", "sprint, jumping, animation state, timing and input release", 150, kJumpSprint),
+    P("target_lock", "Tab lock-on requests, camera adjustment and follow-up attack; target acquisition is unverified", 120, kTargetLock),
     P("combat_primary", "primary/secondary combat inputs, hit effects, animation and audio", 150, kCombat),
-    P("powers_and_abilities", "1/2/3/4/Q/E/F physical inputs; activated power/result remains unverified", 180, kPowers),
+    P("grab_followup", "E grab holds and follow-up combat input; grabbed target and consume/throw result are unverified", 130, kGrabFollowup),
+    P("powers_and_abilities", "1/2/3/4/Q physical inputs; activated power/result remains unverified", 180, kPowers),
+    P("power_wheel", "R power-selection wheel held through relative mouse choices; selected entry is unverified", 100, kPowerWheel),
+    P("disguise_wheel", "F disguise-selection wheel held through relative mouse choices; selected entry is unverified", 90, kDisguiseWheel),
+    P("disguise_forms", "F1 take-disguise and F2 return-to-Alex inputs; available disguise/form result is unverified", 100, kDisguiseForms),
     P("particles_effects", "combat/movement particles, effects, shader variants and audio", 140, kParticles),
     P("lighting_exposure", "opposite camera angles for lighting, shadows, culling and exposure", 120, kLighting),
     P("assets_streaming", "sustained sprint/camera asset requests and streaming; distance covered is unverified", 240, kStreaming),
@@ -149,7 +181,7 @@ inline constexpr TourPhase kTourPhases[] = {
 };
 
 inline constexpr size_t kTourPhaseCount = sizeof(kTourPhases) / sizeof(kTourPhases[0]);
-static_assert(kTourPhaseCount == 17, "crash-marker phase indices must be reviewed when the tour changes");
+static_assert(kTourPhaseCount == 22, "crash-marker phase indices must be reviewed when the tour changes");
 
 // A small pure scheduler used by production and host tests. It emits each action exactly at its requested frame;
 // phase completion is separate so callers can release every held input before recording the result.

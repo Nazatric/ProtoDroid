@@ -24,8 +24,8 @@
 #define PROTODROID_SOURCE_REVISION "unknown"
 #endif
 
-// Read by RecompDispatch. It is zero for ordinary Play, so the two engine-address comparisons are cold and no
-// environment lookup or logging occurs on the computed-call hot path.
+// Read by RecompDispatch. It is zero for ordinary Play, so gameplay-target classification is cold and no environment
+// lookup or logging occurs on the computed-call hot path.
 extern "C" {
 volatile uint32_t RecompDiagnosticTour = 0;
 }
@@ -40,6 +40,7 @@ std::atomic<bool> g_started{false};
 std::atomic<bool> g_finished{false};
 std::atomic<bool> g_gameplay_observed{false};
 std::atomic<uint32_t> g_gameplay_target{0};
+std::atomic<uint32_t> g_gameplay_dispatches{0};
 std::atomic<int> g_result{0};  // 0 running, 1 complete, 2 failed, 3 aborted
 std::atomic<const char*> g_phase_name{"inactive"};
 
@@ -55,6 +56,7 @@ char g_crash_path[512] = {};
 TourPhaseCursor g_cursor;
 size_t g_phase_index = 0;
 uint64_t g_present_cursor = 0;
+uint32_t g_phase_gameplay_start = 0;
 int64_t g_engine_ready_ns = 0;
 int64_t g_last_progress_ns = 0;
 int64_t g_tour_deadline_ns = 0;
@@ -144,6 +146,10 @@ const char* InputName(TourInput input) {
         case TourInput::D: return "D";
         case TourInput::LeftShift: return "LeftShift";
         case TourInput::Space: return "Space";
+        case TourInput::Tab: return "Tab";
+        case TourInput::R: return "R";
+        case TourInput::F1: return "F1";
+        case TourInput::F2: return "F2";
         case TourInput::Num1: return "1";
         case TourInput::Num2: return "2";
         case TourInput::Num3: return "3";
@@ -165,6 +171,10 @@ SDL_Scancode Scancode(TourInput input) {
         case TourInput::D: return SDL_SCANCODE_D;
         case TourInput::LeftShift: return SDL_SCANCODE_LSHIFT;
         case TourInput::Space: return SDL_SCANCODE_SPACE;
+        case TourInput::Tab: return SDL_SCANCODE_TAB;
+        case TourInput::R: return SDL_SCANCODE_R;
+        case TourInput::F1: return SDL_SCANCODE_F1;
+        case TourInput::F2: return SDL_SCANCODE_F2;
         case TourInput::Num1: return SDL_SCANCODE_1;
         case TourInput::Num2: return SDL_SCANCODE_2;
         case TourInput::Num3: return SDL_SCANCODE_3;
@@ -207,19 +217,21 @@ void Finish(int result, const char* reason) {
     g_result.store(result, std::memory_order_release);
     RecompDiagnosticTour = 0;
     const char* name = ResultName(result);
-    Record("result=%s reason=%s visual_verification=not-performed physical_device_validation=not-performed", true,
-           name, reason ? reason : "none");
+    const uint32_t gameplay_dispatches = g_gameplay_dispatches.load(std::memory_order_acquire);
+    Record("result=%s reason=%s gameplay_dispatches=%u visual_verification=not-performed "
+           "physical_device_validation=not-performed",
+           true, name, reason ? reason : "none", gameplay_dispatches);
     char marker[1024];
     snprintf(marker, sizeof(marker),
-             "result=%s\nreason=%s\nphase=%s\npresent=%llu\nvisual_verification=not-performed\n"
-             "script_completion_is_not_visual_correctness=true\n",
+             "result=%s\nreason=%s\nphase=%s\npresent=%llu\ngameplay_dispatches=%u\n"
+             "visual_verification=not-performed\nscript_completion_is_not_visual_correctness=true\n",
              name, reason ? reason : "none", g_phase_name.load(std::memory_order_relaxed),
-             (unsigned long long)PresentedFrameCount());
+             (unsigned long long)PresentedFrameCount(), gameplay_dispatches);
     if (!WriteMarker(g_result_path, marker))
         Log("diagnostic tour: could not write durable result marker %s: %s", g_result_path, strerror(errno));
-    snprintf(marker, sizeof(marker), "phase=%s\nstatus=%s\nreason=%s\npresent=%llu\n",
+    snprintf(marker, sizeof(marker), "phase=%s\nstatus=%s\nreason=%s\npresent=%llu\ngameplay_dispatches=%u\n",
              g_phase_name.load(std::memory_order_relaxed), name, reason ? reason : "none",
-             (unsigned long long)PresentedFrameCount());
+             (unsigned long long)PresentedFrameCount(), gameplay_dispatches);
     if (!WriteMarker(g_phase_path, marker))
         Log("diagnostic tour: could not write final phase marker %s: %s", g_phase_path, strerror(errno));
     Log("diagnostic tour %s: %s; scripted completion is not visual verification", name, reason ? reason : "none");
@@ -247,6 +259,7 @@ void BeginPhase(size_t index) {
             ++index;
             continue;
         }
+        g_phase_gameplay_start = g_gameplay_dispatches.load(std::memory_order_acquire);
         Log("tour phase begin: %s (%zu/%zu), %u presented frames; coverage=%s", phase.name, index + 1,
             kTourPhaseCount, phase.frames, phase.coverage);
         Record("phase=%s index=%zu status=running dwell_present_frames=%u", true, phase.name, index, phase.frames);
@@ -260,10 +273,17 @@ void BeginPhase(size_t index) {
 void CompletePhase() {
     const TourPhase& phase = kTourPhases[g_phase_index];
     ReleaseInjectedInput();
-    Log("tour phase tested (script/actions only): %s", phase.name);
-    Record("phase=%s index=%zu status=tested meaning=requested-inputs-and-rendered-dwell-completed "
-           "visual_verification=not-performed",
-           true, phase.name, g_phase_index);
+    const uint32_t dispatches =
+        g_gameplay_dispatches.load(std::memory_order_acquire) - g_phase_gameplay_start;
+    if (!dispatches) {
+        // Presents alone can continue while the game logic is paused or stuck. Never label such a phase as tested.
+        DiagnosticTourFail(phase.name, "no InGameState task dispatch during the presented phase");
+        return;
+    }
+    Log("tour phase tested (inputs, presents, gameplay task activity): %s; dispatches=%u", phase.name, dispatches);
+    Record("phase=%s index=%zu status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed "
+           "gameplay_dispatches=%u visual_verification=not-performed",
+           true, phase.name, g_phase_index, dispatches);
     BeginPhase(g_phase_index + 1);
 }
 
@@ -373,6 +393,7 @@ void DiagnosticTourEngineInitialized() {
 
 void DiagnosticTourGameplayObserved(uint32_t target) {
     g_gameplay_target.store(target, std::memory_order_release);
+    g_gameplay_dispatches.fetch_add(1, std::memory_order_relaxed);
     g_gameplay_observed.store(true, std::memory_order_release);
 }
 
@@ -454,14 +475,31 @@ void DiagnosticTourAbort(const char* reason) {
     Finish(3, reason);
 }
 
+void DiagnosticTourWatchdogStalled(uint64_t frame, int seconds) {
+    if (!g_started.load(std::memory_order_acquire)) return;  // Ordinary Play keeps its existing watchdog behavior.
+    if (!g_finished.load(std::memory_order_acquire)) {
+        char reason[192];
+        snprintf(reason, sizeof(reason), "main-loop frame %llu did not advance for %d seconds; watchdog backtraces captured",
+                 (unsigned long long)frame, seconds);
+        // Do not inject/release input or call guest code on the watchdog thread. Atomic markers are flushed before the
+        // isolated process exits; process teardown releases any held OS input state without touching normal saves.
+        DiagnosticTourFail(g_phase_name.load(std::memory_order_acquire), reason);
+    }
+    if (!DiagnosticTourFailed()) return;
+    Log("diagnostic tour watchdog: ending the failed isolated process without EngineTerminate");
+    _exit(71);
+}
+
 void DiagnosticTourCrashed(int signal_number) {
     if (!g_started.load(std::memory_order_acquire) || !g_crash_path[0]) return;
     char line[768];
     int length = snprintf(line, sizeof(line),
-                          "crash signal=%d phase=%s result=%s present=%llu gameplay_observed=%u\n",
+                          "crash signal=%d phase=%s result=%s present=%llu gameplay_observed=%u "
+                          "gameplay_dispatches=%u\n",
                           signal_number, g_phase_name.load(std::memory_order_relaxed),
                           ResultName(g_result.load(std::memory_order_relaxed)),
-                          (unsigned long long)PresentedFrameCount(), g_gameplay_observed.load() ? 1u : 0u);
+                          (unsigned long long)PresentedFrameCount(), g_gameplay_observed.load() ? 1u : 0u,
+                          g_gameplay_dispatches.load(std::memory_order_relaxed));
     if (length <= 0) return;
     int fd = open(g_crash_path, O_WRONLY | O_APPEND | O_CLOEXEC);
     if (fd < 0) return;

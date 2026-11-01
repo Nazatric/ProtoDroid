@@ -105,6 +105,8 @@ $(OUT)/main.o $(OUT)/path.o $(OUT)/save_path.o: save_path.h
 $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/present_stats.o $(OUT)/diagnostics.o: present_stats.h timing_window.h
 $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/diagnostics.o: diagnostics.h
 $(OUT)/main.o $(OUT)/runtime.o $(OUT)/diagnostics.o $(OUT)/vulkan_driver.o $(OUT)/diagnostic_tour.o: diagnostic_tour.h
+$(OUT)/runtime.o: diagnostic_tour_probe.h
+$(OUT)/watchdog.o: diagnostic_tour.h
 $(OUT)/diagnostic_tour.o: diagnostic_tour_plan.h input.h
 $(OUT)/input.o: input.h
 $(OUT)/diagnostics.o: proc_stats.h

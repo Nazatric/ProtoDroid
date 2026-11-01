@@ -17,7 +17,7 @@ bool DiagnosticTourStart(const char* isolated_cache_dir);
 void DiagnosticTourSaveReady(const char* path);
 void DiagnosticTourEngineInitialized();
 
-// Called only for the two preferred-base InGameState task targets when the tour probe is armed.
+// Called for the two proven InGameState vtable thunks or their resolved task targets when the tour probe is armed.
 void DiagnosticTourGameplayObserved(uint32_t target);
 
 // Call after EngineService. Returns false after completion/failure so the main loop can terminate cleanly.
@@ -26,6 +26,9 @@ bool DiagnosticTourPump();
 bool DiagnosticTourFailed();
 void DiagnosticTourFail(const char* phase, const char* reason);
 void DiagnosticTourAbort(const char* reason);
+// Called by the watchdog after its backtrace capture only if the main-loop frame counter has not recovered.
+// Ordinary Play returns immediately; a failed isolated tour exits rather than remaining frozen in EngineService.
+void DiagnosticTourWatchdogStalled(uint64_t frame, int seconds);
 
 // Async-signal-context best effort, like the existing native crash report. Uses only precomputed paths and atomics.
 void DiagnosticTourCrashed(int signal_number);

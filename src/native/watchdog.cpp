@@ -16,6 +16,7 @@
 #include <thread>
 #include <vector>
 
+#include "diagnostic_tour.h"
 #include "guest.h"
 
 namespace native {
@@ -85,6 +86,8 @@ void Run(int seconds) {
             tgkill(getpid(), r.tid, SIGUSR2);  // by tid: a thread that has exited is just skipped (ESRCH)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
+        // Capturing a long backtrace must not fail a tour that recovered meanwhile. Ordinary Play returns immediately.
+        if (now == g_frames->load()) DiagnosticTourWatchdogStalled(now, seconds);
     }
 }
 

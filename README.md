@@ -163,9 +163,9 @@ Depending on storage access, logs are available in:
 
 ### Diagnostic tour
 
-Type **MERCER** on the launcher or tap its Prototype logo seven times quickly, then choose **START TOUR**. Repeat the code/gesture to disarm it. The tour requests a direct test level and runs ordered gameplay inputs without further interaction; unavailable gameplay, stalls, and other failures are recorded instead of being reported as passes.
+Type **MERCER** on the launcher or tap its Prototype logo seven times quickly, then choose **START TOUR**. Repeat the code/gesture to disarm it. The 22-phase plan requests a direct test level, then rapidly exercises movement, camera, jumping/sprinting, targeting, combat, grab follow-ups, quick powers, power/disguise wheels, disguise-form inputs, shadows, effects, streaming, audio, and recovery without further interaction.
 
-Tour saves, logs, and shader cache are isolated from normal Play. Shared results are under `/storage/emulated/0/Prototype/diagnostic-tour/logs/`, including `journal.log`, `phase.txt`, `result.txt`, and `crash.log`. “Tested” means the scripted inputs and rendered dwell completed—not that visuals or audio were verified. Unsupported movie and physical-touch phases are explicitly skipped.
+Tour saves, logs, and shader cache are isolated from normal Play. Shared results are under `/storage/emulated/0/Prototype/diagnostic-tour/logs/`, including `journal.log`, `phase.txt`, `result.txt`, and `crash.log`. Every non-skipped phase requires rendered dwell and continuing `InGameState` task activity; presents alone are not enough. “Tested” means those inputs and activity completed—not that the ability’s result, visuals, or audio were verified. Bink movie and physical Android-touch phases are explicitly skipped. The isolated game process closes when the tour completes or fails.
 
 ### Detailed profiling
 
@@ -256,7 +256,7 @@ android/build-apk.sh arm64-v8a
 
 ### Tests
 
-Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler and lock rules, presentation normalization, the Prototype DXVK profile, save paths and migration, game-file validation, diagnostic-tour planning, state-cache behavior, updater recovery policy, settings, and version increments.
+Host tests use strict warnings and UndefinedBehaviorSanitizer. They cover DXT decoding, sampler and lock rules, presentation normalization, the Prototype DXVK profile, save paths and migration, game-file validation, diagnostic-tour planning and engine-thunk probes, state-cache behavior, updater recovery policy, settings, and version increments.
 
 ```sh
 # Graphics helpers and DXT differential tests.
