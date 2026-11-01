@@ -18,6 +18,10 @@ texture_skip_min_size = 512
 # automatically; 1/0 forces it on/off.
 #decode_dxt = 1
 
+# DXT1 decoding on GPUs without BC: 0 keeps full 32-bit color; 1 uses lower-bandwidth 16-bit color.
+# The standalone Android default is 1 when the GPU supports A1R5G5B5. High selects 0; Low/Medium select 1.
+#decode_16bit = 0
+
 # Maximum texture anisotropy. Android defaults to 1 (linear); Settings offers 1/2/4/8.
 # At 1, anisotropic min/mag/mip filters become linear. An explicit d3d9.samplerAnisotropy in DXVK config is preserved.
 #max_anisotropy = 1

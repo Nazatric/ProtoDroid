@@ -160,7 +160,8 @@ require('unlink((mod.root + "/launch-error.txt").c_str());' in platform,
 require("dlclose(" not in text("src/native/mod_plugins.cpp"), "plugin code must remain process-lifetime")
 
 focus = text("android/java/com/protodroid/SetupView.java")
-require(focus.count("ACTION_MODS, ACTION_DRIVERS") >= 5 and
+# Four non-settings branches: launcher/setup, each with or without a pressable update action.
+require(focus.count("ACTION_MODS, ACTION_DRIVERS") >= 4 and
         "settingsOrder.add(ACTION_MODS)" in focus and "settingsOrder.add(ACTION_DRIVERS)" in focus and
         "SETTING_ACTION_BASE + i * 2 + 1" in focus,
         "Mods/Drivers or progressive setting-help targets are missing from launcher focus order")

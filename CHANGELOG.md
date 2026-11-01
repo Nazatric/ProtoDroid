@@ -2,6 +2,9 @@
 
 ## 0.15
 
+- Added default helicopter **DESCEND** (`V`), an independent numbered **123** touch pad, and **ABC** Android keyboard input through SDL. Existing custom-layout indices and Extra buttons behavior are preserved. Added optional fixed Landscape/Reverse recovery while keeping Auto orientation by default.
+- Made High retain full 32-bit decoded DXT1 color; Low/Medium and the standalone default keep the lower-bandwidth 16-bit path. Added a persistent **VERSIONS** action for official older APKs while exact-release updates and verified download recovery remain separate.
+- Corrected the Vulkan 1.1 compatibility wrapper’s DXVK-facing effective API advertisement without lowering DXVK’s requirements or bypassing its isolated feature/extension probe. Physical Mali, PowerVR, long-session, and visual outcomes remain unverified.
 - Simplified the in-game gear to live FPS/battery/menu pacing, touch controls, FPS overlay, and Layout. Restart-only graphics and engine/mod experiments remain in the launcher, where concise explanations appear on touch, hover, or focus. Menu-FPS changes now use atomic live state consumed when Bink movies open.
 - Reworked Mods as a library-only screen with author-defined per-mod toggles, stepped sliders, choices, and text. Added atomic option saves, dirty-back/reset handling, large bounded texture-project imports, shallow library scans, and lazy per-mip DDS reads. Original format/dimension limits remain; arbitrary texture resizing is not claimed.
 - Added native plugin ABI v2 with per-mod boolean/number/string getters while retaining the exact ABI-v1 host contract. Updated the source-built example to use real saved options. Windows x86 ASI/DLL compatibility is still not claimed.

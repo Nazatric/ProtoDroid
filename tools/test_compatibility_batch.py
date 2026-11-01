@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Source regressions for the 0.15 controls, texture-quality, and orientation batch."""
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+touch = (ROOT / "android/java/com/protodroid/TouchControls.java").read_text(encoding="utf-8")
+settings = (ROOT / "android/java/com/protodroid/GameSettings.java").read_text(encoding="utf-8")
+activity = (ROOT / "android/java/com/protodroid/ProtoActivity.java").read_text(encoding="utf-8")
+manifest = (ROOT / "android/AndroidManifest.xml").read_text(encoding="utf-8")
+d3d9 = (ROOT / "src/native/d3d9.cpp").read_text(encoding="utf-8")
+readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+# Saved custom layouts are index-based: every new action must follow the existing last button.
+ordered = ['new Button("ALEX"', 'new Button("123"', 'new Button("ABC"', 'new Button("DESCEND"']
+positions = [touch.index(item) for item in ordered]
+assert positions == sorted(positions), "new controls reindexed an existing saved touch layout"
+assert 'new Button("DESCEND", KeyEvent.KEYCODE_V' in touch
+assert 'new Button("1 ATK", KeyEvent.KEYCODE_1' in touch
+assert 'new Button("2 DSG", KeyEvent.KEYCODE_2' in touch
+assert 'new Button("3 DEF", KeyEvent.KEYCODE_3' in touch
+assert 'new Button("4 SENSE", KeyEvent.KEYCODE_4' in touch
+visible = touch.split("private boolean visible(Button b)", 1)[1].split("private void layout", 1)[0]
+assert "b.numberKey && !numberPad && !powerButtons" in visible
+assert "b.quickPower && !b.numberKey && !powerButtons" in visible
+press = touch.split("private void press(Button b, int pointer)", 1)[1].split("private void release", 1)[0]
+assert "numberPad = !numberPad;" in press
+assert "SDLActivity.showTextInput(0, 0, 1, 1);" in press
+assert press.index("if (b.keyboard)") < press.index("key(b.keycode, true)"), "IME action must not become a keyboard keycode"
+
+assert '"game_aa_level", "game_shadow_detail", "game_graphic_quality", "decode_16bit"' in settings
+assert "{0, 2, 0, 1, 1, 1, 1}" in settings and "{1, 1, 0, 2, 2, 2, 1}" in settings
+assert "{3, 0, 3, 3, 3, 3, 0}" in settings, "High must select full 32-bit DXT1 color"
+default_index = settings.split("int defaultIndex()", 1)[1].split("static boolean isLiveEngineSetting", 1)[0]
+decode_default = default_index.split('key.equals("decode_16bit")', 1)[1].split("return 1;", 1)[0]
+assert "return 0;" not in decode_default, "standalone DXT1 default changed from reduced 16-bit"
+assert 'Setting("DXT1 color", "decode_16bit", new String[] {"32-bit", "16-bit"}' in settings
+assert 'SettingInt("decode_16bit", 1)' in d3d9, "UI key is not connected to the real native decoder"
+assert 'SettingInt("decode_16bit", 0)' in d3d9, "non-A1R5 fallback native default changed"
+
+assert 'Setting("Screen orientation", "display_orientation", new String[] {"Auto", "Landscape", "Reverse"}' in settings
+assert 'getInt("display_orientation", 0)' in activity
+assert "if (orientation == 1)" in activity and "else if (orientation == 2)" in activity
+assert "SCREEN_ORIENTATION_LANDSCAPE" in activity and "SCREEN_ORIENTATION_REVERSE_LANDSCAPE" in activity
+on_create = activity.split("protected void onCreate", 1)[1]
+assert "orientation == 0" not in on_create, "Auto must retain the manifest sensorLandscape behavior"
+assert 'android:screenOrientation="sensorLandscape"' in manifest
+assert "https://github.com/Nazatric/ProtoDroid/releases" in readme and "**VERSIONS**" in readme
+print("Touch/IME, DXT1-quality, orientation-default, and archive documentation checks passed")

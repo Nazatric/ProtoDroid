@@ -65,7 +65,7 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 | --- | --- |
 | **Graphics** | The original renderer through D3D9 and DXVK, with resolution, texture, anisotropy, AA, shadow, and game-quality settings. Mali and Adreno receive device-specific compatibility handling without a shared visual downgrade. |
 | **Movies and audio** | Full-screen Bink videos, ambient menu movies, RCF-resident files, and XAudio2 through FAudio. **Unlock menu FPS** is on by default. |
-| **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. |
+| **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, helicopter descend, a numbered 1–4 pad, Android keyboard input, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. |
 | **Performance** | ARM64 hot-path replacements, optimized DXT decoding, stable FIFO presentation, ADPF hints, unrestricted CPU scheduling, and persistent DXVK state caching. |
 | **Saves** | Shared profiles and saves that you can back up, replace, or delete with a file manager. Existing saves migrate without being overwritten. |
 | **Mods** | An optional local library for overlays, large keyed texture packs, sandboxed Lua engine scripts, and independently rebuilt ARM64 plugins, with dependencies, author options, and next-Play activation. |
@@ -74,13 +74,13 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 
 The launcher’s **Settings** page keeps graphics, drivers, and engine policies. Its rows show short explanations on touch, hover, or keyboard focus; changes save automatically and engine options apply on **Play**. The in-game gear is a smaller live panel: FPS/battery/menu pacing, touch controls, FPS overlay, and **Layout**. Restart-only graphics and engine/mod experiments stay out of that panel.
 
-- **Graphics:** Resolution, Textures, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
+- **Graphics:** Resolution, Textures, DXT1 color, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
 - **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **Game default** leaves the engine’s own device-dependent choice intact.
-- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons.
-- **Interface:** Opacity and Show FPS.
+- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons. In game, **123** toggles number keys independently, **ABC** opens the Android keyboard, and **DESCEND** sends `V`.
+- **Interface:** Screen orientation, Opacity, and Show FPS. Fixed Landscape/Reverse is an optional recovery for devices that choose the wrong direction; Auto remains the default.
 - **Engine fixes:** Optional FOV, shadow-map, tick/QTE, loose-file, developer-menu, VRAM-report, and texture-dump policies. Safe defaults remain unchanged until you opt in.
 
-**Low, Medium, and High presets** update only the graphics and game-video options. Your FPS and control preferences stay as they are. Choose **Custom** after changing an individual graphics row. Use **LAYOUT** to drag controls into place, resize them, or reset the layout.
+**Low, Medium, and High presets** update only the graphics and game-video options. High keeps full 32-bit decoded DXT1 color; Low/Medium retain the lower-bandwidth 16-bit path. Your FPS and control preferences stay as they are. Choose **Custom** after changing an individual graphics row. Use **LAYOUT** to drag controls into place, resize them, or reset the layout.
 
 ### Mods and engine fixes
 
@@ -101,7 +101,7 @@ The **Engine fixes** tab exposes fractional FOV offsets through INI, 512–8192 
 | **Turnip** | Adreno-only. Falls back to System on Mali rather than pretending to be a Mali driver. |
 | **Custom** | Uses the explicitly selected, validated package from the Drivers library. |
 
-If the direct system path cannot run DXVK, Auto can try a bundled Vulkan 1.1 compatibility wrapper after an isolated feature probe. Working direct Vulkan 1.2/1.3 paths and explicit driver choices are not replaced. Physical Mali compatibility remains unverified.
+If the direct system path cannot run DXVK, Auto can try a bundled Vulkan 1.1 compatibility wrapper after an isolated feature probe. The wrapper advertises its lowered DXVK-facing 1.3 interface only after requesting Mesa’s real compatibility path; missing features or extensions still reject it. Working direct Vulkan 1.2/1.3 paths and explicit driver choices are not replaced. Physical Mali and PowerVR compatibility remains unverified.
 
 Open **Drivers** on the launcher or beside **Done** in Settings for the guided driver screen. Your current choice appears first, followed by large plain-language mode cards. **Driver packages** is a separate optional section with **Installed** and **Downloads** tabs, so ordinary Auto/System use is not buried in advanced controls. Downloads start with packages for the detected GPU family and offer **Show all**; this is only a compatibility filter, not a device guarantee. Tap an installed card to use it, open **Details** for technical information, or use two-tap **Remove**.
 
@@ -140,6 +140,7 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `render_height` | Internal render height. Android defaults to 720; width follows the display aspect ratio. |
 | `texture_skip_mips` | `0` full textures, `1` half resolution, `2` quarter resolution. |
 | `texture_skip_min_size` | Minimum texture size eligible for mip reduction. |
+| `decode_16bit` | On decoded DXT1 textures, `0` keeps full 32-bit color and `1` uses the lower-bandwidth 16-bit path. |
 | `max_anisotropy` | Texture anisotropy: 1, 2, 4, 8, or another supported value. |
 | `fps_limit` | Host frame limit: `0` disables it; positive values use the existing limiter. The UI offers 30–1000, without promising the resulting frame rate. |
 | `battery_saver` | Enables the battery-saving frame policy. |
@@ -208,13 +209,13 @@ Use the [guided issue forms](https://github.com/Nazatric/ProtoDroid/issues/new/c
 
 ## Updates
 
-The launcher checks the latest published GitHub release and compares its integer `versionCode`. For an available update, **DOWNLOAD** opens that release’s GitHub page directly. Recovery for an existing in-app download still verifies its APK hash, package/version, and signing certificate before offering installation.
+The launcher checks the latest published GitHub release and compares its integer `versionCode`. For an available update, **DOWNLOAD** opens that release’s GitHub page directly. **VERSIONS** always opens the [official release archive](https://github.com/Nazatric/ProtoDroid/releases) for older APKs; no third-party mirror is used. Recovery for an existing in-app download still verifies its APK hash, package/version, and signing certificate before offering installation.
 
 - **Same certificate:** Android can update in place.
 - **Different certificate:** Android requires a one-time uninstall first. Shared saves and files under `/storage/emulated/0/Prototype` are separate; back up important app-private data.
 - **If Android closes ProtoDroid during an existing verified-download uninstall:** open its completed download notification or the APK in Downloads.
 
-Automatic checks use a 15-minute backoff and do not block Play. Update errors offer Retry and **OPEN RELEASE**.
+Automatic checks use a 15-minute backoff and do not block Play. Update errors offer Retry and **ALL VERSIONS**. Older APKs use the signing rules above; back up important data before reinstalling a different certificate.
 
 ## Under the hood
 

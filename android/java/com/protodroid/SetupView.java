@@ -137,6 +137,7 @@ final class SetupView extends View {
     private final RectF logoBounds = new RectF();
     private final RectF updateBounds = new RectF();
     private final RectF updateReleasesBounds = new RectF();
+    private final RectF archiveBounds = new RectF();
     private final RectF updateWarningConfirmBounds = new RectF();
     private final RectF updateWarningCancelBounds = new RectF();
     private final RectF[] settingLeftBounds;
@@ -752,7 +753,7 @@ final class SetupView extends View {
                 || updateState.status == UpdateManager.State.READY ? BUTTON_PRIMARY : BUTTON_NORMAL;
         drawButton(canvas, ACTION_UPDATE, updateBounds, button, variant, updateState.canPress(), busy, u, now, dt);
         if (recovery) {
-            drawButton(canvas, ACTION_UPDATE_RELEASES, updateReleasesBounds, "OPEN RELEASE",
+            drawButton(canvas, ACTION_UPDATE_RELEASES, updateReleasesBounds, "ALL VERSIONS",
                     BUTTON_PRIMARY, true, false, u, now, dt);
         }
         if (updateState.status == UpdateManager.State.DOWNLOADING && updateState.progress >= 0) {
@@ -1122,6 +1123,11 @@ final class SetupView extends View {
                     BUTTON_NORMAL, !state.checking, state.checking, u, now, dt);
         }
 
+        float archiveWidth = Math.min(128f * u, rightWidth);
+        archiveBounds.set(right - archiveWidth, hudY + 10f * u, right, hudY + 46f * u);
+        drawButton(canvas, ACTION_UPDATE_RELEASES, archiveBounds, "VERSIONS", BUTTON_GHOST,
+                true, false, u, now, dt);
+
         float chipsHeight = chipsHeight(rightWidth, u);
         float chipsTop = contentBottom - chipsHeight;
         drawPathPanel(canvas, rightLeft, chipsTop - 8f * u, rightWidth, u, now);
@@ -1140,7 +1146,7 @@ final class SetupView extends View {
         float updateHeight = updateBannerHeight(u);
         float contentHeight = 46f * u + 14f * u + 2f * u + 14f * u + 46f * u + 14f * u
                 + headline * 2f * u + 14f * u + 18f * u + 14f * u + 42f * u + 14f * u
-                + updateHeight + (updateHeight > 0f ? 8f * u : 0f)
+                + updateHeight + (updateHeight > 0f ? 8f * u : 0f) + 50f * u
                 + panelHeight(u) + 14f * u + chipsHeight(width, u);
         float available = getHeight() - insetTop - insetBottom - 32f * u;
         maxScrollY = Math.max(0f, contentHeight - available);
@@ -1185,6 +1191,11 @@ final class SetupView extends View {
                     BUTTON_NORMAL, !state.checking, state.checking, u, now, dt);
         }
         y += 56f * u;
+        float archiveWidth = Math.min(128f * u, width);
+        archiveBounds.set(right - archiveWidth, y, right, y + 36f * u);
+        drawButton(canvas, ACTION_UPDATE_RELEASES, archiveBounds, "VERSIONS", BUTTON_GHOST,
+                true, false, u, now, dt);
+        y += 50f * u;
         float panelHeight = panelHeight(u);
         drawPathPanel(canvas, left, y + panelHeight, width, u, now);
         y += panelHeight + 14f * u;
@@ -1453,6 +1464,7 @@ final class SetupView extends View {
             return ACTION_UPDATE_RELEASES;
         }
         if (updateState.visible() && updateState.canPress() && updateBounds.contains(x, y)) return ACTION_UPDATE;
+        if (archiveBounds.contains(x, y)) return ACTION_UPDATE_RELEASES;
         if (launcherMode()) {
             if (allowBounds.contains(x, y)) return ACTION_SETTINGS;
             if (checkBounds.contains(x, y)) return ACTION_PLAY;
@@ -1615,23 +1627,17 @@ final class SetupView extends View {
             order = new int[settingsOrder.size()];
             for (int i = 0; i < order.length; ++i) order[i] = settingsOrder.get(i);
         } else if (launcherMode()) {
-            if (updateState.status == UpdateManager.State.ERROR) {
-                order = new int[] {ACTION_UPDATE, ACTION_UPDATE_RELEASES, ACTION_SETTINGS, ACTION_PLAY,
-                        ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
-            } else {
-                order = updateState.visible() && updateState.canPress()
-                        ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
-                        : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
-            }
+            order = updateState.visible() && updateState.canPress()
+                    ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_UPDATE_RELEASES,
+                            ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
+                    : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_UPDATE_RELEASES,
+                            ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
         } else {
-            if (updateState.status == UpdateManager.State.ERROR) {
-                order = new int[] {ACTION_UPDATE, ACTION_UPDATE_RELEASES, ACTION_ALLOW, ACTION_CHECK,
-                        ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
-            } else {
-                order = updateState.visible() && updateState.canPress()
-                        ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
-                        : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
-            }
+            order = updateState.visible() && updateState.canPress()
+                    ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_UPDATE_RELEASES,
+                            ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
+                    : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_UPDATE_RELEASES,
+                            ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
         }
         int index = -1;
         for (int i = 0; i < order.length; i++) if (order[i] == current) index = i;

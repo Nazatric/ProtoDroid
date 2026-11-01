@@ -282,6 +282,12 @@ jobs:
           python3 tools/test_native_mod_platform.py
           python3 tools/generate_engine_symbols.py --check
 
+      - name: Test Vulkan wrapper negotiation policy
+        run: python3 tools/test_vulkan_wrapper_policy.py
+
+      - name: Test compatibility controls and graphics policies
+        run: python3 tools/test_compatibility_batch.py
+
       - name: Test diagnostic-tour launcher cheat code
         run: |
           set -euo pipefail

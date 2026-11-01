@@ -44,7 +44,8 @@ import java.util.concurrent.RejectedExecutionException;
 final class UpdateManager {
     private static final String TAG = "ProtoDroidUpdate";
     private static final String API_URL = "https://api.github.com/repos/Nazatric/ProtoDroid/releases/latest";
-    private static final String RELEASES_URL = "https://github.com/Nazatric/ProtoDroid/releases/latest";
+    private static final String LATEST_RELEASE_URL = "https://github.com/Nazatric/ProtoDroid/releases/latest";
+    private static final String RELEASES_URL = "https://github.com/Nazatric/ProtoDroid/releases";
     private static final String PREFS = "launcher_updates";
     private static final String KEY_DOWNLOAD_ID = "download_id";
     private static final String KEY_VERSION_NAME = "version_name";
@@ -206,7 +207,7 @@ final class UpdateManager {
             case State.AVAILABLE:
                 // The requested simple update path opens the fetched release directly. Existing system downloads
                 // retain the verified recovery/install flow below.
-                onReleasesPressed();
+                onLatestReleasePressed();
                 break;
             case State.READY:
                 if (state.requiresUninstall) callback.onUninstallRequired(state.versionName);
@@ -221,9 +222,19 @@ final class UpdateManager {
         }
     }
 
+    private void onLatestReleasePressed() {
+        if (closed) return;
+        String url = release == null || release.htmlUrl.isEmpty() ? LATEST_RELEASE_URL : release.htmlUrl;
+        openRelease(url);
+    }
+
     void onReleasesPressed() {
         if (closed) return;
-        String url = release == null || release.htmlUrl.isEmpty() ? RELEASES_URL : release.htmlUrl;
+        // Recovery is always the official archive, never a third-party mirror or whichever release is newest.
+        openRelease(RELEASES_URL);
+    }
+
+    private void openRelease(String url) {
         Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
         browser.addCategory(Intent.CATEGORY_BROWSABLE);
         try {
@@ -769,7 +780,7 @@ final class UpdateManager {
         if (name == null || url == null || apkSha256 == null || certificate == null || code <= 0L || size <= 0L) {
             return null;
         }
-        String htmlUrl = prefs.getString(KEY_RELEASE_URL, RELEASES_URL);
+        String htmlUrl = prefs.getString(KEY_RELEASE_URL, LATEST_RELEASE_URL);
         return new UpdateRelease(name, code, htmlUrl, url, size, apkSha256, certificate);
     }
 

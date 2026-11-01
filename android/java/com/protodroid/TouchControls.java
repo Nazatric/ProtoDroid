@@ -48,6 +48,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     static native void nativeSetMenuFpsUnlocked(boolean unlocked);
 
     private static final int MOUSE_LEFT = 1, MOUSE_RIGHT = 2, MOUSE_MIDDLE = 4;
+    private static final int ACTION_TOGGLE_NUMBERS = -1, ACTION_SHOW_KEYBOARD = -2;
     private static final int RED = 0xffe0261e, RED_DIM = 0xff7a1410, INK = 0xff0b0b0b;
 
     /**
@@ -64,6 +65,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         float customX = -1, customY = -1;
         float size = 1;  // the layout editor's per-button size factor
         boolean quickPower;  // the extra buttons: shown only with the "Extra buttons" setting
+        final boolean numberKey, numberToggle, keyboard;
         // POWERS and DISGUISE hold a selection wheel open: sliding the finger that holds the button moves the mouse,
         // which is how the game picks an entry, so one thumb is enough. fx/fy: where that finger is.
         final boolean wheel;
@@ -82,6 +84,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             this.dy = dy;
             this.sizeDp = sizeDp;
             this.gameOnly = gameOnly;
+            this.numberKey = keycode == KeyEvent.KEYCODE_1 || keycode == KeyEvent.KEYCODE_2
+                    || keycode == KeyEvent.KEYCODE_3 || keycode == KeyEvent.KEYCODE_4;
+            this.numberToggle = keycode == ACTION_TOGGLE_NUMBERS;
+            this.keyboard = keycode == ACTION_SHOW_KEYBOARD;
             this.quickPower = keycode == KeyEvent.KEYCODE_F || keycode == KeyEvent.KEYCODE_1
                     || keycode == KeyEvent.KEYCODE_2 || keycode == KeyEvent.KEYCODE_3 || keycode == KeyEvent.KEYCODE_4
                     || keycode == KeyEvent.KEYCODE_DPAD_DOWN || keycode == KeyEvent.KEYCODE_F1
@@ -110,15 +116,20 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         new Button("POWERS", KeyEvent.KEYCODE_R, 0, true, 190, false, 33, 24, true),  // Power Select Menu: R
         // Extra buttons use the reference port's PC Keyboard Setup keys: disguise powers menu, last attack,
         // defense and sensory power; then last disguise power, Web of Intrigue, take a disguise and back to Alex.
-        // Appended so every saved position above keeps its index. All remain hidden unless Extra buttons is enabled.
+        // Appended so every saved position above keeps its index. Non-number extras remain hidden unless enabled;
+        // the numbered power keys can also be opened with the compact 123 control for detector/QTE number prompts.
         new Button("DSG MENU", KeyEvent.KEYCODE_F, 0, true, 370, false, 33, 24, true),
-        new Button("ATK PWR", KeyEvent.KEYCODE_1, 0, true, 280, false, 95, 22, true),
-        new Button("DEFENSE", KeyEvent.KEYCODE_3, 0, true, 190, false, 95, 22, true),
-        new Button("SENSE", KeyEvent.KEYCODE_4, 0, true, 100, false, 95, 22, true),
-        new Button("DSG PWR", KeyEvent.KEYCODE_2, 0, true, 370, false, 95, 22, true),
+        new Button("1 ATK", KeyEvent.KEYCODE_1, 0, true, 280, false, 95, 22, true),
+        new Button("3 DEF", KeyEvent.KEYCODE_3, 0, true, 190, false, 95, 22, true),
+        new Button("4 SENSE", KeyEvent.KEYCODE_4, 0, true, 100, false, 95, 22, true),
+        new Button("2 DSG", KeyEvent.KEYCODE_2, 0, true, 370, false, 95, 22, true),
         new Button("WEB", KeyEvent.KEYCODE_DPAD_DOWN, 0, true, 460, false, 33, 22, true),
         new Button("DISGUISE", KeyEvent.KEYCODE_F1, 0, true, 460, false, 95, 22, true),
         new Button("ALEX", KeyEvent.KEYCODE_F2, 0, true, 550, false, 95, 22, true),
+        // New controls are appended as well: existing saved positions and sizes retain their original indices.
+        new Button("123", ACTION_TOGGLE_NUMBERS, 0, false, 145, false, 33, 22, true),
+        new Button("ABC", ACTION_SHOW_KEYBOARD, 0, false, 210, false, 33, 22, false),
+        new Button("DESCEND", KeyEvent.KEYCODE_V, 0, true, 258, true, 215, 25, true),
     };
 
     // ---- settings ----
@@ -152,6 +163,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             glow = new Paint(Paint.ANTI_ALIAS_FLAG), text = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
     private boolean gameMode = false;
+    private boolean numberPad = false;
     private final RectF modeRect = new RectF(), gearRect = new RectF();
     private int modePointer = -1, gearPointer = -1;
 
@@ -402,6 +414,20 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     }
 
     private void press(Button b, int pointer) {
+        if (b.numberToggle) {
+            releaseAll();
+            numberPad = !numberPad;
+            buzz();
+            return;
+        }
+        if (b.keyboard) {
+            releaseAll();
+            buzz();
+            // SDL 2.30.9 owns the real IME connection and translates ASCII IME input into ordinary SDL key events.
+            // Android Back hides its keyboard; no engine-specific text-field or focus state is invented here.
+            SDLActivity.showTextInput(0, 0, 1, 1);
+            return;
+        }
         b.pointer = pointer;
         pointerButton.put(pointer, b);
         buzz();
@@ -466,7 +492,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     }
 
     private boolean visible(Button b) {
-        if (b.quickPower && !powerButtons) return false;  // off by default: the screen was too busy
+        if (b.numberKey && !numberPad && !powerButtons) return false;
+        if (b.quickPower && !b.numberKey && !powerButtons) return false;  // optional screen-space extras
         return editing || (!controlsHidden() && (gameMode || !b.gameOnly));
     }
 
