@@ -1,7 +1,14 @@
 result=complete
 reason=all requested phases reached a recorded tested or skipped outcome
 phase=complete
-present=3132
-gameplay_dispatches=4952
+present=3068
+gameplay_dispatches=5331
+wall_ms=55593.562
+process_cpu_ms=159818.659
+process_cpu_utilization_pct=287.48
+actions_executed=124
+action_frames=2570
+presented_frames=2773
+exit_behavior=intentional-isolated-process-close
 visual_verification=not-performed
 script_completion_is_not_visual_correctness=true
