@@ -68,7 +68,7 @@ void TestPlanIntegrity() {
     Check(target && grab && power_wheel && disguise_wheel && forms, "target/grab/wheel/form phases are missing");
 }
 
-void TestCursorUsesPresentFrames() {
+void TestCursorUsesActionFrames() {
     for (size_t i = 0; i < native::kTourPhaseCount; ++i) {
         const auto& phase = native::kTourPhases[i];
         native::TourPhaseCursor cursor;
@@ -77,18 +77,26 @@ void TestCursorUsesPresentFrames() {
         for (uint32_t frame = 0; frame < phase.frames; ++frame) {
             TourAction action{};
             while (cursor.Next(action)) {
-                Check(action.frame == frame, "cursor emitted an action on the wrong presented frame");
+                Check(action.frame == frame, "cursor emitted an action on the wrong action frame");
                 ++emitted;
             }
-            if (frame + 1 < phase.frames) Check(!cursor.Complete(), "phase completed before its rendered dwell");
+            if (frame + 1 < phase.frames) Check(!cursor.Complete(), "phase completed before its minimum dwell");
             cursor.AdvanceFrame();
         }
         Check(emitted == phase.action_count && cursor.next_action() == phase.action_count,
               "cursor dropped or duplicated an action");
-        Check(cursor.Complete(), "phase did not complete after all presents and actions");
+        Check(cursor.Complete(), "phase did not complete after all action frames and inputs");
         TourAction extra{};
         Check(!cursor.Next(extra), "cursor emitted an action after phase completion");
     }
+}
+
+void TestPresentBatchPolicy() {
+    Check(native::TourActionStepsForPresentBatch(0) == 0, "idle engine update advanced the action timeline");
+    Check(native::TourActionStepsForPresentBatch(1) == 1, "single Present did not advance one action frame");
+    Check(native::TourActionStepsForPresentBatch(2) == 1, "two Presents compressed two action frames into one update");
+    Check(native::TourActionStepsForPresentBatch(60) == 1, "large Present batch compressed the action timeline");
+    Check(native::TourActionStepsForPresentBatch(UINT64_MAX) == 1, "batch policy overflowed");
 }
 
 void TestGameplayProbeTargets() {
@@ -116,8 +124,9 @@ void TestGameplayProbeTargets() {
 
 int main() {
     TestPlanIntegrity();
-    TestCursorUsesPresentFrames();
+    TestCursorUsesActionFrames();
+    TestPresentBatchPolicy();
     TestGameplayProbeTargets();
-    std::puts("diagnostic-tour plan tests passed (22 phases, probe targets, present timing, sequential actions, skips, input cleanup)");
+    std::puts("diagnostic-tour plan tests passed (22 phases, probe targets, uncompressed action timing, sequential actions, skips, input cleanup)");
     return 0;
 }

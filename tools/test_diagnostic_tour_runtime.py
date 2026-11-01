@@ -91,5 +91,17 @@ assert "DiagnosticTourFail(" in watchdog_exit and "_exit(71);" in watchdog_exit
 assert "ReleaseInjectedInput" not in watchdog_exit and "GuestCall" not in watchdog_exit, (
     "The watchdog thread must not call guest input/engine code"
 )
+assert "TourActionStepsForPresentBatch(batch)" in tour_source, (
+    "The controller must apply the tested one-action-frame policy to coalesced Presents"
+)
+assert "for (uint64_t i = 0; i < batch" not in tour_source, (
+    "Never compress a multi-Present batch into multiple inputs after one EngineService"
+)
+assert "presented_frames=%llu action_frames=%u" in tour_source, (
+    "Actual Present dwell and logical action frames must remain separately observable"
+)
+assert "exit_behavior=intentional-isolated-process-close" in tour_source, (
+    "The durable result must distinguish the expected tour close from a native crash"
+)
 
-print("Diagnostic-tour binary probe, thunk classification, isolated-exit, and watchdog policy checks passed")
+print("Diagnostic-tour binary probe, thunk classification, action timing, isolated-exit, and watchdog checks passed")

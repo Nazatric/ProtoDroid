@@ -119,7 +119,7 @@ public class SetupActivity extends Activity {
         if (missingUv) {
             status = "Missing proto_uv.dat; copy it from your PC game";
         } else if (tourArmed) {
-            status = foundGame != null ? "Tour armed: isolated saves and logs" : "Tour armed; game files required";
+            status = foundGame != null ? "Tour: automatic tests, then app closes" : "Tour armed; game files required";
         }
         setupView.setTourArmed(tourArmed);
         setupView.setState(new SetupView.State(

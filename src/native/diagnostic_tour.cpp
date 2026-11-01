@@ -56,6 +56,7 @@ char g_crash_path[512] = {};
 TourPhaseCursor g_cursor;
 size_t g_phase_index = 0;
 uint64_t g_present_cursor = 0;
+uint64_t g_phase_present_start = 0;
 uint32_t g_phase_gameplay_start = 0;
 int64_t g_engine_ready_ns = 0;
 int64_t g_last_progress_ns = 0;
@@ -224,6 +225,7 @@ void Finish(int result, const char* reason) {
     char marker[1024];
     snprintf(marker, sizeof(marker),
              "result=%s\nreason=%s\nphase=%s\npresent=%llu\ngameplay_dispatches=%u\n"
+             "exit_behavior=intentional-isolated-process-close\n"
              "visual_verification=not-performed\nscript_completion_is_not_visual_correctness=true\n",
              name, reason ? reason : "none", g_phase_name.load(std::memory_order_relaxed),
              (unsigned long long)PresentedFrameCount(), gameplay_dispatches);
@@ -259,10 +261,13 @@ void BeginPhase(size_t index) {
             ++index;
             continue;
         }
+        g_phase_present_start = PresentedFrameCount();
         g_phase_gameplay_start = g_gameplay_dispatches.load(std::memory_order_acquire);
-        Log("tour phase begin: %s (%zu/%zu), %u presented frames; coverage=%s", phase.name, index + 1,
-            kTourPhaseCount, phase.frames, phase.coverage);
-        Record("phase=%s index=%zu status=running dwell_present_frames=%u", true, phase.name, index, phase.frames);
+        Log("tour phase begin: %s (%zu/%zu), at least %u presented frames; one action frame per engine update; coverage=%s",
+            phase.name, index + 1, kTourPhaseCount, phase.frames, phase.coverage);
+        Record("phase=%s index=%zu status=running minimum_present_frames=%u "
+               "action_frame_policy=one-per-engine-update-with-new-present",
+               true, phase.name, index, phase.frames);
         RunDueActions();
         return;
     }
@@ -280,10 +285,12 @@ void CompletePhase() {
         DiagnosticTourFail(phase.name, "no InGameState task dispatch during the presented phase");
         return;
     }
-    Log("tour phase tested (inputs, presents, gameplay task activity): %s; dispatches=%u", phase.name, dispatches);
+    const uint64_t presented_frames = PresentedFrameCount() - g_phase_present_start;
+    Log("tour phase tested (inputs, presents, gameplay task activity): %s; dispatches=%u; presented=%llu",
+        phase.name, dispatches, (unsigned long long)presented_frames);
     Record("phase=%s index=%zu status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed "
-           "gameplay_dispatches=%u visual_verification=not-performed",
-           true, phase.name, g_phase_index, dispatches);
+           "gameplay_dispatches=%u presented_frames=%llu action_frames=%u visual_verification=not-performed",
+           true, phase.name, g_phase_index, dispatches, (unsigned long long)presented_frames, g_cursor.frame());
     BeginPhase(g_phase_index + 1);
 }
 
@@ -441,15 +448,18 @@ bool DiagnosticTourPump() {
         return false;
     }
     const uint64_t batch = presented - g_present_cursor;
+    const uint64_t action_steps = TourActionStepsForPresentBatch(batch);
     if (batch > 1) {
-        Log("diagnostic tour: %llu Presents arrived in one engine service; logical actions are late to that boundary",
+        Log("diagnostic tour: %llu Presents coalesced at one boundary; action timeline remains uncompressed",
             (unsigned long long)batch);
-        Record("present_batch count=%llu timing=actions-late-to-engine-service-boundary", false,
-               (unsigned long long)batch);
+        Record("present_batch count=%llu action_steps=%llu policy=action-timeline-not-compressed", false,
+               (unsigned long long)batch, (unsigned long long)action_steps);
     }
     g_present_cursor = presented;
     g_last_progress_ns = now;
-    for (uint64_t i = 0; i < batch && !g_finished.load(std::memory_order_acquire); ++i) {
+    // Never emit two logical frames after one EngineService: doing so can press and release a control before the game
+    // runs again. The actual (possibly larger) presented-frame dwell is recorded when each phase completes.
+    for (uint64_t i = 0; i < action_steps && !g_finished.load(std::memory_order_acquire); ++i) {
         g_cursor.AdvanceFrame();
         RunDueActions();
         if (g_cursor.Complete()) CompletePhase();

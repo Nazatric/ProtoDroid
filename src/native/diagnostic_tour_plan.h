@@ -183,6 +183,13 @@ inline constexpr TourPhase kTourPhases[] = {
 inline constexpr size_t kTourPhaseCount = sizeof(kTourPhases) / sizeof(kTourPhases[0]);
 static_assert(kTourPhaseCount == 22, "crash-marker phase indices must be reviewed when the tour changes");
 
+// Multiple Presents can arrive between two engine updates. Advancing every logical action frame at that later boundary
+// would inject a press and its release before the game runs again. Preserve the action timeline: one action frame per
+// engine update with new Present activity, while the controller separately records the actual presented-frame dwell.
+constexpr uint64_t TourActionStepsForPresentBatch(uint64_t present_delta) {
+    return present_delta == 0 ? 0 : 1;
+}
+
 // A small pure scheduler used by production and host tests. It emits each action exactly at its requested frame;
 // phase completion is separate so callers can release every held input before recording the result.
 class TourPhaseCursor {
@@ -193,7 +200,8 @@ public:
         next_action_ = 0;
     }
 
-    // Returns true when an action is available. Call again until false, then AdvanceFrame() once per new Present.
+    // Returns true when an action is available. Call again until false, then AdvanceFrame() once per engine update
+    // with new Present activity (not once for every Present coalesced into that update).
     bool Next(TourAction& action) {
         if (phase_ >= kTourPhaseCount) return false;
         const TourPhase& phase = kTourPhases[phase_];

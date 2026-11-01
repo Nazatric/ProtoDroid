@@ -25,19 +25,16 @@ import android.view.WindowInsets;
 import android.widget.OverScroller;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * A dedicated, lightweight Prototype-style driver center. It intentionally uses platform Canvas APIs, like SetupView,
- * so driver management adds no Compose/AndroidX runtime or artwork to the APK.
+ * A guided Prototype-style driver screen built with platform Canvas APIs. Common choices stay short and visible;
+ * package management and technical details are progressive disclosure, not a wall of advanced options.
  */
 final class DriverView extends View implements DriverManager.Observer {
     interface Listener {
@@ -45,35 +42,36 @@ final class DriverView extends View implements DriverManager.Observer {
     }
 
     private static final int RED = 0xffc9141a;
-    private static final int RED_DARK = 0xff6f1017;
-    private static final int RED_HOT = 0xffff4038;
-    private static final int BONE = 0xffece8e1;
-    private static final int DIM = 0xffaaa59e;
-    private static final int MUTED = 0xff74747a;
-    private static final int OK = 0xff8fe07a;
-    private static final int AMBER = 0xffe1b56b;
+    private static final int RED_DARK = 0xff72121a;
+    private static final int RED_HOT = 0xffff463f;
+    private static final int BONE = 0xfff0ece5;
+    private static final int DIM = 0xffbdb7b0;
+    private static final int MUTED = 0xff98929b;
+    private static final int OK = 0xff9ae788;
+    private static final int AMBER = 0xffedc078;
     private static final int PANEL = 0xe613151b;
     private static final int PANEL_ALT = 0xf01a1b22;
+    private static final float MIN_TOUCH_DP = 48f;
 
     private static final int ACTION_NONE = 0;
     private static final int ACTION_BACK = 1;
     private static final int ACTION_CANCEL = 2;
     private static final int ACTION_IMPORT = 3;
     private static final int ACTION_CLEAR_STATUS = 4;
+    private static final int ACTION_PACKAGES = 5;
+    private static final int ACTION_SHOW_ALL = 6;
+    private static final int ACTION_BROWSE_DOWNLOADS = 7;
     private static final int ACTION_MODE = 10;       // + mode 0..3
-    private static final int ACTION_FILTER = 20;     // + filter 0..3
-    private static final int ACTION_SELECT = 1000;   // + visible installed index
-    private static final int ACTION_REMOVE = 2000;   // + visible installed index
+    private static final int ACTION_TAB = 20;        // + tab 0..1
+    private static final int ACTION_SELECT = 1000;   // + installed index
+    private static final int ACTION_REMOVE = 2000;   // + installed index
     private static final int ACTION_DOWNLOAD = 3000; // + visible catalog index
+    private static final int ACTION_DETAILS = 3500;  // + installed index
     private static final int MAX_ACTION = 4096;
 
     private static final int BUTTON_NORMAL = 0;
     private static final int BUTTON_PRIMARY = 1;
     private static final int BUTTON_GHOST = 2;
-
-    private static final String[] MODE_NAMES = {"AUTO", "SYSTEM", "TURNIP", "CUSTOM"};
-    private static final String[] MODE_SUBTITLES = {"RECOMMENDED", "PHONE DRIVER", "ADRENO", "LIBRARY"};
-    private static final String[] FILTER_NAMES = {"ALL", "TURNIP", "PANVK", "INSTALLED"};
 
     private final Listener listener;
     private final GameSettings settings;
@@ -93,9 +91,9 @@ final class DriverView extends View implements DriverManager.Observer {
     private final Map<String, StaticLayout> paragraphCache = new HashMap<>();
     private final Set<String> catalogInstalledIds = new HashSet<>();
     private final ArrayList<DriverRepository.Entry> installed = new ArrayList<>();
-    private final ArrayList<DriverRepository.Entry> visibleInstalled = new ArrayList<>();
     private final ArrayList<DriverCatalog.Entry> visibleCatalog = new ArrayList<>();
     private final boolean maliDevice;
+    private final boolean adrenoDevice;
 
     private int insetLeft, insetTop, insetRight, insetBottom;
     private int pressedAction = ACTION_NONE;
@@ -104,8 +102,11 @@ final class DriverView extends View implements DriverManager.Observer {
     private float maxScrollY;
     private float lastUnit = 1f;
     private boolean scrolling;
-    private int filter;
+    private int packageTab;
+    private boolean showPackages;
+    private boolean showAllPackages;
     private String selectedId = "";
+    private String detailsId = "";
     private String observedStatus = "";
     private boolean observedBusy;
     private String removeArmedId = "";
@@ -130,6 +131,9 @@ final class DriverView extends View implements DriverManager.Observer {
         bold = loadFont(assets, "setup/fonts/barlow_condensed_bold.ttf");
         maliDevice = new File("/dev/mali0").exists() || new File("/dev/mali").exists()
                 || new File("/dev/mali_kbase").exists();
+        adrenoDevice = !maliDevice && new File("/dev/kgsl-3d0").exists();
+        showAllPackages = DriverScreenPolicy.showAllByDefault(maliDevice, adrenoDevice);
+        showPackages = settings.driverMode() == 3;
         setBackgroundColor(Color.BLACK);
         setClickable(true);
         setFocusable(true);
@@ -151,24 +155,17 @@ final class DriverView extends View implements DriverManager.Observer {
         DriverRepository.Entry selected = manager.selected();
         selectedId = selected == null ? "" : selected.id;
         catalogInstalledIds.clear();
-        visibleInstalled.clear();
         visibleCatalog.clear();
         for (DriverRepository.Entry entry : installed) {
             if (!entry.catalogId().isEmpty()) catalogInstalledIds.add(entry.catalogId());
-            if (filter == 3 || filter == 0 || backendFilter(entry.installed.backend)) visibleInstalled.add(entry);
         }
-        if (filter != 3) {
-            for (DriverCatalog.Entry entry : DriverCatalog.ENTRIES) {
-                if (filter == 0 || backendFilter(entry.backend)) visibleCatalog.add(entry);
+        for (DriverCatalog.Entry entry : DriverCatalog.ENTRIES) {
+            if (showAllPackages || DriverScreenPolicy.supportsBackend(maliDevice, adrenoDevice, entry.backend)) {
+                visibleCatalog.add(entry);
             }
         }
         updateContentDescription();
         invalidate();
-    }
-
-    private boolean backendFilter(String backend) {
-        return (filter == 1 && DriverCatalog.TURNIP.equals(backend))
-                || (filter == 2 && DriverCatalog.PANVK.equals(backend));
     }
 
     @Override public void onDriverStateChanged() {
@@ -179,7 +176,6 @@ final class DriverView extends View implements DriverManager.Observer {
             observedBusy = busy;
             refresh();
         } else {
-            // Progress updates need a redraw, not another pass over every package's metadata.
             updateContentDescription();
             invalidate();
         }
@@ -187,9 +183,14 @@ final class DriverView extends View implements DriverManager.Observer {
 
     private void updateContentDescription() {
         String status = manager.statusTitle();
-        setContentDescription("Prototype GPU drivers. " + MODE_NAMES[settings.driverMode()]
-                + " mode. " + installed.size() + " installed custom packages. "
-                + (status.isEmpty() ? "Scroll for downloads, import, compatibility, and recovery information."
+        String custom = settings.driverMode() == 3
+                ? (selectedId.isEmpty() ? " No valid custom package is selected." : " A custom package is selected.")
+                : "";
+        setContentDescription("Prototype graphics drivers. Current choice: "
+                + DriverScreenPolicy.modeName(settings.driverMode()) + "." + custom
+                + " Changes apply the next time you play. "
+                + (showPackages ? "Driver packages are open. " : "Driver packages are collapsed. ")
+                + (status.isEmpty() ? "Automatic is recommended for most people."
                 : status + ". " + manager.statusMessage()));
     }
 
@@ -221,6 +222,11 @@ final class DriverView extends View implements DriverManager.Observer {
         return density * Math.max(0.8f, Math.min(2.2f, usableDp / 360f));
     }
 
+    private float touch(float u) {
+        // Landscape scales the layout to fit short screens, but accessibility targets must never shrink below 48 dp.
+        return Math.max(MIN_TOUCH_DP * density, MIN_TOUCH_DP * u);
+    }
+
     private Typeface font(int weight) {
         if (weight >= 700) return bold;
         if (weight >= 600) return semibold;
@@ -231,7 +237,7 @@ final class DriverView extends View implements DriverManager.Observer {
         target.setTypeface(font(weight));
         target.setTextSize(size * u * fontScale);
         target.setColor(color);
-        target.setLetterSpacing(size == 0f ? 0f : 0.02f);
+        target.setLetterSpacing(size == 0f ? 0f : 0.015f);
         target.setStyle(Paint.Style.FILL);
         return target;
     }
@@ -241,17 +247,26 @@ final class DriverView extends View implements DriverManager.Observer {
         return top + (lineHeight - (metrics.descent - metrics.ascent)) / 2f - metrics.ascent;
     }
 
+    private String ellipsized(String value, float maxWidth) {
+        if (value == null) return "";
+        if (maxWidth <= 0 || text.measureText(value) <= maxWidth) return value;
+        float ellipsis = text.measureText("…");
+        int count = text.breakText(value, true, Math.max(0, maxWidth - ellipsis), null);
+        return value.substring(0, Math.max(0, count)) + "…";
+    }
+
     private void drawLine(Canvas canvas, String value, float x, float top, float lineHeight, float size,
                           int weight, int color, float u, float maxWidth) {
         if (value == null) return;
         configure(text, size, weight, color, u);
-        String shown = value;
-        if (maxWidth > 0 && text.measureText(value) > maxWidth) {
-            float ellipsis = text.measureText("…");
-            int count = text.breakText(value, true, Math.max(0, maxWidth - ellipsis), null);
-            shown = value.substring(0, Math.max(0, count)) + "…";
-        }
-        canvas.drawText(shown, x, baseline(top, lineHeight, text), text);
+        canvas.drawText(ellipsized(value, maxWidth), x, baseline(top, lineHeight, text), text);
+    }
+
+    private void drawCentered(Canvas canvas, String value, RectF bounds, float size, int weight, int color, float u) {
+        configure(text, size, weight, color, u);
+        String shown = ellipsized(value, Math.max(0f, bounds.width() - 16f * u));
+        canvas.drawText(shown, bounds.centerX() - text.measureText(shown) / 2f,
+                baseline(bounds.top, bounds.height(), text), text);
     }
 
     private StaticLayout paragraph(String value, float width, float size, int weight, int color, float u) {
@@ -263,7 +278,6 @@ final class DriverView extends View implements DriverManager.Observer {
                 size, weight, color, u);
         StaticLayout layout = StaticLayout.Builder.obtain(value, 0, value.length(), layoutPaint, pixels)
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL).setIncludePad(false).build();
-        // A malformed content provider can supply a very long name; keep the screen's cache bounded.
         if (paragraphCache.size() > 180) paragraphCache.clear();
         paragraphCache.put(key, layout);
         return layout;
@@ -293,24 +307,23 @@ final class DriverView extends View implements DriverManager.Observer {
     private void panel(Canvas canvas, RectF bounds, int fill, int edge, float u) {
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(fill);
-        canvas.drawPath(cutPath(bounds, 7f * u), paint);
+        canvas.drawPath(cutPath(bounds, Math.min(9f * u, bounds.height() * 0.2f)), paint);
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(Math.max(1f, u * 0.65f));
+        paint.setStrokeWidth(Math.max(1f, u * 0.7f));
         paint.setColor(edge);
-        canvas.drawPath(cutPath(bounds, 7f * u), paint);
+        canvas.drawPath(cutPath(bounds, Math.min(9f * u, bounds.height() * 0.2f)), paint);
         paint.setStyle(Paint.Style.FILL);
     }
 
     private void bind(int action, RectF bounds) {
-        if (action <= ACTION_NONE || action >= MAX_ACTION) return;
+        if (action <= ACTION_NONE || action >= MAX_ACTION || bounds.isEmpty()) return;
         if (actionBounds[action] == null) actionBounds[action] = new RectF();
         actionBounds[action].set(bounds);
         usedActions.add(action);
     }
 
     private void bind(int action, float left, float top, float right, float bottom) {
-        RectF bounds = new RectF(left, top, right, bottom);
-        bind(action, bounds);
+        bind(action, new RectF(left, top, right, bottom));
     }
 
     private int actionAt(float x, float y) {
@@ -324,25 +337,37 @@ final class DriverView extends View implements DriverManager.Observer {
 
     private void button(Canvas canvas, int action, RectF bounds, String label, int variant, boolean enabled, float u) {
         boolean pressed = pressedAction == action && enabled;
-        int edge = variant == BUTTON_PRIMARY ? RED_HOT : (pressed ? RED_HOT : 0xff4c3c42);
+        int edge = variant == BUTTON_PRIMARY ? RED_HOT : (pressed ? RED_HOT : 0xff51414a);
         int fill = variant == BUTTON_PRIMARY ? (pressed ? 0xffa91822 : RED_DARK)
                 : variant == BUTTON_GHOST ? 0x5010141b : (pressed ? 0xff352027 : 0xff202027);
         if (!enabled) {
-            edge = 0xff303039;
-            fill = 0xff15161b;
+            edge = 0xff38353d;
+            fill = 0xff17181d;
         }
         panel(canvas, bounds, fill, edge, u);
         if (enabled) bind(action, bounds);
-        drawLine(canvas, label, bounds.left + 8f * u, bounds.top, bounds.height(), 11f, 700,
-                enabled ? BONE : MUTED, u, bounds.width() - 16f * u);
+        drawCentered(canvas, label, bounds, 12.5f, 700, enabled ? BONE : MUTED, u);
+    }
+
+    private void radio(Canvas canvas, float cx, float cy, boolean selected, float u) {
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(1.8f * u);
+        paint.setColor(selected ? RED_HOT : MUTED);
+        canvas.drawCircle(cx, cy, 9f * u, paint);
+        if (selected) {
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(RED_HOT);
+            canvas.drawCircle(cx, cy, 4.5f * u, paint);
+        }
+        paint.setStyle(Paint.Style.FILL);
     }
 
     private void section(Canvas canvas, String title, float left, float right, float top, float u) {
-        drawLine(canvas, title, left, top, 22f * u, 12f, 700, RED_HOT, u, right - left);
-        paint.setColor(0xff4c282e);
-        canvas.drawRect(left, top + 25f * u, right, top + 26f * u, paint);
+        drawLine(canvas, title, left, top, 23f * u, 12.5f, 700, RED_HOT, u, right - left);
+        paint.setColor(0xff543039);
+        canvas.drawRect(left, top + 27f * u, right, top + 28f * u, paint);
         paint.setColor(RED);
-        canvas.drawRect(left, top + 25f * u, left + 38f * u, top + 27f * u, paint);
+        canvas.drawRect(left, top + 27f * u, left + 46f * u, top + 29f * u, paint);
     }
 
     private void drawBackground(Canvas canvas) {
@@ -356,9 +381,9 @@ final class DriverView extends View implements DriverManager.Observer {
         paint.setShader(backgroundShade);
         canvas.drawRect(0, 0, width, height, paint);
         paint.setShader(null);
-        paint.setColor(0x18c9141a);
+        paint.setColor(0x16c9141a);
         paint.setStrokeWidth(1f);
-        for (int x = -height; x < width + height; x += Math.max(28, width / 12)) {
+        for (int x = -height; x < width + height; x += Math.max(32, width / 12)) {
             canvas.drawLine(x, 0, x - height, height, paint);
         }
         paint.setColor(0xffc9141a);
@@ -366,245 +391,315 @@ final class DriverView extends View implements DriverManager.Observer {
     }
 
     private void drawHeader(Canvas canvas, float left, float right, float top, float u) {
-        drawLine(canvas, "[", left, top, 34f * u, 24f, 500, RED_HOT, u, -1);
-        drawLine(canvas, "PROTOTYPE", left + 13f * u, top, 34f * u, 22f, 700, BONE, u, -1);
-        drawLine(canvas, "]", left + 142f * u, top, 34f * u, 24f, 500, RED_HOT, u, -1);
-        RectF back = new RectF(right - 82f * u, top + 2f * u, right, top + 34f * u);
+        drawLine(canvas, "[", left, top, 38f * u, 25f, 500, RED_HOT, u, -1);
+        drawLine(canvas, "PROTOTYPE", left + 14f * u, top, 38f * u, 23f, 700, BONE, u, -1);
+        configure(text, 23f, 700, BONE, u);
+        float brandEnd = left + 14f * u + text.measureText("PROTOTYPE") + 4f * u;
+        drawLine(canvas, "]", brandEnd, top, 38f * u, 25f, 500, RED_HOT, u, -1);
+        RectF back = new RectF(right - 104f * u, top, right, top + touch(u));
         button(canvas, ACTION_BACK, back, "BACK", BUTTON_GHOST, true, u);
-        drawLine(canvas, "GPU DRIVERS", left, top + 43f * u, 32f * u, 26f, 700, BONE, u, right - left);
-        drawLine(canvas, "A private Vulkan library for Prototype  •  changes apply on the next Play",
-                left, top + 76f * u, 18f * u, 11f, 500, DIM, u, right - left);
+        drawLine(canvas, "GRAPHICS DRIVERS", left, top + 52f * u, 32f * u, 26f, 700, BONE, u, right - left);
+        drawLine(canvas, "Choose once. Your choice applies the next time you play.",
+                left, top + 86f * u, 20f * u, 12.5f, 500, DIM, u, right - left);
     }
 
     private String modeBody(int mode) {
         switch (mode) {
             case 1:
-                return "Uses Android's installed Vulkan driver exactly as the phone provides it. This is the normal "
-                        + "Mali baseline and a useful comparison on Adreno. No custom package is loaded.";
+                return "Uses the Vulkan driver already installed by your phone maker. No package is loaded.";
             case 2:
-                return "Uses ProtoDroid's bundled open-source Adreno driver policy. Turnip is for Adreno, not Mali: "
-                        + "on Mali this mode refuses Turnip and safely uses System. No download is needed.";
+                return "Uses ProtoDroid's bundled Adreno driver. Nothing to download.";
             case 3:
-                return "Uses only the installed package you select below. A separate probe checks it before gameplay; "
-                        + "a failed probe falls back to System and records the reason. Downloading never selects Custom.";
+                return "Uses one installed package you choose below. Best left to advanced testing.";
             default:
-                return "Recommended. ProtoDroid chooses its bundled Adreno policy on supported Qualcomm GPUs and the "
-                        + "phone's system driver on Mali or unsupported devices. No download is needed.";
+                return "Chooses a compatible path for this device. Best for most people.";
         }
     }
 
     private String modeNote(int mode) {
-        if (maliDevice && mode == 2) return "Mali detected: Turnip will not be forced. System is the safe fallback.";
-        if (maliDevice && mode == 3) return "Mali detected: choose a PanVK-kbase package below, or keep Auto/System for the stable baseline.";
-        if (maliDevice) return "Mali detected: Auto and System keep the phone's working driver path.";
-        return "Auto is the default. Custom is always an explicit choice; your global Android driver is never replaced.";
+        DriverRepository.Entry selected = manager.selected();
+        switch (mode) {
+            case 1:
+                return "Useful for comparison or recovering from a custom-driver problem.";
+            case 2:
+                if (maliDevice) return "Not for Mali — the phone driver is used instead.";
+                if (!adrenoDevice) return "Adreno only — other devices safely use the phone driver.";
+                return "For Adreno devices. Your phone's global driver is not replaced.";
+            case 3:
+                if (settings.driverMode() != 3) {
+                    return "Opens Driver packages so you can make an explicit selection.";
+                }
+                if (selected != null) return "Selected: " + selected.installed.name + " • applies next Play.";
+                return "No valid package selected. Open Driver packages to choose one.";
+            default:
+                return "Recommended • " + DriverScreenPolicy.deviceFamily(maliDevice, adrenoDevice)
+                        + (maliDevice || adrenoDevice ? " detected" : "") + ".";
+        }
     }
 
-    private void drawModeExplanation(Canvas canvas, float left, float top, float width, float u) {
-        int mode = settings.driverMode();
+    private float drawModeCard(Canvas canvas, int mode, float left, float top, float width, float u) {
+        boolean selected = settings.driverMode() == mode;
         String body = modeBody(mode);
         String note = modeNote(mode);
-        float inner = width - 28f * u;
-        StaticLayout bodyLayout = paragraph(body, inner, 12f, 500, BONE, u);
-        StaticLayout noteLayout = paragraph(note, inner, 11f, 600, maliDevice && mode == 2 ? AMBER : DIM, u);
-        float height = 28f * u + bodyLayout.getHeight() + 7f * u + noteLayout.getHeight() + 14f * u;
+        float textLeft = left + 50f * u;
+        float inner = width - 66f * u;
+        StaticLayout bodyLayout = paragraph(body, inner, 12.5f, 500, BONE, u);
+        int noteColor = (mode == 2 && maliDevice)
+                || (mode == 3 && settings.driverMode() == 3 && selectedId.isEmpty()) ? AMBER : DIM;
+        StaticLayout noteLayout = paragraph(note, inner, 11.5f, 600, noteColor, u);
+        float height = 42f * u + bodyLayout.getHeight() + 6f * u + noteLayout.getHeight() + 13f * u;
+        height = Math.max(height, 88f * u);
         RectF card = new RectF(left, top, left + width, top + height);
-        panel(canvas, card, PANEL, mode == 3 ? RED : 0xff3c3038, u);
-        drawLine(canvas, MODE_NAMES[mode] + "  /  WHAT HAPPENS", left + 14f * u, top + 9f * u,
-                18f * u, 11f, 700, mode == 3 ? RED_HOT : DIM, u, inner);
-        drawParagraph(canvas, body, left + 14f * u, top + 31f * u, inner, 12f, 500, BONE, u);
-        drawParagraph(canvas, note, left + 14f * u, top + 31f * u + bodyLayout.getHeight() + 7f * u,
-                inner, 11f, 600, maliDevice && mode == 2 ? AMBER : DIM, u);
+        panel(canvas, card, selected ? 0xf02c1b23 : PANEL, selected ? RED_HOT : 0xff45363f, u);
+        bind(ACTION_MODE + mode, card);
+        radio(canvas, left + 24f * u, top + 23f * u, selected, u);
+        drawLine(canvas, DriverScreenPolicy.modeName(mode), textLeft, top + 10f * u, 25f * u,
+                16f, 700, selected ? BONE : DIM, u, inner);
+        drawParagraph(canvas, body, textLeft, top + 39f * u, inner, 12.5f, 500, BONE, u);
+        drawParagraph(canvas, note, textLeft, top + 39f * u + bodyLayout.getHeight() + 6f * u,
+                inner, 11.5f, 600, noteColor, u);
+        return height;
     }
 
-    private void drawStatus(Canvas canvas, float left, float top, float width, float u) {
+    private float drawCurrent(Canvas canvas, float left, float top, float width, float u) {
+        int mode = settings.driverMode();
+        String current = DriverScreenPolicy.modeName(mode);
+        DriverRepository.Entry selected = manager.selected();
+        if (mode == 3 && selected != null) current += " • " + selected.installed.name;
+        String body = mode == 3 && selected == null
+                ? "Custom mode needs a valid selection. Automatic is restored at launch if none is available."
+                : "This affects ProtoDroid only. Your phone's global Vulkan driver and your saves are not changed.";
+        StaticLayout bodyLayout = paragraph(body, width - 28f * u, 12f, 500, DIM, u);
+        float height = 34f * u + bodyLayout.getHeight() + 13f * u;
+        RectF card = new RectF(left, top, left + width, top + height);
+        panel(canvas, card, PANEL_ALT, mode == 3 && selected == null ? AMBER : 0xff51313a, u);
+        drawLine(canvas, "CURRENT CHOICE  /  " + current, left + 14f * u, top + 8f * u,
+                20f * u, 12.5f, 700, mode == 3 && selected == null ? AMBER : OK, u, width - 28f * u);
+        drawParagraph(canvas, body, left + 14f * u, top + 31f * u, width - 28f * u, 12f, 500, DIM, u);
+        return height;
+    }
+
+    private float drawStatus(Canvas canvas, float left, float top, float width, float u) {
         String title = manager.statusTitle();
-        if (title.isEmpty()) return;
+        if (title.isEmpty()) return 0f;
         String message = manager.statusMessage();
         boolean busy = manager.isBusy();
-        boolean cancel = busy && manager.operationTitle().startsWith("Downloading");
-        float buttonWidth = cancel ? 86f * u : (!busy ? 76f * u : 0f);
-        float inner = width - 28f * u - buttonWidth;
-        StaticLayout messageLayout = paragraph(message, inner, 11f, 500, BONE, u);
-        float progressHeight = manager.progressTotal() > 0 ? 19f * u : 0f;
-        float height = Math.max(62f * u, 29f * u + messageLayout.getHeight() + progressHeight + 14f * u);
+        boolean hasButton = !busy || manager.operationTitle().startsWith("Downloading");
+        StaticLayout messageLayout = paragraph(message, width - 28f * u, 12f, 500, BONE, u);
+        boolean progress = manager.progressTotal() > 0;
+        float height = 35f * u + messageLayout.getHeight() + (progress ? 38f * u : 0f)
+                + touch(u) + 22f * u;
         RectF card = new RectF(left, top, left + width, top + height);
         boolean good = title.contains("installed") || title.contains("selected") || title.contains("removed");
-        panel(canvas, card, PANEL_ALT, good ? 0xff55734e : (busy ? RED : 0xff70414a), u);
-        drawLine(canvas, title.toUpperCase(Locale.ROOT), left + 14f * u, top + 8f * u, 18f * u,
-                11f, 700, good ? OK : RED_HOT, u, inner);
-        drawParagraph(canvas, message, left + 14f * u, top + 29f * u, inner, 11f, 500, BONE, u);
-        if (cancel) {
-            RectF cancelBounds = new RectF(left + width - 96f * u, top + 12f * u,
-                    left + width - 12f * u, top + 42f * u);
-            button(canvas, ACTION_CANCEL, cancelBounds, "CANCEL", BUTTON_GHOST, true, u);
-        } else if (!busy) {
-            RectF clearBounds = new RectF(left + width - 88f * u, top + 12f * u,
-                    left + width - 12f * u, top + 42f * u);
-            button(canvas, ACTION_CLEAR_STATUS, clearBounds, "DISMISS", BUTTON_GHOST, true, u);
-        }
-        if (manager.progressTotal() > 0) {
-            float barLeft = left + 14f * u;
-            float barRight = left + width - 14f * u - buttonWidth;
-            float barTop = top + height - 22f * u;
-            paint.setColor(0xff35303a);
-            canvas.drawRect(barLeft, barTop, barRight, barTop + 5f * u, paint);
+        panel(canvas, card, PANEL_ALT, good ? 0xff5d8154 : (busy ? RED : 0xff81505a), u);
+        drawLine(canvas, title.toUpperCase(Locale.ROOT), left + 14f * u, top + 8f * u, 21f * u,
+                12.5f, 700, good ? OK : RED_HOT, u, width - 28f * u);
+        float y = top + 32f * u;
+        drawParagraph(canvas, message, left + 14f * u, y, width - 28f * u, 12f, 500, BONE, u);
+        y += messageLayout.getHeight() + 8f * u;
+        if (progress) {
             float fraction = Math.max(0f, Math.min(1f, manager.progressDone() / (float) manager.progressTotal()));
+            paint.setColor(0xff3c3540);
+            canvas.drawRect(left + 14f * u, y + 8f * u, left + width - 14f * u, y + 13f * u, paint);
             paint.setColor(RED_HOT);
-            canvas.drawRect(barLeft, barTop, barLeft + (barRight - barLeft) * fraction, barTop + 5f * u, paint);
+            canvas.drawRect(left + 14f * u, y + 8f * u,
+                    left + 14f * u + (width - 28f * u) * fraction, y + 13f * u, paint);
             drawLine(canvas, String.format(Locale.ROOT, "%.1f / %.1f MiB  •  %d%%",
-                    manager.progressDone() / 1048576.0, manager.progressTotal() / 1048576.0, Math.round(fraction * 100)),
-                    barLeft, barTop - 16f * u, 14f * u, 10f, 600, DIM, u, barRight - barLeft);
-        } else if (busy) {
-            drawLine(canvas, "VALIDATING / WORKING…", left + 14f * u, top + height - 22f * u,
-                    16f * u, 10f, 600, DIM, u, inner);
+                    manager.progressDone() / 1048576.0, manager.progressTotal() / 1048576.0,
+                    Math.round(fraction * 100)), left + 14f * u, y + 16f * u, 18f * u,
+                    11f, 600, DIM, u, width - 28f * u);
+            y += 38f * u;
+        }
+        if (hasButton) {
+            RectF action = new RectF(left + width - 150f * u, y,
+                    left + width - 14f * u, y + touch(u));
+            button(canvas, busy ? ACTION_CANCEL : ACTION_CLEAR_STATUS, action,
+                    busy ? "CANCEL DOWNLOAD" : "DISMISS", BUTTON_GHOST, true, u);
+        } else {
+            drawLine(canvas, "VALIDATING — KEEP PROTODROID OPEN", left + 14f * u, y,
+                    touch(u), 11.5f, 600, DIM, u, width - 28f * u);
             postInvalidateDelayed(180);
         }
+        return height;
     }
 
-    private float statusHeight(float width, float u) {
-        if (manager.statusTitle().isEmpty()) return 0f;
-        boolean cancel = manager.isBusy() && manager.operationTitle().startsWith("Downloading");
-        float buttonWidth = cancel ? 86f * u : (!manager.isBusy() ? 76f * u : 0f);
-        float inner = width - 28f * u - buttonWidth;
-        StaticLayout message = paragraph(manager.statusMessage(), inner, 11f, 500, BONE, u);
-        float progress = manager.progressTotal() > 0 ? 19f * u : 0f;
-        return Math.max(62f * u, 29f * u + message.getHeight() + progress + 14f * u) + 12f * u;
+    private float drawPackageToggle(Canvas canvas, float left, float top, float width, float u) {
+        String body = showPackages
+                ? "Hide package downloads, imports, and technical details."
+                : "Only needed for a specific custom build. Automatic does not need a download.";
+        StaticLayout bodyLayout = paragraph(body, width - 102f * u, 12f, 500, DIM, u);
+        float height = Math.max(76f * u, 38f * u + bodyLayout.getHeight() + 12f * u);
+        RectF card = new RectF(left, top, left + width, top + height);
+        panel(canvas, card, showPackages ? 0xf0251921 : PANEL, showPackages ? RED : 0xff45363f, u);
+        bind(ACTION_PACKAGES, card);
+        drawLine(canvas, "DRIVER PACKAGES", left + 14f * u, top + 9f * u, 23f * u,
+                14f, 700, BONE, u, width - 102f * u);
+        drawParagraph(canvas, body, left + 14f * u, top + 35f * u, width - 102f * u, 12f, 500, DIM, u);
+        drawCentered(canvas, showPackages ? "−" : "+",
+                new RectF(left + width - 72f * u, top, left + width - 14f * u, top + height),
+                26f, 500, RED_HOT, u);
+        return height;
     }
 
     private String backendLabel(String backend) {
-        return DriverCatalog.PANVK.equals(backend) ? "PANVK  /  DIRECT ICD" : "TURNIP  /  ADRENOTOOLS";
+        return DriverCatalog.PANVK.equals(backend) ? "PanVK-kbase • Mali • experimental"
+                : "Turnip • Adreno";
     }
 
     private boolean isSelected(DriverRepository.Entry entry) {
         return settings.driverMode() == 3 && selectedId.equals(entry.id);
     }
 
-    private void drawInstalledCard(Canvas canvas, DriverRepository.Entry entry, int index, float left, float top,
-                                   float width, float u) {
+    private float drawInstalledCard(Canvas canvas, DriverRepository.Entry entry, int index, float left, float top,
+                                    float width, float u) {
         DriverPackage.Installed item = entry.installed;
         boolean selected = isSelected(entry);
-        boolean narrow = width / u < 560f;
-        float buttons = narrow ? 0f : 112f * u;
-        float inner = width - 28f * u - buttons;
-        String detail = (item.version.isEmpty() ? "Custom package" : item.version) + "  •  "
-                + backendLabel(item.backend) + "\nSource: " + item.source;
-        StaticLayout detailLayout = paragraph(detail, inner, 11f, 500, DIM, u);
-        float contentHeight = 22f * u + detailLayout.getHeight() + 8f * u;
-        float height = Math.max(74f * u, contentHeight + 22f * u) + (narrow ? 35f * u : 0f);
+        boolean expanded = detailsId.equals(entry.id);
+        String detail = (item.version.isEmpty() ? "Custom package" : item.version) + "\n" + backendLabel(item.backend);
+        StaticLayout detailLayout = paragraph(detail, width - 76f * u, 12f, 500, DIM, u);
+        String selection = selected ? "SELECTED FOR NEXT PLAY" : "Tap the card to use this driver • Custom mode turns on";
+        StaticLayout selectionLayout = paragraph(selection, width - 76f * u, 11.5f, 600, selected ? OK : DIM, u);
+        String extra = expanded ? "Source: " + item.source + "\nPackage ID: " + entry.id
+                + "\nThe package was validated before installation. A separate probe checks it again on the next Play." : "";
+        StaticLayout extraLayout = expanded ? paragraph(extra, width - 28f * u, 11.5f, 500, DIM, u) : null;
+        float mainHeight = 43f * u + detailLayout.getHeight() + 5f * u + selectionLayout.getHeight() + 12f * u;
+        float height = mainHeight + (expanded ? extraLayout.getHeight() + 10f * u : 0f) + touch(u) + 14f * u;
         RectF card = new RectF(left, top, left + width, top + height);
-        panel(canvas, card, selected ? 0xf02b1b23 : PANEL, selected ? RED_HOT : 0xff3c3038, u);
-        drawLine(canvas, item.name, left + 14f * u, top + 9f * u, 20f * u, 15f, 700, BONE, u, inner);
-        drawParagraph(canvas, detail, left + 14f * u, top + 33f * u, inner, 11f, 500, DIM, u);
-        if (selected) {
-            drawLine(canvas, "SELECTED", left + 14f * u, top + height - (narrow ? 53f : 22f) * u,
-                    16f * u, 10f, 700, OK, u, inner);
+        panel(canvas, card, selected ? 0xf02b1b23 : PANEL, selected ? RED_HOT : 0xff45363f, u);
+        if (!selected && !manager.isBusy()) bind(ACTION_SELECT + index, left, top, left + width, top + mainHeight);
+        radio(canvas, left + 25f * u, top + 23f * u, selected, u);
+        drawLine(canvas, item.name, left + 50f * u, top + 10f * u, 25f * u,
+                15.5f, 700, BONE, u, width - 66f * u);
+        drawParagraph(canvas, detail, left + 50f * u, top + 39f * u, width - 66f * u, 12f, 500, DIM, u);
+        float selectionTop = top + 39f * u + detailLayout.getHeight() + 5f * u;
+        drawParagraph(canvas, selection, left + 50f * u, selectionTop, width - 66f * u,
+                11.5f, 600, selected ? OK : DIM, u);
+        if (expanded) {
+            drawParagraph(canvas, extra, left + 14f * u, top + mainHeight + 3f * u,
+                    width - 28f * u, 11.5f, 500, DIM, u);
         }
-        float buttonTop = narrow ? top + height - 32f * u : top + 12f * u;
-        float buttonLeft = narrow ? left + 14f * u : left + width - 112f * u;
-        float buttonWidth = narrow ? (width - 36f * u) / 2f : 98f * u;
-        RectF select = new RectF(buttonLeft, buttonTop, buttonLeft + buttonWidth, buttonTop + 26f * u);
-        button(canvas, ACTION_SELECT + index, select, selected ? "SELECTED" : "SELECT",
-                selected ? BUTTON_NORMAL : BUTTON_PRIMARY, !selected && !manager.isBusy(), u);
-        RectF remove = new RectF(buttonLeft + (narrow ? buttonWidth + 8f * u : 0f),
-                narrow ? buttonTop : buttonTop + 32f * u,
-                narrow ? buttonLeft + buttonWidth * 2f + 8f * u : buttonLeft + buttonWidth,
-                (narrow ? buttonTop : buttonTop + 32f * u) + 26f * u);
+        float buttonTop = top + height - touch(u) - 8f * u;
+        float gap = 8f * u;
+        float buttonWidth = (width - 36f * u) / 2f;
+        RectF details = new RectF(left + 14f * u, buttonTop,
+                left + 14f * u + buttonWidth, buttonTop + touch(u));
+        RectF remove = new RectF(details.right + gap, buttonTop, left + width - 14f * u, buttonTop + touch(u));
+        button(canvas, ACTION_DETAILS + index, details, expanded ? "HIDE DETAILS" : "DETAILS",
+                BUTTON_GHOST, !manager.isBusy(), u);
         boolean armed = removeArmedId.equals(entry.id) && SystemClock.uptimeMillis() - removeArmedAt < 6000;
-        button(canvas, ACTION_REMOVE + index, remove, armed ? "CONFIRM" : "REMOVE", BUTTON_GHOST,
-                !manager.isBusy(), u);
+        button(canvas, ACTION_REMOVE + index, remove, armed ? "CONFIRM REMOVE" : "REMOVE",
+                armed ? BUTTON_PRIMARY : BUTTON_GHOST, !manager.isBusy(), u);
+        return height;
     }
 
-    private float installedCardHeight(DriverRepository.Entry entry, float width, float u) {
-        boolean narrow = width / u < 560f;
-        float inner = width - 28f * u - (narrow ? 0f : 112f * u);
-        DriverPackage.Installed item = entry.installed;
-        String detail = (item.version.isEmpty() ? "Custom package" : item.version) + "  •  "
-                + backendLabel(item.backend) + "\nSource: " + item.source;
-        StaticLayout detailLayout = paragraph(detail, inner, 11f, 500, DIM, u);
-        return Math.max(74f * u, 22f * u + detailLayout.getHeight() + 30f * u) + (narrow ? 35f * u : 0f) + 8f * u;
+    private float drawCatalogCard(Canvas canvas, DriverCatalog.Entry entry, int index, float left, float top,
+                                  float width, float u) {
+        boolean narrow = width / u < 580f;
+        float buttonColumn = narrow ? 0f : 174f * u;
+        float inner = width - 28f * u - buttonColumn;
+        String detail = entry.compatibility + "\n" + entry.source + " • "
+                + String.format(Locale.ROOT, "%.2f MiB", entry.size / 1048576.0);
+        StaticLayout description = paragraph(entry.description, inner, 12f, 500, BONE, u);
+        StaticLayout detailLayout = paragraph(detail, inner, 11f, 600, DIM, u);
+        boolean experimental = DriverCatalog.PANVK.equals(entry.backend);
+        StaticLayout note = experimental ? paragraph("EXPERIMENTAL — exact GPU and kernel support still matters",
+                inner, 11f, 700, AMBER, u) : null;
+        float contentHeight = 41f * u + description.getHeight() + 6f * u + detailLayout.getHeight()
+                + (experimental ? note.getHeight() + 5f * u : 0f) + 13f * u;
+        float height = Math.max(104f * u, contentHeight) + (narrow ? touch(u) + 10f * u : 0f);
+        RectF card = new RectF(left, top, left + width, top + height);
+        panel(canvas, card, PANEL, experimental ? 0xff6b5037 : 0xff45363f, u);
+        drawLine(canvas, entry.title, left + 14f * u, top + 10f * u, 25f * u,
+                15.5f, 700, BONE, u, inner);
+        drawParagraph(canvas, entry.description, left + 14f * u, top + 39f * u, inner, 12f, 500, BONE, u);
+        float detailTop = top + 39f * u + description.getHeight() + 6f * u;
+        drawParagraph(canvas, detail, left + 14f * u, detailTop, inner, 11f, 600, DIM, u);
+        if (experimental) {
+            drawParagraph(canvas, "EXPERIMENTAL — exact GPU and kernel support still matters",
+                    left + 14f * u, detailTop + detailLayout.getHeight() + 5f * u, inner, 11f, 700, AMBER, u);
+        }
+        float buttonWidth = narrow ? width - 28f * u : 158f * u;
+        float buttonLeft = narrow ? left + 14f * u : left + width - buttonWidth - 14f * u;
+        float buttonTop = narrow ? top + height - touch(u) - 8f * u : top + 16f * u;
+        RectF get = new RectF(buttonLeft, buttonTop, buttonLeft + buttonWidth, buttonTop + touch(u));
+        button(canvas, ACTION_DOWNLOAD + index, get, catalogInstalled(entry) ? "REINSTALL" : "DOWNLOAD",
+                BUTTON_PRIMARY, !manager.isBusy(), u);
+        return height;
     }
 
     private boolean catalogInstalled(DriverCatalog.Entry entry) {
         return catalogInstalledIds.contains(entry.id);
     }
 
-    private void drawCatalogCard(Canvas canvas, DriverCatalog.Entry entry, int index, float left, float top,
-                                 float width, float u) {
-        boolean narrow = width / u < 560f;
-        float buttons = narrow ? 0f : 116f * u;
-        float inner = width - 28f * u - buttons;
-        String detail = entry.compatibility + "\nGitHub  •  " + entry.source + "  •  "
-                + String.format(Locale.ROOT, "%.2f MiB", entry.size / 1048576.0);
-        StaticLayout description = paragraph(entry.description, inner, 11f, 500, BONE, u);
-        StaticLayout detailLayout = paragraph(detail, inner, 10f, 600, DIM, u);
-        float height = Math.max(102f * u, 34f * u + description.getHeight() + 6f * u
-                + detailLayout.getHeight() + 17f * u) + (narrow ? 35f * u : 0f);
+    private float drawImport(Canvas canvas, float left, float top, float width, float u) {
+        String body = "Already have an AdrenoTools ZIP, .adpkg ZIP, or ARM64 Android .so? Import it here. "
+                + "It is checked before installation and never selected automatically.";
+        StaticLayout bodyLayout = paragraph(body, width - 28f * u, 12f, 500, DIM, u);
+        float height = 40f * u + bodyLayout.getHeight() + touch(u) + 18f * u;
         RectF card = new RectF(left, top, left + width, top + height);
-        panel(canvas, card, PANEL, DriverCatalog.PANVK.equals(entry.backend) ? 0xff66503a : 0xff3c3038, u);
-        drawLine(canvas, entry.title, left + 14f * u, top + 8f * u, 21f * u, 15f, 700, BONE, u, inner);
-        drawParagraph(canvas, entry.description, left + 14f * u, top + 33f * u, inner, 11f, 500, BONE, u);
-        drawParagraph(canvas, detail, left + 14f * u, top + 33f * u + description.getHeight() + 6f * u,
-                inner, 10f, 600, DIM, u);
-        float buttonTop = narrow ? top + height - 32f * u : top + 14f * u;
-        float buttonLeft = narrow ? left + 14f * u : left + width - 116f * u;
-        float buttonWidth = narrow ? width - 28f * u : 102f * u;
-        RectF get = new RectF(buttonLeft, buttonTop, buttonLeft + buttonWidth, buttonTop + 30f * u);
-        button(canvas, ACTION_DOWNLOAD + index, get, catalogInstalled(entry) ? "REINSTALL" : "DOWNLOAD",
-                BUTTON_PRIMARY, !manager.isBusy(), u);
-        if (DriverCatalog.PANVK.equals(entry.backend)) {
-            drawLine(canvas, "EXPERIMENTAL", left + 14f * u, top + height - (narrow ? 51f : 20f) * u,
-                    15f * u, 9f, 700, AMBER, u, inner);
+        panel(canvas, card, PANEL_ALT, 0xff45363f, u);
+        drawLine(canvas, "IMPORT YOUR OWN", left + 14f * u, top + 9f * u, 22f * u,
+                12.5f, 700, RED_HOT, u, width - 28f * u);
+        drawParagraph(canvas, body, left + 14f * u, top + 34f * u, width - 28f * u, 12f, 500, DIM, u);
+        RectF importButton = new RectF(left + 14f * u, top + height - touch(u) - 10f * u,
+                left + width - 14f * u, top + height - 10f * u);
+        button(canvas, ACTION_IMPORT, importButton, "IMPORT ZIP OR .SO", BUTTON_NORMAL, !manager.isBusy(), u);
+        return height;
+    }
+
+    private float drawCompatibility(Canvas canvas, float left, float top, float width, float u) {
+        String family = DriverScreenPolicy.deviceFamily(maliDevice, adrenoDevice);
+        String body;
+        if (!maliDevice && !adrenoDevice) {
+            body = "GPU family was not detected from the device nodes. All pinned packages are shown; read each compatibility line and use Automatic if unsure.";
+        } else if (showAllPackages) {
+            body = family + " detected. Showing every package, including ones for other GPU families. Check compatibility before downloading.";
+        } else {
+            body = family + " detected. Showing only packages built for that family. This is a compatibility filter, not a guarantee for every GPU or kernel.";
         }
+        StaticLayout bodyLayout = paragraph(body, width - 28f * u, 12f, 500, DIM, u);
+        boolean canToggle = maliDevice || adrenoDevice;
+        float height = 35f * u + bodyLayout.getHeight() + (canToggle ? touch(u) + 10f * u : 12f * u) + 12f * u;
+        RectF card = new RectF(left, top, left + width, top + height);
+        panel(canvas, card, PANEL_ALT, 0xff45363f, u);
+        drawLine(canvas, "COMPATIBILITY", left + 14f * u, top + 8f * u, 21f * u,
+                12f, 700, DIM, u, width - 28f * u);
+        drawParagraph(canvas, body, left + 14f * u, top + 32f * u, width - 28f * u, 12f, 500, DIM, u);
+        if (canToggle) {
+            RectF toggle = new RectF(left + 14f * u, top + height - touch(u) - 10f * u,
+                    left + width - 14f * u, top + height - 10f * u);
+            button(canvas, ACTION_SHOW_ALL, toggle, showAllPackages ? "SHOW COMPATIBLE ONLY" : "SHOW ALL PACKAGES",
+                    BUTTON_GHOST, !manager.isBusy(), u);
+        }
+        return height;
     }
 
-    private float catalogCardHeight(DriverCatalog.Entry entry, float width, float u) {
-        boolean narrow = width / u < 560f;
-        float inner = width - 28f * u - (narrow ? 0f : 116f * u);
-        StaticLayout description = paragraph(entry.description, inner, 11f, 500, BONE, u);
-        String detail = entry.compatibility + "\nGitHub  •  " + entry.source + "  •  "
-                + String.format(Locale.ROOT, "%.2f MiB", entry.size / 1048576.0);
-        StaticLayout detailLayout = paragraph(detail, inner, 10f, 600, DIM, u);
-        return Math.max(102f * u, 34f * u + description.getHeight() + 6f * u
-                + detailLayout.getHeight() + 17f * u) + (narrow ? 35f * u : 0f) + 8f * u;
+    private float drawEmptyInstalled(Canvas canvas, float left, float top, float width, float u) {
+        String body = "No custom packages are installed. You do not need one for Automatic or Phone driver.";
+        StaticLayout bodyLayout = paragraph(body, width - 28f * u, 12.5f, 500, DIM, u);
+        float height = 39f * u + bodyLayout.getHeight() + touch(u) + 20f * u;
+        RectF card = new RectF(left, top, left + width, top + height);
+        panel(canvas, card, PANEL, 0xff45363f, u);
+        drawLine(canvas, "NOTHING TO MANAGE YET", left + 14f * u, top + 9f * u, 22f * u,
+                12.5f, 700, DIM, u, width - 28f * u);
+        drawParagraph(canvas, body, left + 14f * u, top + 34f * u, width - 28f * u, 12.5f, 500, DIM, u);
+        RectF browse = new RectF(left + 14f * u, top + height - touch(u) - 10f * u,
+                left + width - 14f * u, top + height - 10f * u);
+        button(canvas, ACTION_BROWSE_DOWNLOADS, browse, "BROWSE DOWNLOADS", BUTTON_NORMAL, true, u);
+        return height;
     }
 
-    private void drawImportAndRecovery(Canvas canvas, float left, float top, float width, float u) {
-        String importBody = "Import an AdrenoTools ZIP, .adpkg ZIP, or raw ARM64 Android/Bionic .so. "
-                + "Unsafe paths, Linux/glibc, x86, wrong-ABI, damaged, and incompatible packages are rejected before installation.";
-        StaticLayout importLayout = paragraph(importBody, width - 160f * u, 11f, 500, DIM, u);
-        float importHeight = Math.max(68f * u, importLayout.getHeight() + 32f * u);
-        RectF importCard = new RectF(left, top, left + width, top + importHeight);
-        panel(canvas, importCard, PANEL_ALT, 0xff3c3038, u);
-        drawLine(canvas, "IMPORT YOUR OWN", left + 14f * u, top + 8f * u, 18f * u, 11f, 700, RED_HOT, u,
-                width - 160f * u);
-        drawParagraph(canvas, importBody, left + 14f * u, top + 29f * u, width - 160f * u, 11f, 500, DIM, u);
-        RectF importButton = new RectF(left + width - 132f * u, top + 14f * u,
-                left + width - 14f * u, top + 44f * u);
-        button(canvas, ACTION_IMPORT, importButton, "IMPORT ZIP / .SO", BUTTON_NORMAL, !manager.isBusy(), u);
-
-        float recoveryTop = top + importHeight + 10f * u;
-        String recovery = "A failed custom probe uses System and logs the reason. A startup crash is guarded on the next "
-                + "launch; see proto-native.prev.log. Turnip is never forced on Mali. Return to Auto at any time. "
-                + "Packages are private to ProtoDroid and never replace the phone's global driver.";
-        StaticLayout recoveryLayout = paragraph(recovery, width - 28f * u, 11f, 500, DIM, u);
-        float recoveryHeight = recoveryLayout.getHeight() + 40f * u;
-        RectF recoveryCard = new RectF(left, recoveryTop, left + width, recoveryTop + recoveryHeight);
-        panel(canvas, recoveryCard, 0xb011141b, 0xff343039, u);
-        drawLine(canvas, "SAFE RECOVERY", left + 14f * u, recoveryTop + 8f * u, 18f * u, 11f, 700, OK, u,
-                width - 28f * u);
-        drawParagraph(canvas, recovery, left + 14f * u, recoveryTop + 29f * u, width - 28f * u, 11f, 500, DIM, u);
-    }
-
-    private float importRecoveryHeight(float width, float u) {
-        StaticLayout importLayout = paragraph("Import an AdrenoTools ZIP, .adpkg ZIP, or raw ARM64 Android/Bionic .so. "
-                + "Unsafe paths, Linux/glibc, x86, wrong-ABI, damaged, and incompatible packages are rejected before installation.",
-                width - 160f * u, 11f, 500, DIM, u);
-        String recovery = "A failed custom probe uses System and logs the reason. A startup crash is guarded on the next "
-                + "launch; see proto-native.prev.log. Turnip is never forced on Mali. Return to Auto at any time. "
-                + "Packages are private to ProtoDroid and never replace the phone's global driver.";
-        StaticLayout recoveryLayout = paragraph(recovery, width - 28f * u, 11f, 500, DIM, u);
-        return Math.max(68f * u, importLayout.getHeight() + 32f * u) + 10f * u + recoveryLayout.getHeight() + 40f * u;
+    private float drawRecovery(Canvas canvas, float left, float top, float width, float u) {
+        String recovery = "If a driver causes trouble, choose Automatic or Phone driver. A failed custom probe uses "
+                + "System and records the reason. Packages are private to ProtoDroid and never replace the phone's global driver.";
+        StaticLayout recoveryLayout = paragraph(recovery, width - 28f * u, 12f, 500, DIM, u);
+        float height = recoveryLayout.getHeight() + 43f * u;
+        RectF card = new RectF(left, top, left + width, top + height);
+        panel(canvas, card, 0xb011141b, 0xff3f3b43, u);
+        drawLine(canvas, "SAFE RECOVERY", left + 14f * u, top + 8f * u, 22f * u,
+                12f, 700, OK, u, width - 28f * u);
+        drawParagraph(canvas, recovery, left + 14f * u, top + 32f * u, width - 28f * u, 12f, 500, DIM, u);
+        return height;
     }
 
     @Override protected void onDraw(Canvas canvas) {
@@ -616,96 +711,77 @@ final class DriverView extends View implements DriverManager.Observer {
         drawBackground(canvas);
         float u = unit();
         lastUnit = u;
-        float left = insetLeft + 20f * u;
-        float right = getWidth() - insetRight - 20f * u;
-        float width = Math.max(1f, right - left);
+        float availableLeft = insetLeft + 20f * u;
+        float availableRight = getWidth() - insetRight - 20f * u;
+        float fullWidth = Math.max(1f, availableRight - availableLeft);
+        float width = Math.min(920f * u, fullWidth);
+        float left = availableLeft + (fullWidth - width) / 2f;
+        float right = left + width;
         for (Integer action : usedActions) {
             if (actionBounds[action] != null) actionBounds[action].setEmpty();
         }
         usedActions.clear();
         drawHeader(canvas, left, right, insetTop + 12f * u, u);
 
-        float contentTop = insetTop + 108f * u;
+        float contentTop = insetTop + 124f * u;
         float contentBottom = getHeight() - insetBottom - 12f * u;
         float available = Math.max(1f, contentBottom - contentTop);
         float y = contentTop - scrollY;
         canvas.save();
         canvas.clipRect(0, contentTop, getWidth(), contentBottom);
 
-        section(canvas, "DRIVER MODE", left, right, y, u);
-        y += 35f * u;
-        float gap = 6f * u;
-        float modeWidth = (width - gap * 3f) / 4f;
-        for (int mode = 0; mode < 4; ++mode) {
-            RectF bounds = new RectF(left + mode * (modeWidth + gap), y,
-                    left + mode * (modeWidth + gap) + modeWidth, y + 43f * u);
-            boolean selected = settings.driverMode() == mode;
-            panel(canvas, bounds, selected ? 0xff3c1b24 : PANEL, selected ? RED_HOT : 0xff49353e, u);
-            bind(ACTION_MODE + mode, bounds);
-            drawLine(canvas, MODE_NAMES[mode], bounds.left + 8f * u, bounds.top + 5f * u, 18f * u,
-                    13f, 700, selected ? BONE : DIM, u, bounds.width() - 16f * u);
-            drawLine(canvas, MODE_SUBTITLES[mode], bounds.left + 8f * u, bounds.top + 24f * u, 14f * u,
-                    8f, 600, selected ? RED_HOT : MUTED, u, bounds.width() - 16f * u);
-        }
-        y += 51f * u;
-        String body = modeBody(settings.driverMode());
-        String note = modeNote(settings.driverMode());
-        float explanationHeight = 28f * u + paragraph(body, width - 28f * u, 12f, 500, BONE, u).getHeight()
-                + 7f * u + paragraph(note, width - 28f * u, 11f, 600, DIM, u).getHeight() + 14f * u;
-        drawModeExplanation(canvas, left, y, width, u);
-        y += explanationHeight + 16f * u;
+        y += drawCurrent(canvas, left, y, width, u) + 14f * u;
+        float statusHeight = drawStatus(canvas, left, y, width, u);
+        if (statusHeight > 0f) y += statusHeight + 14f * u;
 
-        float statusHeight = statusHeight(width, u);
-        if (statusHeight > 0) {
-            drawStatus(canvas, left, y, width, u);
-            y += statusHeight;
+        section(canvas, "01 / DRIVER MODE", left, right, y, u);
+        y += 39f * u;
+        boolean twoColumns = width / u >= 600f;
+        float gap = 10f * u;
+        if (twoColumns) {
+            float columnWidth = (width - gap) / 2f;
+            for (int mode = 0; mode < 4; mode += 2) {
+                float first = drawModeCard(canvas, mode, left, y, columnWidth, u);
+                float second = drawModeCard(canvas, mode + 1, left + columnWidth + gap, y, columnWidth, u);
+                y += Math.max(first, second) + gap;
+            }
+        } else {
+            for (int mode = 0; mode < 4; ++mode) {
+                y += drawModeCard(canvas, mode, left, y, width, u) + gap;
+            }
         }
+        y += 5f * u;
 
-        section(canvas, "DRIVER LIBRARY", left, right, y, u);
-        y += 34f * u;
-        float filterWidth = (width - gap * 3f) / 4f;
-        for (int i = 0; i < 4; ++i) {
-            RectF bounds = new RectF(left + i * (filterWidth + gap), y,
-                    left + i * (filterWidth + gap) + filterWidth, y + 29f * u);
-            button(canvas, ACTION_FILTER + i, bounds, FILTER_NAMES[i],
-                    filter == i ? BUTTON_PRIMARY : BUTTON_GHOST, !manager.isBusy(), u);
-        }
-        y += 40f * u;
-
-        if (filter == 0 || filter == 3 || !visibleInstalled.isEmpty()) {
-            drawLine(canvas, "INSTALLED PACKAGES", left, y, 19f * u, 11f, 700, DIM, u, width);
-            y += 23f * u;
-            if (visibleInstalled.isEmpty()) {
-                String empty = filter == 3 ? "No custom packages are installed yet. Auto and System still work; download a pinned package below or import your own."
-                        : "No installed package matches this filter. Choose ALL, or download a compatible package below.";
-                StaticLayout emptyLayout = paragraph(empty, width - 28f * u, 11f, 500, DIM, u);
-                RectF emptyCard = new RectF(left, y, left + width, y + emptyLayout.getHeight() + 24f * u);
-                panel(canvas, emptyCard, PANEL, 0xff343039, u);
-                drawParagraph(canvas, empty, left + 14f * u, y + 12f * u, width - 28f * u, 11f, 500, DIM, u);
-                y += emptyCard.height() + 8f * u;
+        section(canvas, "02 / OPTIONAL CUSTOM PACKAGES", left, right, y, u);
+        y += 39f * u;
+        y += drawPackageToggle(canvas, left, y, width, u) + 12f * u;
+        if (showPackages) {
+            float tabWidth = (width - gap) / 2f;
+            RectF installedTab = new RectF(left, y, left + tabWidth, y + touch(u));
+            RectF downloadTab = new RectF(left + tabWidth + gap, y, right, y + touch(u));
+            button(canvas, ACTION_TAB, installedTab, "INSTALLED (" + installed.size() + ")",
+                    packageTab == 0 ? BUTTON_PRIMARY : BUTTON_GHOST, !manager.isBusy(), u);
+            button(canvas, ACTION_TAB + 1, downloadTab, "DOWNLOADS",
+                    packageTab == 1 ? BUTTON_PRIMARY : BUTTON_GHOST, !manager.isBusy(), u);
+            y += touch(u) + 12f * u;
+            if (packageTab == 0) {
+                y += drawImport(canvas, left, y, width, u) + 12f * u;
+                if (installed.isEmpty()) {
+                    y += drawEmptyInstalled(canvas, left, y, width, u) + 12f * u;
+                } else {
+                    for (int i = 0; i < installed.size(); ++i) {
+                        y += drawInstalledCard(canvas, installed.get(i), i, left, y, width, u) + 10f * u;
+                    }
+                }
             } else {
-                for (int i = 0; i < visibleInstalled.size(); ++i) {
-                    DriverRepository.Entry entry = visibleInstalled.get(i);
-                    drawInstalledCard(canvas, entry, i, left, y, width, u);
-                    y += installedCardHeight(entry, width, u);
+                y += drawCompatibility(canvas, left, y, width, u) + 12f * u;
+                for (int i = 0; i < visibleCatalog.size(); ++i) {
+                    y += drawCatalogCard(canvas, visibleCatalog.get(i), i, left, y, width, u) + 10f * u;
                 }
             }
+            y += 4f * u;
         }
-
-        if (filter != 3) {
-            drawLine(canvas, "AVAILABLE FROM GITHUB  /  PINNED + SHA-256 VERIFIED", left, y + 5f * u,
-                    19f * u, 11f, 700, DIM, u, width);
-            y += 29f * u;
-            for (int i = 0; i < visibleCatalog.size(); ++i) {
-                DriverCatalog.Entry entry = visibleCatalog.get(i);
-                drawCatalogCard(canvas, entry, i, left, y, width, u);
-                y += catalogCardHeight(entry, width, u);
-            }
-        }
-
-        y += 5f * u;
-        drawImportAndRecovery(canvas, left, y, width, u);
-        y += importRecoveryHeight(width, u) + 18f * u;
+        y += drawRecovery(canvas, left, y, width, u) + 18f * u;
         canvas.restore();
 
         float contentHeight = y + scrollY - contentTop;
@@ -720,7 +796,7 @@ final class DriverView extends View implements DriverManager.Observer {
         if (maxScrollY > 0f) {
             float trackTop = contentTop + 8f * u;
             float trackBottom = contentBottom - 8f * u;
-            paint.setColor(0x503c3038);
+            paint.setColor(0x50513c46);
             canvas.drawRect(right + 5f * u, trackTop, right + 7f * u, trackBottom, paint);
             float thumbHeight = Math.max(28f * u, (trackBottom - trackTop) * available / contentHeight);
             float thumbY = trackTop + (trackBottom - trackTop - thumbHeight) * scrollY / maxScrollY;
@@ -748,27 +824,55 @@ final class DriverView extends View implements DriverManager.Observer {
             manager.openPicker();
             return;
         }
-        if (action >= ACTION_MODE && action < ACTION_MODE + 4) {
+        if (action == ACTION_PACKAGES) {
+            showPackages = !showPackages;
             removeArmedId = "";
-            settings.setDriverMode(action - ACTION_MODE);
+            detailsId = "";
+            updateContentDescription();
+            invalidate();
+            return;
+        }
+        if (action == ACTION_BROWSE_DOWNLOADS) {
+            packageTab = 1;
+            refresh();
+            return;
+        }
+        if (action == ACTION_SHOW_ALL) {
+            showAllPackages = !showAllPackages;
+            refresh();
+            return;
+        }
+        if (action >= ACTION_MODE && action < ACTION_MODE + 4) {
+            int mode = action - ACTION_MODE;
+            removeArmedId = "";
+            detailsId = "";
+            settings.setDriverMode(mode);
+            if (mode == 3) {
+                showPackages = true;
+                packageTab = installed.isEmpty() ? 1 : 0;
+            }
             refresh();
             performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             return;
         }
-        if (action >= ACTION_FILTER && action < ACTION_FILTER + 4) {
-            filter = action - ACTION_FILTER;
-            scrollY = 0f;
+        if (action >= ACTION_TAB && action < ACTION_TAB + 2) {
+            packageTab = action - ACTION_TAB;
+            removeArmedId = "";
+            detailsId = "";
             refresh();
             return;
         }
         if (manager.isBusy()) return;
         if (action >= ACTION_SELECT && action < ACTION_SELECT + 500) {
             int index = action - ACTION_SELECT;
-            if (index >= 0 && index < visibleInstalled.size()) {
-                DriverRepository.Entry entry = visibleInstalled.get(index);
+            if (index >= 0 && index < installed.size()) {
+                DriverRepository.Entry entry = installed.get(index);
                 settings.setDriverMode(3);
+                showPackages = true;
+                packageTab = 0;
                 manager.select(entry.id);
                 removeArmedId = "";
+                detailsId = "";
                 refresh();
                 performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             }
@@ -776,20 +880,22 @@ final class DriverView extends View implements DriverManager.Observer {
         }
         if (action >= ACTION_REMOVE && action < ACTION_REMOVE + 500) {
             int index = action - ACTION_REMOVE;
-            if (index < 0 || index >= visibleInstalled.size()) return;
-            DriverRepository.Entry entry = visibleInstalled.get(index);
+            if (index < 0 || index >= installed.size()) return;
+            DriverRepository.Entry entry = installed.get(index);
             long now = SystemClock.uptimeMillis();
             if (!removeArmedId.equals(entry.id) || now - removeArmedAt >= 6000) {
                 removeArmedId = entry.id;
                 removeArmedAt = now;
                 manager.clearStatus();
                 invalidate();
+                postInvalidateDelayed(6100);
                 return;
             }
             DriverRepository.Entry selected = manager.selected();
             boolean wasSelected = selected != null && selected.id.equals(entry.id);
             if (manager.remove(entry.id) && wasSelected) settings.setDriverMode(0);
             removeArmedId = "";
+            detailsId = "";
             refresh();
             return;
         }
@@ -798,6 +904,16 @@ final class DriverView extends View implements DriverManager.Observer {
             if (index >= 0 && index < visibleCatalog.size()) {
                 removeArmedId = "";
                 manager.download(visibleCatalog.get(index));
+            }
+            return;
+        }
+        if (action >= ACTION_DETAILS && action < ACTION_DETAILS + 500) {
+            int index = action - ACTION_DETAILS;
+            if (index >= 0 && index < installed.size()) {
+                String id = installed.get(index).id;
+                detailsId = detailsId.equals(id) ? "" : id;
+                removeArmedId = "";
+                invalidate();
             }
         }
     }
@@ -830,7 +946,8 @@ final class DriverView extends View implements DriverManager.Observer {
             case MotionEvent.ACTION_UP:
                 int action = ACTION_NONE;
                 if (scrolling) {
-                    velocityTracker.computeCurrentVelocity(1000, ViewConfiguration.get(getContext()).getScaledMaximumFlingVelocity());
+                    velocityTracker.computeCurrentVelocity(1000,
+                            ViewConfiguration.get(getContext()).getScaledMaximumFlingVelocity());
                     scroller.fling(0, Math.round(scrollY), 0, Math.round(-velocityTracker.getYVelocity()),
                             0, 0, 0, Math.round(maxScrollY));
                 } else {
@@ -841,8 +958,7 @@ final class DriverView extends View implements DriverManager.Observer {
                 scrolling = false;
                 recycleVelocityTracker();
                 invalidate();
-                // BACK replaces the content view and recycles touch state in onDetachedFromWindow(). Activate only
-                // after every operation on this view's tracker is complete, so returning to the launcher cannot crash.
+                // Finish tracker cleanup before BACK can synchronously detach this view.
                 if (action != ACTION_NONE) {
                     performClick();
                     activate(action);
