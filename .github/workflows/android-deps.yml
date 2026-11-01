@@ -22,23 +22,34 @@ jobs:
         uses: actions/cache@v4
         with:
           path: out/${{ matrix.abi }}
-          key: android-deps-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/patches/**') }}
+          key: android-deps-standalone-vulkan-wrapper-v2-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/build-vulkan-wrapper.sh', 'android/patches/**') }}
 
       - name: Tools
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip
-          pip3 install --user --break-system-packages meson==1.5.2
+          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip 7zip bison flex
+          pip3 install --user --break-system-packages meson==1.5.2 mako pyyaml packaging
 
       - name: Build
         if: steps.cache.outputs.cache-hit != 'true'
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_LATEST_HOME }}
         run: |
+          set -euo pipefail
           export PATH=$HOME/.local/bin:$PATH
           echo "NDK: $ANDROID_NDK_HOME"
-          android/build-deps.sh ${{ matrix.abi }} src out/${{ matrix.abi }}
+          android/build-deps.sh ${{ matrix.abi }} src out/${{ matrix.abi }} 2>&1 | tee /tmp/build-deps-${{ matrix.abi }}.log
+
+      - name: Report dependency build failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tail -n 180 /tmp/build-deps-${{ matrix.abi }}.log || true
+          gh api repos/${{ github.repository }}/issues/1/comments \
+            --raw-field body="Standalone dependency build failed for ${{ github.sha }} (${{ matrix.abi }}):\n\`\`\`\n$(tail -n 180 /tmp/build-deps-${{ matrix.abi }}.log 2>/dev/null || echo 'no dependency log')\n\`\`\`" || true
 
       - uses: actions/upload-artifact@v4
         with:

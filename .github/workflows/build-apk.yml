@@ -681,6 +681,19 @@ jobs:
           ls -lh ./make.log 2>&1 || true
           if [ "$MAKE_EXIT" != "0" ]; then
             echo "::error::MAKE FAILED with $MAKE_EXIT - posting to issue 1"
+            # Log artifacts and issue posting may be unavailable to read-only consumers. Keep the actual compiler
+            # diagnostics in check annotations as well, rather than exposing only a generic make exit code.
+            python3 - <<'PY'
+            from pathlib import Path
+            lines = Path('/tmp/make.log').read_text(errors='replace').splitlines()
+            markers = ('error:', 'fatal error:', 'undefined reference', 'No such file')
+            selected = [line for line in lines if any(marker in line for marker in markers)]
+            if not selected:
+                selected = lines[-40:]
+            for line in selected[-40:]:
+                message = line[:1800].replace('%', '%25').replace('\r', '%0D')
+                print(f'::error::native build: {message}')
+            PY
             echo "GH_TOKEN len ${#GH_TOKEN}"
             which gh 2>&1 | head || true
             # Post via curl (more reliable than gh in this shell)
@@ -768,34 +781,6 @@ jobs:
             } catch(e) {
               console.log("No make.log: " + e);
             }
-
-      - name: Fallback dummy libmain.so if build failed
-        if: failure()
-        run: |
-          echo "Build failed - checking libmain.so"
-          if [ -f build/android/arm64-v8a/libmain.so ] && [ -s build/android/arm64-v8a/libmain.so ]; then
-            SZ=$(stat -c%s build/android/arm64-v8a/libmain.so 2>/dev/null || wc -c < build/android/arm64-v8a/libmain.so)
-            echo "libmain.so exists size $SZ, not overwriting"
-            ls -lh build/android/arm64-v8a/libmain.so
-            if [ "$SZ" -gt 100000 ]; then
-              echo "Real libmain.so present - keeping"
-              exit 0
-            fi
-            echo "libmain.so too small ($SZ), will recreate fallback"
-          fi
-          echo "Creating fallback dummy libmain.so for APK packaging"
-          mkdir -p build/android/arm64-v8a build/symbols
-          if [ -x "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang" ]; then
-            echo "int dummy=0;" | $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang -shared -o build/android/arm64-v8a/libmain.so -x c - -fPIC || echo "dummy" > build/android/arm64-v8a/libmain.so
-          else
-            echo "dummy libmain for CI" > build/android/arm64-v8a/libmain.so
-          fi
-          ls -lh build/android/arm64-v8a/libmain.so
-          cp build/android/arm64-v8a/libmain.so build/symbols/libmain.so.unstripped || true
-          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libdxvk_d3d9.so build/symbols/libdxvk_d3d9.so.unstripped || true
-          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libSDL2.so build/symbols/libSDL2.so.unstripped || true
-          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
-          ls -lh build/symbols/ || true
 
       - name: Prepare prebuilt libmain.so symbols if DLL not present
         if: env.HAS_DLL == '0'
