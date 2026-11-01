@@ -20,6 +20,7 @@ public final class ModPlatformTest {
             testElf(temporary.resolve("elf"));
             testTextures(temporary.resolve("textures"));
             testArchives(temporary.resolve("archives"));
+            testLegacyWrappedLayouts(temporary.resolve("legacy-wrapped"));
             System.out.println("ProtoDroid mod platform tests passed: " + checks + " checks");
         } finally {
             Files.walk(temporary).sorted(Comparator.reverseOrder()).forEach(path -> {
@@ -154,6 +155,38 @@ public final class ModPlatformTest {
         File windows = Files.createDirectory(path.resolve("windows-pack")).toFile();
         Files.write(new File(windows, "PrototypeFix.asi").toPath(), new byte[] {1, 2, 3});
         expectIOException(() -> ModManager.rejectWindowsBinaries(windows), "explicit ASI rejection");
+    }
+
+    private static void testLegacyWrappedLayouts(Path path) throws Exception {
+        Files.createDirectories(path);
+        File textureStaging = Files.createDirectory(path.resolve("textures")).toFile();
+        File texturePack = Files.createDirectory(textureStaging.toPath().resolve("Pack")).toFile();
+        String hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        Files.writeString(new File(texturePack, "textures.ini").toPath(), hash + " = replacement.dds\n");
+        Files.write(new File(texturePack, "replacement.dds").toPath(), dds(true));
+        ModManager.ensureGeneratedManifest(textureStaging, "wrapped-textures.zip");
+        ModManifest textures = ModManifest.parseValidated(textureStaging, true);
+        check(textures.textures.equals("textures.ini") && textures.files.isEmpty(),
+                "wrapped legacy texture pack remains a texture mod");
+
+        File filesStaging = Files.createDirectory(path.resolve("files")).toFile();
+        File loose = Files.createDirectories(filesStaging.toPath().resolve("Pack/data")).toFile();
+        Files.writeString(new File(loose, "data.bin").toPath(), "payload");
+        ModManager.ensureGeneratedManifest(filesStaging, "wrapped-files.zip");
+        ModManifest files = ModManifest.parseValidated(filesStaging, true);
+        check(files.files.equals(".") && files.textures.isEmpty(),
+                "wrapped loose package uses its normalized content root");
+
+        File pluginStaging = Files.createDirectory(path.resolve("plugin")).toFile();
+        File nativeDir = Files.createDirectories(pluginStaging.toPath().resolve("Pack/lib/arm64-v8a")).toFile();
+        byte[] elf = new byte[64];
+        elf[0] = 0x7f; elf[1] = 'E'; elf[2] = 'L'; elf[3] = 'F'; elf[4] = 2; elf[5] = 1;
+        elf[16] = 3; elf[18] = (byte) 183;
+        Files.write(new File(nativeDir, "libexample.so").toPath(), elf);
+        ModManager.ensureGeneratedManifest(pluginStaging, "wrapped-plugin.zip");
+        ModManifest plugin = ModManifest.parseValidated(pluginStaging, true);
+        check(plugin.plugin.equals("lib/arm64-v8a/libexample.so") && plugin.files.isEmpty(),
+                "wrapped ARM64 plugin retains its native layout");
     }
 
     private static File createMod(File root, String id, String content, boolean files) throws IOException {

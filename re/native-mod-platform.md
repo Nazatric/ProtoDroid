@@ -28,8 +28,8 @@ All addresses below are for the supplied Steam engine. Native recompiled address
 | FPS limit | Existing native frame limiter and `fps_limit` setting | Use the native limiter; preserve default-On `Unlock menu FPS`. |
 | Custom/window resolution and borderless mode | Windows EXE/DLL display overrides; Android already owns the fullscreen SDL window and render sizing | Keep native fullscreen/render-height handling. Do not port EXE patches or add a second window mode. |
 | DInput HID filtering | The Windows fix avoids slow enumeration of arbitrary HID devices; the native DInput bridge already exposes only keyboard/mouse, with gamepads handled separately | Keep the existing controlled input path; do not add native HID enumeration merely to filter it again. |
-| FOV offset | `pure3d::Camera::AdjustFOV` at original `0x106dcfe0`, first float argument at `esp+4` | Optional detour adds a clamped degree offset before calling the original. |
-| Shadow map size | Original `0x10715980` writes output dimensions through arguments at entry `esp+8` and `esp+12` | Call original, then scale its width/height ratio to the optional selected maximum; never force square maps. |
+| FOV offset | `pure3d::Camera::AdjustFOV` at original `0x106dcfe0`, first float argument at `esp+4` | Optional detour adds a finite fractional degree offset before calling the original and clamps the resulting FOV. |
+| Shadow map size | Original `0x10715980` writes output dimensions through arguments at entry `esp+8` and `esp+12`; the supplied fix documents 512–8192 | Call original, then scale its width/height ratio to the optional selected maximum; never force square maps. Unsupported values leave the original unchanged. |
 | VRAM report | Windows patch and DXVK's supported memory option | Optional `d3d9.maxAvailableMemory`; default leaves DXVK unchanged. |
 | Sample rate | Windows engine patch; Android uses native FAudio | Keep FAudio; no duplicate generated-audio rewrite. |
 | Developer menu | Prototype Fix writes `RAD_RELEASE` over the engine build-type string | Optionally replace a uniquely found `RAD_FINAL` guest-data string with `RAD_RELEASE`, with an exact-byte/count guard. |
@@ -75,7 +75,7 @@ Every content key is optional, but at least one is required. Paths are relative,
 - `cover`: PNG/JPEG/WebP decoded with bounded sampling by the launcher.
 - `enabled`: launcher-created marker. Imported mods start disabled. Changes apply on the next Play.
 
-ZIP import uses a local staged archive and staging directory, canonical-path checks, case-insensitive duplicate rejection, entry/count/byte limits, and atomic same-filesystem promotion. An existing ID is not silently overwritten. Removal is confirmed and restricted to a direct child of the mod root. Legacy ZIPs without metadata receive a generated manifest: `textures.ini` selects a texture pack, an ARM64 library selects a native plugin, and other files select a loose overlay. Unsupported Windows native binaries fail explicitly.
+ZIP import uses a local staged archive and staging directory, canonical-path checks, case-insensitive duplicate rejection, entry/count/byte limits, and atomic same-filesystem promotion. An existing ID is not silently overwritten. Removal is confirmed and restricted to a direct child of the mod root. Legacy ZIPs without metadata receive a generated manifest: `textures.ini` selects a texture pack, an ARM64 library selects a native plugin, and other files select a loose overlay. One safe top-level wrapper is flattened only inside private staging before canonical-path/content validation, so wrapped texture, plugin, and loose-file layouts keep their intended type. Nested or ambiguous wrappers are not recursively unpacked. Unsupported Windows native binaries fail explicitly.
 
 Native plugin files are validated and copied to a fresh app-private `noBackupFilesDir/mod-native-<launch>` before launch. Native code never `dlopen`s a shared-storage path. Older private launch directories are cleaned only after the environment points at the fresh path, so a cleanup failure cannot resurrect removed/disabled plugins. Dependent ARM64 libraries must be bundled under the mod's `lib/arm64-v8a` tree and linked with an `$ORIGIN`-relative runpath when required.
 
@@ -99,8 +99,8 @@ Optional dumping writes original-format DDS files and a ready-to-pack `textures.
 
 These `protodroid.ini` keys are independent of imported packages and are off/preserved by default:
 
-- `fov_offset = 0`: signed degree offset, with the resulting FOV clamped to 30–150.
-- `shadow_map_resolution = 0`: `1024`, `2048`, or `4096`; scales the original map ratio rather than forcing square maps.
+- `fov_offset = 0`: finite signed fractional degree offset, with the resulting FOV clamped to 30–150. The launcher offers common integer offsets; INI retains fractional values.
+- `shadow_map_resolution = 0`: `512`, `1024`, `2048`, `4096`, or `8192`; scales the original map ratio rather than forcing square maps. Higher limits are device-dependent and default off.
 - `remove_tick_rate_limit = 0`: removes only the evidenced 15 ms simulation skip. `fix_button_tap_tick_rate = 1` enables the inferred monotonic struggle-timing adjustment only when that gate is removed.
 - `prefer_loose_files = 0`: enables the original loose-file open policy even without an imported overlay.
 - `unlock_dev_menu = 0`: attempts the guarded unique build-type patch; ambiguity/refusal is logged and leaves data unchanged.
@@ -134,11 +134,12 @@ A native Android Mods page is reachable beside Drivers. It provides:
 - installed and active counts;
 - ZIP/single-file import with clear supported-format guidance;
 - cover, name, version, author, description, content type, and compatibility/load errors;
-- enable/disable and confirmed removal;
-- default-disabled imports and next-Play application;
-- an explicit warning that native ARM64 plugins are optional code and x86 ASI/DLL files are not loaded.
+- background import, enable/disable, and removal operations with visible progress/error status;
+- default-disabled imports, next-Play application, two-step removal, and separate native-plugin trust confirmation;
+- an explicit warning that native ARM64 plugins are optional code and x86 ASI/DLL files are not loaded;
+- an Engine fixes tab for the built-in optional policies without changing their safe defaults.
 
-The page uses platform Android views, so import errors and descriptions remain accessible without adding a UI runtime to the non-Gradle build.
+The page shares Setup's artwork, Barlow Condensed fonts, red/bone palette, and cut panels through a custom Android Canvas view. It retains 48 dp touch targets, bounded cover decoding, status announcements, keyboard/D-pad focus, scrolling/fling, and Android reduced-motion handling without adding a UI runtime. Engine INI writes are serialized, synced to a same-directory temporary file, and atomically replaced where supported; failures preserve the previous file and produce a visible main-thread warning.
 
 ## Validation and release boundaries
 
@@ -147,5 +148,5 @@ The page uses platform Android views, so import errors and descriptions remain a
 3. Python source/signature tests verify the exact generated tick patch, selected engine targets, and no accidental default changes.
 4. Real ARM64 CI builds Dobby, `libmain.so`, and the example plugin at the exact pushed commit; artifact metadata must match that commit.
 5. Existing graphics, Bink, save, driver, tour, UI, and package tests must remain green.
-6. No APK is produced for each small edit. Changes are batched into one candidate. No merge, release, or replacement of published v0.13.
-7. CI is not physical-device confirmation. Mod loading, overlays, texture appearance, QTE timing, developer menu behavior, and high-resolution shadows require explicit device validation before any release claim.
+6. No APK is produced for each small edit. Changes are batched into one exact-commit candidate. After that candidate is green, merge its PR, run the explicitly approved exact-main build/release dispatch, and publish 0.14 with that run's verified APK. Published v0.13 and its APK remain available.
+7. CI is not physical-device confirmation. Mod loading, overlays, texture appearance, QTE timing, developer menu behavior, high-resolution shadows, and final on-device APK behavior remain device-dependent; release notes must not present host/CI evidence as physical testing.

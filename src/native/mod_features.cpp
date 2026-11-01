@@ -1,11 +1,14 @@
 #include "mod_platform.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 #include "guest.h"
+#include "mod_feature_policy.h"
 #include "win.h"
 
 namespace native {
@@ -24,10 +27,26 @@ ModHookFn g_shadow_original = nullptr;
 ModHookFn g_file_open_original = nullptr;
 ModHookFn g_button_original = nullptr;
 
+float FovOffset() {
+    static const float offset = [] {
+        const std::string value = Setting("fov_offset", "0");
+        if (value.empty()) return 0.0f;
+        char* end = nullptr;
+        errno = 0;
+        const float parsed = std::strtof(value.c_str(), &end);
+        if (end == value.c_str() || !end || *end != '\0' || errno == ERANGE || !std::isfinite(parsed)) {
+            Log("mods: invalid fov_offset='%s'; using 0", value.c_str());
+            return 0.0f;
+        }
+        return parsed;
+    }();
+    return offset;
+}
+
 void FovDetour(Ctx* c) {
-    static const int offset = SettingInt("fov_offset", 0);
+    static const float offset = FovOffset();
     uint32_t argument = c->esp + 4;
-    float fov = SRF32(argument) + static_cast<float>(offset);
+    float fov = SRF32(argument) + offset;
     fov = std::max(30.0f, std::min(150.0f, fov));
     WF32(argument, fov);
     g_fov_original(c);
@@ -41,12 +60,11 @@ void ShadowDetour(Ctx* c) {
     uint32_t height_pointer = SR32(entry_esp + 12);
     if (!width_pointer || !height_pointer) return;
     uint32_t width = R32(width_pointer), height = R32(height_pointer);
-    if (!width || !height || width > 16384 || height > 16384) return;
-    uint32_t largest = std::max(width, height);
-    if (largest == static_cast<uint32_t>(selected)) return;
-    double scale = static_cast<double>(selected) / largest;
-    uint32_t new_width = static_cast<uint32_t>(std::max(256.0, std::min(4096.0, std::nearbyint(width * scale))));
-    uint32_t new_height = static_cast<uint32_t>(std::max(256.0, std::min(4096.0, std::nearbyint(height * scale))));
+    uint32_t new_width = 0, new_height = 0;
+    if (!ModScaleShadowResolution(selected, width, height, &new_width, &new_height)
+        || (new_width == width && new_height == height)) {
+        return;
+    }
     W32(width_pointer, new_width);
     W32(height_pointer, new_height);
     Log("mods: shadow resolution %ux%u -> %ux%u (ratio preserved)", width, height, new_width, new_height);
@@ -142,14 +160,14 @@ void UnlockDeveloperMenu() {
 }  // namespace
 
 void ModFeaturesInitialize() {
-    if (SettingInt("fov_offset", 0) != 0) {
+    if (FovOffset() != 0.0f) {
         ModHookInstall(kAdjustFov, FovDetour, &g_fov_original);
     }
     int shadow = SettingInt("shadow_map_resolution", 0);
-    if (shadow == 1024 || shadow == 2048 || shadow == 4096) {
+    if (ModShadowResolutionSupported(shadow)) {
         ModHookInstall(kShadowResolution, ShadowDetour, &g_shadow_original);
     } else if (shadow != 0) {
-        Log("mods: shadow_map_resolution=%d rejected; use 1024, 2048 or 4096", shadow);
+        Log("mods: shadow_map_resolution=%d rejected; use 512, 1024, 2048, 4096 or 8192", shadow);
     }
     if (ModFilesHaveOverlays() || SettingInt("prefer_loose_files", 0) != 0) {
         ModHookInstall(kFileOpenExecute, FileOpenDetour, &g_file_open_original);

@@ -109,7 +109,7 @@ final class SetupView extends View {
     private static final String[] REQUIREMENTS = {
             GameFiles.DLL, GameFiles.UV, ".rcf", ".p3d", "art", "audio", "scripts"
     };
-    private static final String[] CATEGORY_NAMES = {"GRAPHICS", "GAME VIDEO", "CONTROLS", "INTERFACE"};
+    private static final String[] CATEGORY_NAMES = {"GRAPHICS", "GAME VIDEO", "CONTROLS", "INTERFACE", "ENGINE FIXES"};
 
     private final Listener listener;
     private final GameSettings gameSettings;
@@ -145,6 +145,7 @@ final class SetupView extends View {
     private final float density;
     private final float fontScale;
     private final int touchSlop;
+    private final boolean motionEnabled;
 
     private State state = new State(false, false, false, "INITIALIZING...", "", "", "");
     private UpdateManager.State updateState = UpdateManager.State.hidden();
@@ -196,6 +197,7 @@ final class SetupView extends View {
         density = getResources().getDisplayMetrics().density;
         fontScale = getResources().getConfiguration().fontScale;
         touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+        motionEnabled = LauncherMotion.enabled();
         setBackgroundColor(Color.BLACK);
         setClickable(true);
         setFocusable(true);
@@ -402,7 +404,7 @@ final class SetupView extends View {
         int width = getWidth();
         int height = getHeight();
         canvas.drawColor(Color.BLACK);
-        long elapsed = Math.max(0L, now - startedAt);
+        long elapsed = motionEnabled ? Math.max(0L, now - startedAt) : 0L;
         int slideNumber = (int) (elapsed / SLIDE_HOLD_MS);
         int index = slideNumber % slides.length;
         long phase = elapsed % SLIDE_HOLD_MS;
@@ -497,7 +499,7 @@ final class SetupView extends View {
     }
 
     private void drawHud(Canvas canvas, float left, float right, float y, float u, long now) {
-        float progress = easeOut((now - startedAt - 700L) / 1100f);
+        float progress = motionEnabled ? easeOut((now - startedAt - 700L) / 1100f) : 1f;
         float width = (right - left) * progress;
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(withAlpha(Color.WHITE, 0.16f));
@@ -546,7 +548,7 @@ final class SetupView extends View {
     private void drawGlitch(Canvas canvas, String value, float x, float top, float lineHeight, float size, int weight,
                             int color, float spacing, float u, long now) {
         long glitchTime = now - startedAt - 2400L;
-        boolean active = glitchTime >= 0L && glitchTime % 6500L < 220L;
+        boolean active = motionEnabled && glitchTime >= 0L && glitchTime % 6500L < 220L;
         float shift = active ? (((glitchTime % 6500L) / 55L) % 2L == 0L ? -5f : 4f) * u : 0f;
         if (active) {
             configure(text, size, weight, RED_HOT, spacing, u);
@@ -806,14 +808,18 @@ final class SetupView extends View {
                 || focusedAction == action || busy);
         if (variant != BUTTON_DONE) {
             float target = live ? 1f : 0f;
-            float amount = 1f - (float) Math.exp(-Math.max(0f, dt) / 110f);
-            buttonFill[action] += (target - buttonFill[action]) * amount;
+            if (motionEnabled) {
+                float amount = 1f - (float) Math.exp(-Math.max(0f, dt) / 110f);
+                buttonFill[action] += (target - buttonFill[action]) * amount;
+            } else {
+                buttonFill[action] = target;
+            }
         } else {
             buttonFill[action] = 0f;
         }
 
         int outer = canvas.save();
-        if (pressedAction == action) canvas.scale(0.97f, 0.97f, bounds.centerX(), bounds.centerY());
+        if (motionEnabled && pressedAction == action) canvas.scale(0.97f, 0.97f, bounds.centerX(), bounds.centerY());
         Path shape = cutPath(bounds, Math.min(9f * u, bounds.height() * 0.25f));
         int clipped = canvas.save();
         canvas.clipPath(shape);
@@ -844,7 +850,7 @@ final class SetupView extends View {
             }
         }
 
-        if (splatAction == action) {
+        if (motionEnabled && splatAction == action) {
             float progress = clamp01((now - splatStartedAt) / 600f);
             if (progress < 1f) {
                 float radius = progress * bounds.width() * 0.8f + 1f;
@@ -857,7 +863,7 @@ final class SetupView extends View {
             }
         }
         if (busy) {
-            float sweep = (now % 900L) / 900f;
+            float sweep = motionEnabled ? (now % 900L) / 900f : 0.5f;
             float barWidth = bounds.width() * 0.35f;
             float x = bounds.left - barWidth + sweep * (bounds.width() + barWidth);
             paint.setColor(Color.WHITE);
@@ -1248,7 +1254,7 @@ final class SetupView extends View {
         for (int column = 0; column < columns; column++) {
             float height = 0f;
             int firstCategory = portrait ? GameSettings.CATEGORY_GRAPHICS : column * 2;
-            int endCategory = portrait ? GameSettings.CATEGORY_COUNT : firstCategory + 2;
+            int endCategory = portrait || column == columns - 1 ? GameSettings.CATEGORY_COUNT : firstCategory + 2;
             for (int category = firstCategory; category < endCategory; category++) {
                 height += headerHeight;
                 for (GameSettings.Setting setting : gameSettings.settings) {
@@ -1267,7 +1273,7 @@ final class SetupView extends View {
             float x = left + column * (columnWidth + rowGap);
             float y = settingsListBounds.top - scrollY;
             int firstCategory = portrait ? GameSettings.CATEGORY_GRAPHICS : column * 2;
-            int endCategory = portrait ? GameSettings.CATEGORY_COUNT : firstCategory + 2;
+            int endCategory = portrait || column == columns - 1 ? GameSettings.CATEGORY_COUNT : firstCategory + 2;
             for (int category = firstCategory; category < endCategory; category++) {
                 if (y + headerHeight >= settingsListBounds.top && y <= settingsListBounds.bottom) {
                     drawLine(canvas, CATEGORY_NAMES[category], x + 3f * u, y, headerHeight - 3f * u,
@@ -1308,6 +1314,7 @@ final class SetupView extends View {
     }
 
     private void drawBootCurtain(Canvas canvas, long now) {
+        if (!motionEnabled) return;
         float progress = clamp01((now - startedAt - 150L) / 1100f);
         if (progress >= 1f) return;
         float eased = progress < 0.5f ? 4f * progress * progress * progress
@@ -1338,7 +1345,7 @@ final class SetupView extends View {
             if (updateWarningVisible) drawUpdateWarning(canvas, now, dt);
             drawBootCurtain(canvas, now);
         }
-        if (getWindowVisibility() == VISIBLE && isAttachedToWindow()) postInvalidateOnAnimation();
+        if (motionEnabled && getWindowVisibility() == VISIBLE && isAttachedToWindow()) postInvalidateOnAnimation();
     }
 
     private int actionAt(float x, float y) {
@@ -1389,7 +1396,7 @@ final class SetupView extends View {
                 requestFocus();
                 focusedAction = ACTION_NONE;
                 pressedAction = actionAt(x, y);
-                splatAction = pressedAction;
+                splatAction = motionEnabled ? pressedAction : ACTION_NONE;
                 splatX = x;
                 splatY = y;
                 splatStartedAt = SystemClock.uptimeMillis();

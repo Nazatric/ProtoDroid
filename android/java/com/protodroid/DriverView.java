@@ -2,6 +2,8 @@ package com.protodroid;
 
 import android.content.Context;
 import android.content.res.AssetManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
@@ -25,6 +27,8 @@ import android.view.WindowInsets;
 import android.widget.OverScroller;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -77,11 +81,16 @@ final class DriverView extends View implements DriverManager.Observer {
     private final GameSettings settings;
     private final DriverManager manager;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final TextPaint text = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
     private final Path path = new Path();
     private final Typeface medium;
     private final Typeface semibold;
     private final Typeface bold;
+    private final Bitmap backdrop;
+    private final Bitmap icon;
+    private final boolean motion;
+    private final long startedAt = SystemClock.uptimeMillis();
     private final float density;
     private final float fontScale;
     private final int touchSlop;
@@ -97,8 +106,11 @@ final class DriverView extends View implements DriverManager.Observer {
 
     private int insetLeft, insetTop, insetRight, insetBottom;
     private int pressedAction = ACTION_NONE;
+    private int focusedAction = ACTION_NONE;
     private float lastTouchY;
     private float scrollY;
+    private float contentTop;
+    private float contentBottom;
     private float maxScrollY;
     private float lastUnit = 1f;
     private boolean scrolling;
@@ -129,6 +141,9 @@ final class DriverView extends View implements DriverManager.Observer {
         medium = loadFont(assets, "setup/fonts/barlow_condensed_medium.ttf");
         semibold = loadFont(assets, "setup/fonts/barlow_condensed_semibold.ttf");
         bold = loadFont(assets, "setup/fonts/barlow_condensed_bold.ttf");
+        backdrop = loadBitmap(assets, "setup/images/bg_2.jpg");
+        icon = loadBitmap(assets, "setup/images/protodroid_icon.png");
+        motion = LauncherMotion.enabled();
         maliDevice = new File("/dev/mali0").exists() || new File("/dev/mali").exists()
                 || new File("/dev/mali_kbase").exists();
         adrenoDevice = !maliDevice && new File("/dev/kgsl-3d0").exists();
@@ -146,6 +161,17 @@ final class DriverView extends View implements DriverManager.Observer {
             return Typeface.createFromAsset(assets, name);
         } catch (RuntimeException e) {
             return Typeface.DEFAULT;
+        }
+    }
+
+    private static Bitmap loadBitmap(AssetManager assets, String name) {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inScaled = false;
+        options.inPreferredConfig = Bitmap.Config.RGB_565;
+        try (InputStream input = assets.open(name)) {
+            return BitmapFactory.decodeStream(input, null, options);
+        } catch (IOException | RuntimeException ignored) {
+            return null;
         }
     }
 
@@ -337,16 +363,20 @@ final class DriverView extends View implements DriverManager.Observer {
 
     private void button(Canvas canvas, int action, RectF bounds, String label, int variant, boolean enabled, float u) {
         boolean pressed = pressedAction == action && enabled;
-        int edge = variant == BUTTON_PRIMARY ? RED_HOT : (pressed ? RED_HOT : 0xff51414a);
+        int edge = variant == BUTTON_PRIMARY || (focusedAction == action && enabled)
+                ? RED_HOT : (pressed ? RED_HOT : 0xff51414a);
         int fill = variant == BUTTON_PRIMARY ? (pressed ? 0xffa91822 : RED_DARK)
                 : variant == BUTTON_GHOST ? 0x5010141b : (pressed ? 0xff352027 : 0xff202027);
         if (!enabled) {
             edge = 0xff38353d;
             fill = 0xff17181d;
         }
-        panel(canvas, bounds, fill, edge, u);
         if (enabled) bind(action, bounds);
+        canvas.save();
+        if (motion && pressed) canvas.scale(0.97f, 0.97f, bounds.centerX(), bounds.centerY());
+        panel(canvas, bounds, fill, edge, u);
         drawCentered(canvas, label, bounds, 12.5f, 700, enabled ? BONE : MUTED, u);
+        canvas.restore();
     }
 
     private void radio(Canvas canvas, float cx, float cy, boolean selected, float u) {
@@ -370,13 +400,24 @@ final class DriverView extends View implements DriverManager.Observer {
         canvas.drawRect(left, top + 27f * u, left + 46f * u, top + 29f * u, paint);
     }
 
-    private void drawBackground(Canvas canvas) {
+    private void drawBackground(Canvas canvas, long now) {
         int width = getWidth(), height = getHeight();
+        canvas.drawColor(Color.BLACK);
+        if (backdrop != null && !backdrop.isRecycled()) {
+            float drift = motion ? 0.012f * (float) Math.sin((now - startedAt) / 10000.0) : 0f;
+            float scale = Math.max(width / (float) backdrop.getWidth(), height / (float) backdrop.getHeight())
+                    * (1.035f + drift);
+            RectF destination = new RectF(0, 0, backdrop.getWidth() * scale, backdrop.getHeight() * scale);
+            destination.offset((width - destination.width()) / 2f, (height - destination.height()) / 2f);
+            bitmapPaint.setAlpha(175);
+            canvas.drawBitmap(backdrop, null, destination, bitmapPaint);
+            bitmapPaint.setAlpha(255);
+        }
         if (backgroundShade == null || backgroundWidth != width || backgroundHeight != height) {
             backgroundWidth = width;
             backgroundHeight = height;
             backgroundShade = new LinearGradient(0, 0, width, height,
-                    new int[]{0xff08090d, 0xff111018, 0xff230e16}, null, Shader.TileMode.CLAMP);
+                    new int[]{0xf208090d, 0xea111018, 0xf2230e16}, null, Shader.TileMode.CLAMP);
         }
         paint.setShader(backgroundShade);
         canvas.drawRect(0, 0, width, height, paint);
@@ -391,10 +432,13 @@ final class DriverView extends View implements DriverManager.Observer {
     }
 
     private void drawHeader(Canvas canvas, float left, float right, float top, float u) {
-        drawLine(canvas, "[", left, top, 38f * u, 25f, 500, RED_HOT, u, -1);
-        drawLine(canvas, "PROTOTYPE", left + 14f * u, top, 38f * u, 23f, 700, BONE, u, -1);
+        float iconSize = 38f * u;
+        if (icon != null) canvas.drawBitmap(icon, null, new RectF(left, top, left + iconSize, top + iconSize), bitmapPaint);
+        float brandLeft = left + iconSize + 8f * u;
+        drawLine(canvas, "[", brandLeft, top, 38f * u, 25f, 500, RED_HOT, u, -1);
+        drawLine(canvas, "PROTOTYPE", brandLeft + 14f * u, top, 38f * u, 23f, 700, BONE, u, -1);
         configure(text, 23f, 700, BONE, u);
-        float brandEnd = left + 14f * u + text.measureText("PROTOTYPE") + 4f * u;
+        float brandEnd = brandLeft + 14f * u + text.measureText("PROTOTYPE") + 4f * u;
         drawLine(canvas, "]", brandEnd, top, 38f * u, 25f, 500, RED_HOT, u, -1);
         RectF back = new RectF(right - 104f * u, top, right, top + touch(u));
         button(canvas, ACTION_BACK, back, "BACK", BUTTON_GHOST, true, u);
@@ -708,7 +752,9 @@ final class DriverView extends View implements DriverManager.Observer {
             scrollY = scroller.getCurrY();
             invalidate();
         }
-        drawBackground(canvas);
+        long now = SystemClock.uptimeMillis();
+        if (!removeArmedId.isEmpty() && now - removeArmedAt >= 6000) removeArmedId = "";
+        drawBackground(canvas, now);
         float u = unit();
         lastUnit = u;
         float availableLeft = insetLeft + 20f * u;
@@ -723,8 +769,8 @@ final class DriverView extends View implements DriverManager.Observer {
         usedActions.clear();
         drawHeader(canvas, left, right, insetTop + 12f * u, u);
 
-        float contentTop = insetTop + 124f * u;
-        float contentBottom = getHeight() - insetBottom - 12f * u;
+        contentTop = insetTop + 124f * u;
+        contentBottom = getHeight() - insetBottom - 12f * u;
         float available = Math.max(1f, contentBottom - contentTop);
         float y = contentTop - scrollY;
         canvas.save();
@@ -803,6 +849,7 @@ final class DriverView extends View implements DriverManager.Observer {
             paint.setColor(RED);
             canvas.drawRect(right + 5f * u, thumbY, right + 7f * u, thumbY + thumbHeight, paint);
         }
+        if (motion && getWindowVisibility() == VISIBLE && isAttachedToWindow()) postInvalidateOnAnimation();
     }
 
     private void activate(int action) {
@@ -928,6 +975,8 @@ final class DriverView extends View implements DriverManager.Observer {
                 scroller.forceFinished(true);
                 scrolling = false;
                 lastTouchY = y;
+                requestFocus();
+                focusedAction = ACTION_NONE;
                 pressedAction = actionAt(event.getX(), y);
                 invalidate();
                 return true;
@@ -990,16 +1039,53 @@ final class DriverView extends View implements DriverManager.Observer {
         return super.onGenericMotionEvent(event);
     }
 
+    private void focusNext(int direction) {
+        if (usedActions.isEmpty()) return;
+        int index = usedActions.indexOf(focusedAction);
+        if (index < 0) index = direction >= 0 ? -1 : 0;
+        focusedAction = usedActions.get(Math.floorMod(index + direction, usedActions.size()));
+        ensureFocusedVisible();
+        invalidate();
+    }
+
+    private void ensureFocusedVisible() {
+        if (focusedAction < 0 || focusedAction >= actionBounds.length || actionBounds[focusedAction] == null) return;
+        RectF bounds = actionBounds[focusedAction];
+        float visibleTop = bounds.top + scrollY;
+        float visibleBottom = bounds.bottom + scrollY;
+        if (bounds.top < contentTop) scrollY = Math.max(0f, visibleTop - contentTop - 12f * lastUnit);
+        else if (bounds.bottom > contentBottom) {
+            scrollY = Math.min(maxScrollY, visibleBottom - contentBottom + 12f * lastUnit);
+        }
+    }
+
     @Override public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_PAGE_UP) {
+        if (keyCode == KeyEvent.KEYCODE_PAGE_UP) {
             scrollY = Math.max(0f, scrollY - 64f * lastUnit);
             invalidate();
             return true;
         }
-        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN || keyCode == KeyEvent.KEYCODE_PAGE_DOWN) {
+        if (keyCode == KeyEvent.KEYCODE_PAGE_DOWN) {
             scrollY = Math.min(maxScrollY, scrollY + 64f * lastUnit);
             invalidate();
             return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+            focusNext(-1);
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                || keyCode == KeyEvent.KEYCODE_TAB) {
+            focusNext(1);
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER
+                || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER || keyCode == KeyEvent.KEYCODE_BUTTON_A) {
+            if (focusedAction != ACTION_NONE) {
+                performClick();
+                activate(focusedAction);
+                return true;
+            }
         }
         return super.onKeyDown(keyCode, event);
     }

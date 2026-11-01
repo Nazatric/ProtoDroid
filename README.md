@@ -13,6 +13,7 @@
     <a href="#quick-start">QUICK START</a> ·
     <a href="#screens">SCREENS</a> ·
     <a href="#settings-and-drivers">SETTINGS</a> ·
+    <a href="#mods-and-engine-fixes">MODS</a> ·
     <a href="#logs-and-diagnostics">LOGS</a> ·
     <a href="CHANGELOG.md">CHANGELOG</a>
   </p>
@@ -67,6 +68,7 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 | **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. |
 | **Performance** | ARM64 hot-path replacements, optimized DXT decoding, stable FIFO presentation, ADPF hints, unrestricted CPU scheduling, and persistent DXVK state caching. |
 | **Saves** | Shared profiles and saves that you can back up, replace, or delete with a file manager. Existing saves migrate without being overwritten. |
+| **Mods** | An optional local library for loose-file overlays, same-format texture packs, and independently rebuilt ARM64 plugins, with covers, details, and next-Play activation. |
 
 ## Settings and drivers
 
@@ -76,8 +78,19 @@ The launcher’s **Settings** page and the in-game gear menu share the same pref
 - **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **Game default** leaves the engine’s own device-dependent choice intact.
 - **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons.
 - **Interface:** Opacity and Show FPS.
+- **Engine fixes:** Optional FOV, shadow-map, tick/QTE, loose-file, developer-menu, VRAM-report, and texture-dump policies. Safe defaults remain unchanged until you opt in.
 
 **Low, Medium, and High presets** update only the graphics and game-video options. Your FPS and control preferences stay as they are. Choose **Custom** after changing an individual graphics row. Use **LAYOUT** to drag controls into place, resize them, or reset the layout.
+
+### Mods and engine fixes
+
+Open **Mods** beside **Drivers** to import a local ZIP, a loose file, or an ARM64 `.so`. The library shows installed/active counts, cover art, descriptions, content types, compatibility errors, and load state. Imports start **disabled**; review the details, then enable them for the next **Play**. Enable/disable, two-step removal, and the additional native-plugin confirmation never patch original game files or shared saves.
+
+Packages live under `/storage/emulated/0/Prototype/mods/` when shared access is available, or ProtoDroid’s app-specific `mods/` folder otherwise. A ZIP can use the documented manifest or a legacy layout, including one top-level wrapper folder. Unsafe paths, duplicate IDs, oversized archives, and incompatible native binaries are rejected. **Windows x86 ASI/DLL plugins do not load on Android**; native plugins must be independently translated and rebuilt for AArch64 using ABI v1.
+
+Texture packs map ProtoDroid’s versioned texture hashes in `textures.ini` to same-size, same-format DDS replacements. Enable **Dump original textures** to create original-format DDS files and a starter mapping. This is useful for compatible top-level static 2D textures, not arbitrary high-resolution texture resizing. See the [mod package and plugin guide](re/native-mod-platform.md) for authoring details.
+
+The **Engine fixes** tab exposes fractional FOV offsets through INI, 512–8192 shadow-map limits, the evidenced tick/QTE policies, loose files, the guarded developer-menu option, DXVK VRAM reporting, and texture dumping. Higher limits can cost memory and performance; support and appearance remain device-dependent. These options are independent of imported mods.
 
 ### Vulkan drivers
 
@@ -128,7 +141,7 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `texture_skip_mips` | `0` full textures, `1` half resolution, `2` quarter resolution. |
 | `texture_skip_min_size` | Minimum texture size eligible for mip reduction. |
 | `max_anisotropy` | Texture anisotropy: 1, 2, 4, 8, or another supported value. |
-| `fps_limit` | Host frame limit: `0`/off, 30, 45, or 60. |
+| `fps_limit` | Host frame limit: `0` disables it; positive values use the existing limiter. The UI offers 30–1000, without promising the resulting frame rate. |
 | `battery_saver` | Enables the battery-saving frame policy. |
 | `unlock_menu_fps` | `1` keeps menu movies responsive without blocking waits. Default: `1`. |
 | `audio_driver` | `aaudio` or `openslES`. |

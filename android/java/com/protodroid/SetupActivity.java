@@ -79,6 +79,7 @@ public class SetupActivity extends Activity {
                 @Override
                 public void onMods() {
                     startActivity(new Intent(SetupActivity.this, ModsActivity.class));
+                    LauncherMotion.transition(SetupActivity.this);
                 }
 
                 @Override
@@ -141,6 +142,10 @@ public class SetupActivity extends Activity {
         if (driverView != null || setupView == null) return;
         driverView = new DriverView(this, setupView.gameSettings(), driverManager, this::closeDrivers);
         setContentView(driverView);
+        if (LauncherMotion.enabled()) {
+            driverView.setAlpha(0f);
+            driverView.animate().alpha(1f).setDuration(220).start();
+        }
     }
 
     private void closeDrivers() {
@@ -148,6 +153,10 @@ public class SetupActivity extends Activity {
         driverManager.setObserver(null);
         driverView = null;
         setContentView(setupView);
+        if (LauncherMotion.enabled()) {
+            setupView.setAlpha(0f);
+            setupView.animate().alpha(1f).setDuration(220).start();
+        }
     }
 
     private File appGame() {

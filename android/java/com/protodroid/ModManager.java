@@ -300,9 +300,11 @@ final class ModManager {
         }
     }
 
-    private static void ensureGeneratedManifest(File staging, String displayName) throws IOException {
+    static void ensureGeneratedManifest(File staging, String displayName) throws IOException {
         if (new File(staging, ModManifest.FILE_NAME).isFile()) return;
         rejectWindowsBinaries(staging);
+        File contentRoot = legacyContentRoot(staging);
+        if (!contentRoot.equals(staging)) flattenLegacyWrapper(staging, contentRoot);
         String textures = new File(staging, "textures.ini").isFile() ? "textures.ini" : "";
         String plugin = findSinglePlugin(staging);
         String files = "";
@@ -310,6 +312,33 @@ final class ModManager {
         else if (new File(staging, "files").isDirectory()) files = "files";
         String id = legacyId(displayName);
         ModManifest.writeGenerated(staging, id, displayName, files, textures, plugin);
+    }
+
+    private static File legacyContentRoot(File staging) {
+        // Preserve root-level packages exactly as before. Otherwise recognize the common single-folder ZIP wrapper;
+        // it is normalized only inside private staging before canonical-path and content validation.
+        if (new File(staging, "textures.ini").isFile() || new File(staging, "files").isDirectory()
+                || new File(staging, "lib/arm64-v8a").isDirectory()) {
+            return staging;
+        }
+        File[] children = staging.listFiles();
+        if (children != null && children.length == 1 && children[0].isDirectory()
+                && !Files.isSymbolicLink(children[0].toPath())) {
+            return children[0];
+        }
+        return staging;
+    }
+
+    private static void flattenLegacyWrapper(File staging, File wrapper) throws IOException {
+        File[] children = wrapper.listFiles();
+        if (children == null) throw new IOException("Could not inspect the legacy mod folder");
+        for (File child : children) {
+            File target = new File(staging, child.getName());
+            if (target.exists() || !child.renameTo(target)) {
+                throw new IOException("Could not normalize the legacy mod folder");
+            }
+        }
+        if (!wrapper.delete()) throw new IOException("Could not remove the empty legacy mod wrapper");
     }
 
     private static String findSinglePlugin(File staging) throws IOException {

@@ -2,11 +2,19 @@ package com.protodroid;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
+import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 /** Shared by the launcher and the in-game panel so both edit the same preferences and engine configuration. */
 final class GameSettings {
@@ -19,9 +27,11 @@ final class GameSettings {
     static final int CATEGORY_GAME_VIDEO = 1;
     static final int CATEGORY_CONTROLS = 2;
     static final int CATEGORY_INTERFACE = 3;
-    static final int CATEGORY_COUNT = 4;
+    static final int CATEGORY_FIXES = 4;
+    static final int CATEGORY_COUNT = 5;
 
     private static final String PRESET_KEY = "graphics_preset";
+    private static final Object INI_LOCK = new Object();
     private static final String[] PRESET_KEYS = {
             "render_height", "texture_skip_mips", "max_anisotropy",
             "game_aa_level", "game_shadow_detail", "game_graphic_quality",
@@ -55,6 +65,16 @@ final class GameSettings {
         String engineValue() {
             return engineValues == null ? Integer.toString(value()) : engineValues[index];
         }
+
+        int defaultIndex() {
+            // Defaults live beside their setting, so adding an option cannot misalign a parallel defaults array.
+            if (key.equals("render_height") || key.equals("texture_skip_mips") || key.equals("unlock_menu_fps")
+                    || key.equals("ui_scale") || key.equals("ui_vibrate") || key.equals("fix_button_tap_tick_rate")) {
+                return 1;
+            }
+            if (key.equals("ui_cam") || key.equals("ui_opacity") || key.equals("fov_offset")) return 2;
+            return 0;
+        }
     }
 
     static boolean isLiveEngineSetting(Setting setting) {
@@ -62,6 +82,12 @@ final class GameSettings {
     }
 
     static int categoryOf(Setting setting) {
+        if (setting.key.equals("fov_offset") || setting.key.equals("shadow_map_resolution")
+                || setting.key.equals("remove_tick_rate_limit") || setting.key.equals("fix_button_tap_tick_rate")
+                || setting.key.equals("prefer_loose_files") || setting.key.equals("unlock_dev_menu")
+                || setting.key.equals("vram_report_mb") || setting.key.equals("dump_textures")) {
+            return CATEGORY_FIXES;
+        }
         if (setting.key.startsWith("game_")) return CATEGORY_GAME_VIDEO;
         if (setting.key.equals("ui_opacity") || setting.key.equals("ui_fps")) return CATEGORY_INTERFACE;
         if (setting.key.startsWith("ui_")) return CATEGORY_CONTROLS;
@@ -76,8 +102,9 @@ final class GameSettings {
                     new int[] {0, 1, 2}, true),
             new Setting("Anisotropy", "max_anisotropy", new String[] {"1x", "2x", "4x", "8x"},
                     new int[] {1, 2, 4, 8}, true),
-            new Setting("FPS limit", "fps_limit", new String[] {"Off", "30", "45", "60"},
-                    new int[] {0, 30, 45, 60}, true),
+            new Setting("FPS limit", "fps_limit",
+                    new String[] {"Off", "30", "45", "60", "90", "120", "144", "240", "500", "1000"},
+                    new int[] {0, 30, 45, 60, 90, 120, 144, 240, 500, 1000}, true),
             new Setting("Battery saver", "battery_saver", new String[] {"Off", "On"}, new int[] {0, 1}, true),
             new Setting("Unlock menu FPS", "unlock_menu_fps", new String[] {"Off", "On"}, new int[] {0, 1}, true),
             new Setting("GPU driver", "vulkan_driver", new String[] {"Auto", "System", "Turnip", "Custom"},
@@ -103,9 +130,28 @@ final class GameSettings {
             new Setting("Opacity", "ui_opacity", new String[] {"40%", "60%", "80%", "100%"},
                     new int[] {40, 60, 80, 100}, false),
             new Setting("Show FPS", "ui_fps", new String[] {"Off", "On"}, new int[] {0, 1}, false),
+            // Independent Android equivalents of Prototype Fix options. Every addition is opt-in apart from the
+            // existing QTE timing policy, which has no effect unless tick-limit removal is explicitly enabled.
+            new Setting("Field of view", "fov_offset",
+                    new String[] {"-20°", "-10°", "Original", "+10°", "+20°"},
+                    new int[] {-20, -10, 0, 10, 20}, true),
+            new Setting("Shadow map", "shadow_map_resolution",
+                    new String[] {"Game default", "512", "1024", "2048", "4096", "8192"},
+                    new int[] {0, 512, 1024, 2048, 4096, 8192}, true),
+            new Setting("Remove tick limit", "remove_tick_rate_limit", new String[] {"Off", "On"},
+                    new int[] {0, 1}, true),
+            new Setting("Button-tap timing", "fix_button_tap_tick_rate", new String[] {"Off", "On"},
+                    new int[] {0, 1}, true),
+            new Setting("Prefer loose files", "prefer_loose_files", new String[] {"Off", "On"},
+                    new int[] {0, 1}, true),
+            new Setting("Developer menu", "unlock_dev_menu", new String[] {"Off", "On"},
+                    new int[] {0, 1}, true),
+            new Setting("Reported VRAM", "vram_report_mb",
+                    new String[] {"DXVK default", "512 MiB", "1 GiB", "2 GiB", "3 GiB"},
+                    new int[] {0, 512, 1024, 2048, 3072}, true),
+            new Setting("Dump original textures", "dump_textures", new String[] {"Off", "On"},
+                    new int[] {0, 1}, true),
     };
-
-    private static final int[] DEFAULTS = {1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 2, 0, 0, 2, 0};
 
     // Presets cover both port and game video options. FPS, battery and every control preference stay untouched.
     private static final int[][] PRESET_VALUES = {
@@ -123,7 +169,8 @@ final class GameSettings {
         prefs = this.context.getSharedPreferences("controls", Context.MODE_PRIVATE);
         for (int i = 0; i < settings.length; i++) {
             Setting setting = settings[i];
-            setting.index = Math.max(0, Math.min(setting.values.length - 1, prefs.getInt(setting.key, DEFAULTS[i])));
+            setting.index = Math.max(0, Math.min(setting.values.length - 1,
+                    prefs.getInt(setting.key, setting.defaultIndex())));
         }
         graphicsPreset = prefs.getInt(PRESET_KEY, detectPreset());
         if (graphicsPreset < PRESET_LOW || graphicsPreset > PRESET_CUSTOM) graphicsPreset = PRESET_CUSTOM;
@@ -215,9 +262,19 @@ final class GameSettings {
     }
 
     private void writeEngineSettings(String[] keys) {
+        synchronized (INI_LOCK) {
+            writeEngineSettingsLocked(keys);
+        }
+    }
+
+    private void writeEngineSettingsLocked(String[] keys) {
         File dir = context.getExternalFilesDir(null);
-        if (dir == null) return;
+        if (dir == null) {
+            reportWriteFailure("protodroid.ini", new IOException("App-specific storage is unavailable"));
+            return;
+        }
         File ini = new File(dir, "protodroid.ini");
+        File temporary = new File(dir, "protodroid.ini.tmp");
         StringBuilder out = new StringBuilder();
         try {
             if (ini.exists()) {
@@ -235,11 +292,35 @@ final class GameSettings {
                     out.append(setting.key).append(" = ").append(setting.engineValue()).append('\n');
                 }
             }
-            try (FileWriter writer = new FileWriter(ini)) {
+            // Write and sync beside the destination. A failed write must not truncate the last working INI.
+            try (FileOutputStream stream = new FileOutputStream(temporary);
+                 OutputStreamWriter writer = new OutputStreamWriter(stream, StandardCharsets.UTF_8)) {
                 writer.write(out.toString());
+                writer.flush();
+                stream.getFD().sync();
             }
-        } catch (Exception ignored) {
-            // Preferences remain saved; the engine keeps its previous file if storage is unavailable.
+            try {
+                Files.move(temporary.toPath(), ini.toPath(), StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary.toPath(), ini.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Exception error) {
+            try {
+                Files.deleteIfExists(temporary.toPath());
+            } catch (IOException ignored) {
+                // The original INI is still intact; the visible error below is the important signal.
+            }
+            reportWriteFailure(ini.getAbsolutePath(), error);
         }
+    }
+
+    private void reportWriteFailure(String path, Exception error) {
+        String detail = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+        String message = "Engine settings were not written to " + path + ": " + detail;
+        Log.e("ProtoDroid", message, error);
+        // Driver operations can change settings off the UI thread; always marshal the visible warning to main.
+        new Handler(Looper.getMainLooper()).post(() ->
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show());
     }
 }

@@ -47,9 +47,16 @@ require('RecompRemoveTickRateLimit(void) { return 0; }' in bridge, "x86 bridge d
 require('SettingInt("remove_tick_rate_limit", 0)' in native_runtime, "native tick policy is not default-off")
 
 features = text("src/native/mod_features.cpp")
-for setting in ('SettingInt("fov_offset", 0)', 'SettingInt("shadow_map_resolution", 0)',
+require('Setting("fov_offset", "0")' in features and 'std::strtof' in features,
+        "FOV must preserve finite fractional offsets with a safe zero default")
+for setting in ('SettingInt("shadow_map_resolution", 0)',
                 'SettingInt("unlock_dev_menu", 0)', 'SettingInt("prefer_loose_files", 0)'):
     require(setting in features or setting in text("src/native/mod_files.cpp"), f"unsafe feature default: {setting}")
+feature_policy = text("src/native/mod_feature_policy.h")
+for value in (512, 1024, 2048, 4096, 8192):
+    require(f"value == {value}" in feature_policy, f"documented shadow override {value} is missing")
+require("ModScaleShadowResolution" in features and "4096.0" not in features,
+        "shadow detour does not use the complete bounded scaling policy")
 require('SettingInt("unlock_menu_fps", 1)' in text("src/native/bink.cpp"), "default-On menu FPS unlock changed")
 require('SettingInt("vram_report_mb", 0)' in text("src/native/main.cpp"), "VRAM report cap is not default-off")
 
@@ -81,6 +88,36 @@ require("5dfc8546954ce3b3198132ab13fddb89ee92cdd7" in build_deps,
 require('"-DCMAKE_ASM_FLAGS=-x assembler-with-cpp"' in build_deps,
         "Dobby assembly architecture guards require the preprocessor on every ABI")
 require("readNBytes" not in java, "mod imports must retain the API-26 Java baseline")
+manager = text("android/java/com/protodroid/ModManager.java")
+require("flattenLegacyWrapper" in manager and "legacyContentRoot" in manager,
+        "single-folder legacy archives are not normalized")
+settings = text("android/java/com/protodroid/GameSettings.java")
+require("DEFAULTS" not in settings and "setting.defaultIndex()" in settings,
+        "settings defaults can become misaligned with their declarations")
+for key in ("fov_offset", "shadow_map_resolution", "remove_tick_rate_limit", "fix_button_tap_tick_rate",
+            "prefer_loose_files", "unlock_dev_menu", "vram_report_mb", "dump_textures"):
+    require(f'"{key}"' in settings, f"Prototype Fix setting is not exposed: {key}")
+require('new int[] {0, 512, 1024, 2048, 4096, 8192}' in settings,
+        "launcher shadow choices do not cover the documented range")
+for marker in ("INI_LOCK", "protodroid.ini.tmp", "stream.getFD().sync()",
+               "StandardCopyOption.ATOMIC_MOVE", "Toast.makeText"):
+    require(marker in settings, f"engine INI durability/visibility regression: {marker}")
+mods_view = text("android/java/com/protodroid/ModsView.java")
+mods_activity = text("android/java/com/protodroid/ModsActivity.java")
+motion = text("android/java/com/protodroid/LauncherMotion.java")
+require("ValueAnimator.areAnimatorsEnabled()" in motion, "Android reduced-motion policy is not authoritative")
+require("contentShiftX" in mods_view and "actionBounds[action].offset(contentShiftX" in mods_view,
+        "animated mod content and its touch bounds can diverge")
+require("pluginArmedId" in mods_view and "removeArmedId" in mods_view,
+        "native-plugin/removal confirmation was lost")
+require("runBackground" in mods_activity and mods_activity.count("runBackground(") >= 4,
+        "mod import/lifecycle operations are not serialized off the UI thread")
+driver_view = text("android/java/com/protodroid/DriverView.java")
+setup_view = text("android/java/com/protodroid/SetupView.java")
+require("LauncherMotion.enabled()" in driver_view and "focusNext" in driver_view,
+        "driver motion/focus behavior regressed")
+require("motionEnabled" in setup_view and "drawBootCurtain" in setup_view,
+        "Setup does not retain reduced-motion behavior")
 require("Files.isSymbolicLink(directory.toPath())" in java, "symlinked package roots are not rejected")
 require('unlink((mod.root + "/launch-error.txt").c_str());' in platform,
         "native diagnostics could follow a link into original data")
