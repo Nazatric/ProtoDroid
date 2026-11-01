@@ -1,6 +1,6 @@
 # ProtoDroid 0.15: AA corruption follow-up
 
-Status: implementation and local source validation complete; exact-commit ARM64 CI and physical visual verification pending. Keep 0.15 unmerged and unreleased. Original game files and the `Logs`/`TestingFiles` branches remain read-only. This batch does not claim physical-device visual verification.
+Status: exact-commit ARM64 CI passed; physical visual verification remains pending. Keep 0.15 unmerged and unreleased. Original game files and the `Logs`/`TestingFiles` branches remain read-only. This batch does not claim physical-device visual verification.
 
 ## Evidence inventory
 
@@ -47,6 +47,12 @@ Status: implementation and local source validation complete; exact-commit ARM64 
 - The new FXAA GLSL and DXVK's original present shader both compiled to SPIR-V with the npm glslang fallback. The fresh-patch FXAA source produced the same 4,518-word shader; exact CI will also compile it with `glslangValidator`.
 - Structural FXAA gating/fallback tests, compatibility source tests, workflow YAML parsing, and Java syntax parsing pass. The pure Java migration test is wired into CI because no local `javac` is available.
 - Existing graphics, mod feature/texture/hook/platform/file/plugin, Lua, save-path, state-cache, performance-hint, CPU-affinity, present-stats, diagnostic-tour, diagnostics, GPU-profile, driver-recovery, wrapper, release, updater, and issue-template checks pass locally.
+
+## Exact-commit CI validation
+
+Source commit `f0eb5bcc64d1474f8c901ade42763497d501f8dd` passed [build-apk run 41348438974](https://github.com/Nazatric/ProtoDroid/actions/runs/41348438974). This included the new host AA/GameDB tests, Java preset migration test, `glslangValidator` shader compilation, all ordered DXVK patches, the real ARM64 dependency/native/plugin/Lua builds, Android Java compilation, signed APK packaging, and embedded-DXVK verification. The release job was skipped; no pull request or release was created.
+
+Artifacts: `prototype-apk` **13100513846**, `debug-symbols` **13100727917**, `make-logs` **13100533754**, `android-deps-arm64-v8a` **13100422035**, `protodroid-mod-example` **13101241845**, and `android-turnip-arm64-v8a` **13099938801**. These are CI artifacts, not a 0.15 release. CI does not establish that the physical Mali corruption is gone.
 
 ## Explicitly out of scope without new evidence
 
