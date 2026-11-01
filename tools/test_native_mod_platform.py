@@ -75,8 +75,11 @@ require("ProtoDroidTextureV1" in text("src/native/mod_textures.cpp")
 require("if (ModTexturesEnabled())" in text("src/native/d3d9.cpp"),
         "ordinary texture unlocks lost the disabled fast path")
 require("#define PD_PLUGIN_API_VERSION 1u" in text("modding/include/protodroid_plugin.h"), "plugin ABI version changed")
-require("5dfc8546954ce3b3198132ab13fddb89ee92cdd7" in text("android/build-deps.sh"),
+build_deps = text("android/build-deps.sh")
+require("5dfc8546954ce3b3198132ab13fddb89ee92cdd7" in build_deps,
         "Dobby source revision is not pinned")
+require('"-DCMAKE_ASM_FLAGS=-x assembler-with-cpp"' in build_deps,
+        "Dobby assembly architecture guards require the preprocessor on every ABI")
 require("readNBytes" not in java, "mod imports must retain the API-26 Java baseline")
 require("Files.isSymbolicLink(directory.toPath())" in java, "symlinked package roots are not rejected")
 require('unlink((mod.root + "/launch-error.txt").c_str());' in platform,

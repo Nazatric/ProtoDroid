@@ -78,7 +78,8 @@ CMAKE_ANDROID=(-G Ninja -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolcha
 # libmain.so supplies log/dl and no libdobby.so is added to the APK. Save all FP registers across a detour.
 rm -rf "$SRC/build/Dobby-$ABI"
 cmake -S "$SRC/Dobby" -B "$SRC/build/Dobby-$ABI" "${CMAKE_ANDROID[@]}" \
-    -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DDOBBY_DEBUG=OFF -DDOBBY_BUILD_EXAMPLE=OFF -DDOBBY_BUILD_TEST=OFF \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON "-DCMAKE_ASM_FLAGS=-x assembler-with-cpp" \
+    -DDOBBY_DEBUG=OFF -DDOBBY_BUILD_EXAMPLE=OFF -DDOBBY_BUILD_TEST=OFF \
     -DFullFloatingPointRegisterPack=ON -DPlugin.SymbolResolver=OFF -DPlugin.ImportTableReplace=OFF \
     -DPlugin.Android.BionicLinkerUtil=OFF
 cmake --build "$SRC/build/Dobby-$ABI" --target dobby_static -j "$JOBS"
