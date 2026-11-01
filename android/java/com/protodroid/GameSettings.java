@@ -99,7 +99,7 @@ final class GameSettings {
             case "battery_saver": return "Limits the engine to 30 FPS when the selected cap is higher or unlimited.";
             case "unlock_menu_fps": return "Keeps silent menu movies responsive. Audio-backed movies retain their normal pacing.";
             case "vulkan_driver": return "Auto is recommended. Change drivers from the Drivers screen when recovery is needed.";
-            case "game_aa_level": return "The game's anti-aliasing setting. Game default leaves its own choice untouched.";
+            case "game_aa_level": return "FXAA filters the final image with built-in MSAA disabled. 2x/4x keep the game's original MSAA. Applies on the next Play.";
             case "game_shadow_detail": return "The game's shadow quality. Game default preserves dynamic shadows and their original detail.";
             case "game_graphic_quality": return "The game's general graphics quality. Applies on the next Play.";
             case "ui_scale": return "Changes touch-button size immediately. Use Layout in the in-game gear to move controls.";
@@ -156,8 +156,10 @@ final class GameSettings {
             new Setting("GPU driver", "vulkan_driver", new String[] {"Auto", "System", "Turnip", "Custom"},
                     new int[] {0, 1, 2, 3}, true, new String[] {"auto", "system", "turnip", "custom"}),
             // The game's own GameDB video settings. -1 leaves its device-dependent default untouched.
-            new Setting("Anti-Alias Level", "game_aa_level", new String[] {"Game default", "Off", "2x", "4x"},
-                    new int[] {-1, 0, 1, 2}, true),
+            // Append-only: preference indices 0..3 and INI values -1/0/1/2 keep their original meaning.
+            new Setting("Anti-Alias Level", "game_aa_level",
+                    new String[] {"Game default", "Off", "2x MSAA", "4x MSAA", "FXAA"},
+                    new int[] {-1, 0, 1, 2, AaPolicy.FXAA_VALUE}, true),
             new Setting("Shadow Detail", "game_shadow_detail", new String[] {"Game default", "Low", "Medium", "High"},
                     new int[] {-1, 0, 1, 2}, true),
             new Setting("Graphic Quality", "game_graphic_quality", new String[] {"Game default", "Low", "Medium", "High"},
@@ -204,8 +206,8 @@ final class GameSettings {
     // Presets cover both port and game video options. FPS, battery and every control preference stay untouched.
     private static final int[][] PRESET_VALUES = {
             {0, 2, 0, 1, 1, 1, 1},  // Low: 540p, quarter, 1x; reduced DXT1 color, AA off, low shadows/quality
-            {1, 1, 0, 2, 2, 2, 1},  // Medium: 720p, half, 1x; reduced DXT1 color, 2x AA, medium shadows/quality
-            {3, 0, 3, 3, 3, 3, 0},  // High: 1080p, full, 8x; full DXT1 color, 4x AA, high shadows/quality
+            {1, 1, 0, 4, 2, 2, 1},  // Medium: 720p, half, 1x; reduced DXT1 color, FXAA, medium shadows/quality
+            {3, 0, 3, 4, 3, 3, 0},  // High: 1080p, full, 8x; full DXT1 color, FXAA, high shadows/quality
     };
 
     private final Context context;
@@ -228,6 +230,17 @@ final class GameSettings {
         }
         graphicsPreset = prefs.getInt(PRESET_KEY, detectPreset());
         if (graphicsPreset < PRESET_LOW || graphicsPreset > PRESET_CUSTOM) graphicsPreset = PRESET_CUSTOM;
+
+        // Updating the preset definitions alone would leave existing users on the exact MSAA values that caused the
+        // corruption. Migrate only those old preset-owned AA indices. setIndex() marks manual changes Custom, so a
+        // custom configuration or a deliberate return to MSAA is never rewritten here.
+        Setting aa = settings[settingIndex("game_aa_level")];
+        int migratedAa = AaPolicy.migratePresetAaIndex(graphicsPreset, aa.index);
+        if (migratedAa != aa.index) {
+            aa.index = migratedAa;
+            prefs.edit().putInt(aa.key, migratedAa).apply();
+            writeEngineSettings(new String[] {aa.key});
+        }
     }
 
     int graphicsPreset() {

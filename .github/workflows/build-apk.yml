@@ -41,7 +41,7 @@ jobs:
       - name: Install host test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends zlib1g-dev python3-yaml
+          sudo apt-get install -y --no-install-recommends zlib1g-dev python3-yaml glslang-tools
 
       - name: Compile and run graphics UBSAN tests
         run: |
@@ -201,6 +201,12 @@ jobs:
           done
           python3 tools/test_dxvk_unified_memory.py /tmp/protodroid-dxvk-test/src/dxvk/dxvk_memory.cpp
           python3 tools/test_dxvk_depth_resolve.py /tmp/protodroid-dxvk-test/src/d3d9/d3d9_device.cpp
+          python3 tools/test_dxvk_fxaa.py /tmp/protodroid-dxvk-test
+          glslangValidator --quiet -V --target-env vulkan1.3 \
+            -I/tmp/protodroid-dxvk-test/src/dxvk/shaders \
+            /tmp/protodroid-dxvk-test/src/dxvk/shaders/dxvk_present_frag_fxaa.frag \
+            -o /tmp/protodroid-fxaa.spv
+          test -s /tmp/protodroid-fxaa.spv
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-test/src/dxvk"
           g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
@@ -213,6 +219,14 @@ jobs:
           g++ $CXXFLAGS src/native/video_settings.cpp src/native/tests/video_settings_test.cpp -o /tmp/video_settings_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/video_settings_test
+
+      - name: Compile and run AA compatibility policy tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/aa_policy_test.cpp -o /tmp/aa_policy_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/aa_policy_test
 
       - name: Test Android version increments
         run: python3 tools/test_bump_version.py
@@ -270,6 +284,7 @@ jobs:
             android/java/com/protodroid/ModConfig.java \
             android/java/com/protodroid/ModConfigActivity.java \
             android/java/com/protodroid/ModManager.java \
+            android/java/com/protodroid/AaPolicy.java \
             android/java/com/protodroid/GameSettings.java \
             android/java/com/protodroid/LauncherMotion.java \
             android/java/com/protodroid/ModsView.java \
@@ -287,6 +302,16 @@ jobs:
 
       - name: Test compatibility controls and graphics policies
         run: python3 tools/test_compatibility_batch.py
+
+      - name: Compile and run AA preset migration tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-aa-policy-test
+          mkdir -p /tmp/protodroid-aa-policy-test
+          javac --release 11 -d /tmp/protodroid-aa-policy-test \
+            android/java/com/protodroid/AaPolicy.java \
+            android/tests/com/protodroid/AaPolicyTest.java
+          java -cp /tmp/protodroid-aa-policy-test com.protodroid.AaPolicyTest
 
       - name: Test diagnostic-tour launcher cheat code
         run: |

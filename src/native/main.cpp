@@ -31,6 +31,7 @@
 #include <thread>
 #include <vector>
 
+#include "aa_policy.h"
 #include "diagnostic_tour.h"
 #include "diagnostics.h"
 #include "dxvk_config.h"
@@ -620,6 +621,11 @@ int main(int argc, char** argv) {
         setenv("PROTODROID_PIPELINE_TRACE", "1", diagnostic_tour ? 1 : 0);
         Log("DXVK pipeline trace enabled (%s)", diagnostic_tour ? "diagnostic tour" : "pipeline_trace = 1");
     }
+    // DXVK reads this once when its swapchain blitter is created. Overwrite stale process state in both directions:
+    // ordinary Off/MSAA must never inherit a post-process filter from an earlier launch or external environment.
+    const bool fxaa = AaUsesFxaa(SettingInt("game_aa_level", kAaGameDefault));
+    setenv("PROTODROID_FXAA", fxaa ? "1" : "0", 1);
+    if (fxaa) Log("AA policy: FXAA present filter requested; Prototype built-in MSAA disabled");
     InitGuestMemory();
     AttachThread(8u << 20);
     InitD3D9Bridge();
@@ -726,8 +732,10 @@ int main(int argc, char** argv) {
 
     // Apply last so stale user configuration cannot undo the official Prototype workaround. DXVK keys its own
     // profile to prototypef.exe, which never matches this native host process (app_process64 on Android).
-    setenv("DXVK_CONFIG", PrototypeDxvkConfig(
-        getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "").c_str(), 1);
+    std::string dxvk_config = PrototypeDxvkConfig(getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "");
+    dxvk_config = AaDxvkConfig(SettingInt("game_aa_level", kAaGameDefault), dxvk_config);
+    setenv("DXVK_CONFIG", dxvk_config.c_str(), 1);
+    if (fxaa) Log("AA policy: DXVK forced swapchain MSAA override pinned to 0");
     Log("game profile: Prototype DF formats disabled for dynamic shadows and effects");
 
     // The game window: DXVK's native WSI takes the SDL window as HWND.

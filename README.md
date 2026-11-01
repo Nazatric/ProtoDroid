@@ -75,12 +75,12 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 The launcher’s **Settings** page keeps graphics, drivers, and engine policies. Its rows show short explanations on touch, hover, or keyboard focus; changes save automatically and engine options apply on **Play**. The in-game gear is a smaller live panel: FPS/battery/menu pacing, touch controls, FPS overlay, and **Layout**. Restart-only graphics and engine/mod experiments stay out of that panel.
 
 - **Graphics:** Resolution, Textures, DXT1 color, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
-- **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **Game default** leaves the engine’s own device-dependent choice intact.
+- **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **FXAA** filters the completed frame with built-in MSAA disabled to avoid Prototype’s missing-texture AA path; **2x/4x MSAA** retain the original behavior. **Game default** leaves the engine’s own device-dependent choice intact.
 - **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons. In game, **123** toggles number keys independently, **ABC** opens the Android keyboard, and **DESCEND** sends `V`.
 - **Interface:** Screen orientation, Opacity, and Show FPS. Fixed Landscape/Reverse is an optional recovery for devices that choose the wrong direction; Auto remains the default.
 - **Engine fixes:** Optional FOV, shadow-map, tick/QTE, loose-file, developer-menu, VRAM-report, and texture-dump policies. Safe defaults remain unchanged until you opt in.
 
-**Low, Medium, and High presets** update only the graphics and game-video options. High keeps full 32-bit decoded DXT1 color; Low/Medium retain the lower-bandwidth 16-bit path. Your FPS and control preferences stay as they are. Choose **Custom** after changing an individual graphics row. Use **LAYOUT** to drag controls into place, resize them, or reset the layout.
+**Low, Medium, and High presets** update only the graphics and game-video options. Medium/High use FXAA; High keeps full 32-bit decoded DXT1 color, while Low/Medium retain the lower-bandwidth 16-bit path. Exact old Medium/High AA preset values migrate to FXAA once; Custom and explicit MSAA choices are preserved. Your FPS and control preferences stay as they are. Choose **Custom** after changing an individual graphics row. Use **LAYOUT** to drag controls into place, resize them, or reset the layout.
 
 ### Mods and engine fixes
 
@@ -142,6 +142,7 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `texture_skip_min_size` | Minimum texture size eligible for mip reduction. |
 | `decode_16bit` | On decoded DXT1 textures, `0` keeps full 32-bit color and `1` uses the lower-bandwidth 16-bit path. |
 | `max_anisotropy` | Texture anisotropy: 1, 2, 4, 8, or another supported value. |
+| `game_aa_level` | `-1` Game default, `0` Off, `1` 2x MSAA, `2` 4x MSAA, `3` FXAA. FXAA keeps GameDB/present MSAA at zero and applies on the next Play. |
 | `fps_limit` | Host frame limit: `0` disables it; positive values use the existing limiter. The UI offers 30–1000, without promising the resulting frame rate. |
 | `battery_saver` | Enables the battery-saving frame policy. |
 | `unlock_menu_fps` | `1` keeps menu movies responsive without blocking waits. Default: `1`. |

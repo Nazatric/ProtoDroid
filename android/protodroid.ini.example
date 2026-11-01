@@ -26,6 +26,10 @@ texture_skip_min_size = 512
 # At 1, anisotropic min/mag/mip filters become linear. An explicit d3d9.samplerAnisotropy in DXVK config is preserved.
 #max_anisotropy = 1
 
+# Anti-aliasing: -1 = Game default, 0 = Off, 1 = 2x MSAA, 2 = 4x MSAA, 3 = FXAA.
+# FXAA filters the completed frame while keeping Prototype's built-in MSAA disabled, including after Video-menu reads.
+#game_aa_level = 3
+
 # Audio backend: aaudio (default) or openslES. Try openslES if the sound stutters while the game runs smoothly.
 #audio_driver = openslES
 # Reuse the default mastering voice/output thread when the engine recreates its audio voices (Android default 1).

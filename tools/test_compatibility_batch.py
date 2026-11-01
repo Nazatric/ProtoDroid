@@ -7,8 +7,10 @@ ROOT = Path(__file__).resolve().parents[1]
 touch = (ROOT / "android/java/com/protodroid/TouchControls.java").read_text(encoding="utf-8")
 settings = (ROOT / "android/java/com/protodroid/GameSettings.java").read_text(encoding="utf-8")
 activity = (ROOT / "android/java/com/protodroid/ProtoActivity.java").read_text(encoding="utf-8")
+aa_policy = (ROOT / "android/java/com/protodroid/AaPolicy.java").read_text(encoding="utf-8")
 manifest = (ROOT / "android/AndroidManifest.xml").read_text(encoding="utf-8")
 d3d9 = (ROOT / "src/native/d3d9.cpp").read_text(encoding="utf-8")
+main = (ROOT / "src/native/main.cpp").read_text(encoding="utf-8")
 readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
 # Saved custom layouts are index-based: every new action must follow the existing last button.
@@ -29,8 +31,18 @@ assert "SDLActivity.showTextInput(0, 0, 1, 1);" in press
 assert press.index("if (b.keyboard)") < press.index("key(b.keycode, true)"), "IME action must not become a keyboard keycode"
 
 assert '"game_aa_level", "game_shadow_detail", "game_graphic_quality", "decode_16bit"' in settings
-assert "{0, 2, 0, 1, 1, 1, 1}" in settings and "{1, 1, 0, 2, 2, 2, 1}" in settings
-assert "{3, 0, 3, 3, 3, 3, 0}" in settings, "High must select full 32-bit DXT1 color"
+assert "{0, 2, 0, 1, 1, 1, 1}" in settings
+assert "{1, 1, 0, 4, 2, 2, 1}" in settings, "Medium must avoid built-in MSAA and select FXAA"
+assert "{3, 0, 3, 4, 3, 3, 0}" in settings, "High must select FXAA and full 32-bit DXT1 color"
+assert 'new String[] {"Game default", "Off", "2x MSAA", "4x MSAA", "FXAA"}' in settings
+assert 'new int[] {-1, 0, 1, 2, AaPolicy.FXAA_VALUE}' in settings, "AA preference indices were not append-only"
+assert "AaPolicy.migratePresetAaIndex(graphicsPreset, aa.index)" in settings
+assert "preset == MEDIUM_PRESET && currentIndex == OLD_MEDIUM_AA_INDEX" in aa_policy
+assert "preset == HIGH_PRESET && currentIndex == OLD_HIGH_AA_INDEX" in aa_policy
+assert 'setenv("PROTODROID_FXAA", fxaa ? "1" : "0", 1)' in main
+assert "AaDxvkConfig(SettingInt(\"game_aa_level\", kAaGameDefault), dxvk_config)" in main
+assert "AaPresentSampleType(aa, uint32_t(p.MultiSampleType))" in d3d9
+assert "AaPresentSampleQuality(aa, p.MultiSampleQuality)" in d3d9
 default_index = settings.split("int defaultIndex()", 1)[1].split("static boolean isLiveEngineSetting", 1)[0]
 decode_default = default_index.split('key.equals("decode_16bit")', 1)[1].split("return 1;", 1)[0]
 assert "return 0;" not in decode_default, "standalone DXT1 default changed from reduced 16-bit"
@@ -46,4 +58,4 @@ on_create = activity.split("protected void onCreate", 1)[1]
 assert "orientation == 0" not in on_create, "Auto must retain the manifest sensorLandscape behavior"
 assert 'android:screenOrientation="sensorLandscape"' in manifest
 assert "https://github.com/Nazatric/ProtoDroid/releases" in readme and "**VERSIONS**" in readme
-print("Touch/IME, DXT1-quality, orientation-default, and archive documentation checks passed")
+print("Touch/IME, AA/quality, orientation-default, and archive documentation checks passed")
