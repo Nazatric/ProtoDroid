@@ -1,10 +1,6 @@
 package com.protodroid;
 
-import android.app.Activity;
-import android.app.AlarmManager;
-import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BlurMaskFilter;
@@ -49,6 +45,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     static native float nativeFrameP99Ms();
     static native int nativeMemoryMiB();
     static native void nativeSetFpsLimit(int fps);
+    static native void nativeSetMenuFpsUnlocked(boolean unlocked);
 
     private static final int MOUSE_LEFT = 1, MOUSE_RIGHT = 2, MOUSE_MIDDLE = 4;
     private static final int RED = 0xffe0261e, RED_DIM = 0xff7a1410, INK = 0xff0b0b0b;
@@ -132,9 +129,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private boolean vibrate, showFps, hideWithPad, autoRun, invertY, powerButtons;
     private float camGain;
     private boolean padConnected;
-    private boolean panelOpen = false, restartNeeded = false;
-    private final RectF panel = new RectF(), restartRect = new RectF(), closeRect = new RectF(),
-            layoutRect = new RectF();
+    private boolean panelOpen = false;
+    private final RectF panel = new RectF(), closeRect = new RectF(), layoutRect = new RectF();
 
     // ---- layout editor ----
     private boolean editing = false;
@@ -177,9 +173,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         density = context.getResources().getDisplayMetrics().density;
         prefs = context.getSharedPreferences("controls", Context.MODE_PRIVATE);
         settingsStore = new GameSettings(context);
-        settings = settingsStore.settings;
+        settings = settingsStore.gameplaySettings;
         loadLayout();
         applyUiSettings();
+        applyLiveSettings();
         Typeface face = Typeface.create("sans-serif-condensed", Typeface.BOLD);
         text.setTypeface(face);
         text.setTextAlign(Paint.Align.CENTER);
@@ -243,6 +240,14 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         invertY = settingsStore.valueOf("ui_invert") != 0;
         powerButtons = settingsStore.valueOf("ui_power_buttons") != 0;
         layoutButtons(getWidth(), getHeight());
+    }
+
+    private void applyLiveSettings() {
+        int requested = settingsStore.valueOf("fps_limit");
+        boolean batterySaver = settingsStore.valueOf("battery_saver") != 0;
+        int effective = batterySaver && (requested == 0 || requested > 30) ? 30 : requested;
+        nativeSetFpsLimit(effective);
+        nativeSetMenuFpsUnlocked(settingsStore.valueOf("unlock_menu_fps") != 0);
     }
 
     private void loadLayout() {
@@ -684,10 +689,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             panelOpen = false;
             return;
         }
-        if (restartNeeded && restartRect.contains(x, y)) {
-            restartApp();
-            return;
-        }
         if (layoutRect.contains(x, y)) {
             startEditing();
             return;
@@ -696,24 +697,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             int delta = leftArrows.get(i).contains(x, y) ? -1 : rightArrows.get(i).contains(x, y) ? 1 : 0;
             if (delta == 0) continue;
             GameSettings.Setting s = settings[i];
-            settingsStore.setIndex(i, s.index + delta);
+            settingsStore.setIndex(s, s.index + delta);
             buzz();
-            if (s.key.equals("fps_limit")) nativeSetFpsLimit(s.value());  // applies right away
-            else if (s.engine && !GameSettings.isLiveEngineSetting(s)) restartNeeded = true;
             applyUiSettings();
+            applyLiveSettings();
             return;
         }
-    }
-
-    private void restartApp() {
-        Context ctx = getContext();
-        Intent intent = new Intent(ctx, ProtoActivity.class);
-        PendingIntent pi = PendingIntent.getActivity(ctx, 0, intent,
-                PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
-        if (am != null) am.set(AlarmManager.RTC, System.currentTimeMillis() + 400, pi);
-        if (ctx instanceof Activity) ((Activity) ctx).finishAffinity();
-        System.exit(0);
     }
 
     // ---- drawing ----
@@ -888,8 +877,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             float y = top + rowH * (i % rows) + rowH / 2;
             text.setTextAlign(Paint.Align.LEFT);
             text.setColor(0xffe8d6d4);
-            c.drawText(s.label + (s.engine && !GameSettings.isLiveEngineSetting(s) ? " *" : ""), colLeft, y + 5 * density,
-                    text);
+            c.drawText(s.label, colLeft, y + 5 * density, text);
             float vx = colRight - 62 * density;
             RectF l = new RectF(vx - 64 * density, y - rowH / 2, vx - 32 * density, y + rowH / 2);
             RectF r = new RectF(vx + 32 * density, y - rowH / 2, vx + 64 * density, y + rowH / 2);
@@ -912,14 +900,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         drawPill(c, layoutRect, "LAYOUT", false);
         closeRect.set(cx + pillW * 0.5f + gap, by - 18 * density, cx + pillW * 1.5f + gap, by + 18 * density);
         drawPill(c, closeRect, "CLOSE", false);
-        restartRect.set(cx - pillW * 0.5f, by - 18 * density, cx + pillW * 0.5f, by + 18 * density);
-        if (restartNeeded) {
-            drawPill(c, restartRect, "RESTART", true);
-        } else {
-            text.setTextSize(11 * density);
-            text.setColor(0xff9a8a88);
-            c.drawText("* applies after restart", restartRect.centerX(), by + 4 * density, text);
-        }
     }
 
     private void drawEditor(Canvas c) {

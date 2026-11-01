@@ -155,8 +155,11 @@ int main() {
     Dds parsed;
     std::string error;
     Check(LoadDds(high.root + "/replacement.dds", &parsed, &error) && parsed.levels.size() == 1 &&
-              parsed.levels[0].bytes == high_payload,
-          "valid DDS parsed");
+              parsed.levels[0].offset == 128 && parsed.levels[0].size == high_payload.size(),
+          "valid DDS header and lazy level offset parsed");
+    uint8_t lazy[8] = {};
+    Check(ReadDdsLevel(parsed, 0, 8, lazy) && memcmp(lazy, high_payload.data(), 8) == 0,
+          "lazy level read returns the expected payload");
     Write(root + "/truncated.dds", std::vector<uint8_t>(128));
     Check(!LoadDds(root + "/truncated.dds", &parsed, &error) && !error.empty(), "truncated DDS rejected");
 

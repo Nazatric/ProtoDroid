@@ -1,7 +1,7 @@
 #ifndef PROTODROID_PLUGIN_H
 #define PROTODROID_PLUGIN_H
 
-/* ProtoDroid native ARM64 plugin ABI v1. This is not the Windows ASI ABI. */
+/* ProtoDroid native ARM64 plugin ABI v1/v2. This is not the Windows ASI ABI. */
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -10,7 +10,8 @@
 extern "C" {
 #endif
 
-#define PD_PLUGIN_API_VERSION 1u
+#define PD_PLUGIN_API_VERSION 2u
+#define PD_PLUGIN_API_VERSION_V1 1u
 #define PD_PLUGIN_INIT_SYMBOL "ProtoDroidPluginInit"
 #define PD_PLUGIN_SHUTDOWN_SYMBOL "ProtoDroidPluginShutdown"
 
@@ -74,8 +75,21 @@ typedef struct PdHostApi {
 
     /* Register during ProtoDroidPluginInit only. */
     bool (*on_event)(void* context, PdEvent event, PdEventCallback callback, void* userdata);
+
+    /* Legacy process-wide engine INI lookup retained for ABI v1. Prefer the per-mod getters below in new plugins. */
     int (*get_config_int)(void* context, const char* key, int default_value);
+
+    /* ABI v2: values from this plugin's own protodroid-settings.ini, never another mod or the engine INI.
+       Missing/unparsable values return the supplied default. The string getter copies a UTF-8 value and returns false
+       when output is null, too small, or output_size is zero. All getters are safe during init and frame events. */
+    bool (*get_mod_boolean)(void* context, const char* key, bool default_value);
+    double (*get_mod_number)(void* context, const char* key, double default_value);
+    bool (*get_mod_string)(void* context, const char* key, const char* default_value,
+                           char* output, uint32_t output_size);
 } PdHostApi;
+
+/* Exact byte size seen by existing ABI-v1 plugins. New fields are appended, never inserted. */
+#define PD_HOST_API_V1_SIZE ((uint32_t)offsetof(PdHostApi, get_mod_boolean))
 
 typedef struct PdPluginInfo {
     uint32_t abi_version;

@@ -214,10 +214,12 @@ bool Within(const std::string& root, const std::string& candidate) {
 
 struct DdsLevel {
     uint32_t width = 0, height = 0, pitch = 0, rows = 0;
-    std::vector<uint8_t> bytes;
+    uint64_t offset = 0;
+    uint32_t size = 0;
 };
 
 struct Dds {
+    std::string path;
     uint32_t format = 0, width = 0, height = 0;
     std::vector<DdsLevel> levels;
 };
@@ -227,10 +229,10 @@ bool LoadDds(const std::string& path, Dds* output, std::string* error) {
     if (!input) { *error = "cannot open DDS"; return false; }
     std::streamoff end = input.tellg();
     if (end < 128 || end > std::streamoff(kMaxDdsBytes)) { *error = "invalid DDS size"; return false; }
-    std::vector<uint8_t> bytes(static_cast<size_t>(end));
+    std::array<uint8_t, 128> bytes{};
     input.seekg(0);
-    input.read(reinterpret_cast<char*>(bytes.data()), end);
-    if (!input) { *error = "cannot read DDS"; return false; }
+    input.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
+    if (!input) { *error = "cannot read DDS header"; return false; }
     if (memcmp(bytes.data(), "DDS ", 4) != 0 || Read32(bytes.data() + 4) != 124 ||
         Read32(bytes.data() + 76) != 32) { *error = "invalid DDS header"; return false; }
     uint32_t height = Read32(bytes.data() + 12), width = Read32(bytes.data() + 16);
@@ -250,10 +252,11 @@ bool LoadDds(const std::string& path, Dds* output, std::string* error) {
         else if (alpha == 0) format = kX8R8G8B8;
     }
     Dds parsed;
+    parsed.path = path;
     parsed.format = format;
     parsed.width = width;
     parsed.height = height;
-    size_t offset = 128;
+    uint64_t offset = 128;
     for (uint32_t level = 0; level < count; ++level) {
         DdsLevel item;
         item.width = level < 32 ? std::max(1u, width >> level) : 1;
@@ -263,14 +266,43 @@ bool LoadDds(const std::string& path, Dds* output, std::string* error) {
             return false;
         }
         uint64_t size = uint64_t(item.pitch) * item.rows;
-        if (offset + size > bytes.size()) { *error = "truncated DDS mip chain"; return false; }
-        item.bytes.assign(bytes.begin() + offset, bytes.begin() + offset + size);
+        if (!size || size > kMaxDdsBytes || offset + size > static_cast<uint64_t>(end)) {
+            *error = "truncated DDS mip chain";
+            return false;
+        }
+        item.offset = offset;
+        item.size = static_cast<uint32_t>(size);
         offset += size;
-        parsed.levels.push_back(std::move(item));
+        parsed.levels.push_back(item);
     }
     *output = std::move(parsed);
     return true;
 }
+
+// Only the requested mip is temporary. Large packs do not accumulate a second permanent copy of every DDS payload.
+bool ReadDdsLevel(const Dds& dds, uint32_t level, uint32_t destination_pitch, void* destination) {
+    if (!destination || level >= dds.levels.size()) return false;
+    const DdsLevel& source = dds.levels[level];
+    if (!source.size || destination_pitch < source.pitch) return false;
+    try {
+        std::vector<uint8_t> bytes(source.size);
+        std::ifstream input(dds.path, std::ios::binary);
+        if (!input) return false;
+        input.seekg(static_cast<std::streamoff>(source.offset));
+        input.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
+        if (!input) return false;
+        auto* output = static_cast<uint8_t*>(destination);
+        for (uint32_t row = 0; row < source.rows; ++row) {
+            memcpy(output + uint64_t(row) * destination_pitch, bytes.data() + uint64_t(row) * source.pitch,
+                   source.pitch);
+        }
+        return true;
+    } catch (const std::bad_alloc&) {
+        return false;
+    }
+}
+
+constexpr size_t kMaxTextureMappings = 65536;
 
 struct Replacement {
     std::string path;
@@ -330,12 +362,20 @@ void LoadMappings(const std::vector<ModEntry>& mods) {
                 Log("mods: %s:%u invalid texture key/path", mod.textures.c_str(), number);
                 continue;
             }
+            if (g_replacements.size() >= kMaxTextureMappings) {
+                Log("mods: global texture mapping limit reached");
+                return;
+            }
             std::string path = parent + "/" + relative;
             struct stat st{};
             if (stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode) || uint64_t(st.st_size) > kMaxDdsBytes ||
                 !Within(mod.root, path)) {
                 Log("mods: unsafe or missing texture replacement %s", path.c_str());
                 continue;
+            }
+            if (accepted >= kMaxTextureMappings) {
+                Log("mods: %s texture mapping limit reached", mod.id.c_str());
+                break;
             }
             Replacement replacement;
             replacement.path = path;
@@ -457,7 +497,7 @@ void ModTexturesReplace(void* host, uint32_t level, uint32_t format, uint32_t wi
         }
     }
     Replacement* replacement = state.replacement;
-    if (!replacement) return;
+    if (!replacement || !write_back) return;
     if (!replacement->attempted) {
         replacement->attempted = true;
         std::string error;
@@ -471,14 +511,16 @@ void ModTexturesReplace(void* host, uint32_t level, uint32_t format, uint32_t wi
             return;
         }
     }
-    if (!replacement->valid || !write_back || level >= replacement->dds.levels.size()) return;
+    if (!replacement->valid || level >= replacement->dds.levels.size()) return;
     const DdsLevel& source = replacement->dds.levels[level];
     uint32_t expected_width = level < 32 ? std::max(1u, state.width >> level) : 1;
     uint32_t expected_height = level < 32 ? std::max(1u, state.height >> level) : 1;
     if (source.width != expected_width || source.height != expected_height || pitch < source.pitch) return;
-    auto* destination = static_cast<uint8_t*>(data);
-    for (uint32_t row = 0; row < source.rows; ++row) {
-        memcpy(destination + uint64_t(row) * pitch, source.bytes.data() + uint64_t(row) * source.pitch, source.pitch);
+    if (!ReadDdsLevel(replacement->dds, level, pitch, data)) {
+        replacement->valid = false;
+        state.replacement = nullptr;
+        Log("mods: texture %s read failed after validation", replacement->path.c_str());
+        return;
     }
     if (!state.logged) {
         state.logged = true;

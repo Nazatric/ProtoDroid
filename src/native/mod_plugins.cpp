@@ -4,7 +4,13 @@
 #include <limits.h>
 #include <sys/stat.h>
 
+#include <cerrno>
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -21,12 +27,15 @@ struct EventBinding {
     void* userdata;
 };
 
+using PluginSettings = std::map<std::string, std::string, std::less<>>;
+
 struct Plugin {
     const ModEntry* mod = nullptr;
     void* handle = nullptr;
     PdHostApi api{};
     PdPluginInfo info{};
     std::vector<EventBinding> events;
+    PluginSettings settings;
     void (*shutdown)() = nullptr;
     bool active = false;
 };
@@ -63,6 +72,74 @@ bool SafePluginRelative(const char* value) {
     }
     for (const char* p = value; *p; ++p) {
         if (static_cast<unsigned char>(*p) < 32 || *p == '\\') return false;
+    }
+    return true;
+}
+
+std::string Trim(std::string value) {
+    size_t first = 0;
+    while (first < value.size() && std::isspace(static_cast<unsigned char>(value[first]))) ++first;
+    size_t last = value.size();
+    while (last > first && std::isspace(static_cast<unsigned char>(value[last - 1]))) --last;
+    return value.substr(first, last - first);
+}
+
+bool SafeConfigKey(const std::string& key) {
+    if (key.empty() || key.size() > 48 ||
+        !(std::islower(static_cast<unsigned char>(key[0])) || std::isdigit(static_cast<unsigned char>(key[0])))) {
+        return false;
+    }
+    for (char c : key) {
+        if (!std::islower(static_cast<unsigned char>(c)) && !std::isdigit(static_cast<unsigned char>(c)) &&
+            c != '.' && c != '_' && c != '-') return false;
+    }
+    return true;
+}
+
+bool LoadSettings(const ModEntry& mod, PluginSettings* output, std::string* error) {
+    const std::string path = mod.root + "/protodroid-settings.ini";
+    struct stat st {};
+    if (lstat(path.c_str(), &st) != 0) {
+        if (errno == ENOENT) return true;
+        *error = "mod settings could not be inspected";
+        return false;
+    }
+    if (!S_ISREG(st.st_mode) || st.st_size > 128 * 1024) {
+        *error = "mod settings are not a bounded regular file";
+        return false;
+    }
+    std::ifstream input(path);
+    if (!input) {
+        *error = "mod settings could not be read";
+        return false;
+    }
+    std::string line;
+    while (std::getline(input, line)) {
+        line = Trim(line);
+        if (line.empty() || line[0] == '#' || line[0] == ';') continue;
+        size_t equals = line.find('=');
+        if (equals == std::string::npos || equals == 0) {
+            *error = "invalid mod settings line";
+            return false;
+        }
+        std::string key = Trim(line.substr(0, equals));
+        std::string value = Trim(line.substr(equals + 1));
+        if (!SafeConfigKey(key) || value.size() > 4096) {
+            *error = "invalid mod settings key or value";
+            return false;
+        }
+        for (char c : value) if (std::iscntrl(static_cast<unsigned char>(c))) {
+            *error = "control character in mod settings";
+            return false;
+        }
+        if (!output->emplace(key, value).second) {
+            *error = "duplicate mod setting " + key;
+            return false;
+        }
+        if (output->size() > 256) {
+            *error = "too many saved mod settings";
+            return false;
+        }
     }
     return true;
 }
@@ -150,6 +227,74 @@ int ApiGetConfig(void* opaque, const char* key, int default_value) {
     return SettingInt(key, default_value);
 }
 
+bool SafeConfigKey(const char* key) {
+    if (!key) return false;
+    size_t size = strnlen(key, 49);
+    if (!size || size > 48 ||
+        !(std::islower(static_cast<unsigned char>(key[0])) || std::isdigit(static_cast<unsigned char>(key[0])))) {
+        return false;
+    }
+    for (size_t i = 0; i < size; ++i) {
+        char c = key[i];
+        if (!std::islower(static_cast<unsigned char>(c)) && !std::isdigit(static_cast<unsigned char>(c)) &&
+            c != '.' && c != '_' && c != '-') return false;
+    }
+    return true;
+}
+
+const std::string* ConfigValue(Plugin* plugin, const char* key) {
+    if (!plugin || !SafeConfigKey(key)) return nullptr;
+    auto found = plugin->settings.find(key);
+    return found == plugin->settings.end() ? nullptr : &found->second;
+}
+
+bool EqualsIgnoreCase(const std::string& value, const char* expected) {
+    size_t size = strlen(expected);
+    if (value.size() != size) return false;
+    for (size_t i = 0; i < size; ++i) {
+        if (std::tolower(static_cast<unsigned char>(value[i])) !=
+            std::tolower(static_cast<unsigned char>(expected[i]))) return false;
+    }
+    return true;
+}
+
+bool ApiGetModBoolean(void* opaque, const char* key, bool default_value) {
+    auto* p = static_cast<Plugin*>(opaque);
+    const std::string* value = ConfigValue(p, key);
+    if (!value) return default_value;
+    if (*value == "1" || EqualsIgnoreCase(*value, "true") || EqualsIgnoreCase(*value, "on") ||
+        EqualsIgnoreCase(*value, "yes")) return true;
+    if (*value == "0" || EqualsIgnoreCase(*value, "false") || EqualsIgnoreCase(*value, "off") ||
+        EqualsIgnoreCase(*value, "no")) return false;
+    return default_value;
+}
+
+double ApiGetModNumber(void* opaque, const char* key, double default_value) {
+    auto* p = static_cast<Plugin*>(opaque);
+    const std::string* value = ConfigValue(p, key);
+    if (!value || value->empty()) return default_value;
+    char* end = nullptr;
+    errno = 0;
+    double result = std::strtod(value->c_str(), &end);
+    if (errno == ERANGE || !end || *end || !std::isfinite(result)) return default_value;
+    return result;
+}
+
+bool ApiGetModString(void* opaque, const char* key, const char* default_value,
+                     char* output, uint32_t output_size) {
+    auto* p = static_cast<Plugin*>(opaque);
+    if (!output || !output_size) return false;
+    const std::string* saved = ConfigValue(p, key);
+    const char* value = saved ? saved->c_str() : (default_value ? default_value : "");
+    size_t size = saved ? saved->size() : strlen(value);
+    if (size >= output_size) {
+        output[0] = 0;
+        return false;
+    }
+    memcpy(output, value, size + 1);
+    return true;
+}
+
 void Fail(const ModEntry& mod, const std::string& error) {
     Log("mods: plugin %s: %s", mod.id.c_str(), error.c_str());
     ModWriteLaunchError(mod, error);
@@ -185,8 +330,15 @@ void ModPluginsInitialize(const std::vector<ModEntry>& mods) {
         auto plugin = std::make_unique<Plugin>();
         plugin->mod = &mod;
         plugin->handle = handle;
-        plugin->api.abi_version = PD_PLUGIN_API_VERSION;
-        plugin->api.struct_size = sizeof(PdHostApi);
+        const uint32_t abi = static_cast<uint32_t>(mod.pluginApi);
+        std::string settings_error;
+        if (abi == PD_PLUGIN_API_VERSION && !LoadSettings(mod, &plugin->settings, &settings_error)) {
+            Fail(mod, settings_error.empty() ? "mod settings could not be read" : settings_error);
+            g_plugins.push_back(std::move(plugin));
+            continue;
+        }
+        plugin->api.abi_version = abi;
+        plugin->api.struct_size = abi == PD_PLUGIN_API_VERSION_V1 ? PD_HOST_API_V1_SIZE : sizeof(PdHostApi);
         plugin->api.context = plugin.get();
         plugin->api.engine_sha256 = kModEngineSha256;
         plugin->api.game_directory = g_game_dir ? g_game_dir : "";
@@ -201,14 +353,17 @@ void ModPluginsInitialize(const std::vector<ModEntry>& mods) {
         plugin->api.add_file_override = ApiAddFileOverride;
         plugin->api.on_event = ApiOnEvent;
         plugin->api.get_config_int = ApiGetConfig;
-        plugin->info.abi_version = PD_PLUGIN_API_VERSION;
+        plugin->api.get_mod_boolean = ApiGetModBoolean;
+        plugin->api.get_mod_number = ApiGetModNumber;
+        plugin->api.get_mod_string = ApiGetModString;
+        plugin->info.abi_version = abi;
         plugin->info.struct_size = sizeof(PdPluginInfo);
         plugin->shutdown = reinterpret_cast<void (*)()>(dlsym(handle, PD_PLUGIN_SHUTDOWN_SYMBOL));
 
         g_accepting_registration = true;
         int32_t result = init(&plugin->api, &plugin->info);
         g_accepting_registration = false;
-        if (result != 0 || plugin->info.abi_version != PD_PLUGIN_API_VERSION ||
+        if (result != 0 || plugin->info.abi_version != abi ||
             plugin->info.struct_size < sizeof(PdPluginInfo) || !plugin->info.name) {
             Fail(mod, result != 0 ? "plugin initialization returned an error" : "plugin returned invalid ABI information");
             // Initialization may already have installed detours. Keep the library and context alive; never dlclose a

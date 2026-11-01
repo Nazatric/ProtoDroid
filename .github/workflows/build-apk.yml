@@ -24,6 +24,11 @@ on:
         required: true
         default: false
         type: boolean
+      allow_certificate_change:
+        description: Explicitly allow a different signing certificate (existing users must uninstall once)
+        required: true
+        default: false
+        type: boolean
   repository_dispatch:
     types: [publish-apk-release]
 
@@ -197,12 +202,18 @@ jobs:
       - name: Validate GitHub issue forms
         run: python3 tools/test_issue_templates.py
 
+      - name: Test release version and signing approvals
+        run: |
+          python3 tools/test_release_policy.py
+          python3 tools/test_release_workflow.py
+
       - name: Test Drivers navigation touch cleanup
         run: python3 tools/test_driver_screen_navigation.py
 
       - name: Test launcher update metadata and recovery policy
         run: |
           set -euo pipefail
+          python3 tools/test_launcher_update_action.py
           git clone -q --depth 1 --branch 20240303 https://github.com/stleary/JSON-java.git /tmp/protodroid-json
           rm -rf /tmp/protodroid-update-test
           mkdir -p /tmp/protodroid-update-test
@@ -234,6 +245,8 @@ jobs:
           mkdir -p /tmp/protodroid-mod-test
           javac --release 11 -cp "$ANDROID_JAR" -d /tmp/protodroid-mod-test \
             android/java/com/protodroid/ModManifest.java \
+            android/java/com/protodroid/ModConfig.java \
+            android/java/com/protodroid/ModConfigActivity.java \
             android/java/com/protodroid/ModManager.java \
             android/java/com/protodroid/GameSettings.java \
             android/java/com/protodroid/LauncherMotion.java \
@@ -541,6 +554,8 @@ jobs:
     needs: [build-deps, build-turnip, bink-tests, arm64-graphics-tests, driver-package-tests]
     env:
       SOURCE_REVISION: ${{ github.sha }}
+      PUBLISH_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release == true) }}
+      ALLOW_EPHEMERAL_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.allow_ephemeral_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_ephemeral_release == true) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -943,7 +958,7 @@ jobs:
           "$TOOLS/llvm-nm" -D "$LIB" | tee /tmp/dxvk-nm.txt
 
       - name: Setup protected release signing identity
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main' && !inputs.allow_ephemeral_release
+        if: github.ref == 'refs/heads/main' && env.PUBLISH_RELEASE == 'true' && env.ALLOW_EPHEMERAL_RELEASE != 'true'
         env:
           KEYSTORE_B64: ${{ secrets.PROTODROID_ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASS: ${{ secrets.PROTODROID_ANDROID_KEYSTORE_PASSWORD }}
@@ -978,7 +993,7 @@ jobs:
           ls -lh "$KEYSTORE"
 
       - name: Setup disposable CI signing identity
-        if: github.event_name != 'workflow_dispatch' || !inputs.publish_release || github.ref != 'refs/heads/main' || inputs.allow_ephemeral_release
+        if: github.ref != 'refs/heads/main' || env.PUBLISH_RELEASE != 'true' || env.ALLOW_EPHEMERAL_RELEASE == 'true'
         run: |
           set -euo pipefail
           # Random non-default credentials exercise the generic apksigner path without making artifacts update-stable.
@@ -1134,8 +1149,7 @@ jobs:
     if: >
       github.ref == 'refs/heads/main' &&
       ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
-      (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release &&
-      github.event.client_payload.allow_ephemeral_release))
+      (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release == true))
     steps:
       - name: Check out release notes
         uses: actions/checkout@v4
@@ -1149,7 +1163,8 @@ jobs:
       - name: Verify this is a new sequential release version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ALLOW_EPHEMERAL: ${{ inputs.allow_ephemeral_release || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_ephemeral_release) }}
+          ALLOW_EPHEMERAL: ${{ (github.event_name == 'workflow_dispatch' && inputs.allow_ephemeral_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_ephemeral_release == true) }}
+          ALLOW_CERTIFICATE_CHANGE: ${{ (github.event_name == 'workflow_dispatch' && inputs.allow_certificate_change) || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_certificate_change == true) }}
         run: |
           set -euo pipefail
           test -s release-apk/prototype.apk
@@ -1187,42 +1202,8 @@ jobs:
             exit 1
           fi
           gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/protodroid-releases.json
-          python3 - "$versionName" "$versionCode" "$certificateSha256" /tmp/protodroid-releases.json <<'PY'
-          import json
-          import os
-          import re
-          import sys
-          allow_ephemeral = os.environ.get("ALLOW_EPHEMERAL") == "true"
-          current = tuple(map(int, sys.argv[1].split(".")))
-          current_code = int(sys.argv[2])
-          current_certificate = sys.argv[3]
-          with open(sys.argv[4], encoding="utf-8") as source:
-              releases = json.load(source)
-          versions = []
-          codes = []
-          certificates = {}
-          for release in releases:
-              match = re.fullmatch(r"protodroid-v([0-9]+)\.([0-9]+)", release.get("tag_name", ""))
-              body = release.get("body") or ""
-              if match:
-                  version = tuple(map(int, match.groups()))
-                  versions.append(version)
-                  certificate = re.search(r"Signing certificate SHA-256: `([0-9a-f]{64})`", body)
-                  if certificate:
-                      certificates[version] = certificate.group(1)
-              code = re.search(r"versionCode[ =]([0-9]+)", body)
-              if code:
-                  codes.append(int(code.group(1)))
-          if versions and current <= max(versions):
-              raise SystemExit("APK version is not newer than the latest release; run tools/bump_version.py")
-          if codes and current_code <= max(codes):
-              raise SystemExit("APK versionCode is not newer than the latest release; run tools/bump_version.py")
-          if versions:
-              previous_certificate = certificates.get(max(versions))
-              if previous_certificate and current_certificate != previous_certificate and not allow_ephemeral:
-                  raise SystemExit("APK signing certificate differs from the latest release; refusing an update-breaking release")
-          print(f"Release version and signing identity accepted: {sys.argv[1]} (versionCode {current_code})")
-          PY
+          python3 tools/release_policy.py "$versionName" "$versionCode" "$certificateSha256" /tmp/protodroid-releases.json "$identity"
+
           {
             echo "RELEASE_TAG=$TAG"
             echo "RELEASE_VERSION=$versionName"

@@ -78,7 +78,47 @@ final class GameSettings {
     }
 
     static boolean isLiveEngineSetting(Setting setting) {
-        return setting.key.equals("fps_limit");
+        return setting.key.equals("fps_limit") || setting.key.equals("battery_saver")
+                || setting.key.equals("unlock_menu_fps");
+    }
+
+    static boolean isGameplaySetting(Setting setting) {
+        if (isLiveEngineSetting(setting)) return true;
+        return setting.key.startsWith("ui_");
+    }
+
+    /** Short, on-demand explanations; the settings page shows these only for the active row. */
+    static String helpFor(Setting setting) {
+        switch (setting.key) {
+            case "render_height": return "Internal render height. Applies the next time you play.";
+            case "texture_skip_mips": return "Full keeps every texture level. Lower choices save memory on the next Play.";
+            case "max_anisotropy": return "Texture sharpness at glancing angles. Applies on the next Play.";
+            case "fps_limit": return "Caps the engine loop. Your display and FIFO still pace presented frames.";
+            case "battery_saver": return "Limits the engine to 30 FPS when the selected cap is higher or unlimited.";
+            case "unlock_menu_fps": return "Keeps silent menu movies responsive. Audio-backed movies retain their normal pacing.";
+            case "vulkan_driver": return "Auto is recommended. Change drivers from the Drivers screen when recovery is needed.";
+            case "game_aa_level": return "The game's anti-aliasing setting. Game default leaves its own choice untouched.";
+            case "game_shadow_detail": return "The game's shadow quality. Game default preserves dynamic shadows and their original detail.";
+            case "game_graphic_quality": return "The game's general graphics quality. Applies on the next Play.";
+            case "ui_scale": return "Changes touch-button size immediately. Use Layout in the in-game gear to move controls.";
+            case "ui_vibrate": return "Vibrates for touch-control feedback when the device supports it.";
+            case "ui_pad_hide": return "Hides touch controls while a gamepad is connected.";
+            case "ui_stick_run": return "Pushing the movement stick to its edge also sprints.";
+            case "ui_cam": return "Adjusts swipe camera speed without changing the game configuration.";
+            case "ui_invert": return "Inverts vertical camera swipes.";
+            case "ui_power_buttons": return "Shows additional power and disguise buttons.";
+            case "ui_opacity": return "Changes touch-control visibility without changing game brightness.";
+            case "ui_fps": return "Shows FPS, frame times, and app memory over the game.";
+            case "fov_offset": return "Offsets the camera field of view. Original uses the game's value.";
+            case "shadow_map_resolution": return "Optional shadow-map size override. Larger maps can cost performance and memory.";
+            case "remove_tick_rate_limit": return "Removes the identified simulation wait for high-refresh play. Leave Off for ordinary behavior.";
+            case "fix_button_tap_tick_rate": return "Adjusts button-tap timing only when Remove tick limit is enabled.";
+            case "prefer_loose_files": return "Prefers eligible unpacked game data while keeping saves and write paths unchanged.";
+            case "unlock_dev_menu": return "Experimental developer-menu patch. Ambiguous engine data is refused and logged.";
+            case "vram_report_mb": return "Changes the memory amount reported to the game; it does not add physical memory.";
+            case "dump_textures": return "Writes original DDS textures and replacement keys for mod authors. Uses extra storage.";
+            default: return "Changes save automatically. Engine options apply on the next Play.";
+        }
     }
 
     static int categoryOf(Setting setting) {
@@ -162,11 +202,17 @@ final class GameSettings {
 
     private final Context context;
     private final SharedPreferences prefs;
+    final Setting[] gameplaySettings;
     private int graphicsPreset;
 
     GameSettings(Context context) {
         this.context = context.getApplicationContext();
         prefs = this.context.getSharedPreferences("controls", Context.MODE_PRIVATE);
+        Setting[] live = new Setting[settings.length];
+        int liveCount = 0;
+        for (Setting setting : settings) if (isGameplaySetting(setting)) live[liveCount++] = setting;
+        gameplaySettings = new Setting[liveCount];
+        System.arraycopy(live, 0, gameplaySettings, 0, liveCount);
         for (int i = 0; i < settings.length; i++) {
             Setting setting = settings[i];
             setting.index = Math.max(0, Math.min(setting.values.length - 1,
@@ -226,7 +272,10 @@ final class GameSettings {
     }
 
     void setIndex(int index, int next) {
-        Setting setting = settings[index];
+        setIndex(settings[index], next);
+    }
+
+    void setIndex(Setting setting, int next) {
         setting.index = (next % setting.values.length + setting.values.length) % setting.values.length;
         SharedPreferences.Editor editor = prefs.edit().putInt(setting.key, setting.index);
         if (isPresetSetting(setting)) {

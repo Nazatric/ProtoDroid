@@ -103,5 +103,19 @@ assert "presented_frames=%llu action_frames=%u" in tour_source, (
 assert "exit_behavior=intentional-isolated-process-close" in tour_source, (
     "The durable result must distinguish the expected tour close from a native crash"
 )
+for evidence in (
+    "actions_executed=%llu", "wall_ms=%.3f", "process_cpu_ms=%.3f",
+    "process_cpu_utilization_pct=%.2f", "present_window=last-completed-rolling-window",
+    "present_window_p99_ms=%.3f", "gameplay_dispatches=%u",
+):
+    assert evidence in tour_source, f"Missing durable tour evidence: {evidence}"
+begin_phase = tour_source.split("void BeginPhase(size_t index)", 1)[1].split("void CompletePhase()", 1)[0]
+assert 'status=requested coverage=%s", true' not in begin_phase, "Duplicate durable requested/running records returned"
+assert 'status=running minimum_present_frames=%u' in begin_phase
+assert 'false, phase.name, index, phase.frames' in begin_phase, "Running record must use the completion/failure sync"
+assert 'WriteMarker(g_result_path, marker, false)' in tour_source, "Final same-directory markers should share one directory sync"
+assert 'if (sync_directory) SyncLogDirectory();' in tour_source
+assert 'actions != phase.action_count' in tour_source, "Completed phases must verify exact executed-action counts"
+assert 'phase_metrics=not-started' in tour_source, "Startup failures must not inherit stale phase metrics"
 
 print("Diagnostic-tour binary probe, thunk classification, action timing, isolated-exit, and watchdog checks passed")

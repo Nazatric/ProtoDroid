@@ -365,6 +365,9 @@ extern SDL_Window* g_sdl_window;
 // ---- frame limiter and presented-frame counters (read by the on-screen overlay through JNI) ----
 namespace native {
 std::atomic<int> g_fps_limit{0};  // 0 = no limit (the swap interval still applies)
+std::atomic<bool> g_unlock_menu_fps{true};
+
+bool MenuFpsUnlocked() { return g_unlock_menu_fps.load(std::memory_order_relaxed); }
 
 static long ResidentMiB() {
     long pages = 0, resident = 0;
@@ -392,6 +395,10 @@ extern "C" JNIEXPORT jint JNICALL Java_com_protodroid_TouchControls_nativeMemory
 extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetFpsLimit(JNIEnv*, jclass, jint fps) {
     native::g_fps_limit.store(fps);
     native::PerfHintTarget(fps);
+}
+extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetMenuFpsUnlocked(
+    JNIEnv*, jclass, jboolean unlocked) {
+    native::g_unlock_menu_fps.store(unlocked != JNI_FALSE, std::memory_order_relaxed);
 }
 #endif
 
@@ -756,6 +763,7 @@ int main(int argc, char** argv) {
     if (!loaded) StartupFailure("Cannot load prototypeenginef.dll.");
     g_engine_lo = g_engine.base;
     g_engine_hi = g_engine.base + g_engine.size;
+    g_unlock_menu_fps.store(SettingInt("unlock_menu_fps", 1) != 0, std::memory_order_relaxed);
     ModPlatformInitialize();  // optional packages, detours and plugins: before DllMain/EngineInitialize
 
     uint32_t init = FindExport(g_engine, "EngineInitialize");

@@ -37,9 +37,9 @@ import java.util.zip.ZipFile;
 /** Local mod import, lifecycle and launch preparation. Original game files are never import targets. */
 final class ModManager {
     private static final String TAG = "ProtoDroidMods";
-    private static final long MAX_ARCHIVE_BYTES = 512L * 1024L * 1024L;
-    private static final long MAX_EXTRACTED_BYTES = 1024L * 1024L * 1024L;
-    private static final int MAX_ENTRIES = 4096;
+    private static final long MAX_ARCHIVE_BYTES = 4L * 1024L * 1024L * 1024L;
+    private static final long MAX_EXTRACTED_BYTES = 8L * 1024L * 1024L * 1024L;
+    private static final int MAX_ENTRIES = 65536;
     private static final int BUFFER = 64 * 1024;
 
     private ModManager() {}
@@ -94,7 +94,8 @@ final class ModManager {
     static void setEnabled(File root, String id, boolean enabled) throws IOException {
         File directory = directChild(root, id);
         if (Files.isSymbolicLink(directory.toPath())) throw new IOException("Mod folder must not be a symbolic link");
-        ModManifest current = ModManifest.read(directory);
+        ModManifest current = enabled ? ModManifest.parseValidated(directory, true) : ModManifest.read(directory);
+        if (!current.id.equals(id)) throw new IOException("Mod ID does not match its folder name");
         if (enabled && !current.error.isEmpty()) throw new IOException(current.error);
         File marker = new File(directory, ModManifest.ENABLED_NAME);
         if (!enabled) {

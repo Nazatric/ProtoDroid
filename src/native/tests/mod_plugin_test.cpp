@@ -119,10 +119,35 @@ int main() {
     targets[kEngineBase + 0x006dcfe0] = OriginalFov;
     targets[kEngineBase + 0x00001234] = GuestCallTarget;
 
+    Plugin fallback;
+    fallback.settings["number"] = "not-a-number";
+    fallback.settings["boolean"] = "unexpected";
+    fallback.settings["text"] = "saved";
+    Check(ApiGetModNumber(&fallback, "number", 12.5) == 12.5, "malformed number uses plugin default");
+    Check(ApiGetModBoolean(&fallback, "boolean", true), "malformed boolean uses plugin default");
+    char text[16] = {};
+    Check(ApiGetModString(&fallback, "text", "default", text, sizeof(text)) && std::string(text) == "saved",
+          "per-mod string getter copies the saved value");
+    char tiny[4] = {};
+    Check(!ApiGetModString(&fallback, "text", "default", tiny, sizeof(tiny)) && tiny[0] == 0,
+          "string getter rejects inadequate storage without truncation");
+    Check(ApiGetModNumber(&fallback, "missing", 9.0) == 9.0 &&
+              ApiGetModNumber(nullptr, "number", 4.0) == 4.0,
+          "missing values and contexts are isolated defaults");
+
     ModEntry example;
     example.id = "example";
     example.root = packages + "/example";
     example.plugin = "libexample.so";
+    example.pluginApi = 2;
+    {
+        std::ofstream settings(packages + "/example/protodroid-settings.ini");
+        settings << "enabled=1\nfov_offset=7\nframe_logging=Every 300 frames\nauthor_note=Host option string\n";
+    }
+    {
+        std::ofstream legacy_settings(packages + "/custom/protodroid-settings.ini");
+        legacy_settings << "this legacy plugin does not consume settings\n";
+    }
     ModEntry custom;
     custom.id = "custom";
     custom.root = packages + "/custom";
@@ -130,7 +155,8 @@ int main() {
     std::vector<ModEntry> mods = {example, custom};
     ModPluginsInitialize(mods);
     Check(launch_errors.empty(), "both plugins initialize");
-    Check(LogContains("example initialized") && LogContains("test plugin initialized"), "initialization logs");
+    Check(LogContains("example initialized") && LogContains("test plugin initialized") &&
+              LogContains("Host option string"), "initialization logs and v2 text option");
     Check(alias_key == "data/test.bin", "plugin file alias key");
     Check(alias_path == packages + "/custom/payload.bin", "plugin alias remains inside package");
 
@@ -138,7 +164,7 @@ int main() {
     context.esp = 0x1000;
     *Ptr<float>(context.esp + 4) = 50.0f;
     Invoke(OriginalFov, &context);
-    Check(original_fov == 56.0f, "test plugin +1 wraps example +5 wraps original");
+    Check(original_fov == 58.0f, "legacy plugin +1 wraps configured v2 plugin +7 wraps original");
     Check(context.edx == 0x44, "plugin set_register reaches guest context");
 
     ModPluginsFrame();

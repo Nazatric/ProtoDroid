@@ -15,6 +15,7 @@ struct ModEntry {
     std::string textures;
     std::string plugin;  // manifest path below lib/arm64-v8a/
     int priority = 100;
+    int pluginApi = 1;
 };
 
 // Active, validated packages in priority order (higher first). Populated once before engine startup.

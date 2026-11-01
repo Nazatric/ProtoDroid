@@ -127,6 +127,7 @@ int DuplicateFileHandle(uint32_t h) {
 }
 std::string Setting(const char*, const char* def) { return def ? def : ""; }
 int SettingInt(const char*, int def) { return def; }
+bool MenuFpsUnlocked() { return true; }  // production default; live JNI state is supplied by main.cpp
 // This standalone Bink harness intentionally has no mod catalog; production overlay policy is tested separately.
 bool ModFilesHaveOverlays() { return false; }
 std::string ModFilesResolveReadPath(const char*, const std::string& original_host) { return original_host; }

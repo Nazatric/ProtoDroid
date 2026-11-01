@@ -6,6 +6,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -21,6 +23,7 @@ public final class ModPlatformTest {
             testTextures(temporary.resolve("textures"));
             testArchives(temporary.resolve("archives"));
             testLegacyWrappedLayouts(temporary.resolve("legacy-wrapped"));
+            testModConfig(temporary.resolve("mod-config"));
             System.out.println("ProtoDroid mod platform tests passed: " + checks + " checks");
         } finally {
             Files.walk(temporary).sorted(Comparator.reverseOrder()).forEach(path -> {
@@ -70,6 +73,13 @@ public final class ModPlatformTest {
         check(!ModManifest.read(traversal).error.isEmpty(), "loose-file traversal is rejected");
         File empty = createMod(root, "empty.mod", "", false);
         check(ModManifest.read(empty).error.contains("no files"), "empty package is rejected");
+        File mismatch = createMod(root, "actual.id", "files = files\n", true);
+        String mismatchMetadata = Files.readString(new File(mismatch, ModManifest.FILE_NAME).toPath());
+        Files.writeString(new File(mismatch, ModManifest.FILE_NAME).toPath(),
+                mismatchMetadata.replace("id = actual.id", "id = declared.id"));
+        expectIOException(() -> ModManager.setEnabled(root, "actual.id", true),
+                "deep enable retains folder/ID validation");
+        check(!new File(mismatch, ModManifest.ENABLED_NAME).exists(), "mismatched package stays disabled");
 
         if (System.getProperty("os.name").toLowerCase().contains("linux")) {
             Path externalDirectory = Files.createDirectory(path.getParent().resolve("external"));
@@ -107,6 +117,8 @@ public final class ModPlatformTest {
         File mod = createMod(root, "example.textures", "textures = textures.ini\n", false);
         String hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         Files.writeString(new File(mod, "textures.ini").toPath(), "[hashes]\n" + hash + " = replacement.dds\n");
+        check(ModManifest.read(mod).error.isEmpty(), "library listing does not open every DDS payload");
+        expectIOException(() -> ModManifest.parseValidated(mod, true), "deep validation still requires the DDS");
         Files.write(new File(mod, "replacement.dds").toPath(), dds(true));
         check(ModManifest.parseValidated(mod, true).textures.equals("textures.ini"), "valid DDS mapping");
 
@@ -187,6 +199,52 @@ public final class ModPlatformTest {
         ModManifest plugin = ModManifest.parseValidated(pluginStaging, true);
         check(plugin.plugin.equals("lib/arm64-v8a/libexample.so") && plugin.files.isEmpty(),
                 "wrapped ARM64 plugin retains its native layout");
+    }
+
+    private static void testModConfig(Path path) throws Exception {
+        File root = Files.createDirectories(path).toFile();
+        String options = "files = files\n\n"
+                + "[setting.enabled]\ntype = toggle\nlabel = Enabled\ndefault = 1\norder = 10\n"
+                + "[setting.amount]\ntype = slider\nlabel = Amount\ndefault = 5\nmin = -20\nmax = 20\nstep = 0.5\n"
+                + "[setting.mode]\ntype = choice\nlabel = Mode\noptions = Quiet|Every 300 frames\ndefault = Quiet\n"
+                + "[setting.note]\ntype = text\nlabel = Note\ndefault = Hello\nmax_length = 80\n";
+        File mod = createMod(root, "config.mod", options, true);
+        ModManifest parsed = ModManifest.read(mod);
+        check(parsed.error.isEmpty() && parsed.options.size() == 4 && parsed.pluginApi == 1,
+                "four author options with legacy package/plugin defaults: " + parsed.error);
+        check(parsed.options.get(0).id.equals("enabled"), "option order is respected");
+        Files.writeString(new File(mod, ModConfig.FILE_NAME).toPath(), "future.value = keep\n");
+        LinkedHashMap<String, String> changes = new LinkedHashMap<>();
+        changes.put("enabled", "off");
+        changes.put("amount", "7.5");
+        changes.put("mode", "Every 300 frames");
+        changes.put("note", "Hello = world");
+        ModConfig.saveValues(mod, parsed.options, changes);
+        Map<String, String> saved = ModConfig.loadValues(mod);
+        check(saved.get("enabled").equals("0") && saved.get("amount").equals("7.5"),
+                "toggle and stepped slider persist canonically");
+        check(saved.get("mode").equals("Every 300 frames") && saved.get("note").equals("Hello = world"),
+                "choice and text values persist");
+        check(saved.get("future.value").equals("keep"), "unknown safe values survive edits");
+        String before = Files.readString(new File(mod, ModConfig.FILE_NAME).toPath());
+        changes.put("amount", "99");
+        expectIOException(() -> ModConfig.saveValues(mod, parsed.options, changes), "out-of-range slider");
+        check(Files.readString(new File(mod, ModConfig.FILE_NAME).toPath()).equals(before),
+                "failed validation leaves previous settings untouched");
+        changes.put("amount", "7.5");
+        changes.put("note", "bad\nvalue");
+        expectIOException(() -> ModConfig.saveValues(mod, parsed.options, changes), "multiline text rejection");
+
+        File invalid = createMod(root, "invalid.choice", "files = files\n\n"
+                + "[setting.mode]\ntype = choice\nlabel = Mode\noptions = Same|same\ndefault = Same\n", true);
+        check(ModManifest.read(invalid).error.contains("duplicate choice"), "duplicate choices are visible");
+        File invalidApi = createMod(root, "invalid.api", "files = files\nplugin_api = 2\n", true);
+        check(ModManifest.read(invalidApi).error.contains("plugin API"), "plugin API requires native content");
+
+        File example = new File("modding/example/package");
+        ModManifest exampleManifest = ModManifest.parseValidated(example, false);
+        check(exampleManifest.pluginApi == 2 && exampleManifest.options.size() == 4,
+                " shipped example opts into ABI v2 and demonstrates all option types");
     }
 
     private static File createMod(File root, String id, String content, boolean files) throws IOException {

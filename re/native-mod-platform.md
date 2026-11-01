@@ -1,6 +1,6 @@
 # Native mod platform — evidence and implementation contract
 
-Status: implementation candidate for 0.14. This document does not claim physical-device validation. The published 0.13 release is not a target of this work.
+Status: 0.14's base contract plus in-progress 0.15 extensions. This document does not claim physical-device validation.
 
 ## Research method and provenance
 
@@ -65,15 +65,18 @@ priority = 100
 files = files
 textures = textures.ini
 plugin = lib/arm64-v8a/libexample.so
+plugin_api = 2
 ```
 
-Every content key is optional, but at least one is required. Paths are relative, canonical, and cannot escape the mod directory. Symlinked package roots are rejected for launch/enable, and marker/diagnostic writes do not follow pre-existing links. Higher priority wins file/texture conflicts. Native plugins additionally support `api = 1` and an optional exact `engine_sha256` in `[mod]`.
+Every content key is optional, but at least one is required. Paths are relative, canonical, and cannot escape the mod directory. Symlinked package roots are rejected for launch/enable, and marker/diagnostic writes do not follow pre-existing links. Higher priority wins file/texture conflicts. Packages retain `mod.api = 1`; `content.plugin_api` selects native ABI 1 (the default) or 2. Native plugins also support an optional exact `engine_sha256` in `[mod]`.
 
 - `files`: loose-file overlay root. Original game files are never modified. Save paths and write/create/truncate modes are excluded. Read-only Win32/CRT opens and existence/metadata probes resolve replacements; wildcard directory enumeration is not merged.
 - `textures`: line-oriented `hash = relative/file.dds` mapping, optionally in `[hashes]`. The hash is ProtoDroid's versioned SHA-256 texture key, not a PPSSPP hash.
 - `plugin`: ELF64 little-endian AArch64 shared object. Windows ASI/DLL files are rejected with a translation-required error.
 - `cover`: PNG/JPEG/WebP decoded with bounded sampling by the launcher.
 - `enabled`: launcher-created marker. Imported mods start disabled. Changes apply on the next Play.
+- `setting.<id>.*`: optional author-defined toggle, bounded/stepped slider, named choice, or bounded text controls. See `modding/README.md` for the schema and limits.
+- `protodroid-settings.ini`: generated per-mod values; safe unknown keys survive edits, and updates are atomic.
 
 ZIP import uses a local staged archive and staging directory, canonical-path checks, case-insensitive duplicate rejection, entry/count/byte limits, and atomic same-filesystem promotion. An existing ID is not silently overwritten. Removal is confirmed and restricted to a direct child of the mod root. Legacy ZIPs without metadata receive a generated manifest: `textures.ini` selects a texture pack, an ARM64 library selects a native plugin, and other files select a loose overlay. One safe top-level wrapper is flattened only inside private staging before canonical-path/content validation, so wrapped texture, plugin, and loose-file layouts keep their intended type. Nested or ambiguous wrappers are not recursively unpacked. Unsupported Windows native binaries fail explicitly.
 
@@ -89,7 +92,7 @@ For a full 2D level lock, the key is:
 SHA256("ProtoDroidTextureV1\0" || little-endian format,width,height,rowBytes,rows || tightly packed rows)
 ```
 
-Pitch padding is excluded. DDS replacements must match the original dimensions and guest format. This first contract intentionally supports same-size replacement, not high-resolution texture resizing. A8R8G8B8/X8R8G8B8 and DXT1/3/5 are supported; unsupported layouts are skipped and logged. Replacement rows are expanded back to the original guest pitch before the existing upload/decode path.
+Pitch padding is excluded. DDS replacements must match the original dimensions and guest format. This first contract intentionally supports same-size replacement, not high-resolution texture resizing. A8R8G8B8/X8R8G8B8 and DXT1/3/5 are supported; unsupported layouts are skipped and logged. Replacement rows are expanded back to the original guest pitch before the existing upload/decode path. In 0.15, validated DDS metadata retains file offsets instead of every payload; only the requested mip is read temporarily. Import/listing validation is separated so large libraries do not open every DDS during a shallow scan.
 
 Only full locks of static (`usage == 0`) 2D textures participate. Dynamic textures, render targets, cube maps, and partial rectangles are excluded. Identity is established at the full top-level lock; a mip locked before that first top-level identification is not retroactively replaced. Decoded/dropped read-only adapted locks are not hashed because they have no authoritative guest-input copy. Missing replacement mips retain the original mip.
 
@@ -109,7 +112,7 @@ These `protodroid.ini` keys are independent of imported packages and are off/pre
 
 Existing `fps_limit`, `render_height`, display, driver, audio, save, and default-On `unlock_menu_fps` behavior remains the implementation for those equivalents; no parallel Windows patch path is introduced.
 
-## ARM64 plugin ABI version 1
+## ARM64 plugin ABI versions 1 and 2
 
 Public source lives in `modding/include/protodroid_plugin.h`; a complete example and packaging metadata live in `modding/example/`.
 
@@ -121,11 +124,12 @@ The versioned C ABI provides only implemented capabilities:
 - exact engine-RVA function detours with per-target chaining: later registrations wrap earlier ones, and each original pointer reaches the previous detour or real function;
 - mod-relative file overlay registration;
 - engine-frame and shutdown events;
-- mod/game paths, engine identity, integer configuration, and logging.
+- mod/game paths, engine identity, legacy global integer configuration, and logging;
+- ABI-v2-only per-mod boolean, number, and string getters, appended after the exact v1 host structure.
 
 Registrations occur during `ProtoDroidPluginInit`, before engine startup. Native plugins are process-lifetime optional code; disabling/removing takes effect on the next process. Shutdown callbacks run at the ordinary safe shutdown boundary; libraries are not unloaded while detours could still execute. Hook/registration failures are returned to the plugin and logged, not hidden.
 
-The ABI does not claim source or binary compatibility with Windows ASI plugins. Existing plugins must be translated and rebuilt for AArch64.
+The exact v1 host size is exported as `PD_HOST_API_V1_SIZE`; old plugins keep ABI 1 and that structure size. ABI 2 adds only the implemented per-mod getters. Neither ABI claims source or binary compatibility with Windows ASI plugins. Existing plugins must be translated and rebuilt for AArch64.
 
 ## Launcher contract
 
@@ -137,7 +141,8 @@ A native Android Mods page is reachable beside Drivers. It provides:
 - background import, enable/disable, and removal operations with visible progress/error status;
 - default-disabled imports, next-Play application, two-step removal, and separate native-plugin trust confirmation;
 - an explicit warning that native ARM64 plugins are optional code and x86 ASI/DLL files are not loaded;
-- an Engine fixes tab for the built-in optional policies without changing their safe defaults.
+- a Configure action for packages with author-defined options, with reset/discard handling and atomic values;
+- built-in engine policies remain in Setup rather than the mod library.
 
 The page shares Setup's artwork, Barlow Condensed fonts, red/bone palette, and cut panels through a custom Android Canvas view. It retains 48 dp touch targets, bounded cover decoding, status announcements, keyboard/D-pad focus, scrolling/fling, and Android reduced-motion handling without adding a UI runtime. Engine INI writes are serialized, synced to a same-directory temporary file, and atomically replaced where supported; failures preserve the previous file and produce a visible main-thread warning.
 
@@ -148,5 +153,5 @@ The page shares Setup's artwork, Barlow Condensed fonts, red/bone palette, and c
 3. Python source/signature tests verify the exact generated tick patch, selected engine targets, and no accidental default changes.
 4. Real ARM64 CI builds Dobby, `libmain.so`, and the example plugin at the exact pushed commit; artifact metadata must match that commit.
 5. Existing graphics, Bink, save, driver, tour, UI, and package tests must remain green.
-6. No APK is produced for each small edit. Changes are batched into one exact-commit candidate. After that candidate is green, merge its PR, run the explicitly approved exact-main build/release dispatch, and publish 0.14 with that run's verified APK. Published v0.13 and its APK remain available.
+6. No APK is produced for each small edit. Batch changes into one exact-commit ARM64 candidate. Keep 0.15 unmerged and unreleased; do not present that candidate as a published update.
 7. CI is not physical-device confirmation. Mod loading, overlays, texture appearance, QTE timing, developer menu behavior, high-resolution shadows, and final on-device APK behavior remain device-dependent; release notes must not present host/CI evidence as physical testing.

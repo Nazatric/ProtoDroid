@@ -170,8 +170,9 @@ bool ReadMod(const std::string& root, const std::string& id, ModEntry* mod, std:
     }
     mod->id = id;
     mod->root = root + "/" + id;
-    if (!ParseInt(Value(values, "mod.priority"), 100, -10000, 10000, &mod->priority)) {
-        *error = "invalid mod priority";
+    if (!ParseInt(Value(values, "mod.priority"), 100, -10000, 10000, &mod->priority) ||
+        !ParseInt(Value(values, "content.plugin_api"), 1, 1, 2, &mod->pluginApi)) {
+        *error = "invalid mod priority or plugin API";
         return false;
     }
     std::string files = Value(values, "content.files");
@@ -191,6 +192,10 @@ bool ReadMod(const std::string& root, const std::string& id, ModEntry* mod, std:
     }
     if (files.empty() && textures.empty() && plugin.empty()) {
         *error = "mod has no content";
+        return false;
+    }
+    if (plugin.empty() && mod->pluginApi != 1) {
+        *error = "plugin API declared without a native plugin";
         return false;
     }
     if (!files.empty()) {

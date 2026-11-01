@@ -20,6 +20,7 @@ final class ModManifest {
     static final String ENABLED_NAME = "enabled";
     static final String ENGINE_SHA256 = "d331be205bdde99897952ee88261ab7e63c5c65e36a4660e2a367886a3537071";
     private static final int MAX_METADATA_BYTES = 128 * 1024;
+    private static final int MAX_TEXTURE_MAPPINGS = 65536;
 
     final File directory;
     String id = "";
@@ -36,6 +37,8 @@ final class ModManifest {
     String launchError = "";  // previous native load failure; a valid package may retry on the next Play
     int priority = 100;
     int api = API_VERSION;
+    int pluginApi = 1;
+    final ArrayList<ModConfig.Option> options = new ArrayList<>();
     boolean enabled;
 
     private ModManifest(File directory) {
@@ -47,7 +50,9 @@ final class ModManifest {
             if (Files.isSymbolicLink(directory.toPath())) {
                 throw new IOException("Mod folder must not be a symbolic link");
             }
-            ModManifest manifest = parseValidated(directory, true);
+            // Library listing must not open every payload in a large pack. Import/enable perform deep validation;
+            // native launch performs its own path checks and lazy DDS validation as well.
+            ModManifest manifest = parseValidated(directory, false);
             if (!manifest.id.equals(directory.getName())) {
                 throw new IOException("Mod ID does not match its folder name");
             }
@@ -109,15 +114,18 @@ final class ModManifest {
         result.files = value(values, "content.files");
         result.textures = value(values, "content.textures");
         result.plugin = value(values, "content.plugin");
+        result.options.addAll(ModConfig.parseOptions(values));
         String schema = value(values, "mod.schema");
         String api = value(values, "mod.api");
         String priority = value(values, "mod.priority");
+        String pluginApi = value(values, "content.plugin_api");
         try {
             if (!schema.isEmpty() && Integer.parseInt(schema) != 1) {
                 throw new IOException("Unsupported mod schema " + schema);
             }
             if (!api.isEmpty()) result.api = Integer.parseInt(api);
             if (!priority.isEmpty()) result.priority = Integer.parseInt(priority);
+            if (!pluginApi.isEmpty()) result.pluginApi = Integer.parseInt(pluginApi);
         } catch (NumberFormatException e) {
             throw new IOException("Schema, API and priority must be integers");
         }
@@ -141,6 +149,9 @@ final class ModManifest {
         }
         if (api != API_VERSION) throw new IOException("Requires mod API " + api + "; installed API is " + API_VERSION);
         if (priority < -10000 || priority > 10000) throw new IOException("Priority is outside the supported range");
+        if (pluginApi < 1 || pluginApi > 2 || (plugin.isEmpty() && pluginApi != 1)) {
+            throw new IOException("Native plugin API must be 1 or 2");
+        }
         if (!engineSha256.isEmpty() && !ENGINE_SHA256.equals(engineSha256)) {
             throw new IOException("Built for a different engine; the installed Steam build is required");
         }
@@ -248,7 +259,7 @@ final class ModManifest {
 
     static void validateTextures(File ini) throws IOException {
         if (!ini.isFile()) throw new IOException("Texture mapping is missing");
-        if (ini.length() > 4 * 1024 * 1024) throw new IOException("Texture mapping is too large");
+        if (ini.length() > 64L * 1024L * 1024L) throw new IOException("Texture mapping is too large");
         int count = 0;
         HashSet<String> keys = new HashSet<>();
         String section = "";
@@ -279,7 +290,7 @@ final class ModManifest {
                     throw new IOException("Texture replacement is missing or unsafe: " + relative);
                 }
                 validateDds(dds);
-                if (++count > 4096) throw new IOException("Texture mapping contains too many replacements");
+                if (++count > MAX_TEXTURE_MAPPINGS) throw new IOException("Texture mapping contains too many replacements");
             }
         }
         if (count == 0) throw new IOException("Texture mapping contains no replacements");

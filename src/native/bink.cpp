@@ -799,7 +799,7 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
             track->ring.Reset(OutputRate());
             movie->tracks.push_back(std::move(track));
         }
-        movie->nonblocking_menu_wait = BinkMenuWaitUnlocked(SettingInt("unlock_menu_fps", 1), audio_streams);
+        movie->nonblocking_menu_wait = BinkMenuWaitUnlocked(MenuFpsUnlocked() ? 1 : 0, audio_streams);
         FillPublic(*movie);
         movie->paused = false;
         movie->start = Clock::now();

@@ -68,11 +68,11 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 | **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. |
 | **Performance** | ARM64 hot-path replacements, optimized DXT decoding, stable FIFO presentation, ADPF hints, unrestricted CPU scheduling, and persistent DXVK state caching. |
 | **Saves** | Shared profiles and saves that you can back up, replace, or delete with a file manager. Existing saves migrate without being overwritten. |
-| **Mods** | An optional local library for loose-file overlays, same-format texture packs, and independently rebuilt ARM64 plugins, with covers, details, and next-Play activation. |
+| **Mods** | An optional local library for overlays, large keyed texture packs, and independently rebuilt ARM64 plugins, with covers, author-defined options, and next-Play activation. |
 
 ## Settings and drivers
 
-The launcher’s **Settings** page and the in-game gear menu share the same preferences. Changes made in the launcher are saved automatically; engine options are applied when you press **Play**. In-game rows marked with `*` take effect after a restart, while the FPS limit changes immediately.
+The launcher’s **Settings** page keeps graphics, drivers, and engine policies. Its rows show short explanations on touch, hover, or keyboard focus; changes save automatically and engine options apply on **Play**. The in-game gear is a smaller live panel: FPS/battery/menu pacing, touch controls, FPS overlay, and **Layout**. Restart-only graphics and engine/mod experiments stay out of that panel.
 
 - **Graphics:** Resolution, Textures, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
 - **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **Game default** leaves the engine’s own device-dependent choice intact.
@@ -84,11 +84,11 @@ The launcher’s **Settings** page and the in-game gear menu share the same pref
 
 ### Mods and engine fixes
 
-Open **Mods** beside **Drivers** to import a local ZIP, a loose file, or an ARM64 `.so`. The library shows installed/active counts, cover art, descriptions, content types, compatibility errors, and load state. Imports start **disabled**; review the details, then enable them for the next **Play**. Enable/disable, two-step removal, and the additional native-plugin confirmation never patch original game files or shared saves.
+Open **Mods** beside **Drivers** to import a local ZIP, a loose file, or an ARM64 `.so`. The library shows installed/active counts, cover art, descriptions, content types, compatibility errors, and load state. Imports start **disabled**; review the details, then enable them for the next **Play**. Mods with author-defined options have **Configure** for toggles, stepped sliders, choices, and text, with reset/discard handling. Enable/disable, two-step removal, and native-plugin confirmation never patch original game files or shared saves. Engine fixes remain in Settings, not Mods.
 
-Packages live under `/storage/emulated/0/Prototype/mods/` when shared access is available, or ProtoDroid’s app-specific `mods/` folder otherwise. A ZIP can use the documented manifest or a legacy layout, including one top-level wrapper folder. Unsafe paths, duplicate IDs, oversized archives, and incompatible native binaries are rejected. **Windows x86 ASI/DLL plugins do not load on Android**; native plugins must be independently translated and rebuilt for AArch64 using ABI v1.
+Packages live under `/storage/emulated/0/Prototype/mods/` when shared access is available, or ProtoDroid’s app-specific `mods/` folder otherwise. A ZIP can use the documented manifest or a legacy layout, including one top-level wrapper folder. Unsafe paths, duplicate IDs, oversized archives, and incompatible native binaries are rejected. **Windows x86 ASI/DLL plugins do not load on Android**; native plugins must be independently translated and rebuilt for AArch64. Existing ABI-v1 plugins retain their original contract; ABI v2 adds per-mod settings getters.
 
-Texture packs map ProtoDroid’s versioned texture hashes in `textures.ini` to same-size, same-format DDS replacements. Enable **Dump original textures** to create original-format DDS files and a starter mapping. This is useful for compatible top-level static 2D textures, not arbitrary high-resolution texture resizing. See the [mod package and plugin guide](re/native-mod-platform.md) for authoring details.
+Texture packs map ProtoDroid’s versioned texture hashes in `textures.ini` to same-size, same-format DDS replacements. Large projects use bounded imports and lazy per-mip reads rather than retaining every payload in memory. Enable **Dump original textures** to create original-format DDS files and a starter mapping. This supports compatible static 2D replacements, including character textures when they use the supported path—not arbitrary high-resolution resizing or new engine effects. See the [authoring guide](modding/README.md) and [platform contract](re/native-mod-platform.md).
 
 The **Engine fixes** tab exposes fractional FOV offsets through INI, 512–8192 shadow-map limits, the evidenced tick/QTE policies, loose files, the guarded developer-menu option, DXVK VRAM reporting, and texture dumping. Higher limits can cost memory and performance; support and appearance remain device-dependent. These options are independent of imported mods.
 
@@ -180,7 +180,7 @@ Depending on storage access, logs are available in:
 
 Type **MERCER** on the launcher or tap its Prototype logo seven times quickly, then choose **START TOUR**. Repeat the code/gesture to disarm it. The 22-phase plan requests a direct test level, then rapidly exercises movement, camera, jumping/sprinting, targeting, combat, grab follow-ups, quick powers, power/disguise wheels, disguise-form inputs, shadows, effects, streaming, audio, and recovery without further interaction.
 
-Tour saves, logs, and shader cache are isolated from normal Play. Shared results are under `/storage/emulated/0/Prototype/diagnostic-tour/logs/`, including `journal.log`, `phase.txt`, `result.txt`, and `crash.log`. Every non-skipped phase requires rendered dwell and continuing `InGameState` task activity; presents alone are not enough. Coalesced Presents do not compress several logical action frames into one game update, and each phase records its actual `presented_frames` separately from `action_frames`. “Tested” means those inputs and activity completed—not that the ability’s result, visuals, or audio were verified. Bink movie and physical Android-touch phases are explicitly skipped. The launcher warns that the isolated game process closes when the tour completes or fails; `result.txt` also records this expected exit behavior.
+Tour saves, logs, and shader cache are isolated from normal Play. Shared results are under `/storage/emulated/0/Prototype/diagnostic-tour/logs/`, including `journal.log`, `phase.txt`, `result.txt`, and `crash.log`. Every non-skipped phase requires rendered dwell and continuing `InGameState` task activity; presents alone are not enough. Coalesced Presents do not compress logical action frames. Phases record exact actions, wall/process-CPU time, gameplay dispatches, and Presented frames, with rolling timing snapshots. Duplicate sync/logging work is reduced without shortening the plan. “Tested” means those inputs and activity completed—not visual, ability-result, or audio verification. Bink and physical-touch phases remain explicit skips. The isolated process closes intentionally at completion or failure.
 
 ### Detailed profiling
 
@@ -208,13 +208,13 @@ Use the [guided issue forms](https://github.com/Nazatric/ProtoDroid/issues/new/c
 
 ## Updates
 
-The launcher checks the latest published GitHub release in the background and compares its integer `versionCode`, not just the visible version string. An update card appears only for a newer release with the official `prototype.apk`, release APK SHA-256, and signing-certificate metadata. Downloads use Android’s system DownloadManager, show progress, and are checked against the release hash and APK package/version before installation is offered.
+The launcher checks the latest published GitHub release and compares its integer `versionCode`. For an available update, **DOWNLOAD** opens that release’s GitHub page directly. Recovery for an existing in-app download still verifies its APK hash, package/version, and signing certificate before offering installation.
 
-- **Same signing certificate:** Android opens the normal in-place installer.
-- **Different signing certificate:** the launcher explains why Android requires uninstalling the old copy first, then chains the system uninstall and install prompts where the device permits it. Shared game saves and files under `/storage/emulated/0/Prototype` are not deleted. App-private settings and data may be removed, so back up anything important outside that shared folder.
-- **If Android closes ProtoDroid during uninstall:** open the completed ProtoDroid download notification or the APK in the public **Downloads** folder to continue. This fallback is intentional: an ordinary app cannot silently uninstall itself and guarantee that it can launch another activity afterward.
+- **Same certificate:** Android can update in place.
+- **Different certificate:** Android requires a one-time uninstall first. Shared saves and files under `/storage/emulated/0/Prototype` are separate; back up important app-private data.
+- **If Android closes ProtoDroid during an existing verified-download uninstall:** open its completed download notification or the APK in Downloads.
 
-The updater never downloads game content, changes graphics or controls, or installs an unverified APK. Automatic checks use a 15-minute backoff and failures do not block Play. Transient download queries are rechecked before failure; the error card offers **Retry** and **GO TO RELEASES** for manual browser recovery.
+Automatic checks use a 15-minute backoff and do not block Play. Update errors offer Retry and **OPEN RELEASE**.
 
 ## Under the hood
 
@@ -310,7 +310,9 @@ Protected releases use these repository Actions secrets:
 
 Encode the keystore with `base64 -w 0` on Linux or `base64` without line wrapping on macOS. Keep an offline backup of the original keystore and passwords, and never commit them. Once protected signing is configured, later releases keep the same identity and can update in place.
 
-Branch and PR artifacts use disposable CI identities and are not release-eligible. Ephemeral releases are rejected unless explicitly approved. Some existing builds, including 0.8 and older CI artifacts, use certificates whose private keys are unavailable. Android cannot install a differently signed build over them; a one-time uninstall is required. Shared saves under `/storage/emulated/0/Prototype` remain separate from the app, but back up any important app-specific data first.
+Branch and PR artifacts use disposable CI identities and are not release-eligible. Disposable releases and certificate changes require separate explicit approvals; both approved dispatch types can use the same protected identity. The protected secrets and offline keystore backup must be maintained by a repository administrator.
+
+**0.14’s disposable private key cannot be recovered.** A persistent 0.15 identity cannot match its certificate, so installation over 0.14 requires one uninstall even after persistent signing is configured. Later releases can update in place only while that identity is retained. Shared saves under `/storage/emulated/0/Prototype` remain separate, but back up important app-private data first.
 
 </details>
 

@@ -37,8 +37,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
- * Launcher-only updater. The system DownloadManager owns the bytes and their completion notification, so the APK
- * remains available in public Downloads even when Android kills this activity during a signature-changing uninstall.
+ * Launcher-only updater. Available releases open their exact GitHub page. For an existing system download,
+ * DownloadManager owns the bytes/completion notification so verification and installation can recover in public
+ * Downloads even when Android kills this activity during a signature-changing uninstall.
  */
 final class UpdateManager {
     private static final String TAG = "ProtoDroidUpdate";
@@ -202,7 +203,9 @@ final class UpdateManager {
         if (closed) return;
         switch (state.status) {
             case State.AVAILABLE:
-                beginDownload();
+                // The requested simple update path opens the fetched release directly. Existing system downloads
+                // retain the verified recovery/install flow below.
+                onReleasesPressed();
                 break;
             case State.READY:
                 if (state.requiresUninstall) callback.onUninstallRequired(state.versionName);
@@ -219,7 +222,8 @@ final class UpdateManager {
 
     void onReleasesPressed() {
         if (closed) return;
-        Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL));
+        String url = release == null || release.htmlUrl.isEmpty() ? RELEASES_URL : release.htmlUrl;
+        Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
         browser.addCategory(Intent.CATEGORY_BROWSABLE);
         try {
             activity.startActivity(browser);
