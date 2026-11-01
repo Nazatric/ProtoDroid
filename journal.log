@@ -1,351 +1,367 @@
-[mono=115746.892 present=0] run status=requested source=51e51ea3b20927e40e94135a6a09633c616dcf61 command_line=Level=manhattanTest NoAutoSave logs=/storage/emulated/0/Prototype/diagnostic-tour/logs saves=/storage/emulated/0/Prototype/diagnostic-tour/saves cache=/storage/emulated/0/Android/data/com.protodroid/files/diagnostic-tour-cache
-[mono=115746.892 present=0] policy normal_play_unchanged=true normal_save_migration=false normal_cache_migration=false visual_verification=not-performed
-[mono=115746.893 present=0] phase=render_shaders_pipelines index=0 status=requested coverage=initial gameplay rendering, shader/pipeline creation, DF shadow profile; actions only
-[mono=115746.893 present=0] phase=camera_orbit index=1 status=requested coverage=camera-relative rendering, lighting angles, culling and input
-[mono=115746.893 present=0] phase=shadow_ground_view index=2 status=requested coverage=dynamic-shadow view toward the ground while stationary; no visual pass claim
-[mono=115746.893 present=0] phase=shadow_motion index=3 status=requested coverage=dynamic shadows and DF-format effects during movement; no visual pass claim
-[mono=115746.893 present=0] phase=movement_directions index=4 status=requested coverage=W/A/S/D movement, animation, collision, camera and character rendering
-[mono=115746.893 present=0] phase=jump_sprint index=5 status=requested coverage=sprint, jumping, animation state, timing and input release
-[mono=115746.893 present=0] phase=target_lock index=6 status=requested coverage=Tab lock-on requests, camera adjustment and follow-up attack; target acquisition is unverified
-[mono=115746.893 present=0] phase=combat_primary index=7 status=requested coverage=primary/secondary combat inputs, hit effects, animation and audio
-[mono=115746.893 present=0] phase=grab_followup index=8 status=requested coverage=E grab holds and follow-up combat input; grabbed target and consume/throw result are unverified
-[mono=115746.893 present=0] phase=powers_and_abilities index=9 status=requested coverage=1/2/3/4/Q physical inputs; activated power/result remains unverified
-[mono=115746.893 present=0] phase=power_wheel index=10 status=requested coverage=R power-selection wheel held through relative mouse choices; selected entry is unverified
-[mono=115746.893 present=0] phase=disguise_wheel index=11 status=requested coverage=F disguise-selection wheel held through relative mouse choices; selected entry is unverified
-[mono=115746.893 present=0] phase=disguise_forms index=12 status=requested coverage=F1 take-disguise and F2 return-to-Alex inputs; available disguise/form result is unverified
-[mono=115746.893 present=0] phase=particles_effects index=13 status=requested coverage=combat/movement particles, effects, shader variants and audio
-[mono=115746.893 present=0] phase=lighting_exposure index=14 status=requested coverage=opposite camera angles for lighting, shadows, culling and exposure
-[mono=115746.893 present=0] phase=assets_streaming index=15 status=requested coverage=sustained sprint/camera asset requests and streaming; distance covered is unverified
-[mono=115746.893 present=0] phase=audio_mix index=16 status=requested coverage=gameplay/combat audio timing, underruns, SDL mixer and worker activity
-[mono=115746.893 present=0] phase=bink_video index=17 status=requested coverage=Bink audio/video playback
-[mono=115746.893 present=0] phase=android_touch_overlay index=18 status=requested coverage=physical Android touch and overlay widgets
-[mono=115746.893 present=0] phase=save_isolation index=19 status=requested coverage=NoAutoSave command, isolated guest save route and durable tour markers
-[mono=115746.893 present=0] phase=memory_thread_stress index=20 status=requested coverage=combined rendering/input work with memory, thread, CPU and timing diagnostics
-[mono=115746.893 present=0] phase=recovery_idle index=21 status=requested coverage=all injected inputs released; post-activity rendering, audio and memory recovery
-[mono=115746.952 present=0] save_isolation status=tested path=/storage/emulated/0/Prototype/diagnostic-tour/saves normal_save_migration=false write_probe=passed game_save_write=not-requested
-[mono=115747.672 present=2] engine status=tested EngineInitialize=returned-success gameplay_wait=InGameState-dispatch
-[mono=115757.267 present=438] gameplay status=observed InGameState_target=7c4e4ad0 note=dispatch-is-not-visual-verification
-[mono=115757.277 present=438] tour status=running start_present=438
-[mono=115757.287 present=438] phase=render_shaders_pipelines index=0 status=requested coverage=initial gameplay rendering, shader/pipeline creation, DF shadow profile; actions only
-[mono=115757.335 present=438] phase=render_shaders_pipelines index=0 status=running dwell_present_frames=120
-[mono=115757.368 present=441] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.474 present=446] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.620 present=450] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.638 present=453] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.663 present=458] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.714 present=462] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.727 present=464] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.747 present=467] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.797 present=471] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.856 present=478] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.921 present=485] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.940 present=488] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115757.966 present=490] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.177 present=492] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.231 present=500] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.251 present=502] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.270 present=505] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.300 present=508] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.324 present=510] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.405 present=517] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.424 present=520] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.447 present=523] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.474 present=525] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.491 present=527] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.508 present=529] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.565 present=537] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.621 present=542] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.659 present=547] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.699 present=551] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.713 present=554] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.752 present=557] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.768 present=559] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.768 present=559] phase=render_shaders_pipelines index=0 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=173 visual_verification=not-performed
-[mono=115758.770 present=559] phase=camera_orbit index=1 status=requested coverage=camera-relative rendering, lighting angles, culling and input
-[mono=115758.803 present=559] phase=camera_orbit index=1 status=running dwell_present_frames=120
-[mono=115758.804 present=559] action phase=camera_orbit frame=0 type=mouse_move x=24 y=0
-[mono=115758.915 present=572] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.923 present=573] action phase=camera_orbit frame=15 type=mouse_move x=24 y=0
-[mono=115758.940 present=575] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115758.966 present=578] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.052 present=582] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.083 present=585] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.104 present=588] action phase=camera_orbit frame=30 type=mouse_move x=24 y=0
-[mono=115759.131 present=591] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.136 present=593] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.244 present=599] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.263 present=601] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.287 present=603] action phase=camera_orbit frame=45 type=mouse_move x=24 y=0
-[mono=115759.302 present=606] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.330 present=611] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.351 present=613] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.366 present=615] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.388 present=618] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.388 present=618] action phase=camera_orbit frame=60 type=mouse_move x=24 y=0
-[mono=115759.404 present=620] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.422 present=622] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.447 present=624] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.522 present=628] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.544 present=630] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.552 present=632] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.571 present=633] action phase=camera_orbit frame=75 type=mouse_move x=24 y=0
-[mono=115759.601 present=636] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.617 present=639] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.638 present=641] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.677 present=643] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.702 present=646] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.717 present=648] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.717 present=648] action phase=camera_orbit frame=90 type=mouse_move x=24 y=0
-[mono=115759.770 present=655] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.786 present=658] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.809 present=660] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.851 present=663] action phase=camera_orbit frame=105 type=mouse_move x=24 y=0
-[mono=115759.870 present=665] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.895 present=669] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.935 present=675] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115759.968 present=678] phase=camera_orbit index=1 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=176 visual_verification=not-performed
-[mono=115759.970 present=679] phase=shadow_ground_view index=2 status=requested coverage=dynamic-shadow view toward the ground while stationary; no visual pass claim
-[mono=115759.995 present=679] phase=shadow_ground_view index=2 status=running dwell_present_frames=90
-[mono=115759.996 present=679] action phase=shadow_ground_view frame=0 type=mouse_move x=0 y=32
-[mono=115760.003 present=680] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.120 present=692] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.140 present=694] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.140 present=694] action phase=shadow_ground_view frame=15 type=mouse_move x=0 y=24
-[mono=115760.222 present=701] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.253 present=705] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.279 present=708] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.309 present=712] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.344 present=717] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.385 present=721] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.404 present=723] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.454 present=728] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.493 present=730] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.553 present=736] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115760.585 present=740] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115761.210 present=768] phase=shadow_ground_view index=2 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=146 visual_verification=not-performed
-[mono=115761.211 present=768] phase=shadow_motion index=3 status=requested coverage=dynamic shadows and DF-format effects during movement; no visual pass claim
-[mono=115761.240 present=768] phase=shadow_motion index=3 status=running dwell_present_frames=120
-[mono=115761.241 present=768] action phase=shadow_motion frame=0 input=W down=1
-[mono=115761.405 present=778] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115761.411 present=780] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115761.460 present=785] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115761.537 present=790] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115761.592 present=795] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115761.610 present=797] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115761.626 present=798] action phase=shadow_motion frame=30 type=mouse_move x=12 y=0
-[mono=115761.685 present=802] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115761.771 present=807] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115761.823 present=810] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115761.890 present=815] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115761.912 present=817] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115762.032 present=825] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115762.081 present=828] action phase=shadow_motion frame=60 type=mouse_move x=-12 y=0
-[mono=115762.672 present=858] action phase=shadow_motion frame=90 input=W down=0
-[mono=115762.774 present=865] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115762.951 present=875] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115768.351 present=883] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115768.669 present=887] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115768.685 present=888] phase=shadow_motion index=3 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=221 visual_verification=not-performed
-[mono=115768.689 present=888] phase=movement_directions index=4 status=requested coverage=W/A/S/D movement, animation, collision, camera and character rendering
-[mono=115768.714 present=888] phase=movement_directions index=4 status=running dwell_present_frames=150
-[mono=115768.715 present=888] action phase=movement_directions frame=0 input=W down=1
-[mono=115769.133 present=898] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115769.201 present=901] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115769.276 present=905] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115769.485 present=914] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115769.995 present=932] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115770.248 present=943] action phase=movement_directions frame=55 input=W down=0
-[mono=115770.248 present=943] action phase=movement_directions frame=55 input=A down=1
-[mono=115770.529 present=954] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115770.792 present=963] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115770.992 present=973] action phase=movement_directions frame=85 input=A down=0
-[mono=115770.992 present=973] action phase=movement_directions frame=85 input=D down=1
-[mono=115771.440 present=992] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115771.487 present=995] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115771.714 present=1003] action phase=movement_directions frame=115 input=D down=0
-[mono=115771.714 present=1003] action phase=movement_directions frame=115 input=S down=1
-[mono=115772.363 present=1028] action phase=movement_directions frame=140 input=S down=0
-[mono=115772.563 present=1038] phase=movement_directions index=4 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=297 visual_verification=not-performed
-[mono=115772.568 present=1038] phase=jump_sprint index=5 status=requested coverage=sprint, jumping, animation state, timing and input release
-[mono=115772.593 present=1038] phase=jump_sprint index=5 status=running dwell_present_frames=150
-[mono=115772.594 present=1038] action phase=jump_sprint frame=0 input=LeftShift down=1
-[mono=115772.594 present=1038] action phase=jump_sprint frame=0 input=W down=1
-[mono=115773.335 present=1068] action phase=jump_sprint frame=30 input=Space down=1
-[mono=115773.707 present=1083] action phase=jump_sprint frame=45 input=Space down=0
-[mono=115774.381 present=1107] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115774.798 present=1124] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115774.898 present=1128] action phase=jump_sprint frame=90 input=Space down=1
-[mono=115775.232 present=1143] action phase=jump_sprint frame=105 input=Space down=0
-[mono=115775.754 present=1168] action phase=jump_sprint frame=130 input=W down=0
-[mono=115775.754 present=1168] action phase=jump_sprint frame=130 input=LeftShift down=0
-[mono=115776.147 present=1188] phase=jump_sprint index=5 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=300 visual_verification=not-performed
-[mono=115776.151 present=1188] phase=target_lock index=6 status=requested coverage=Tab lock-on requests, camera adjustment and follow-up attack; target acquisition is unverified
-[mono=115776.169 present=1188] phase=target_lock index=6 status=running dwell_present_frames=120
-[mono=115776.170 present=1188] action phase=target_lock frame=0 input=Tab down=1
-[mono=115776.411 present=1200] action phase=target_lock frame=12 input=Tab down=0
-[mono=115776.565 present=1208] action phase=target_lock frame=20 type=mouse_move x=20 y=0
-[mono=115776.900 present=1223] action phase=target_lock frame=35 input=Tab down=1
-[mono=115777.182 present=1235] action phase=target_lock frame=47 input=Tab down=0
-[mono=115777.362 present=1243] action phase=target_lock frame=55 input=LeftMouse down=1
-[mono=115777.602 present=1254] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115777.678 present=1258] action phase=target_lock frame=70 input=LeftMouse down=0
-[mono=115777.892 present=1268] action phase=target_lock frame=80 type=mouse_move x=-20 y=0
-[mono=115778.086 present=1278] action phase=target_lock frame=90 input=Tab down=1
-[mono=115778.322 present=1290] action phase=target_lock frame=102 input=Tab down=0
-[mono=115778.675 present=1308] phase=target_lock index=6 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=239 visual_verification=not-performed
-[mono=115778.678 present=1308] phase=combat_primary index=7 status=requested coverage=primary/secondary combat inputs, hit effects, animation and audio
-[mono=115778.697 present=1308] phase=combat_primary index=7 status=running dwell_present_frames=150
-[mono=115778.901 present=1318] action phase=combat_primary frame=10 input=LeftMouse down=1
-[mono=115779.193 present=1333] action phase=combat_primary frame=25 input=LeftMouse down=0
-[mono=115779.494 present=1348] action phase=combat_primary frame=40 input=LeftMouse down=1
-[mono=115779.787 present=1363] action phase=combat_primary frame=55 input=LeftMouse down=0
-[mono=115780.127 present=1378] action phase=combat_primary frame=70 input=LeftMouse down=1
-[mono=115780.439 present=1393] action phase=combat_primary frame=85 input=LeftMouse down=0
-[mono=115780.720 present=1408] action phase=combat_primary frame=100 input=RightMouse down=1
-[mono=115781.092 present=1428] action phase=combat_primary frame=120 input=RightMouse down=0
-[mono=115781.677 present=1458] phase=combat_primary index=7 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=300 visual_verification=not-performed
-[mono=115781.684 present=1458] phase=grab_followup index=8 status=requested coverage=E grab holds and follow-up combat input; grabbed target and consume/throw result are unverified
-[mono=115781.704 present=1458] phase=grab_followup index=8 status=running dwell_present_frames=130
-[mono=115781.705 present=1458] action phase=grab_followup frame=0 input=E down=1
-[mono=115782.218 present=1483] action phase=grab_followup frame=25 input=E down=0
-[mono=115782.546 present=1498] action phase=grab_followup frame=40 input=E down=1
-[mono=115782.739 present=1507] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115783.062 present=1523] action phase=grab_followup frame=65 input=E down=0
-[mono=115783.163 present=1528] action phase=grab_followup frame=70 input=RightMouse down=1
-[mono=115783.464 present=1543] action phase=grab_followup frame=85 input=RightMouse down=0
-[mono=115783.660 present=1553] action phase=grab_followup frame=95 input=E down=1
-[mono=115783.956 present=1568] action phase=grab_followup frame=110 input=E down=0
-[mono=115784.353 present=1588] phase=grab_followup index=8 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=260 visual_verification=not-performed
-[mono=115784.356 present=1588] phase=powers_and_abilities index=9 status=requested coverage=1/2/3/4/Q physical inputs; activated power/result remains unverified
-[mono=115784.373 present=1588] phase=powers_and_abilities index=9 status=running dwell_present_frames=180
-[mono=115784.374 present=1588] action phase=powers_and_abilities frame=0 input=1 down=1
-[mono=115784.586 present=1598] action phase=powers_and_abilities frame=10 input=1 down=0
-[mono=115785.136 present=1605] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115785.418 present=1607] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115785.693 present=1618] action phase=powers_and_abilities frame=30 input=2 down=1
-[mono=115785.903 present=1628] action phase=powers_and_abilities frame=40 input=2 down=0
-[mono=115786.332 present=1646] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115786.386 present=1648] action phase=powers_and_abilities frame=60 input=3 down=1
-[mono=115786.587 present=1658] action phase=powers_and_abilities frame=70 input=3 down=0
-[mono=115786.756 present=1663] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115787.061 present=1667] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115787.297 present=1678] action phase=powers_and_abilities frame=90 input=4 down=1
-[mono=115787.528 present=1688] action phase=powers_and_abilities frame=100 input=4 down=0
-[mono=115787.741 present=1694] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115788.031 present=1708] action phase=powers_and_abilities frame=120 input=Q down=1
-[mono=115788.228 present=1718] action phase=powers_and_abilities frame=130 input=Q down=0
-[mono=115789.237 present=1768] phase=powers_and_abilities index=9 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=360 visual_verification=not-performed
-[mono=115789.241 present=1768] phase=power_wheel index=10 status=requested coverage=R power-selection wheel held through relative mouse choices; selected entry is unverified
-[mono=115789.262 present=1768] phase=power_wheel index=10 status=running dwell_present_frames=100
-[mono=115789.263 present=1768] action phase=power_wheel frame=0 input=R down=1
-[mono=115789.584 present=1783] action phase=power_wheel frame=15 type=mouse_move x=24 y=0
-[mono=115789.888 present=1798] action phase=power_wheel frame=30 type=mouse_move x=0 y=24
-[mono=115790.192 present=1813] action phase=power_wheel frame=45 type=mouse_move x=-24 y=0
-[mono=115790.499 present=1828] action phase=power_wheel frame=60 input=R down=0
-[mono=115790.834 present=1843] action phase=power_wheel frame=75 input=1 down=1
-[mono=115791.042 present=1853] action phase=power_wheel frame=85 input=1 down=0
-[mono=115791.348 present=1868] phase=power_wheel index=10 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=200 visual_verification=not-performed
-[mono=115791.355 present=1868] phase=disguise_wheel index=11 status=requested coverage=F disguise-selection wheel held through relative mouse choices; selected entry is unverified
-[mono=115791.371 present=1868] phase=disguise_wheel index=11 status=running dwell_present_frames=90
-[mono=115791.372 present=1868] action phase=disguise_wheel frame=0 input=F down=1
-[mono=115791.780 present=1883] action phase=disguise_wheel frame=15 type=mouse_move x=-24 y=0
-[mono=115792.115 present=1898] action phase=disguise_wheel frame=30 type=mouse_move x=0 y=24
-[mono=115792.439 present=1913] action phase=disguise_wheel frame=45 type=mouse_move x=24 y=0
-[mono=115792.765 present=1928] action phase=disguise_wheel frame=60 input=F down=0
-[mono=115793.422 present=1958] phase=disguise_wheel index=11 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=180 visual_verification=not-performed
-[mono=115793.425 present=1958] phase=disguise_forms index=12 status=requested coverage=F1 take-disguise and F2 return-to-Alex inputs; available disguise/form result is unverified
-[mono=115793.444 present=1958] phase=disguise_forms index=12 status=running dwell_present_frames=100
-[mono=115793.446 present=1958] action phase=disguise_forms frame=0 input=F1 down=1
-[mono=115793.697 present=1970] action phase=disguise_forms frame=12 input=F1 down=0
-[mono=115794.156 present=1993] action phase=disguise_forms frame=35 input=F2 down=1
-[mono=115794.416 present=2005] action phase=disguise_forms frame=47 input=F2 down=0
-[mono=115794.908 present=2028] action phase=disguise_forms frame=70 input=F1 down=1
-[mono=115795.172 present=2040] action phase=disguise_forms frame=82 input=F1 down=0
-[mono=115795.553 present=2058] phase=disguise_forms index=12 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=200 visual_verification=not-performed
-[mono=115795.556 present=2058] phase=particles_effects index=13 status=requested coverage=combat/movement particles, effects, shader variants and audio
-[mono=115795.577 present=2058] phase=particles_effects index=13 status=running dwell_present_frames=140
-[mono=115795.578 present=2058] action phase=particles_effects frame=0 input=W down=1
-[mono=115795.912 present=2073] action phase=particles_effects frame=15 input=LeftMouse down=1
-[mono=115796.207 present=2088] action phase=particles_effects frame=30 input=LeftMouse down=0
-[mono=115796.501 present=2103] action phase=particles_effects frame=45 input=RightMouse down=1
-[mono=115796.719 present=2112] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115796.958 present=2123] action phase=particles_effects frame=65 input=RightMouse down=0
-[mono=115797.285 present=2138] action phase=particles_effects frame=80 input=LeftMouse down=1
-[mono=115797.469 present=2145] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115797.622 present=2153] action phase=particles_effects frame=95 input=LeftMouse down=0
-[mono=115797.731 present=2157] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115797.991 present=2168] action phase=particles_effects frame=110 input=W down=0
-[mono=115797.991 present=2168] action phase=particles_effects frame=110 type=mouse_move x=20 y=-12
-[mono=115798.603 present=2198] phase=particles_effects index=13 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=279 visual_verification=not-performed
-[mono=115798.606 present=2198] phase=lighting_exposure index=14 status=requested coverage=opposite camera angles for lighting, shadows, culling and exposure
-[mono=115798.621 present=2198] phase=lighting_exposure index=14 status=running dwell_present_frames=120
-[mono=115798.621 present=2198] action phase=lighting_exposure frame=0 type=mouse_move x=-32 y=-16
-[mono=115799.001 present=2218] action phase=lighting_exposure frame=20 type=mouse_move x=-32 y=0
-[mono=115799.390 present=2238] action phase=lighting_exposure frame=40 type=mouse_move x=-32 y=0
-[mono=115799.802 present=2258] action phase=lighting_exposure frame=60 type=mouse_move x=-32 y=0
-[mono=115800.227 present=2278] action phase=lighting_exposure frame=80 type=mouse_move x=-32 y=0
-[mono=115800.619 present=2298] action phase=lighting_exposure frame=100 type=mouse_move x=-32 y=0
-[mono=115801.030 present=2318] phase=lighting_exposure index=14 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=240 visual_verification=not-performed
-[mono=115801.034 present=2318] phase=assets_streaming index=15 status=requested coverage=sustained sprint/camera asset requests and streaming; distance covered is unverified
-[mono=115801.058 present=2318] phase=assets_streaming index=15 status=running dwell_present_frames=240
-[mono=115801.059 present=2318] action phase=assets_streaming frame=0 input=LeftShift down=1
-[mono=115801.059 present=2318] action phase=assets_streaming frame=0 input=W down=1
-[mono=115802.323 present=2378] action phase=assets_streaming frame=60 type=mouse_move x=18 y=0
-[mono=115803.770 present=2438] action phase=assets_streaming frame=120 type=mouse_move x=-18 y=0
-[mono=115805.087 present=2498] action phase=assets_streaming frame=180 type=mouse_move x=18 y=0
-[mono=115805.526 present=2518] action phase=assets_streaming frame=200 input=W down=0
-[mono=115805.526 present=2518] action phase=assets_streaming frame=200 input=LeftShift down=0
-[mono=115806.326 present=2558] phase=assets_streaming index=15 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=480 visual_verification=not-performed
-[mono=115806.331 present=2558] phase=audio_mix index=16 status=requested coverage=gameplay/combat audio timing, underruns, SDL mixer and worker activity
-[mono=115806.353 present=2558] phase=audio_mix index=16 status=running dwell_present_frames=120
-[mono=115806.354 present=2558] action phase=audio_mix frame=0 input=W down=1
-[mono=115806.675 present=2574] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115806.675 present=2574] action phase=audio_mix frame=15 input=LeftMouse down=1
-[mono=115806.723 present=2577] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115806.942 present=2588] action phase=audio_mix frame=30 input=LeftMouse down=0
-[mono=115806.991 present=2591] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115807.521 present=2618] action phase=audio_mix frame=60 input=W down=0
-[mono=115807.612 present=2623] action phase=audio_mix frame=65 input=RightMouse down=1
-[mono=115808.000 present=2643] action phase=audio_mix frame=85 input=RightMouse down=0
-[mono=115808.518 present=2671] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115808.647 present=2678] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115808.647 present=2678] phase=audio_mix index=16 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=235 visual_verification=not-performed
-[mono=115808.649 present=2678] phase=bink_video index=17 status=requested coverage=Bink audio/video playback
-[mono=115808.671 present=2678] phase=bink_video index=17 status=skipped reason=direct Level entry does not request a movie; normal Bink playback is not covered
-[mono=115808.671 present=2678] phase=android_touch_overlay index=18 status=requested coverage=physical Android touch and overlay widgets
-[mono=115808.689 present=2678] phase=android_touch_overlay index=18 status=skipped reason=automation uses the ordinary SDL input boundary, not physical touch
-[mono=115808.690 present=2678] phase=save_isolation index=19 status=requested coverage=NoAutoSave command, isolated guest save route and durable tour markers
-[mono=115808.704 present=2678] phase=save_isolation index=19 status=running dwell_present_frames=60
-[mono=115808.791 present=2683] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115809.049 present=2698] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115809.094 present=2701] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115809.162 present=2705] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115809.610 present=2729] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115809.773 present=2738] phase=save_isolation index=19 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=115 visual_verification=not-performed
-[mono=115809.775 present=2738] phase=memory_thread_stress index=20 status=requested coverage=combined rendering/input work with memory, thread, CPU and timing diagnostics
-[mono=115809.801 present=2738] phase=memory_thread_stress index=20 status=running dwell_present_frames=180
-[mono=115809.803 present=2738] action phase=memory_thread_stress frame=0 input=LeftShift down=1
-[mono=115809.803 present=2738] action phase=memory_thread_stress frame=0 input=W down=1
-[mono=115810.171 present=2758] action phase=memory_thread_stress frame=20 input=LeftMouse down=1
-[mono=115810.457 present=2773] action phase=memory_thread_stress frame=35 input=LeftMouse down=0
-[mono=115810.644 present=2783] action phase=memory_thread_stress frame=45 type=mouse_move x=16 y=0
-[mono=115810.944 present=2798] action phase=memory_thread_stress frame=60 input=Space down=1
-[mono=115811.222 present=2813] action phase=memory_thread_stress frame=75 input=Space down=0
-[mono=115811.417 present=2823] action phase=memory_thread_stress frame=85 input=RightMouse down=1
-[mono=115811.622 present=2834] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115811.813 present=2843] action phase=memory_thread_stress frame=105 input=RightMouse down=0
-[mono=115812.111 present=2858] action phase=memory_thread_stress frame=120 type=mouse_move x=-16 y=0
-[mono=115812.485 present=2878] action phase=memory_thread_stress frame=140 input=W down=0
-[mono=115812.485 present=2878] action phase=memory_thread_stress frame=140 input=LeftShift down=0
-[mono=115812.911 present=2900] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115812.958 present=2903] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115813.152 present=2914] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115813.221 present=2918] phase=memory_thread_stress index=20 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=356 visual_verification=not-performed
-[mono=115813.229 present=2918] phase=recovery_idle index=21 status=requested coverage=all injected inputs released; post-activity rendering, audio and memory recovery
-[mono=115813.244 present=2918] phase=recovery_idle index=21 status=running dwell_present_frames=90
-[mono=115814.029 present=2961] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115814.093 present=2965] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115814.137 present=2968] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115814.408 present=2984] present_batch count=2 timing=actions-late-to-engine-service-boundary
-[mono=115814.844 present=3008] phase=recovery_idle index=21 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=176 visual_verification=not-performed
-[mono=115814.846 present=3008] result=complete reason=all requested phases reached a recorded tested or skipped outcome gameplay_dispatches=4934 visual_verification=not-performed physical_device_validation=not-performed
+[mono=154104.892 present=0] run status=requested source=e34ebb066ffe70717eb79259ad6d6421f4987193 command_line=Level=manhattanTest NoAutoSave logs=/storage/emulated/0/Prototype/diagnostic-tour/logs saves=/storage/emulated/0/Prototype/diagnostic-tour/saves cache=/storage/emulated/0/Android/data/com.protodroid/files/diagnostic-tour-cache
+[mono=154104.893 present=0] policy normal_play_unchanged=true normal_save_migration=false normal_cache_migration=false visual_verification=not-performed
+[mono=154104.893 present=0] phase=render_shaders_pipelines index=0 status=requested coverage=initial gameplay rendering, shader/pipeline creation, DF shadow profile; actions only
+[mono=154104.893 present=0] phase=camera_orbit index=1 status=requested coverage=camera-relative rendering, lighting angles, culling and input
+[mono=154104.893 present=0] phase=shadow_ground_view index=2 status=requested coverage=dynamic-shadow view toward the ground while stationary; no visual pass claim
+[mono=154104.893 present=0] phase=shadow_motion index=3 status=requested coverage=dynamic shadows and DF-format effects during movement; no visual pass claim
+[mono=154104.893 present=0] phase=movement_directions index=4 status=requested coverage=W/A/S/D movement, animation, collision, camera and character rendering
+[mono=154104.893 present=0] phase=jump_sprint index=5 status=requested coverage=sprint, jumping, animation state, timing and input release
+[mono=154104.893 present=0] phase=target_lock index=6 status=requested coverage=Tab lock-on requests, camera adjustment and follow-up attack; target acquisition is unverified
+[mono=154104.893 present=0] phase=combat_primary index=7 status=requested coverage=primary/secondary combat inputs, hit effects, animation and audio
+[mono=154104.893 present=0] phase=grab_followup index=8 status=requested coverage=E grab holds and follow-up combat input; grabbed target and consume/throw result are unverified
+[mono=154104.893 present=0] phase=powers_and_abilities index=9 status=requested coverage=1/2/3/4/Q physical inputs; activated power/result remains unverified
+[mono=154104.893 present=0] phase=power_wheel index=10 status=requested coverage=R power-selection wheel held through relative mouse choices; selected entry is unverified
+[mono=154104.893 present=0] phase=disguise_wheel index=11 status=requested coverage=F disguise-selection wheel held through relative mouse choices; selected entry is unverified
+[mono=154104.893 present=0] phase=disguise_forms index=12 status=requested coverage=F1 take-disguise and F2 return-to-Alex inputs; available disguise/form result is unverified
+[mono=154104.893 present=0] phase=particles_effects index=13 status=requested coverage=combat/movement particles, effects, shader variants and audio
+[mono=154104.893 present=0] phase=lighting_exposure index=14 status=requested coverage=opposite camera angles for lighting, shadows, culling and exposure
+[mono=154104.893 present=0] phase=assets_streaming index=15 status=requested coverage=sustained sprint/camera asset requests and streaming; distance covered is unverified
+[mono=154104.893 present=0] phase=audio_mix index=16 status=requested coverage=gameplay/combat audio timing, underruns, SDL mixer and worker activity
+[mono=154104.893 present=0] phase=bink_video index=17 status=requested coverage=Bink audio/video playback
+[mono=154104.893 present=0] phase=android_touch_overlay index=18 status=requested coverage=physical Android touch and overlay widgets
+[mono=154104.893 present=0] phase=save_isolation index=19 status=requested coverage=NoAutoSave command, isolated guest save route and durable tour markers
+[mono=154104.893 present=0] phase=memory_thread_stress index=20 status=requested coverage=combined rendering/input work with memory, thread, CPU and timing diagnostics
+[mono=154104.893 present=0] phase=recovery_idle index=21 status=requested coverage=all injected inputs released; post-activity rendering, audio and memory recovery
+[mono=154104.986 present=0] save_isolation status=tested path=/storage/emulated/0/Prototype/diagnostic-tour/saves normal_save_migration=false write_probe=passed game_save_write=not-requested
+[mono=154105.860 present=2] engine status=tested EngineInitialize=returned-success gameplay_wait=InGameState-dispatch
+[mono=154110.256 present=446] gameplay status=observed InGameState_target=7c4e4ad0 note=dispatch-is-not-visual-verification
+[mono=154110.260 present=446] tour status=running start_present=446
+[mono=154110.281 present=446] phase=render_shaders_pipelines index=0 status=running minimum_present_frames=120 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154110.395 present=454] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154110.552 present=458] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154110.574 present=462] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154110.606 present=465] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154110.641 present=470] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154110.689 present=474] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154110.748 present=482] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154110.818 present=488] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154110.839 present=492] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154110.915 present=497] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.161 present=501] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.211 present=508] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.268 present=513] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.291 present=517] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.322 present=520] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.358 present=526] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.384 present=529] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.400 present=531] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.420 present=534] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.464 present=537] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.478 present=539] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.484 present=541] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.565 present=548] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.593 present=553] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.613 present=555] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.634 present=557] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.647 present=559] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.662 present=562] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.717 present=564] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.732 present=566] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.753 present=569] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.794 present=575] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.803 present=577] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.830 present=579] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.897 present=582] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.943 present=590] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154111.962 present=592] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.049 present=599] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.091 present=604] phase=render_shaders_pipelines index=0 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=225 presented_frames=158 action_frames=120 actions_executed=0 wall_ms=1809.173 process_cpu_ms=3873.878 process_cpu_utilization_pct=214.12 present_window=last-completed-rolling-window present_window_frames=78 present_window_fps=77.727 present_window_average_ms=12.865 present_window_p99_ms=206.834 present_window_max_ms=206.834 visual_verification=not-performed
+[mono=154112.110 present=604] phase=camera_orbit index=1 status=running minimum_present_frames=120 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154112.110 present=604] action phase=camera_orbit frame=0 type=mouse_move x=24 y=0
+[mono=154112.159 present=612] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.181 present=615] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.197 present=617] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.220 present=620] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.294 present=623] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.300 present=624] action phase=camera_orbit frame=15 type=mouse_move x=24 y=0
+[mono=154112.316 present=626] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.338 present=630] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.362 present=633] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.375 present=635] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.414 present=640] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.431 present=642] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.464 present=644] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.480 present=646] action phase=camera_orbit frame=30 type=mouse_move x=24 y=0
+[mono=154112.510 present=650] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.536 present=654] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.552 present=657] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.591 present=661] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.603 present=663] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.629 present=666] action phase=camera_orbit frame=45 type=mouse_move x=24 y=0
+[mono=154112.645 present=668] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.662 present=670] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.679 present=672] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.695 present=674] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.713 present=676] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.733 present=678] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.756 present=681] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.776 present=683] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.819 present=688] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.837 present=691] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.837 present=691] action phase=camera_orbit frame=60 type=mouse_move x=24 y=0
+[mono=154112.865 present=694] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.887 present=697] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.915 present=700] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.928 present=702] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154112.971 present=707] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.016 present=712] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.016 present=712] action phase=camera_orbit frame=75 type=mouse_move x=24 y=0
+[mono=154113.046 present=715] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.112 present=724] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.146 present=728] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.163 present=730] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.185 present=732] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.185 present=732] action phase=camera_orbit frame=90 type=mouse_move x=24 y=0
+[mono=154113.205 present=735] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.222 present=737] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.239 present=739] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.264 present=742] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.288 present=745] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.304 present=747] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.322 present=749] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.365 present=751] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.459 present=755] action phase=camera_orbit frame=105 type=mouse_move x=24 y=0
+[mono=154113.498 present=758] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.535 present=761] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.680 present=770] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.731 present=773] phase=camera_orbit index=1 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=250 presented_frames=169 action_frames=120 actions_executed=8 wall_ms=1620.810 process_cpu_ms=3130.677 process_cpu_utilization_pct=193.16 present_window=last-completed-rolling-window present_window_frames=114 present_window_fps=111.611 present_window_average_ms=8.960 present_window_p99_ms=25.405 present_window_max_ms=41.603 visual_verification=not-performed
+[mono=154113.764 present=773] phase=shadow_ground_view index=2 status=running minimum_present_frames=90 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154113.764 present=773] action phase=shadow_ground_view frame=0 type=mouse_move x=0 y=32
+[mono=154113.818 present=777] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.876 present=781] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.916 present=784] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154113.959 present=787] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.034 present=793] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.034 present=793] action phase=shadow_ground_view frame=15 type=mouse_move x=0 y=24
+[mono=154114.067 present=796] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.104 present=799] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.283 present=810] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.351 present=816] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.377 present=818] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.436 present=823] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.454 present=825] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.469 present=827] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.509 present=831] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.542 present=834] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.612 present=839] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.650 present=841] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.677 present=843] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.786 present=851] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.960 present=862] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154114.977 present=865] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154115.061 present=873] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154115.113 present=877] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154115.250 present=885] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154115.282 present=888] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154115.282 present=888] phase=shadow_ground_view index=2 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=197 presented_frames=115 action_frames=90 actions_executed=2 wall_ms=1517.805 process_cpu_ms=2873.553 process_cpu_utilization_pct=189.32 present_window=last-completed-rolling-window present_window_frames=70 present_window_fps=69.806 present_window_average_ms=14.326 present_window_p99_ms=47.906 present_window_max_ms=47.906 visual_verification=not-performed
+[mono=154115.305 present=888] phase=shadow_motion index=3 status=running minimum_present_frames=120 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154115.305 present=888] action phase=shadow_motion frame=0 input=W down=1
+[mono=154115.360 present=893] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154115.427 present=899] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154120.197 present=914] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154120.532 present=919] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154120.625 present=922] action phase=shadow_motion frame=30 type=mouse_move x=12 y=0
+[mono=154121.570 present=952] action phase=shadow_motion frame=60 type=mouse_move x=-12 y=0
+[mono=154121.993 present=961] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154122.695 present=983] action phase=shadow_motion frame=90 input=W down=0
+[mono=154122.952 present=991] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154123.661 present=1014] phase=shadow_motion index=3 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=248 presented_frames=126 action_frames=120 actions_executed=4 wall_ms=8355.888 process_cpu_ms=13631.541 process_cpu_utilization_pct=163.14 present_window=last-completed-rolling-window present_window_frames=33 present_window_fps=31.992 present_window_average_ms=31.258 present_window_p99_ms=41.682 present_window_max_ms=41.682 visual_verification=not-performed
+[mono=154123.684 present=1014] phase=movement_directions index=4 status=running minimum_present_frames=150 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154123.684 present=1014] action phase=movement_directions frame=0 input=W down=1
+[mono=154125.356 present=1069] action phase=movement_directions frame=55 input=W down=0
+[mono=154125.356 present=1069] action phase=movement_directions frame=55 input=A down=1
+[mono=154126.306 present=1099] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154126.334 present=1100] action phase=movement_directions frame=85 input=A down=0
+[mono=154126.334 present=1100] action phase=movement_directions frame=85 input=D down=1
+[mono=154127.249 present=1130] action phase=movement_directions frame=115 input=D down=0
+[mono=154127.250 present=1130] action phase=movement_directions frame=115 input=S down=1
+[mono=154128.011 present=1155] action phase=movement_directions frame=140 input=S down=0
+[mono=154128.349 present=1165] phase=movement_directions index=4 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=302 presented_frames=151 action_frames=150 actions_executed=8 wall_ms=4664.587 process_cpu_ms=11835.460 process_cpu_utilization_pct=253.73 present_window=last-completed-rolling-window present_window_frames=32 present_window_fps=31.627 present_window_average_ms=31.619 present_window_p99_ms=48.995 present_window_max_ms=48.995 visual_verification=not-performed
+[mono=154128.376 present=1165] phase=jump_sprint index=5 status=running minimum_present_frames=150 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154128.376 present=1165] action phase=jump_sprint frame=0 input=LeftShift down=1
+[mono=154128.376 present=1165] action phase=jump_sprint frame=0 input=W down=1
+[mono=154129.283 present=1195] action phase=jump_sprint frame=30 input=Space down=1
+[mono=154129.676 present=1207] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154129.795 present=1211] action phase=jump_sprint frame=45 input=Space down=0
+[mono=154131.230 present=1256] action phase=jump_sprint frame=90 input=Space down=1
+[mono=154131.720 present=1271] action phase=jump_sprint frame=105 input=Space down=0
+[mono=154131.856 present=1275] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154132.111 present=1283] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154132.599 present=1298] action phase=jump_sprint frame=130 input=W down=0
+[mono=154132.599 present=1298] action phase=jump_sprint frame=130 input=LeftShift down=0
+[mono=154133.255 present=1318] phase=jump_sprint index=5 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=306 presented_frames=153 action_frames=150 actions_executed=8 wall_ms=4878.737 process_cpu_ms=12714.292 process_cpu_utilization_pct=260.61 present_window=last-completed-rolling-window present_window_frames=31 present_window_fps=30.707 present_window_average_ms=32.566 present_window_p99_ms=45.292 present_window_max_ms=45.292 visual_verification=not-performed
+[mono=154133.279 present=1318] phase=target_lock index=6 status=running minimum_present_frames=120 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154133.279 present=1318] action phase=target_lock frame=0 input=Tab down=1
+[mono=154133.634 present=1330] action phase=target_lock frame=12 input=Tab down=0
+[mono=154133.893 present=1338] action phase=target_lock frame=20 type=mouse_move x=20 y=0
+[mono=154134.364 present=1353] action phase=target_lock frame=35 input=Tab down=1
+[mono=154134.733 present=1365] action phase=target_lock frame=47 input=Tab down=0
+[mono=154134.983 present=1373] action phase=target_lock frame=55 input=LeftMouse down=1
+[mono=154135.455 present=1388] action phase=target_lock frame=70 input=LeftMouse down=0
+[mono=154135.765 present=1398] action phase=target_lock frame=80 type=mouse_move x=-20 y=0
+[mono=154136.077 present=1408] action phase=target_lock frame=90 input=Tab down=1
+[mono=154136.449 present=1420] action phase=target_lock frame=102 input=Tab down=0
+[mono=154137.008 present=1438] phase=target_lock index=6 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=240 presented_frames=120 action_frames=120 actions_executed=10 wall_ms=3729.298 process_cpu_ms=9310.871 process_cpu_utilization_pct=249.67 present_window=last-completed-rolling-window present_window_frames=33 present_window_fps=31.961 present_window_average_ms=31.288 present_window_p99_ms=36.082 present_window_max_ms=36.082 visual_verification=not-performed
+[mono=154137.038 present=1438] phase=combat_primary index=7 status=running minimum_present_frames=150 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154137.314 present=1448] action phase=combat_primary frame=10 input=LeftMouse down=1
+[mono=154137.774 present=1463] action phase=combat_primary frame=25 input=LeftMouse down=0
+[mono=154138.237 present=1478] action phase=combat_primary frame=40 input=LeftMouse down=1
+[mono=154138.705 present=1493] action phase=combat_primary frame=55 input=LeftMouse down=0
+[mono=154139.174 present=1508] action phase=combat_primary frame=70 input=LeftMouse down=1
+[mono=154139.639 present=1523] action phase=combat_primary frame=85 input=LeftMouse down=0
+[mono=154140.119 present=1538] action phase=combat_primary frame=100 input=RightMouse down=1
+[mono=154140.750 present=1558] action phase=combat_primary frame=120 input=RightMouse down=0
+[mono=154141.660 present=1588] phase=combat_primary index=7 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=300 presented_frames=150 action_frames=150 actions_executed=8 wall_ms=4621.275 process_cpu_ms=12076.859 process_cpu_utilization_pct=261.33 present_window=last-completed-rolling-window present_window_frames=33 present_window_fps=32.771 present_window_average_ms=30.515 present_window_p99_ms=38.729 present_window_max_ms=38.729 visual_verification=not-performed
+[mono=154141.688 present=1588] phase=grab_followup index=8 status=running minimum_present_frames=130 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154141.688 present=1588] action phase=grab_followup frame=0 input=E down=1
+[mono=154142.407 present=1613] action phase=grab_followup frame=25 input=E down=0
+[mono=154142.852 present=1628] action phase=grab_followup frame=40 input=E down=1
+[mono=154143.599 present=1653] action phase=grab_followup frame=65 input=E down=0
+[mono=154143.749 present=1658] action phase=grab_followup frame=70 input=RightMouse down=1
+[mono=154144.236 present=1673] action phase=grab_followup frame=85 input=RightMouse down=0
+[mono=154144.551 present=1683] action phase=grab_followup frame=95 input=E down=1
+[mono=154145.017 present=1698] action phase=grab_followup frame=110 input=E down=0
+[mono=154145.634 present=1718] phase=grab_followup index=8 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=260 presented_frames=130 action_frames=130 actions_executed=8 wall_ms=3945.787 process_cpu_ms=10556.705 process_cpu_utilization_pct=267.54 present_window=last-completed-rolling-window present_window_frames=33 present_window_fps=32.469 present_window_average_ms=30.798 present_window_p99_ms=39.892 present_window_max_ms=39.892 visual_verification=not-performed
+[mono=154145.658 present=1718] phase=powers_and_abilities index=9 status=running minimum_present_frames=180 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154145.658 present=1718] action phase=powers_and_abilities frame=0 input=1 down=1
+[mono=154145.939 present=1728] action phase=powers_and_abilities frame=10 input=1 down=0
+[mono=154146.471 present=1735] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154146.703 present=1737] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154147.098 present=1750] action phase=powers_and_abilities frame=30 input=2 down=1
+[mono=154147.407 present=1760] action phase=powers_and_abilities frame=40 input=2 down=0
+[mono=154147.571 present=1765] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154148.049 present=1781] action phase=powers_and_abilities frame=60 input=3 down=1
+[mono=154148.353 present=1791] action phase=powers_and_abilities frame=70 input=3 down=0
+[mono=154148.601 present=1797] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154148.879 present=1800] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154149.265 present=1813] action phase=powers_and_abilities frame=90 input=4 down=1
+[mono=154149.567 present=1823] action phase=powers_and_abilities frame=100 input=4 down=0
+[mono=154149.805 present=1829] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154150.280 present=1844] action phase=powers_and_abilities frame=120 input=Q down=1
+[mono=154150.607 present=1854] action phase=powers_and_abilities frame=130 input=Q down=0
+[mono=154152.211 present=1904] phase=powers_and_abilities index=9 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=372 presented_frames=186 action_frames=180 actions_executed=10 wall_ms=6552.410 process_cpu_ms=16650.083 process_cpu_utilization_pct=254.11 present_window=last-completed-rolling-window present_window_frames=32 present_window_fps=31.681 present_window_average_ms=31.565 present_window_p99_ms=37.726 present_window_max_ms=37.726 visual_verification=not-performed
+[mono=154152.233 present=1904] phase=power_wheel index=10 status=running minimum_present_frames=100 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154152.233 present=1904] action phase=power_wheel frame=0 input=R down=1
+[mono=154152.727 present=1919] action phase=power_wheel frame=15 type=mouse_move x=24 y=0
+[mono=154153.197 present=1934] action phase=power_wheel frame=30 type=mouse_move x=0 y=24
+[mono=154153.694 present=1949] action phase=power_wheel frame=45 type=mouse_move x=-24 y=0
+[mono=154154.182 present=1964] action phase=power_wheel frame=60 input=R down=0
+[mono=154154.693 present=1979] action phase=power_wheel frame=75 input=1 down=1
+[mono=154155.010 present=1989] action phase=power_wheel frame=85 input=1 down=0
+[mono=154155.480 present=2004] phase=power_wheel index=10 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=200 presented_frames=100 action_frames=100 actions_executed=7 wall_ms=3246.432 process_cpu_ms=8202.809 process_cpu_utilization_pct=252.67 present_window=last-completed-rolling-window present_window_frames=32 present_window_fps=31.449 present_window_average_ms=31.797 present_window_p99_ms=96.079 present_window_max_ms=96.079 visual_verification=not-performed
+[mono=154155.504 present=2004] phase=disguise_wheel index=11 status=running minimum_present_frames=90 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154155.504 present=2004] action phase=disguise_wheel frame=0 input=F down=1
+[mono=154155.987 present=2019] action phase=disguise_wheel frame=15 type=mouse_move x=-24 y=0
+[mono=154156.454 present=2034] action phase=disguise_wheel frame=30 type=mouse_move x=0 y=24
+[mono=154156.914 present=2049] action phase=disguise_wheel frame=45 type=mouse_move x=24 y=0
+[mono=154157.380 present=2064] action phase=disguise_wheel frame=60 input=F down=0
+[mono=154158.316 present=2094] phase=disguise_wheel index=11 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=180 presented_frames=90 action_frames=90 actions_executed=5 wall_ms=2811.049 process_cpu_ms=7340.139 process_cpu_utilization_pct=261.12 present_window=last-completed-rolling-window present_window_frames=33 present_window_fps=32.331 present_window_average_ms=30.930 present_window_p99_ms=36.081 present_window_max_ms=36.081 visual_verification=not-performed
+[mono=154158.343 present=2094] phase=disguise_forms index=12 status=running minimum_present_frames=100 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154158.343 present=2094] action phase=disguise_forms frame=0 input=F1 down=1
+[mono=154158.682 present=2106] action phase=disguise_forms frame=12 input=F1 down=0
+[mono=154159.395 present=2129] action phase=disguise_forms frame=35 input=F2 down=1
+[mono=154159.767 present=2141] action phase=disguise_forms frame=47 input=F2 down=0
+[mono=154160.475 present=2164] action phase=disguise_forms frame=70 input=F1 down=1
+[mono=154160.834 present=2176] action phase=disguise_forms frame=82 input=F1 down=0
+[mono=154161.377 present=2194] phase=disguise_forms index=12 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=200 presented_frames=100 action_frames=100 actions_executed=6 wall_ms=3033.806 process_cpu_ms=8028.397 process_cpu_utilization_pct=264.63 present_window=last-completed-rolling-window present_window_frames=34 present_window_fps=33.228 present_window_average_ms=30.095 present_window_p99_ms=33.284 present_window_max_ms=33.284 visual_verification=not-performed
+[mono=154161.399 present=2194] phase=particles_effects index=13 status=running minimum_present_frames=140 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154161.400 present=2194] action phase=particles_effects frame=0 input=W down=1
+[mono=154161.833 present=2209] action phase=particles_effects frame=15 input=LeftMouse down=1
+[mono=154162.285 present=2224] action phase=particles_effects frame=30 input=LeftMouse down=0
+[mono=154162.732 present=2239] action phase=particles_effects frame=45 input=RightMouse down=1
+[mono=154163.333 present=2259] action phase=particles_effects frame=65 input=RightMouse down=0
+[mono=154163.777 present=2274] action phase=particles_effects frame=80 input=LeftMouse down=1
+[mono=154164.229 present=2289] action phase=particles_effects frame=95 input=LeftMouse down=0
+[mono=154164.687 present=2304] action phase=particles_effects frame=110 input=W down=0
+[mono=154164.687 present=2304] action phase=particles_effects frame=110 type=mouse_move x=20 y=-12
+[mono=154165.593 present=2334] phase=particles_effects index=13 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=280 presented_frames=140 action_frames=140 actions_executed=9 wall_ms=4193.602 process_cpu_ms=11191.064 process_cpu_utilization_pct=266.86 present_window=last-completed-rolling-window present_window_frames=34 present_window_fps=33.102 present_window_average_ms=30.210 present_window_p99_ms=33.944 present_window_max_ms=33.944 visual_verification=not-performed
+[mono=154165.620 present=2334] phase=lighting_exposure index=14 status=running minimum_present_frames=120 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154165.620 present=2334] action phase=lighting_exposure frame=0 type=mouse_move x=-32 y=-16
+[mono=154166.193 present=2354] action phase=lighting_exposure frame=20 type=mouse_move x=-32 y=0
+[mono=154166.805 present=2374] action phase=lighting_exposure frame=40 type=mouse_move x=-32 y=0
+[mono=154167.414 present=2394] action phase=lighting_exposure frame=60 type=mouse_move x=-32 y=0
+[mono=154168.027 present=2414] action phase=lighting_exposure frame=80 type=mouse_move x=-32 y=0
+[mono=154168.650 present=2434] action phase=lighting_exposure frame=100 type=mouse_move x=-32 y=0
+[mono=154169.257 present=2454] phase=lighting_exposure index=14 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=240 presented_frames=120 action_frames=120 actions_executed=6 wall_ms=3637.144 process_cpu_ms=9414.188 process_cpu_utilization_pct=258.83 present_window=last-completed-rolling-window present_window_frames=33 present_window_fps=32.552 present_window_average_ms=30.720 present_window_p99_ms=37.113 present_window_max_ms=37.113 visual_verification=not-performed
+[mono=154169.283 present=2454] phase=assets_streaming index=15 status=running minimum_present_frames=240 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154169.283 present=2454] action phase=assets_streaming frame=0 input=LeftShift down=1
+[mono=154169.283 present=2454] action phase=assets_streaming frame=0 input=W down=1
+[mono=154171.032 present=2514] action phase=assets_streaming frame=60 type=mouse_move x=18 y=0
+[mono=154172.777 present=2574] action phase=assets_streaming frame=120 type=mouse_move x=-18 y=0
+[mono=154174.529 present=2634] action phase=assets_streaming frame=180 type=mouse_move x=18 y=0
+[mono=154175.081 present=2654] action phase=assets_streaming frame=200 input=W down=0
+[mono=154175.081 present=2654] action phase=assets_streaming frame=200 input=LeftShift down=0
+[mono=154176.089 present=2694] phase=assets_streaming index=15 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=480 presented_frames=240 action_frames=240 actions_executed=7 wall_ms=6806.556 process_cpu_ms=18040.416 process_cpu_utilization_pct=265.04 present_window=last-completed-rolling-window present_window_frames=37 present_window_fps=36.738 present_window_average_ms=27.220 present_window_p99_ms=32.683 present_window_max_ms=32.683 visual_verification=not-performed
+[mono=154176.116 present=2694] phase=audio_mix index=16 status=running minimum_present_frames=120 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154176.116 present=2694] action phase=audio_mix frame=0 input=W down=1
+[mono=154176.202 present=2698] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154176.574 present=2710] action phase=audio_mix frame=15 input=LeftMouse down=1
+[mono=154177.003 present=2725] action phase=audio_mix frame=30 input=LeftMouse down=0
+[mono=154177.839 present=2755] action phase=audio_mix frame=60 input=W down=0
+[mono=154177.979 present=2760] action phase=audio_mix frame=65 input=RightMouse down=1
+[mono=154178.541 present=2780] action phase=audio_mix frame=85 input=RightMouse down=0
+[mono=154179.579 present=2815] phase=audio_mix index=16 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=242 presented_frames=121 action_frames=120 actions_executed=6 wall_ms=3462.914 process_cpu_ms=8908.831 process_cpu_utilization_pct=257.26 present_window=last-completed-rolling-window present_window_frames=34 present_window_fps=33.747 present_window_average_ms=29.632 present_window_p99_ms=38.562 present_window_max_ms=38.562 visual_verification=not-performed
+[mono=154179.602 present=2815] phase=bink_video index=17 status=skipped reason=direct Level entry does not request a movie; normal Bink playback is not covered
+[mono=154179.621 present=2815] phase=android_touch_overlay index=18 status=skipped reason=automation uses the ordinary SDL input boundary, not physical touch
+[mono=154179.636 present=2815] phase=save_isolation index=19 status=running minimum_present_frames=60 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154179.865 present=2824] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154180.540 present=2847] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154181.159 present=2870] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154181.217 present=2874] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154181.249 present=2879] phase=save_isolation index=19 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=111 presented_frames=64 action_frames=60 actions_executed=0 wall_ms=1613.396 process_cpu_ms=3982.849 process_cpu_utilization_pct=246.86 present_window=last-completed-rolling-window present_window_frames=34 present_window_fps=33.719 present_window_average_ms=29.657 present_window_p99_ms=75.147 present_window_max_ms=75.147 visual_verification=not-performed
+[mono=154181.278 present=2880] phase=memory_thread_stress index=20 status=running minimum_present_frames=180 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154181.278 present=2880] action phase=memory_thread_stress frame=0 input=LeftShift down=1
+[mono=154181.278 present=2880] action phase=memory_thread_stress frame=0 input=W down=1
+[mono=154181.281 present=2881] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154181.954 present=2901] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154181.955 present=2901] action phase=memory_thread_stress frame=20 input=LeftMouse down=1
+[mono=154182.064 present=2913] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.083 present=2915] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.103 present=2917] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.133 present=2920] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.133 present=2920] action phase=memory_thread_stress frame=35 input=LeftMouse down=0
+[mono=154182.188 present=2926] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.235 present=2931] action phase=memory_thread_stress frame=45 type=mouse_move x=16 y=0
+[mono=154182.336 present=2945] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.358 present=2947] action phase=memory_thread_stress frame=60 input=Space down=1
+[mono=154182.406 present=2954] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.436 present=2958] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.456 present=2961] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.494 present=2965] action phase=memory_thread_stress frame=75 input=Space down=0
+[mono=154182.542 present=2971] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.585 present=2976] action phase=memory_thread_stress frame=85 input=RightMouse down=1
+[mono=154182.651 present=2984] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.761 present=2997] action phase=memory_thread_stress frame=105 input=RightMouse down=0
+[mono=154182.839 present=3007] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154182.894 present=3013] action phase=memory_thread_stress frame=120 type=mouse_move x=-16 y=0
+[mono=154182.978 present=3023] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.001 present=3026] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.035 present=3030] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.090 present=3036] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.099 present=3037] action phase=memory_thread_stress frame=140 input=W down=0
+[mono=154183.099 present=3037] action phase=memory_thread_stress frame=140 input=LeftShift down=0
+[mono=154183.136 present=3041] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.221 present=3051] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.248 present=3054] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.274 present=3057] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.395 present=3073] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.455 present=3081] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.478 present=3083] phase=memory_thread_stress index=20 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=204 presented_frames=203 action_frames=180 actions_executed=12 wall_ms=2200.379 process_cpu_ms=3477.785 process_cpu_utilization_pct=158.05 present_window=last-completed-rolling-window present_window_frames=104 present_window_fps=103.264 present_window_average_ms=9.684 present_window_p99_ms=12.989 present_window_max_ms=132.284 visual_verification=not-performed
+[mono=154183.508 present=3084] phase=recovery_idle index=21 status=running minimum_present_frames=90 action_frame_policy=one-per-engine-update-with-new-present
+[mono=154183.513 present=3085] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.558 present=3090] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.633 present=3099] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.688 present=3105] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.758 present=3114] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.812 present=3121] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.832 present=3123] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.854 present=3126] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154183.875 present=3128] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154184.031 present=3147] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154184.154 present=3162] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154184.191 present=3166] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154184.230 present=3171] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154184.264 present=3175] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154184.357 present=3185] present_batch count=2 action_steps=1 policy=action-timeline-not-compressed
+[mono=154184.381 present=3188] phase=recovery_idle index=21 status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed gameplay_dispatches=104 presented_frames=104 action_frames=90 actions_executed=0 wall_ms=873.308 process_cpu_ms=1603.827 process_cpu_utilization_pct=183.65 present_window=last-completed-rolling-window present_window_frames=117 present_window_fps=116.831 present_window_average_ms=8.559 present_window_p99_ms=14.396 present_window_max_ms=33.164 visual_verification=not-performed
+[mono=154184.387 present=3188] result=complete reason=all requested phases reached a recorded tested or skipped outcome gameplay_dispatches=4942 wall_ms=74131.869 process_cpu_ms=177393.279 process_cpu_utilization_pct=239.29 actions_executed=124 action_frames=2570 presented_frames=2742 visual_verification=not-performed physical_device_validation=not-performed
