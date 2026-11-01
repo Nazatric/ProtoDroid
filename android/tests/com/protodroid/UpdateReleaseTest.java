@@ -6,6 +6,7 @@ import org.json.JSONException;
 public final class UpdateReleaseTest {
     private static final String VALID = "{"
             + "\"tag_name\":\"protodroid-v0.10\",\"draft\":false,\"prerelease\":false,"
+            + "\"html_url\":\"https://github.com/Nazatric/ProtoDroid/releases/tag/protodroid-v0.10\","
             + "\"body\":\"Version 0.10 (versionCode 11)\\n"
             + "APK SHA-256: `0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`\\n"
             + "Signing certificate SHA-256: `abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789`\","
@@ -16,6 +17,8 @@ public final class UpdateReleaseTest {
     public static void main(String[] args) throws Exception {
         UpdateRelease release = UpdateRelease.parse(VALID);
         check("0.10".equals(release.versionName), "visible version");
+        check("https://github.com/Nazatric/ProtoDroid/releases/tag/protodroid-v0.10".equals(release.htmlUrl),
+                "exact release page");
         check(release.versionCode == 11L, "integer versionCode");
         check(release.isNewerThan(10L) && !release.isNewerThan(11L), "version comparison");
         check(release.sizeBytes == 47672216L, "asset size");
@@ -30,6 +33,10 @@ public final class UpdateReleaseTest {
         reject(VALID.replace("prototype.apk\",", "other.apk\","), "asset name");
         reject(VALID.replace("https://github.com/Nazatric/ProtoDroid", "https://example.com/Nazatric/ProtoDroid"),
                 "download host");
+        reject(VALID.replace("https://github.com/Nazatric/ProtoDroid/releases/tag",
+                "https://example.com/Nazatric/ProtoDroid/releases/tag"), "release page host");
+        reject(VALID.replace("releases/tag/protodroid-v0.10", "releases/tag/protodroid-v0.11"),
+                "release page tag");
         reject(VALID.replace("versionCode 11", "versionCode eleven"), "version code");
         reject(VALID.replace("Version 0.10", "Version 0.9"), "tag/body mismatch");
         reject(VALID.replace("APK SHA-256:", "APK digest:"), "APK hash");

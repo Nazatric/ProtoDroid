@@ -24,15 +24,17 @@ final class UpdateRelease {
 
     final String versionName;
     final long versionCode;
+    final String htmlUrl;
     final String downloadUrl;
     final long sizeBytes;
     final String apkSha256;
     final String certificateSha256;
 
-    UpdateRelease(String versionName, long versionCode, String downloadUrl, long sizeBytes,
+    UpdateRelease(String versionName, long versionCode, String htmlUrl, String downloadUrl, long sizeBytes,
                   String apkSha256, String certificateSha256) {
         this.versionName = versionName;
         this.versionCode = versionCode;
+        this.htmlUrl = htmlUrl;
         this.downloadUrl = downloadUrl;
         this.sizeBytes = sizeBytes;
         this.apkSha256 = apkSha256;
@@ -52,6 +54,8 @@ final class UpdateRelease {
         Matcher tag = TAG.matcher(root.optString("tag_name", ""));
         if (!tag.matches()) throw new JSONException("unexpected release tag");
         String versionName = tag.group(1);
+        String htmlUrl = root.optString("html_url", "");
+        validateReleasePageUrl(htmlUrl, versionName);
         String body = root.optString("body", "");
         Matcher statedVersion = RELEASE_VERSION.matcher(body);
         if (!statedVersion.find()) throw new JSONException("release has no verified versionCode");
@@ -79,7 +83,8 @@ final class UpdateRelease {
         if (sizeBytes <= 0L || sizeBytes > MAX_APK_BYTES) {
             throw new JSONException("invalid APK size");
         }
-        return new UpdateRelease(versionName, versionCode, downloadUrl, sizeBytes, apkSha256, certificateSha256);
+        return new UpdateRelease(versionName, versionCode, htmlUrl, downloadUrl, sizeBytes,
+                apkSha256, certificateSha256);
     }
 
     private static long positiveNumber(String text) throws JSONException {
@@ -96,6 +101,21 @@ final class UpdateRelease {
         Matcher matcher = pattern.matcher(text);
         if (!matcher.find()) throw new JSONException("release has no " + label);
         return matcher.group(1).toLowerCase(Locale.ROOT);
+    }
+
+    private static void validateReleasePageUrl(String value, String versionName) throws JSONException {
+        try {
+            URI uri = new URI(value);
+            String host = uri.getHost();
+            String expectedPath = "/Nazatric/ProtoDroid/releases/tag/protodroid-v" + versionName;
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || host == null
+                    || !("github.com".equalsIgnoreCase(host) || "www.github.com".equalsIgnoreCase(host))
+                    || uri.getUserInfo() != null || !expectedPath.equals(uri.getPath())) {
+                throw new JSONException("release page is not the official ProtoDroid release");
+            }
+        } catch (URISyntaxException e) {
+            throw new JSONException("invalid release page URL");
+        }
     }
 
     private static void validateDownloadUrl(String value) throws JSONException {

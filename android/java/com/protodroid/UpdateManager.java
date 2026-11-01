@@ -50,6 +50,7 @@ final class UpdateManager {
     private static final String KEY_VERSION_NAME = "version_name";
     private static final String KEY_VERSION_CODE = "version_code";
     private static final String KEY_URL = "url";
+    private static final String KEY_RELEASE_URL = "release_url";
     private static final String KEY_SIZE = "size";
     private static final String KEY_APK_SHA256 = "apk_sha256";
     private static final String KEY_CERTIFICATE_SHA256 = "certificate_sha256";
@@ -751,6 +752,7 @@ final class UpdateManager {
                 .putString(KEY_VERSION_NAME, release.versionName)
                 .putLong(KEY_VERSION_CODE, release.versionCode)
                 .putString(KEY_URL, release.downloadUrl)
+                .putString(KEY_RELEASE_URL, release.htmlUrl)
                 .putLong(KEY_SIZE, release.sizeBytes)
                 .putString(KEY_APK_SHA256, release.apkSha256)
                 .putString(KEY_CERTIFICATE_SHA256, release.certificateSha256)
@@ -767,7 +769,8 @@ final class UpdateManager {
         if (name == null || url == null || apkSha256 == null || certificate == null || code <= 0L || size <= 0L) {
             return null;
         }
-        return new UpdateRelease(name, code, url, size, apkSha256, certificate);
+        String htmlUrl = prefs.getString(KEY_RELEASE_URL, RELEASES_URL);
+        return new UpdateRelease(name, code, htmlUrl, url, size, apkSha256, certificate);
     }
 
     private void removeDownload() {
@@ -786,7 +789,8 @@ final class UpdateManager {
 
     private void clearDownloadPrefs() {
         prefs.edit().remove(KEY_DOWNLOAD_ID).remove(KEY_VERSION_NAME).remove(KEY_VERSION_CODE).remove(KEY_URL)
-                .remove(KEY_SIZE).remove(KEY_APK_SHA256).remove(KEY_CERTIFICATE_SHA256).apply();
+                .remove(KEY_RELEASE_URL).remove(KEY_SIZE).remove(KEY_APK_SHA256).remove(KEY_CERTIFICATE_SHA256)
+                .apply();
     }
 
     private long installedVersionCode() {
