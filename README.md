@@ -29,7 +29,7 @@
    - **Recommended:** `/storage/emulated/0/Prototype/`
    - **Also supported:** `/storage/emulated/0/Prototype/game/`
    - **App-specific:** `/storage/emulated/0/Android/data/com.protodroid/files/game/`
-3. Make sure the folder contains `prototypeenginef.dll` and the original archives and game folders. Grant file access if you use shared storage.
+3. Make sure the folder contains `prototypeenginef.dll`, `proto_uv.dat`, the original archives, and game folders. `proto_uv.dat` is required for startup. Grant file access if you use shared storage.
 4. Return to the launcher and tap **Check Again** if needed. When your game is detected, tap **Play**.
 
 On Android 11 or above, copy to the app-specific `Android/data` folder from a PC over USB. On Android 10 or below, a file manager with storage access also works. You do not need to keep two copies of the game.

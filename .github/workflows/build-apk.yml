@@ -165,6 +165,16 @@ jobs:
           java -cp /tmp/protodroid-update-test com.protodroid.UpdateReleaseTest
           java -cp /tmp/protodroid-update-test com.protodroid.UpdateDownloadPolicyTest
 
+      - name: Test required game-file detection
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-game-files-test
+          mkdir -p /tmp/protodroid-game-files-test
+          javac --release 11 -d /tmp/protodroid-game-files-test \
+            android/java/com/protodroid/GameFiles.java \
+            android/tests/com/protodroid/GameFilesTest.java
+          java -cp /tmp/protodroid-game-files-test com.protodroid.GameFilesTest
+
       - name: Test diagnostic-tour launcher cheat code
         run: |
           set -euo pipefail

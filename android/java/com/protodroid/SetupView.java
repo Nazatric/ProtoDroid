@@ -105,7 +105,7 @@ final class SetupView extends View {
 
     private static final long SLIDE_HOLD_MS = 6500L;
     private static final String[] REQUIREMENTS = {
-            "prototypeenginef.dll", ".rcf", ".p3d", "art", "audio", "scripts"
+            GameFiles.DLL, GameFiles.UV, ".rcf", ".p3d", "art", "audio", "scripts"
     };
     private static final String[] CATEGORY_NAMES = {"GRAPHICS", "GAME VIDEO", "CONTROLS", "INTERFACE"};
 

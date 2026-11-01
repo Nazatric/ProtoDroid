@@ -23,7 +23,6 @@ import java.io.File;
  * Also supports /sdcard/Prototype/game subfolder.
  */
 public class SetupActivity extends Activity {
-    private static final String DLL = "prototypeenginef.dll";
     private static final int REQUEST_STORAGE = 1;
 
     private SetupView setupView;
@@ -34,6 +33,7 @@ public class SetupActivity extends Activity {
     private DriverManager driverManager;
     private File foundGame;
     private boolean foundInApp;
+    private boolean missingUv;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -116,7 +116,9 @@ public class SetupActivity extends Activity {
                 : "/storage/emulated/0/Android/data/" + getPackageName() + "/files/game";
         String status = foundGame != null ? "Ready to play"
                 : access ? "Game files not found. Tap Play to check again" : "Waiting for file access";
-        if (tourArmed) {
+        if (missingUv) {
+            status = "Missing proto_uv.dat; copy it from your PC game";
+        } else if (tourArmed) {
             status = foundGame != null ? "Tour armed: isolated saves and logs" : "Tour armed; game files required";
         }
         setupView.setTourArmed(tourArmed);
@@ -161,10 +163,6 @@ public class SetupActivity extends Activity {
         return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
     }
 
-    private static boolean hasGame(File dir) {
-        return dir != null && new File(dir, DLL).canRead();
-    }
-
     @Override
     protected void onResume() {
         super.onResume();
@@ -190,21 +188,16 @@ public class SetupActivity extends Activity {
         if (app != null) app.mkdirs();
         File shared = sharedGame();
         File sharedSub = sharedGameSub();
-        if (hasSharedAccess()) {
+        boolean sharedAccess = hasSharedAccess();
+        if (sharedAccess) {
             shared.mkdirs();
             // Also ensure subfolder exists check doesn't create it yet, but ensure parent exists
         }
         // Detection is automatic; launching is deliberate so Settings remains available before every game start.
-        foundGame = null;
-        foundInApp = false;
-        if (hasGame(app)) {
-            foundGame = app;
-            foundInApp = true;
-        } else if (hasSharedAccess() && hasGame(shared)) {
-            foundGame = shared;
-        } else if (hasSharedAccess() && hasGame(sharedSub)) {
-            foundGame = sharedSub;
-        }
+        File[] candidates = sharedAccess ? new File[]{app, shared, sharedSub} : new File[]{app};
+        foundGame = GameFiles.firstComplete(candidates);
+        foundInApp = foundGame != null && foundGame.equals(app);
+        missingUv = foundGame == null && GameFiles.anyMissingUv(candidates);
         showSetup(app, shared);
     }
 
