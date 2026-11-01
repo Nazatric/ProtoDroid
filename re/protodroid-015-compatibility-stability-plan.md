@@ -1,6 +1,6 @@
 # ProtoDroid 0.15 compatibility and stability plan
 
-Status: research completed before edits; the planned source changes and local host/source validation are now complete. Exact-commit ARM64 CI is pending. This is not physical-device validation or a release approval. Version 0.15 remains unmerged and unreleased.
+Status: research, implementation, local host/source validation, and exact-commit ARM64 CI are complete. This is not physical-device validation or a release approval. Version 0.15 remains unmerged and unreleased.
 
 ## Method and boundaries
 
@@ -76,3 +76,11 @@ Preserve the mod platform, ARM64 ABI, original files, saves, controls/layout ind
 - Push the batched candidate and require the complete exact-commit workflow: host tests, dependency checks, real ARM64 native/plugin/wrapper linkage, Android compilation, driver/graphics/save/tour tests, signed APK packaging, and artifact/source verification.
 - Do not merge or release 0.15. Do not claim physical-device confirmation without affected-device logs/traces; `adb` is unavailable in this environment.
 - Record any unresolved device-specific items and the exact CI result in the research documentation. Keep the README concise, English-only, and free of universal compatibility/FPS claims.
+
+## Implementation and validation record
+
+- Source candidate: `af7c7e5b40b013b44c314d2f72a2a77c5dcde4a8` (`Add evidence-based compatibility and recovery controls`). It implements the wrapper-only effective-version override, append-only `V`/numbered-pad/IME controls, High/full-color DXT1 policy, optional fixed landscape recovery, persistent official archive access, regression tests, and concise documentation. Existing required-UV validation, unified-memory backport, AA/depth handling, mod platform, saves, FIFO/Reset, Bink, scheduler/ADPF, and driver recovery paths were not rewritten.
+- Local validation passed the new wrapper/compatibility/archive policies; existing mod, driver, release, issue-form, diagnostic-tour, and DXVK source checks; graphics/DXT, texture, detour, plugin, package, overlay, save, performance, affinity, Present, diagnostics, GPU negotiation, recovery, cache, and GameDB native tests; and Lua runtime tests under UBSan and ASan/UBSan. Local APK signing tools/JDK/Android SDK were unavailable, so those checks were left to CI rather than replaced with stubs.
+- Exact-commit workflow [41343699226](https://github.com/Nazatric/ProtoDroid/actions/runs/41343699226) passed for the source candidate. Host/Bink, driver-package, standalone ARM64 graphics, real ARM64 `libmain.so`, source ARM64 plugin/Lua examples, Android Java compilation, APK signing/packaging, embedded-DXVK/source verification, and artifact upload all succeeded. The release job was skipped.
+- APK artifact: `13099037576` (`prototype-apk`, 58,313,204 bytes in GitHub's artifact inventory). Other uploaded artifacts include debug symbols `13098982770`, make logs `13098548781`, ARM64 dependencies `13098462456`, the source mod example `13098299989`, and Turnip `13097977872`. No local APK-binary inspection or APK-file SHA-256 is claimed.
+- There is no pull request for this branch and no 0.15 release; the latest public release remains 0.14. No `adb` or affected physical device was available. PowerVR/Mali wrapper acceptance, #22/#28 visual causes, #27's missing-log crash, S23 Ultra long-session/flicker/rotation behavior, and device-specific power/performance remain unresolved until matched device evidence is supplied.
