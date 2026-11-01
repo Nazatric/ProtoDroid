@@ -210,6 +210,9 @@ jobs:
       - name: Test Drivers navigation touch cleanup
         run: python3 tools/test_driver_screen_navigation.py
 
+      - name: Test launcher immersive startup compatibility
+        run: python3 tools/test_immersive_mode.py
+
       - name: Test launcher update metadata and recovery policy
         run: |
           set -euo pipefail
