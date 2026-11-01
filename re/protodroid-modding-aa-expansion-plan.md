@@ -1,8 +1,8 @@
 # ProtoDroid 0.15: AA correctness and mod-platform expansion
 
-Status: implementation batches 1–3 are source-complete and host-tested; exact-commit ARM64 CI and physical-device AA verification are pending. Keep 0.15 unmerged and unreleased. Original game files remain read-only; probes use copies under `/tmp/protodroid-deep-re`.
+Status: implementation batches 1–3 are source-complete and validated in exact-commit CI; physical-device AA verification is pending. Keep 0.15 unmerged and unreleased. Original game files remain read-only; probes use copies under `/tmp/protodroid-deep-re`.
 
-Implemented evidence: the DXVK depth-resolve patch applies cleanly; generated symbols contain 105,037 records; the real Lua 5.4.8 runtime, dependency scanner, native ABI v1/v2/v3 fixtures, shipped Lua FOV example, and ASan/UBSan harness pass locally. No physical-device AA or third-party mod claim is made.
+Implemented evidence: the DXVK depth-resolve patch applies cleanly; generated symbols contain 105,037 records; the real Lua 5.4.8 runtime, dependency scanner, native ABI v1/v2/v3 fixtures, shipped Lua FOV example, and ASan/UBSan harness pass locally. Exact-commit CI run [41338443987](https://github.com/Nazatric/ProtoDroid/actions/runs/41338443987) at `ea96126ed03c52a5f5c042a747b68e9022494896` passed the Java lifecycle tests, host sanitizer suites, ARM64 native tests, Android compilation, DXVK/native build, source-built examples, and signed APK verification. The run produced `prototype-apk` artifact `13097067492` and `protodroid-mod-example` artifact `13096843372`; its release job was skipped. No physical-device AA or third-party mod claim is made.
 
 ## Evidence and research
 
@@ -50,7 +50,7 @@ Implemented evidence: the DXVK depth-resolve patch applies cleanly; generated sy
 2. Update the Mods library content labels and compatibility/load failures for scripts and dependencies. Preserve default-disabled import, enable/disable/remove, covers, options, and native trust confirmation.
 3. Document script and native APIs, security/trust boundaries, symbolic lookup, duplicate handling, event ordering, examples, and the distinction between implemented primitives and future high-level game/render bindings.
 4. Add host tests for manifest/dependency policy, symbol generation/lookup, Lua sandbox, memory limits, instruction limits, events, calls, hooks, error isolation, and ABI layout. Run sanitizer passes and full existing native/Java suites.
-5. Build the real ARM64 `libmain.so`, native example, script example, DXVK, and signed APK in exact-commit CI. No dummy APK, merge, release, or claim of universal device/mod compatibility.
+5. Build the real ARM64 `libmain.so`, native example, script example, DXVK, and signed APK in exact-commit CI. **Completed for the code at `ea96126` in run 41338443987.** No dummy APK, merge, release, or claim of universal device/mod compatibility.
 
 ## Later high-value layers (not falsely claimed by this batch)
 

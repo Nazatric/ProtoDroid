@@ -1,6 +1,6 @@
 # Native mod platform — evidence and implementation contract
 
-Status: 0.14's base contract plus in-progress 0.15 Lua/dependency/ABI-v3 extensions. Host tests cover the new implementation; this document does not claim physical-device validation.
+Status: 0.14's base contract plus 0.15 Lua/dependency/ABI-v3 extensions. Host tests and exact-commit ARM64 CI cover the new implementation; this document does not claim physical-device validation. Code commit `ea96126ed03c52a5f5c042a747b68e9022494896` passed CI run [41338443987](https://github.com/Nazatric/ProtoDroid/actions/runs/41338443987), including Android Java tests, native ARM64 tests, source-built examples, and signed APK verification.
 
 ## Research method and provenance
 
@@ -122,8 +122,6 @@ Existing `fps_limit`, `render_height`, display, driver, audio, save, and default
 Lua packages use independent states, text-only chunks, per-mod settings, restricted libraries, bounded module loading, allocator/instruction budgets, and protected callbacks. The generated `mod_symbols.inc` index is reproducible from `re/functions.csv`; exact duplicate names use ascending-RVA ordinals. Scripts and native plugins share the dependency-ordered package graph. Uncaught script failures disable only that state, preserve the original detour path when possible, and write a persistent launch error. States and detour storage remain alive through teardown.
 
 Public native source lives in `modding/include/protodroid_plugin.h`; complete native and Lua examples live in `modding/example/` and `modding/script-example/`.
-
-Public source lives in `modding/include/protodroid_plugin.h`; a complete example and packaging metadata live in `modding/example/`.
 
 The versioned C ABI provides only implemented capabilities:
 
