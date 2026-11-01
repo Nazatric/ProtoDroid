@@ -279,7 +279,7 @@ public final class ModPlatformTest {
     private static File createScriptMod(File root, String id, String dependencies, String source) throws IOException {
         File mod = createMod(root, id, "script = scripts/main.lua\nscript_api = 1\n", false);
         File metadata = new File(mod, ModManifest.FILE_NAME);
-        String text = Files.readString(metadata.toPath()).replace("api = 1", "api = 2");
+        String text = Files.readString(metadata.toPath()).replace("\napi = 1\n", "\napi = 2\n");
         if (!dependencies.isEmpty()) text = text.replace("name = Test mod", "name = Test mod\ndepends = " + dependencies);
         Files.writeString(metadata.toPath(), text);
         writeScript(mod, "scripts/main.lua", source);
