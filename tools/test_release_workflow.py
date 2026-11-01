@@ -33,4 +33,5 @@ assert "allow_ephemeral_release" not in release_if, (
 assert "publish_release == true" in release_if
 assert 'python3 tools/release_policy.py "$versionName" "$versionCode" "$certificateSha256"' in WORKFLOW
 assert 'android/java/com/protodroid/ModConfig.java' in WORKFLOW
+assert 'android/java/com/protodroid/ImmersiveMode.java' in WORKFLOW
 print("Workflow signing selection, dispatch parity, and separate certificate approval checks passed")

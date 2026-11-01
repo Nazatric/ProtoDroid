@@ -244,6 +244,7 @@ jobs:
           rm -rf /tmp/protodroid-mod-test
           mkdir -p /tmp/protodroid-mod-test
           javac --release 11 -cp "$ANDROID_JAR" -d /tmp/protodroid-mod-test \
+            android/java/com/protodroid/ImmersiveMode.java \
             android/java/com/protodroid/ModManifest.java \
             android/java/com/protodroid/ModConfig.java \
             android/java/com/protodroid/ModConfigActivity.java \
