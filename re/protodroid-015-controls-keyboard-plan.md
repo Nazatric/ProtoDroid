@@ -104,4 +104,13 @@ Research, plan, and the complete implementation batch are present in the working
 - Native UBSan graphics, mod, plugin, Lua (normal and ASan/UBSan), save, diagnostics, driver, state-cache, video-setting, AA, CPU, and presented-frame suites.
 - Repository compatibility, updater, release/workflow, issue-form, diagnostic-tour, native-mod, and Vulkan-wrapper tests; Java syntax parsing and workflow YAML parsing; `git diff --check`.
 
-The sandbox has no JDK/Android SDK, so the new Java model tests have been written but **not run locally**. They are wired into the real CI test job along with Android/SDL Java compilation and the ARM64/APK build. Exact-commit CI and physical Android acceptance remain pending. No PR or release has been created.
+The sandbox has no JDK/Android SDK, so the new Java model tests were not run locally. They subsequently ran and passed in the real CI test job along with Android/SDL Java compilation and the ARM64/APK build. Physical Android acceptance remains pending. No PR or release has been created.
+
+## Exact-commit CI result
+
+- **Tested source:** `ba1b01f26deffb1c538cc9d1b08c75d9986e4098` (`Add in-game keyboard and custom touch chords`).
+- **Workflow:** `build-apk.yml`, run **41379542243**, push event on `arena/78b126d7-protodroid`: **success**. The run head SHA exactly matches the source above and has no pull request.
+- The new keyboard/custom-button Java model tests passed, as did Android Java compilation, all host/ARM64 test jobs, fresh dependency patching, native ARM64 builds, D8/packaging, signing, and APK/embedded-DXVK verification.
+- Final `build-apk` job: **16m31s, success**. The `release` job was **skipped**. Latest release remains 0.14; no 0.15 release or PR exists.
+- Artifacts at query time (none expired): `prototype-apk` **13113462817** (58,332,457 bytes), `debug-symbols` **13112947968**, `make-logs` **13113422861**, `android-deps-arm64-v8a` **13112607690**, `protodroid-mod-example` **13113263642**, and `android-turnip-arm64-v8a` **13113345083**. These are CI artifacts, not a release.
+- CI proves source/build/test integrity, not touch feel or the physical Prototype cheat-screen result. Use the physical acceptance list above on Android before calling that report resolved on a device.
