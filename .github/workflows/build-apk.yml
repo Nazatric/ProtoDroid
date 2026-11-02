@@ -689,10 +689,10 @@ jobs:
       - name: Compile unsigned Compose base APK
         id: compose
         env:
-          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           SDL_SRC: /home/runner/SDL2-2.32.10
         run: |
           set -euo pipefail
+          export ANDROID_HOME="${ANDROID_SDK_ROOT:?Android SDK root is missing}"
           cd android
           ./gradlew --no-daemon --console=plain :launcher:assembleRelease 2>&1 | tee /tmp/protodroid-compose-build.log
 

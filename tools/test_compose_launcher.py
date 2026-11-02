@@ -69,6 +69,7 @@ assert "onLogoTap" in app and "logoTourCode.onLogoTap" in host
 assert "tourCode.onLetter" in host and "host.onLetter" in activity
 assert 'if (gameData.gameDataReady) StatusTag("READY", Bone)' in app
 assert "CHECK APP FOLDER" in app and "host.checkGameData()" in activity
+assert "permissions: Array<String>" in activity and "permissions: Array<out String>" not in activity
 assert "if (modsRequested) refreshMods()" in host, "startup must not scan every mod before the library is used"
 assert "OPEN TOUCH EDITOR" in app and "SETTINGS → CONTROLS → TOUCH LAYOUT" in app
 assert "host::openMods" in app and "host::openDriverPackages" in app
