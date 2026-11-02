@@ -51,6 +51,16 @@ These are direct UI acceptance failures despite the previous build/tests passing
 - Run the existing Java model tests in CI, all previous host/ARM64 regressions, fresh SDL patching, Android Java compilation, and exact-commit ARM64/APK CI.
 - Physical acceptance: compare new screenshots with the supplied failures; exercise all three keyboard pages, arrow labels, built-in hide/show, stick hide/show, custom create/rebind/delete, launcher-open/save/reopen, rotation, and in-game input. CI is not physical UI approval.
 
+## Exact validation result
+
+- Tested source: `aa50df08778ee336452955068481955c3491ded7` (`Rework touch keyboard and layout editor`).
+- Exact GitHub Actions run: `41383625342` — **success**. Host/Bink tests, Java controls models, Android Java/D8 compilation, native ARM64 regressions, real ARM64 source build, APK packaging/signing, APK verification, and artifact uploads passed. Release was **skipped**.
+- `prototype-apk`: artifact `13115530695`, 58,333,907 bytes.
+- `debug-symbols`: artifact `13115386492`; `make-logs`: artifact `13115401439`.
+- v0.14 remains the latest release; 0.15 is not merged or released.
+
 ## Current status
 
-Implementation is complete in the working tree: paged MAIN/MORE/NUMPAD keyboard, conventional keycaps, opaque editor bars, built-in/stick visibility persistence, standalone launcher editor, documentation, and regressions. Local structural, compatibility, native-mod, SDL-patch, launcher/update/release, immersive, diagnostic-tour, Vulkan, and patched-DXVK checks pass. Changed Java sources parse and the manifest is valid XML. Local `javac`/Android SDK remain unavailable, so Android Java/D8 and ARM64 compilation still require exact-commit CI. Next: review, commit, push, and run CI; no physical UI/input approval is claimed.
+Implementation and exact-source CI validation are complete. The keyboard now partitions all 104 keys across MAIN/MORE/NUMPAD, conventional labels also apply to inherited custom-button text, editor chrome is opaque and owns its touches, built-in/stick visibility persists without reindexing old geometry, and Settings → Controls → Touch layout opens a standalone editor without starting the game or calling SDL live-setting natives. Local structural, compatibility, native-mod, SDL-patch, launcher/update/release, immersive, diagnostic-tour, Vulkan, and patched-DXVK checks also passed.
+
+Physical acceptance is still required: compare the new screens with the supplied failures, exercise every page, verify touch targets/rotation, hide/show built-ins and the stick, create/rebind/delete customs, save/reopen from the launcher, and confirm real Prototype input/cheat-screen behavior. CI and source inspection do not prove that on-device interaction flow.
