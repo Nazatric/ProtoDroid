@@ -434,7 +434,7 @@ This batch intentionally keeps the existing launcher and game architecture. It i
 | Ordinary file-I/O overhead | **Implemented:** when detailed diagnostics are off, ReadFile/WriteFile skip diagnostic clocks, counter atomics and slow-event bookkeeping; the syscall and error behavior remain. Detailed mode retains the counters/events. | Source/host checks pass. No device I/O or FPS improvement is claimed without a before/after run. |
 | ADPF overhead without a session | **Implemented:** a session-active atomic avoids the per-Present mutex when ADPF is unavailable. The mutex remains for a live session and concurrent worker registration. | This removes a specific host-lock path; it does not establish a measurable device FPS gain. |
 | Auto recovery after failed Turnip | **Implemented:** on a direct <1.2 path, Auto re-runs the established direct/wrapper capability policy rather than retrying the same failed Turnip build. Explicit Turnip/Custom retry behavior is unchanged. | Affected Adreno devices must test the actual fallback. No capability is forced or invented. |
-| DXVK feature failure diagnostics | **Implemented:** the Android preflight checks the final logical-device feature set on every API path after optional clamping and before `vkCreateDevice`; existing logging names each missing feature. | This improves #31/#32-style failure evidence and can feed Auto recovery. The missing feature and compatibility outcome on those devices remain unknown. |
+| DXVK feature failure diagnostics | **Corrected after device evidence:** the first common preflight wrongly rejected a Mali-G720 before creation. The original Vulkan 1.2 check is restored; Vulkan 1.3 again reaches `vkCreateDevice`, and exact requested-feature names are audited only after an actual `VK_ERROR_FEATURE_NOT_PRESENT`. | Supplied 0.15 normal/tour logs confirmed the regression and exact commit. The correction is source-tested; physical Mali retesting and #31/#32 outcomes remain pending. |
 | UI and controls | **Unchanged:** existing launcher, Classic controls and Settings → Controls → Layout remain. Smart controls were not restored. | The separate future UI ZIP is not part of 0.15. |
 
 ### Open-issue disposition
@@ -446,7 +446,7 @@ This batch intentionally keeps the existing launcher and game architecture. It i
 | #25, #29 — Vulkan 1.1 PowerVR/Mali requests | No universal Vulkan 1.1 support claim. Auto may use the wrapper only when its isolated probe verifies the effective version and required features. |
 | #26 — camera/touch report | No speculative camera or touch rewrite was made; this batch does not claim to resolve it. |
 | #27 — PanVK crash | Experimental Custom PanVK policy is preserved; no unverified PanVK compiler/runtime patch was added. |
-| #31, #32 — DXVK feature-not-present failures | Final-feature preflight should name the actual unsupported requirement and Auto can try the established fallback. Neither issue is marked fixed without the affected device. |
+| #31, #32 — DXVK feature-not-present failures | A post-failure audit names requested features without pre-rejecting the device, and Auto can try the established fallback. Neither issue is marked fixed without the affected device. |
 
 Issue #21's UV/null-dereference constraints remain unchanged: no fabricated UV data, validation bypass or hidden null dereference was introduced.
 
@@ -454,7 +454,7 @@ Issue #21's UV/null-dereference constraints remain unchanged: no fabricated UV d
 
 - Strict `-Wall -Wextra -Werror` UBSan host tests passed for guest clocks, Present statistics, the 41-phase plan, ADPF sessions, GPU profiles and diagnostics.
 - Native syntax checks passed for the changed kernel/misc/Present/ADPF/tour paths. The tour check used a temporary SDL declaration shim and compiler format checking; it was not an Android runtime test.
-- Source-policy tests passed for ordinary-play I/O gating, no-session ADPF, Auto/wrapper recovery, compatibility controls, the tour clock/isolation/watchdog, and the actual patched DXVK preflight source. Existing DXVK unified-memory, depth-resolve and FXAA source tests also passed.
+- Source-policy tests passed for ordinary-play I/O gating, no-session ADPF, Auto/wrapper recovery, compatibility controls, the tour clock/isolation/watchdog, and the actual patched DXVK feature-diagnostic source. Existing DXVK unified-memory, depth-resolve and FXAA source tests also passed. The later Mali log regression produced an additional no-pre-create-rejection test.
 - Workflow YAML parsed successfully, Android build scripts passed `bash -n`, and `git diff --check` passed.
 - Local FFmpeg development headers, Android SDK/NDK, JDK compiler and adb were unavailable. Bink/Android/DXVK compilation and APK packaging therefore remain CI-pending; no local APK or physical-device result is claimed.
 

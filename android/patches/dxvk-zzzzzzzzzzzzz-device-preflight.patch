@@ -2,26 +2,18 @@ diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
 index 000000000..000000000 100644
 --- a/src/dxvk/dxvk_adapter.cpp
 +++ b/src/dxvk/dxvk_adapter.cpp
-@@ -1239,8 +1239,6 @@ namespace dxvk {
-         Logger::err("DxvkAdapter: missing required feature extExtendedDynamicState.extendedDynamicState");
-         throw DxvkError("DxvkAdapter: Vulkan 1.2 extendedDynamicState feature is required");
-       }
--      if (!checkFeatureSupport(enabledFeatures))
--        throw DxvkError("DxvkAdapter: required Vulkan 1.2/D3D9 features are not supported");
+@@ -1332,5 +1332,14 @@
+       vr = m_vki->vkCreateDevice(m_handle, &info, nullptr, &device);
      }
- #endif
-
-@@ -1321,5 +1319,13 @@ namespace dxvk {
-     if (env::getEnvVar("DXVK_NO_NULL_DESCRIPTOR") == "1")
-       enabledFeatures.extRobustness2.nullDescriptor = VK_FALSE;
 
 +#ifdef __ANDROID__
-+    // Check the final requested bits on every Android API path, after optional features have been clamped. Turnip
-+    // can otherwise reject vkCreateDevice with only VK_ERROR_FEATURE_NOT_PRESENT, hiding which D3D9/DXVK requirement
-+    // is absent. checkFeatureSupport logs every missing name; it never weakens or disables a required feature.
-+    if (!checkFeatureSupport(enabledFeatures))
-+      throw DxvkError("DxvkAdapter: required logical-device features are not supported");
++    // Never reject a device before the driver has answered: some Android drivers expose imperfect feature reports.
++    // If creation actually fails for a missing feature, retain the generic VkResult and add the exact requested names.
++    if (vr == VK_ERROR_FEATURE_NOT_PRESENT) {
++      Logger::err("DxvkAdapter: vkCreateDevice reported VK_ERROR_FEATURE_NOT_PRESENT; requested-feature audit follows");
++      checkFeatureSupport(enabledFeatures);
++    }
 +#endif
 +
-     VkDevice device = VK_NULL_HANDLE;
-     VkResult vr = m_vki->vkCreateDevice(m_handle, &info, nullptr, &device);
+     if (vr != VK_SUCCESS)
+       throw DxvkError(str::format("DxvkAdapter: Failed to create device: ", vr));
