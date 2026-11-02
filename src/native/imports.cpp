@@ -18,6 +18,10 @@
 
 namespace native {
 
+// Defined by runtime.cpp. Import handlers can call back into guest code, so the active context must follow the
+// import even when dispatch recognizes its thunk before attempting a recompiled-function lookup.
+extern thread_local Ctx* tl_ctx;
+
 namespace {
 
 uint32_t g_thunk_base = 0;
@@ -122,6 +126,8 @@ uint32_t ImportThunk(const char* dll, const char* name) {
 
 bool DispatchImport(Ctx* ctx, uint32_t target) {
     if (!g_thunk_base || target < g_thunk_base || target >= g_thunk_base + kThunkSize) return false;
+    Ctx* saved = tl_ctx;
+    tl_ctx = ctx;
     uint32_t index = (target - g_thunk_base) / kSlot;
     auto& slots = Slots();
     if (index >= slots.size() || (target & (kSlot - 1))) {
@@ -137,6 +143,7 @@ bool DispatchImport(Ctx* ctx, uint32_t target) {
     } else {
         s.fn(ctx);
     }
+    tl_ctx = saved;
     return true;
 }
 

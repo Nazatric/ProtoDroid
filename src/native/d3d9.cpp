@@ -375,7 +375,8 @@ uint32_t ShadowLock(void* object, uint32_t sub, void* host, uint32_t size, DWORD
     return s.guest;
 }
 
-void ShadowUnlock(void* object, uint32_t sub, const D3DSURFACE_DESC* texture_desc = nullptr) {
+void ShadowUnlock(void* object, uint32_t sub, const D3DSURFACE_DESC* texture_desc = nullptr,
+                  bool release_scratch = false) {
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
     auto it = g_shadows.find({object, sub});
     if (it == g_shadows.end() || !it->second.host) return;
@@ -390,6 +391,13 @@ void ShadowUnlock(void* object, uint32_t sub, const D3DSURFACE_DESC* texture_des
         }
     }
     D3D9ShadowCopyBack(s.host, Ptr<void>(s.guest), s.size, s.write_back);
+    if (release_scratch) {
+        // Adapted static textures do not need their upload buffer after the last consumer has run. Large entries
+        // are page-backed, so HeapFree also unmaps them; dynamic/ordinary locks retain their reusable shadows.
+        HeapFree(s.guest);
+        g_shadows.erase(it);
+        return;
+    }
     s.host = nullptr;
 }
 
@@ -595,6 +603,11 @@ bool AdaptedUnlock(void* tex, uint32_t sub, bool* host_locked, bool texture_2d =
         }
         l.host = nullptr;
     }
+    // The D3D lock pointer is invalid after UnlockRect. Release the compressed guest copy only after mod
+    // replacement and decoding have consumed it; this bounds static-texture upload memory instead of retaining one
+    // scratch allocation per subresource for the texture's entire lifetime.
+    HeapFree(l.guest);
+    g_adapted_locks.erase(it);
     return true;
 }
 
@@ -1200,9 +1213,11 @@ M(IDirect3DTexture9, UnlockRect) {
         } else {
             t->GetLevelDesc(level, &guest_desc);
         }
-        ShadowUnlock(t, level, &guest_desc);
+        ShadowUnlock(t, level, &guest_desc, a != nullptr);
     } else {
-        ShadowUnlock(t, level);  // ordinary Play keeps the original unlock route and avoids a DXVK description query
+        // Ordinary Play keeps the original unlock route and avoids a DXVK description query. Adapted static
+        // textures still release their completed upload scratch; all other shadows remain reusable.
+        ShadowUnlock(t, level, nullptr, a != nullptr);
     }
     Return(c, uint32_t(TimedTextureUpload([&] { return t->UnlockRect(a ? level - a->skip : level); })), 2);
 }
@@ -1239,7 +1254,7 @@ M(IDirect3DCubeTexture9, UnlockRect) {
                3);
         return;
     }
-    ShadowUnlock(t, face * 64 + level);
+    ShadowUnlock(t, face * 64 + level, nullptr, a != nullptr);
     Return(c,
            uint32_t(TimedTextureUpload(
                [&] { return t->UnlockRect(D3DCUBEMAP_FACES(face), a ? level - a->skip : level); })),

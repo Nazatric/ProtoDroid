@@ -59,4 +59,23 @@ on_create = activity.split("protected void onCreate", 1)[1]
 assert "orientation == 0" not in on_create, "Auto must retain the manifest sensorLandscape behavior"
 assert 'android:screenOrientation="sensorLandscape"' in manifest
 assert "https://github.com/Nazatric/ProtoDroid/releases" in readme and "**VERSIONS**" in readme
-print("Touch keyboard, AA/quality, orientation-default, and archive documentation checks passed")
+
+# Static-texture scratch is released only after every consumer. Ordinary/dynamic shadows keep their reuse policy.
+adapted_unlock = d3d9.split("bool AdaptedUnlock(void* tex", 1)[1].split("void ForgetResource", 1)[0]
+assert adapted_unlock.index("ModTexturesReplace") < adapted_unlock.index("DecodeDxt")
+assert adapted_unlock.index("DecodeDxt") < adapted_unlock.index("HeapFree(l.guest)")
+assert adapted_unlock.index("HeapFree(l.guest)") < adapted_unlock.index("g_adapted_locks.erase(it)")
+shadow_unlock = d3d9.split("void ShadowUnlock(void* object", 1)[1].split("void ForgetShadows", 1)[0]
+assert shadow_unlock.index("ModTexturesReplace") < shadow_unlock.index("D3D9ShadowCopyBack")
+assert shadow_unlock.index("D3D9ShadowCopyBack") < shadow_unlock.index("if (release_scratch)")
+assert shadow_unlock.index("if (release_scratch)") < shadow_unlock.index("HeapFree(s.guest)")
+texture_unlock = d3d9.split("M(IDirect3DTexture9, UnlockRect)", 1)[1].split(
+    "M(IDirect3DCubeTexture9, LockRect)", 1
+)[0]
+assert "ShadowUnlock(t, level, &guest_desc, a != nullptr)" in texture_unlock
+assert "ShadowUnlock(t, level, nullptr, a != nullptr)" in texture_unlock
+cube_unlock = d3d9.split("M(IDirect3DCubeTexture9, UnlockRect)", 1)[1].split(
+    "// D3DLOCKED_BOX", 1
+)[0]
+assert "ShadowUnlock(t, face * 64 + level, nullptr, a != nullptr)" in cube_unlock
+print("Touch keyboard, AA/quality, orientation-default, archive, and texture-scratch lifetime checks passed")

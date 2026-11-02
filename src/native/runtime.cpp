@@ -87,6 +87,9 @@ extern "C" void RecompDispatch(Ctx* ctx, uint32_t target) {
         if (const uint32_t task = DiagnosticTourGameplayTaskTarget(target, kEngineBase))
             DiagnosticTourGameplayObserved(task);
     }
+    // Import thunks occupy their own address range and cannot have a recompiled entry. Recognize them before the
+    // guest-function hash: D3D9/Win32 calls otherwise paid for a known-miss lookup on every crossing.
+    if (DispatchImport(ctx, target)) return;
     if (RecompFn fn = RecompLookup(target)) {
         fn(ctx);
         return;
@@ -102,13 +105,12 @@ extern "C" void RecompDispatch(Ctx* ctx, uint32_t target) {
             return;
         }
         target = real;
+        // An engine thunk can resolve to an import even though its original target was outside the import range.
+        if (DispatchImport(ctx, target)) return;
     }
-    Ctx* saved = tl_ctx;
+    // Preserve the active guest context for crash diagnostics; Fatal does not return.
     tl_ctx = ctx;
-    if (!DispatchImport(ctx, target)) {
-        Fatal("call to %08x: neither recompiled nor an import (return address %08x)", target, R32(ctx->esp));
-    }
-    tl_ctx = saved;
+    Fatal("call to %08x: neither recompiled nor an import (return address %08x)", target, R32(ctx->esp));
 }
 
 extern "C" void RecompCpuid(Ctx* ctx) {
