@@ -58,7 +58,7 @@ assert "SCREEN_ORIENTATION_LANDSCAPE" in activity and "SCREEN_ORIENTATION_REVERS
 on_create = activity.split("protected void onCreate", 1)[1]
 assert "orientation == 0" not in on_create, "Auto must retain the manifest sensorLandscape behavior"
 assert 'android:screenOrientation="sensorLandscape"' in manifest
-assert "https://github.com/Nazatric/ProtoDroid/releases" in readme and "**VERSIONS**" in readme
+assert "https://github.com/Nazatric/ProtoDroid/releases" in readme and "**ALL RELEASES**" in readme
 
 # Static-texture scratch is released only after every consumer. Ordinary/dynamic shadows keep their reuse policy.
 adapted_unlock = d3d9.split("bool AdaptedUnlock(void* tex", 1)[1].split("void ForgetResource", 1)[0]

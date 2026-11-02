@@ -72,7 +72,7 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 
 ## Settings and drivers
 
-The launcher’s **Settings** page keeps graphics, drivers, and engine policies. Its rows show short explanations on touch, hover, or keyboard focus; changes save automatically and engine options apply on **Play**. The in-game gear is a smaller live panel: FPS/battery/menu pacing, touch controls, FPS overlay, and **Layout**. Restart-only graphics and engine/mod experiments stay out of that panel.
+The native Compose launcher’s **Settings** page keeps graphics, drivers, and engine policies. Its rows show short explanations on touch or keyboard focus; changes save automatically and engine options apply on **Play**. The in-game gear is a smaller live panel: FPS/battery/menu pacing, touch controls, FPS overlay, and **Layout**. Restart-only graphics and engine/mod experiments stay out of that panel.
 
 - **Graphics:** Resolution, Textures, DXT1 color, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
 - **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **FXAA** filters the completed frame with built-in MSAA disabled to avoid Prototype’s missing-texture AA path; **2x/4x MSAA** retain the original behavior. **Game default** leaves the engine’s own device-dependent choice intact.
@@ -180,7 +180,7 @@ Depending on storage access, logs are available in:
 
 ### Diagnostic tour
 
-Type **MERCER** on the launcher or tap its Prototype logo seven times quickly, then choose **START TOUR**. Repeat the code/gesture to disarm it. The 41-phase plan requests a direct test level and runs 10,440 logical action frames without further interaction: movement, charged jumps, glide/dash chains, building-climb and wall-grab attempts, combat, powers, disguises, shadows, streaming, audio, sustained stress, and recovery. The isolated tour scales its guest timers to 4×; host timing, action scheduling, and normal Play stay at real time.
+Type **MERCER** on the launcher or tap its Prototype logo seven times quickly, then choose **Play**. Repeat the code/gesture to disarm it. The 41-phase plan requests a direct test level and runs 10,440 logical action frames without further interaction: movement, charged jumps, glide/dash chains, building-climb and wall-grab attempts, combat, powers, disguises, shadows, streaming, audio, sustained stress, and recovery. The isolated tour scales its guest timers to 4×; host timing, action scheduling, and normal Play stay at real time.
 
 Tour saves, logs, and shader cache are isolated from normal Play. Shared results are under `/storage/emulated/0/Prototype/diagnostic-tour/logs/`, including `journal.log`, `phase.txt`, `result.txt`, and `crash.log`. Every non-skipped phase requires rendered dwell and continuing `InGameState` task activity; presents alone are not enough. Coalesced Presents do not compress logical action frames. Phases record exact actions, wall/process-CPU time, gameplay dispatches, Presented frames, exact phase average/max timing, and rolling FPS/P99 snapshots; guest/import profiling is enabled automatically. “Tested” means those inputs and activity completed—not visual, rooftop, ability-result, or audio verification. Bink and physical-touch phases remain explicit skips. The isolated process closes intentionally at completion or failure.
 
@@ -210,13 +210,13 @@ Use the [guided issue forms](https://github.com/Nazatric/ProtoDroid/issues/new/c
 
 ## Updates
 
-The launcher checks the latest published GitHub release and compares its integer `versionCode`. For an available update, **DOWNLOAD** opens that release’s GitHub page directly. **VERSIONS** always opens the [official release archive](https://github.com/Nazatric/ProtoDroid/releases) for older APKs; no third-party mirror is used. Recovery for an existing in-app download still verifies its APK hash, package/version, and signing certificate before offering installation.
+The launcher checks the latest published GitHub release and compares its integer `versionCode`. For an available update, **OPEN RELEASE** opens that release’s GitHub page directly. **ALL RELEASES** always opens the [official release archive](https://github.com/Nazatric/ProtoDroid/releases) for older APKs; no third-party mirror is used. Recovery for an existing in-app download still verifies its APK hash, package/version, and signing certificate before offering installation.
 
 - **Same certificate:** Android can update in place.
 - **Different certificate:** Android requires a one-time uninstall first. Shared saves and files under `/storage/emulated/0/Prototype` are separate; back up important app-private data.
 - **If Android closes ProtoDroid during an existing verified-download uninstall:** open its completed download notification or the APK in Downloads.
 
-Automatic checks use a 15-minute backoff and do not block Play. Update errors offer Retry and **ALL VERSIONS**. Older APKs use the signing rules above; back up important data before reinstalling a different certificate.
+Automatic checks use a 15-minute backoff and do not block Play. Update errors offer Retry and **ALL RELEASES**. Older APKs use the signing rules above; back up important data before reinstalling a different certificate.
 
 ## Under the hood
 
@@ -225,7 +225,7 @@ Automatic checks use a 15-minute backoff and do not block Play. Update errors of
 - **D3D9 on Vulkan:** a generated bridge forwards drawing to DXVK 2.5.3. Android patches cover Mali and Adreno behavior, descriptor compatibility, pipeline compilation, presentation, and persistent caching.
 - **Bink through FFmpeg:** a minimal FFmpeg build decodes loose and RCF-resident movies. Decoded YUV planes are copied directly into the textures supplied by the game.
 - **XAudio2 through FAudio:** FAudio handles voice processing and mixing, with SDL audio output and Android-friendly pacing.
-- **SDL2 and Android UI:** SDL owns the window and platform events. The Android Java UI layer provides the launcher, touch controls, gamepad support, layout editor, and settings.
+- **SDL2 and Android UI:** SDL owns the game window and platform events. A native Kotlin Compose launcher connects to the existing Android settings, driver, update, mod, log, touch-control, and layout services without a WebView.
 
 ## Developer guide
 
@@ -264,7 +264,7 @@ tools/cool_make.sh -C src/native PLATFORM=android ABI=arm64-v8a \
 android/build-apk.sh arm64-v8a
 ```
 
-`tools/cool_make.sh` runs a parallel build and pauses when the host reaches its configured temperature limit. Ordinary `make` with the same variables works too. Local native builds record the checked-out Git commit when available; CI embeds the exact workflow commit and verifies it before a release.
+`tools/cool_make.sh` runs a parallel build and pauses when the host reaches its configured temperature limit. Ordinary `make` with the same variables works too. `android/build-apk.sh` uses the included Gradle wrapper for the Kotlin Compose launcher, then keeps the native-library packaging and signing checks. Local native builds record the checked-out Git commit when available; CI embeds the exact workflow commit and verifies it before a release.
 
 </details>
 

@@ -1,48 +1,25 @@
 #!/usr/bin/env python3
-"""Guard Drivers entry/exit navigation and touch cleanup across content-view replacement.
+"""Guard native Compose-to-driver navigation and DriverView touch cleanup.
 
-This is a host-side structural regression test, not a substitute for an Android device smoke test. Opening Drivers must
-not dereference the launcher's removed parent, and closing it must not use a touch tracker already recycled by detach.
+This is a host-side structural regression test, not an Android device smoke test. The Compose launcher opens the
+existing driver manager in its own activity; DriverView must still finish all touch cleanup before a BACK action can
+detach it.
 """
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-setup = (ROOT / "android/java/com/protodroid/SetupView.java").read_text(encoding="utf-8")
 driver = (ROOT / "android/java/com/protodroid/DriverView.java").read_text(encoding="utf-8")
-activity = (ROOT / "android/java/com/protodroid/SetupActivity.java").read_text(encoding="utf-8")
+activity = (ROOT / "android/java/com/protodroid/DriverActivity.java").read_text(encoding="utf-8")
+host = (ROOT / "android/launcher/src/androidMain/kotlin/com/protodroid/ProtoDroidLauncherHost.kt").read_text(encoding="utf-8")
+compose = (ROOT / "android/launcher/src/commonMain/kotlin/com/protodroid/launcher/LauncherApp.kt").read_text(encoding="utf-8")
+manifest = (ROOT / "android/AndroidManifest.xml").read_text(encoding="utf-8")
 
-show_drivers = activity.split("private void showDrivers()", 1)[1].split("private void closeDrivers()", 1)[0]
-assert "setContentView(driverView);" in show_drivers, "The Drivers action no longer replaces the content view"
-
-try:
-    action_up = setup.split("case MotionEvent.ACTION_UP:", 1)[1].split(
-        "case MotionEvent.ACTION_CANCEL:", 1
-    )[0]
-except IndexError as error:
-    raise AssertionError("SetupView touch-up/cancel handlers are missing") from error
-
-capture = "ViewParent parent = getParent();"
-activate = "activate(action);"
-release = "if (parent != null) parent.requestDisallowInterceptTouchEvent(false);"
-assert capture in action_up, "Touch-up must retain its original parent before running an action"
-assert activate in action_up, "Touch-up action dispatch is missing"
-assert release in action_up, "Touch-up must release interception null-safely through the retained parent"
-assert action_up.index(capture) < action_up.index(activate) < action_up.index(release), (
-    "Parent capture must precede content-view replacement; cleanup must use that retained parent afterwards"
-)
-assert "getParent().requestDisallowInterceptTouchEvent(false)" not in action_up, (
-    "A detached setup view can have no parent after Drivers opens"
-)
-
-# Both the on-screen and Android system back paths must return to the existing launcher, never finish the activity.
-close_drivers = activity.split("private void closeDrivers()", 1)[1].split("private File appGame()", 1)[0]
-assert "setContentView(setupView);" in close_drivers, "Closing Drivers must restore the launcher homepage"
-assert "finish(" not in close_drivers, "Closing Drivers must not finish the launcher"
-back_pressed = activity.split("public void onBackPressed()", 1)[1]
-assert back_pressed.index("if (driverView != null)") < back_pressed.index("closeDrivers();") < back_pressed.index(
-    "super.onBackPressed();"
-), "System Back must close Drivers before the Activity's default exit behavior"
-assert "listener.onClose();" in driver, "The DriverView BACK action is not connected to the launcher"
+assert "DriverActivity::class.java" in host and "override fun openDriverPackages()" in host
+assert 'ActionButton("MANAGE DRIVER PACKAGES", onClick = host::openDriverPackages)' in compose
+assert "new DriverView(this, new GameSettings(this), driverManager, this::finish)" in activity
+assert "driverManager.setObserver(null);" in activity and "driverManager.close();" in activity
+assert 'android:name="com.protodroid.DriverActivity"' in manifest
+assert "listener.onClose();" in driver, "The DriverView BACK action is not connected to its activity"
 
 # Closing Drivers from its own BACK button detaches the view synchronously. onDetachedFromWindow recycles the tracker,
 # so ACTION_UP must finish all touch cleanup before activate() and every recycle path must tolerate an earlier detach.
@@ -81,4 +58,4 @@ assert "Tap the card to use this driver" in driver and "CONFIRM REMOVE" in drive
 )
 assert "SAFE RECOVERY" in driver and "never replace the phone's global driver" in driver
 
-print("Drivers navigation, guided-layout, touch-target, and touch-detach checks passed")
+print("Native driver navigation, guided-layout, touch-target, and touch-detach checks passed")

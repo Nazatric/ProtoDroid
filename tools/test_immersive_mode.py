@@ -18,6 +18,6 @@ assert "WindowInsets.Type.navigationBars()" in modern
 assert "BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE" in modern
 assert "controller == null" in modern and "applyLegacy(window);" in modern
 
-activity = (ROOT / "android/java/com/protodroid/SetupActivity.java").read_text(encoding="utf-8")
-assert "ImmersiveMode.apply(this);" in activity
+activity = (ROOT / "android/launcher/src/androidMain/kotlin/com/protodroid/SetupActivity.kt").read_text(encoding="utf-8")
+assert "ImmersiveMode.apply(this)" in activity
 print("Immersive startup API isolation and non-fatal fallback checks passed")

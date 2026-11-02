@@ -149,22 +149,21 @@ require("pluginArmedId" in mods_view and "removeArmedId" in mods_view,
 require("runBackground" in mods_activity and mods_activity.count("runBackground(") >= 4,
         "mod import/lifecycle operations are not serialized off the UI thread")
 driver_view = text("android/java/com/protodroid/DriverView.java")
-setup_view = text("android/java/com/protodroid/SetupView.java")
+compose_launcher = text("android/launcher/src/commonMain/kotlin/com/protodroid/launcher/LauncherApp.kt")
 require("LauncherMotion.enabled()" in driver_view and "focusNext" in driver_view,
         "driver motion/focus behavior regressed")
-require("motionEnabled" in setup_view and "drawBootCurtain" in setup_view,
-        "Setup does not retain reduced-motion behavior")
+require("LocalLauncherMotion" in compose_launcher and "host.motionEnabled()" in compose_launcher,
+        "Compose setup does not retain reduced-motion behavior")
 require("Files.isSymbolicLink(directory.toPath())" in java, "symlinked package roots are not rejected")
 require('unlink((mod.root + "/launch-error.txt").c_str());' in platform,
         "native diagnostics could follow a link into original data")
 require("dlclose(" not in text("src/native/mod_plugins.cpp"), "plugin code must remain process-lifetime")
 
-focus = text("android/java/com/protodroid/SetupView.java")
-# Four non-settings branches: launcher/setup, each with or without a pressable update action.
-require(focus.count("ACTION_MODS, ACTION_DRIVERS") >= 4 and
-        "settingsOrder.add(ACTION_MODS)" in focus and "settingsOrder.add(ACTION_DRIVERS)" in focus and
-        "SETTING_ACTION_BASE + i * 2 + 1" in focus,
-        "Mods/Drivers or progressive setting-help targets are missing from launcher focus order")
+# Compose keeps the native routes and progressive setting help rather than the removed Web bridge.
+require('MainMenuItem("Mods"' in compose_launcher and 'MainMenuItem("Drivers"' in compose_launcher and
+        "s.rows.filter { it.category == section.category }" in compose_launcher and
+        "row.help" in compose_launcher,
+        "Mods/Drivers or progressive setting-help targets are missing from the Compose launcher")
 require("paths-ignore:\n      - '**.md'" in text(".github/workflows/build-apk.yml"), "workflow trigger unexpectedly changed")
 
 print("native mod source/signature tests passed")

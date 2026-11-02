@@ -1,6 +1,6 @@
 # ProtoDroid native, recompilation, GPU, and modding research
 
-Status: research and 0.15 implementation record, 2026-11-02. Original game files and the existing launcher UI remain unchanged. Version 0.15 remains unmerged, untagged, and unreleased.
+Status: research and 0.15 implementation record, 2026-11-03. Original game files remain read-only. The native Compose launcher is integrated in source, with Android compilation/APK and physical-device validation tracked separately. Version 0.15 remains unmerged, untagged, and unreleased.
 
 ## 1. Evidence rules and current baseline
 
@@ -423,7 +423,7 @@ These are investigation steps, not approval to make speculative engine changes.
 
 ## 13. 0.15 implementation disposition
 
-This batch intentionally keeps the existing launcher and game architecture. It is a bounded runtime/diagnostic update, not a claim that the open device issues are fixed.
+This batch keeps the native game/runtime architecture and replaces only the launcher presentation and Android host integration. It is not a claim that the open device issues are fixed.
 
 | Candidate | Source disposition | Evidence boundary |
 | --- | --- | --- |
@@ -435,7 +435,7 @@ This batch intentionally keeps the existing launcher and game architecture. It i
 | ADPF overhead without a session | **Implemented:** a session-active atomic avoids the per-Present mutex when ADPF is unavailable. The mutex remains for a live session and concurrent worker registration. | This removes a specific host-lock path; it does not establish a measurable device FPS gain. |
 | Auto recovery after failed Turnip | **Implemented:** on a direct <1.2 path, Auto re-runs the established direct/wrapper capability policy rather than retrying the same failed Turnip build. Explicit Turnip/Custom retry behavior is unchanged. | Affected Adreno devices must test the actual fallback. No capability is forced or invented. |
 | DXVK feature failure diagnostics | **Corrected after device evidence:** the first common preflight wrongly rejected a Mali-G720 before creation. The original Vulkan 1.2 check is restored; Vulkan 1.3 again reaches `vkCreateDevice`, and exact requested-feature names are audited only after an actual `VK_ERROR_FEATURE_NOT_PRESENT`. | Supplied 0.15 normal/tour logs confirmed the regression and exact commit. The correction is source-tested; physical Mali retesting and #31/#32 outcomes remain pending. |
-| UI and controls | **Unchanged:** existing launcher, Classic controls and Settings → Controls → Layout remain. Smart controls were not restored. | The separate future UI ZIP is not part of 0.15. |
+| UI and controls | **Integrated in source:** the user-supplied `prototype-android-launcher-ui` from `TestingFiles` commit `5ad7589f22137ac773dd602e5933fea590965e0d` (ZIP SHA-256 `5cf448fe15a932d849eb49347d66ed08235d3694474def1f6cbb0c720bb514f5`) now uses native Android Compose. A production host connects exact `GameSettings` rows/defaults, launch/permissions, drivers, mods, logs, updates and tour state. The WebView/React UI, preview host, partial INI writer, fake layout editor and Wasm target are excluded; the full native driver/mod/layout tools remain. Classic controls and Settings → Controls → Layout remain; Smart controls were not restored. | Source/asset/host-policy checks pass. Kotlin/APK compilation requires CI in this environment; physical layout, performance and all device interactions remain unverified. |
 
 ### Open-issue disposition
 

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Packages the APK without Gradle: SDL's Java activity + ours -> classes.dex, the manifest -> aapt2, native
-# libraries for the requested ABIs, then zipalign and apksigner. KEYSTORE and its password/alias environment
+# Gradle compiles the native Compose/Java launcher and resources into an unsigned base APK. This script then adds
+# native libraries for the requested ABIs, zipaligns and signs. KEYSTORE and its password/alias environment
 # variables select the signing identity; the default remains the local Android debug key.
 #
 # Usage: android/build-apk.sh [abi ...]          (default: arm64-v8a)
@@ -27,32 +27,31 @@ case "$SIGNING_IDENTITY" in
 esac
 ABIS=("${@:-arm64-v8a}")
 
-if [ ! -s "$ROOT/android/assets/launcher/index.html" ]; then
-    echo "ERROR: offline launcher is missing; run npm ci --prefix launcher && npm run build --prefix launcher"
+if [ ! -s "$ROOT/android/launcher/src/commonMain/kotlin/com/protodroid/launcher/LauncherApp.kt" ]; then
+    echo "ERROR: native Compose launcher source is missing"
     exit 1
 fi
 
 OUT=$ROOT/build/apk
 rm -rf "$OUT"
-mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/pkg"
+mkdir -p "$OUT/pkg"
 VERSION_INFO=$(python3 "$ROOT/tools/bump_version.py" --show "$ROOT/android/AndroidManifest.xml")
 read -r VERSION_NAME VERSION_CODE <<< "$VERSION_INFO"
 echo "=== Package version: $VERSION_NAME (versionCode $VERSION_CODE) ==="
 
-# Java: SDL's activity classes plus ProtoActivity.
-javac --release 11 -nowarn -cp "$PLATFORM_JAR" -d "$OUT/classes" \
-    "$SDL_SRC"/android-project/app/src/main/java/org/libsdl/app/*.java "$ROOT"/android/java/com/protodroid/*.java
-"$BUILD_TOOLS/d8" --release --min-api 26 --lib "$PLATFORM_JAR" --output "$OUT/dex" \
-    $(find "$OUT/classes" -name '*.class')
-
-# Resources (launcher icon; tools/make_icon.py draws it) and the self-contained setup artwork/fonts.
-"$BUILD_TOOLS/aapt2" compile --dir "$ROOT/android/res" -o "$OUT/res.zip"
-"$BUILD_TOOLS/aapt2" link -o "$OUT/base.apk" -I "$PLATFORM_JAR" --manifest "$ROOT/android/AndroidManifest.xml" \
-    -A "$ROOT/android/assets" -R "$OUT/res.zip" --auto-add-overlay --min-sdk-version 26 --target-sdk-version 35
-
-cp "$OUT/dex/classes.dex" "$OUT/pkg/"
-echo "=== classes.dex size ==="
-ls -lh "$OUT/dex/classes.dex" "$OUT/pkg/classes.dex"
+# Compile the production Java/Kotlin launcher, Compose resources, SDL activity and Android manifest into an unsigned
+# base APK. Native libraries are still staged, stripped and verified below by this script, not fetched by Gradle.
+export SDL_SRC
+(
+    cd "$ROOT/android"
+    ./gradlew --no-daemon --stacktrace :launcher:assembleRelease
+)
+COMPOSE_APK="$ROOT/android/launcher/build/outputs/apk/release/launcher-release-unsigned.apk"
+if [ ! -s "$COMPOSE_APK" ]; then
+    echo "ERROR: unsigned native Compose base APK is missing at $COMPOSE_APK"
+    exit 1
+fi
+cp "$COMPOSE_APK" "$OUT/base.apk"
 for abi in "${ABIS[@]}"; do
     mkdir -p "$OUT/pkg/lib/$abi"
     echo "=== Bundling libs for $abi ==="
@@ -108,7 +107,7 @@ for abi in "${ABIS[@]}"; do
 done
 echo "=== Packaging base.apk ==="
 du -sh "$OUT/pkg"/lib/*/* 2>&1 | head -n 20
-(cd "$OUT/pkg" && zip -q -r "$OUT/base.apk" classes.dex lib && echo "zip done" && ls -lh "$OUT/base.apk" && unzip -l "$OUT/base.apk" | head -n 100)
+(cd "$OUT/pkg" && zip -q -r "$OUT/base.apk" lib && echo "zip done" && ls -lh "$OUT/base.apk" && unzip -l "$OUT/base.apk" | head -n 100)
 
 "$BUILD_TOOLS/zipalign" -P 16 -f 4 "$OUT/base.apk" "$OUT/aligned.apk"
 "$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-key-alias "$KEY_ALIAS" \
@@ -141,6 +140,30 @@ with zipfile.ZipFile(apk) as archive:
         if archive.read(name) != source.read_bytes():
             raise SystemExit(f"ERROR: signed APK asset differs from source: {name}")
         print(f"Verified {name} ({source.stat().st_size} bytes)")
+PY
+# The launcher must be the native Compose implementation with its offline resources, never the retired Web/preview host.
+python3 - "$OUT/prototype.apk" <<'PY'
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1]) as apk:
+    names = set(apk.namelist())
+    if any(name.startswith("assets/launcher/") for name in names):
+        raise SystemExit("ERROR: signed APK contains the retired Web launcher")
+    dex_names = sorted(name for name in names if name.startswith("classes") and name.endswith(".dex"))
+    if not dex_names:
+        raise SystemExit("ERROR: signed APK has no DEX bytecode")
+    dex = b"".join(apk.read(name) for name in dex_names)
+    for marker in (b"LauncherAppKt", b"ProtoDroidLauncherHost", b"SetupActivity"):
+        if marker not in dex:
+            raise SystemExit("ERROR: signed APK lacks native launcher marker " + marker.decode())
+    for forbidden in (b"PreviewLauncherHost", b"addJavascriptInterface"):
+        if forbidden in dex:
+            raise SystemExit("ERROR: signed APK contains preview/Web launcher marker " + forbidden.decode())
+    for resource in ("wall_mercer_city", "launcher_icon", "oswald_variable"):
+        if not any(resource in name for name in names):
+            raise SystemExit("ERROR: signed APK lacks Compose resource " + resource)
+    print(f"Verified native Compose launcher in {len(dex_names)} DEX file(s), with offline artwork/fonts and no Web asset")
 PY
 # The A825 fix is part of the native package, not an optional download. Verify it in the signed APK itself.
 if [[ " ${ABIS[*]} " == *" arm64-v8a "* ]]; then
