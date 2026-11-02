@@ -57,8 +57,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
      * replaces it with a position in fractions of the view.
      */
     private static final class Button {
-        final String label;
-        final int keycode, mouseButton;
+        String label;
+        int keycode;
+        int secondKeycode;
+        long customId;
+        boolean custom, hidden;
+        final int mouseButton;
         final boolean fromRight, fromBottom;
         final float dx, dy, sizeDp;
         final boolean gameOnly;
@@ -93,6 +97,36 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     || keycode == KeyEvent.KEYCODE_DPAD_DOWN || keycode == KeyEvent.KEYCODE_F1
                     || keycode == KeyEvent.KEYCODE_F2;
             this.wheel = keycode == KeyEvent.KEYCODE_R || keycode == KeyEvent.KEYCODE_F;
+        }
+
+        Button(CustomButtonStore.Entry entry) {
+            this.label = ControlKeys.chordLabel(entry.key1, entry.key2);
+            this.keycode = entry.key1;
+            this.secondKeycode = entry.key2;
+            this.customId = entry.id;
+            this.custom = true;
+            this.hidden = entry.hidden;
+            this.mouseButton = 0;
+            this.fromRight = true;
+            this.dx = 130;
+            this.fromBottom = true;
+            this.dy = 290;
+            this.sizeDp = 28;
+            this.gameOnly = false;
+            this.numberKey = this.numberToggle = this.keyboard = false;
+            this.quickPower = this.wheel = false;
+            this.customX = entry.x;
+            this.customY = entry.y;
+            this.size = entry.size;
+        }
+
+        CustomButtonStore.Entry toEntry() {
+            CustomButtonStore.Entry entry = new CustomButtonStore.Entry(customId, keycode, secondKeycode);
+            entry.x = customX;
+            entry.y = customY;
+            entry.size = size;
+            entry.hidden = hidden;
+            return entry;
         }
 
         boolean hit(float x, float y) {
@@ -131,6 +165,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         new Button("ABC", ACTION_SHOW_KEYBOARD, 0, false, 210, false, 33, 22, false),
         new Button("DESCEND", KeyEvent.KEYCODE_V, 0, true, 258, true, 215, 25, true),
     };
+    private final List<Button> customButtons = new ArrayList<>();
+    private final List<Button> allButtons = new ArrayList<>();
+    private long nextCustomId = 1;
 
     // ---- settings ----
     private final SharedPreferences prefs;
@@ -145,10 +182,13 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
 
     // ---- layout editor ----
     private boolean editing = false;
-    private final RectF doneRect = new RectF(), resetRect = new RectF();
+    private final RectF doneRect = new RectF(), resetRect = new RectF(), addRect = new RectF();
     private final RectF smallerRect = new RectF(), biggerRect = new RectF();
+    private final RectF bindRect = new RectF(), hideRect = new RectF(), removeRect = new RectF();
     private Button selected;          // the button (or stick) the size buttons act on
-    private boolean selectedStick;
+    private boolean selectedStick, removeArmed;
+    private Button bindingTarget;
+    private boolean bindingNew;
     private float stickSize = 1;
     private Button dragButton;
     private boolean dragStick;
@@ -162,6 +202,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG), edge = new Paint(Paint.ANTI_ALIAS_FLAG),
             glow = new Paint(Paint.ANTI_ALIAS_FLAG), text = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
+    private final TouchKeyboard keyboard;
+    private final TouchKeyState keyState;
     private boolean gameMode = false;
     private boolean numberPad = false;
     private final RectF modeRect = new RectF(), gearRect = new RectF();
@@ -186,6 +228,29 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         prefs = context.getSharedPreferences("controls", Context.MODE_PRIVATE);
         settingsStore = new GameSettings(context);
         settings = settingsStore.gameplaySettings;
+        keyState = new TouchKeyState((keycode, down) -> {
+            if (down) SDLActivity.onNativeKeyDown(keycode);
+            else SDLActivity.onNativeKeyUp(keycode);
+        });
+        keyboard = new TouchKeyboard(density, new TouchKeyboard.Callback() {
+            @Override public void key(int keycode, boolean down) {
+                TouchControls.this.key(keycode, down);
+            }
+
+            @Override public void closed() {
+                bindingTarget = null;
+                bindingNew = false;
+                invalidate();
+            }
+
+            @Override public void bindingDone(int first, int second) {
+                finishBinding(first, second);
+            }
+
+            @Override public void feedback() {
+                buzz();
+            }
+        });
         loadLayout();
         applyUiSettings();
         applyLiveSettings();
@@ -262,7 +327,19 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         nativeSetMenuFpsUnlocked(settingsStore.valueOf("unlock_menu_fps") != 0);
     }
 
+    private static void defaultCustomGeometry(CustomButtonStore.Entry entry, int index) {
+        entry.x = 0.40f + (index % 4) * 0.10f;
+        entry.y = 0.40f + ((index / 4) % 3) * 0.14f;
+    }
+
+    private void rebuildAllButtons() {
+        allButtons.clear();
+        for (Button b : buttons) allButtons.add(b);
+        allButtons.addAll(customButtons);
+    }
+
     private void loadLayout() {
+        // These indices are the original persistence contract. New controls never enter this array.
         for (int i = 0; i < buttons.length; i++) {
             buttons[i].customX = prefs.getFloat("pos" + i + "x", -1);
             buttons[i].customY = prefs.getFloat("pos" + i + "y", -1);
@@ -271,6 +348,26 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         stickCustomX = prefs.getFloat("stick_x", -1);
         stickCustomY = prefs.getFloat("stick_y", -1);
         stickSize = prefs.getFloat("stick_size", 1);
+        customButtons.clear();
+        long maxId = 0;
+        List<CustomButtonStore.Entry> entries = CustomButtonStore.decode(
+                prefs.getString(CustomButtonStore.PREFERENCE, "[]"));
+        for (int i = 0; i < entries.size(); ++i) {
+            CustomButtonStore.Entry entry = entries.get(i);
+            if (entry.x < 0 || entry.y < 0) defaultCustomGeometry(entry, i);
+            customButtons.add(new Button(entry));
+            maxId = Math.max(maxId, entry.id);
+        }
+        nextCustomId = Math.max(maxId + 1, prefs.getLong("custom_next_id", 1));
+        if (nextCustomId <= 0) nextCustomId = maxId + 1;
+        rebuildAllButtons();
+    }
+
+    private void saveCustomButtons() {
+        List<CustomButtonStore.Entry> entries = new ArrayList<>();
+        for (Button b : customButtons) entries.add(b.toEntry());
+        prefs.edit().putString(CustomButtonStore.PREFERENCE, CustomButtonStore.encode(entries))
+                .putLong("custom_next_id", nextCustomId).apply();
     }
 
     private void saveLayout() {
@@ -285,6 +382,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         ed.putFloat("stick_size", stickSize);
         if (stickCustomX >= 0) ed.putFloat("stick_x", stickHomeX / w).putFloat("stick_y", stickHomeY / h);
         ed.apply();
+        saveCustomButtons();
     }
 
     private void resetLayout() {
@@ -294,11 +392,20 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             buttons[i].size = 1;
             ed.remove("pos" + i + "x").remove("pos" + i + "y").remove("size" + i);
         }
+        for (int i = 0; i < customButtons.size(); ++i) {
+            CustomButtonStore.Entry entry = customButtons.get(i).toEntry();
+            defaultCustomGeometry(entry, i);
+            customButtons.get(i).customX = entry.x;
+            customButtons.get(i).customY = entry.y;
+            customButtons.get(i).size = 1;
+        }
         stickCustomX = stickCustomY = -1;
         stickSize = 1;
         selected = null;
         selectedStick = false;
+        removeArmed = false;
         ed.remove("stick_x").remove("stick_y").remove("stick_size").apply();
+        saveCustomButtons();
         layoutButtons(getWidth(), getHeight());
     }
 
@@ -338,6 +445,11 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     // ---- layout ----
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        releaseAll();
+        dragPointer = modePointer = gearPointer = -1;
+        dragButton = null;
+        dragStick = false;
+        removeArmed = false;
         layoutButtons(w, h);
         lastMouseX = w / 2f;
         lastMouseY = h / 2f;
@@ -345,7 +457,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
 
     private void layoutButtons(int w, int h) {
         final float u = density * scale;
-        for (Button b : buttons) {
+        for (Button b : allButtons) {
             b.r = b.sizeDp * u * b.size;
             if (b.customX >= 0) {
                 b.cx = b.customX * w;
@@ -369,12 +481,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         gearRect.set(w - 58 * density, 12 * density, w - 14 * density, 56 * density);
         float pw = Math.min(w * 0.92f, 860 * density), ph = Math.min(h * 0.94f, 500 * density);
         panel.set((w - pw) / 2, (h - ph) / 2, (w + pw) / 2, (h + ph) / 2);
+        keyboard.layout(w, h);
     }
 
     // ---- input to SDL ----
     private void key(int keycode, boolean down) {
-        if (down) SDLActivity.onNativeKeyDown(keycode);
-        else SDLActivity.onNativeKeyUp(keycode);
+        keyState.set(keycode, down);
     }
 
     private void mouseButton(int bit, boolean down, float x, float y) {
@@ -423,15 +535,17 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         if (b.keyboard) {
             releaseAll();
             buzz();
-            // SDL 2.30.9 owns the real IME connection and translates ASCII IME input into ordinary SDL key events.
-            // Android Back hides its keyboard; no engine-specific text-field or focus state is invented here.
-            SDLActivity.showTextInput(0, 0, 1, 1);
+            keyboard.show();
+            keyboard.layout(getWidth(), getHeight());
             return;
         }
         b.pointer = pointer;
         pointerButton.put(pointer, b);
         buzz();
-        if (b.mouseButton != 0) mouseButton(b.mouseButton, true, lastMouseX, lastMouseY);
+        if (b.custom) {
+            key(b.keycode, true);
+            if (b.secondKeycode != 0) key(b.secondKeycode, true);
+        } else if (b.mouseButton != 0) mouseButton(b.mouseButton, true, lastMouseX, lastMouseY);
         else if (b.keycode == KeyEvent.KEYCODE_SHIFT_LEFT) setRun(stickRun, true);
         else key(b.keycode, true);
     }
@@ -439,7 +553,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void release(Button b) {
         pointerButton.remove(b.pointer);
         b.pointer = -1;
-        if (b.mouseButton != 0) mouseButton(b.mouseButton, false, lastMouseX, lastMouseY);
+        if (b.custom) {
+            if (b.secondKeycode != 0) key(b.secondKeycode, false);
+            key(b.keycode, false);
+        } else if (b.mouseButton != 0) mouseButton(b.mouseButton, false, lastMouseX, lastMouseY);
         else if (b.keycode == KeyEvent.KEYCODE_SHIFT_LEFT) setRun(stickRun, false);
         else key(b.keycode, false);
     }
@@ -484,14 +601,17 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     }
 
     private void releaseAll() {
-        for (Button b : buttons) if (b.pointer >= 0) release(b);
+        keyboard.releaseAll();
+        for (Button b : allButtons) if (b.pointer >= 0) release(b);
         if (stickPointer >= 0) releaseStick();
         setRun(false, false);
         if (lookPointer >= 0 && !gameMode) mouseButton(MOUSE_LEFT, false, lookX, lookY);
         lookPointer = -1;
+        keyState.releaseAll();  // fail closed after rotation/cancellation or an interrupted editor transition
     }
 
     private boolean visible(Button b) {
+        if (b.custom && b.hidden && !editing) return false;
         if (b.numberKey && !numberPad && !powerButtons) return false;
         if (b.quickPower && !b.numberKey && !powerButtons) return false;  // optional screen-space extras
         return editing || (!controlsHidden() && (gameMode || !b.gameOnly));
@@ -499,9 +619,48 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
 
     // ---- layout editor ----
     private void startEditing() {
+        keyboard.hide();
         releaseAll();
+        bindingTarget = null;
+        bindingNew = false;
+        removeArmed = false;
         panelOpen = false;
         editing = true;
+    }
+
+    private void startBinding(Button target) {
+        releaseAll();
+        bindingTarget = target;
+        bindingNew = target == null;
+        removeArmed = false;
+        keyboard.showPicker(target == null ? 0 : target.keycode, target == null ? 0 : target.secondKeycode);
+        keyboard.layout(getWidth(), getHeight());
+    }
+
+    private void finishBinding(int first, int second) {
+        if (!CustomButtonStore.validBinding(first, second)) return;
+        if (bindingNew) {
+            if (customButtons.size() >= CustomButtonStore.MAX_BUTTONS) return;
+            CustomButtonStore.Entry entry = new CustomButtonStore.Entry(nextCustomId++, first, second);
+            defaultCustomGeometry(entry, customButtons.size());
+            Button created = new Button(entry);
+            customButtons.add(created);
+            rebuildAllButtons();
+            selected = created;
+            selectedStick = false;
+        } else if (bindingTarget != null && bindingTarget.custom) {
+            bindingTarget.keycode = first;
+            bindingTarget.secondKeycode = second;
+            bindingTarget.label = ControlKeys.chordLabel(first, second);
+            selected = bindingTarget;
+            selectedStick = false;
+        }
+        bindingTarget = null;
+        bindingNew = false;
+        cache.clear();
+        saveCustomButtons();
+        layoutButtons(getWidth(), getHeight());
+        invalidate();
     }
 
     private void editTouch(MotionEvent e, int action, int id, float x, float y) {
@@ -512,6 +671,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                 if (doneRect.contains(x, y)) {
                     saveLayout();
                     editing = false;
+                    removeArmed = false;
                     buzz();
                     break;
                 }
@@ -520,7 +680,39 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     buzz();
                     break;
                 }
+                if (addRect.contains(x, y)) {
+                    if (customButtons.size() < CustomButtonStore.MAX_BUTTONS) startBinding(null);
+                    buzz();
+                    break;
+                }
+                if (selected != null && selected.custom && bindRect.contains(x, y)) {
+                    startBinding(selected);
+                    buzz();
+                    break;
+                }
+                if (selected != null && selected.custom && hideRect.contains(x, y)) {
+                    selected.hidden = !selected.hidden;
+                    removeArmed = false;
+                    saveCustomButtons();
+                    buzz();
+                    break;
+                }
+                if (selected != null && selected.custom && removeRect.contains(x, y)) {
+                    if (removeArmed) {
+                        customButtons.remove(selected);
+                        rebuildAllButtons();
+                        selected = null;
+                        removeArmed = false;
+                        saveCustomButtons();
+                        layoutButtons(getWidth(), getHeight());
+                    } else {
+                        removeArmed = true;
+                    }
+                    buzz();
+                    break;
+                }
                 if ((selected != null || selectedStick) && (smallerRect.contains(x, y) || biggerRect.contains(x, y))) {
+                    removeArmed = false;
                     float step = biggerRect.contains(x, y) ? 0.1f : -0.1f;
                     if (selected != null) {
                         selected.size = Math.max(0.6f, Math.min(2f, selected.size + step));
@@ -536,7 +728,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     buzz();
                     break;
                 }
-                for (Button b : buttons) {
+                for (Button b : allButtons) {
                     if (visible(b) && b.hit(x, y)) {
                         dragButton = b;
                         dragDx = b.cx - x;
@@ -556,6 +748,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     dragPointer = id;
                     selected = dragButton;
                     selectedStick = dragStick;
+                    removeArmed = false;
                     buzz();
                 }
                 break;
@@ -599,6 +792,11 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         int index = e.getActionIndex();
         int id = e.getPointerId(index);
         float x = e.getX(index), y = e.getY(index);
+        if (keyboard.isVisible()) {
+            keyboard.onTouch(e, action, id, x, y);
+            invalidate();
+            return true;
+        }
         if (panelOpen) {
             if (action == MotionEvent.ACTION_UP) panelTap(x, y);
             invalidate();
@@ -624,7 +822,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     break;
                 }
                 Button hit = null;
-                for (Button b : buttons) {
+                for (Button b : allButtons) {
                     if (visible(b) && b.pointer < 0 && b.hit(x, y)) {
                         hit = b;
                         break;
@@ -769,8 +967,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             c.drawLine(b.cx, b.cy, b.fx, b.fy, edge);
             c.drawCircle(b.fx, b.fy, 10 * density, edge);
         }
-        Bitmap bmp = cached(b.label + (down ? ":1:" : ":0:") + b.r, b.r + 12 * density,
-                (cc, x, y) -> paintButton(cc, b, x, y, down));
+        Bitmap bmp = cached(b.label + (down ? ":1:" : ":0:") + (b.hidden ? ":H:" : ":V:") + b.r,
+                b.r + 12 * density, (cc, x, y) -> paintButton(cc, b, x, y, down));
         blitCentered(c, bmp, b.cx, b.cy);
     }
 
@@ -789,9 +987,19 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         edge.setStrokeWidth(0.8f * density);
         edge.setColor(alpha(RED_DIM, 0.9f));
         c.drawPath(path, edge);
-        text.setTextSize(Math.min(14 * density, b.r * 0.42f));
+        float labelSize = Math.min(14 * density, b.r * 0.42f);
+        text.setTextSize(labelSize);
+        while (labelSize > 7 * density && text.measureText(b.label) > b.r * 1.45f) {
+            labelSize -= density;
+            text.setTextSize(labelSize);
+        }
         text.setColor(alpha(down ? 0xffffffff : 0xffffd6d0, 1f));
-        c.drawText(b.label, bx, by + text.getTextSize() * 0.36f, text);
+        c.drawText(b.label, bx, by + labelSize * (b.hidden ? 0.05f : 0.36f), text);
+        if (b.custom && b.hidden) {
+            text.setTextSize(Math.max(7 * density, labelSize * 0.65f));
+            text.setColor(alpha(0xffff8d82, 1f));
+            c.drawText("HIDDEN", bx, by + labelSize * 1.15f, text);
+        }
     }
 
     private void drawStick(Canvas c) {
@@ -932,35 +1140,58 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void drawEditor(Canvas c) {
         c.drawColor(0x66000000);
         drawStick(c);
-        for (Button b : buttons) {
+        for (Button b : allButtons) {
             if (visible(b)) drawButton(c, b);
         }
-        float cx = getWidth() * 0.38f, top = 16 * density;  // left of centre: clear of the buttons on the top right
-        text.setTextSize(15 * density);
-        text.setColor(0xffffe0dc);
-        c.drawText("Drag the buttons and the stick, tap one to resize it", cx, top + 70 * density, text);
-        resetRect.set(cx - 162 * density, top, cx - 12 * density, top + 38 * density);
-        doneRect.set(cx + 12 * density, top, cx + 162 * density, top + 38 * density);
+        float cx = getWidth() * 0.5f, top = 12 * density;
+        float pillW = Math.min(110 * density, getWidth() * 0.18f), gap = 12 * density;
+        float left = cx - (pillW * 3 + gap * 2) / 2;
+        addRect.set(left, top, left + pillW, top + 38 * density);
+        resetRect.set(left + pillW + gap, top, left + pillW * 2 + gap, top + 38 * density);
+        doneRect.set(left + (pillW + gap) * 2, top, left + (pillW + gap) * 2 + pillW, top + 38 * density);
+        drawPill(c, addRect, customButtons.size() >= CustomButtonStore.MAX_BUTTONS ? "MAX 24" : "ADD", false);
         drawPill(c, resetRect, "RESET", false);
         drawPill(c, doneRect, "DONE", true);
+        text.setTextSize(14 * density);
+        text.setColor(0xffffe0dc);
+        c.drawText("Drag / resize • ADD a one- or two-key button", cx, top + 60 * density, text);
         if (selected != null || selectedStick) {
             float sx = selected != null ? selected.cx : stickHomeX, sy = selected != null ? selected.cy : stickHomeY;
             float sr = selected != null ? selected.r : stickR;
             edge.setStrokeWidth(2.5f * density);
             edge.setColor(0xffffffff);
             c.drawCircle(sx, sy, sr + 6 * density, edge);
-            float y = top + 96 * density, size = selected != null ? selected.size : stickSize;
-            smallerRect.set(cx - 150 * density, y, cx - 60 * density, y + 38 * density);
-            biggerRect.set(cx + 60 * density, y, cx + 150 * density, y + 38 * density);
+            float y = top + 82 * density, size = selected != null ? selected.size : stickSize;
+            smallerRect.set(cx - 150 * density, y, cx - 60 * density, y + 36 * density);
+            biggerRect.set(cx + 60 * density, y, cx + 150 * density, y + 36 * density);
             drawPill(c, smallerRect, "\u2212", false);
             drawPill(c, biggerRect, "+", false);
             text.setTextSize(15 * density);
             text.setColor(0xffffe0dc);
             c.drawText((selected != null ? selected.label : "STICK") + "  " + Math.round(size * 100) + "%", cx,
-                    y + 25 * density, text);
+                    y + 24 * density, text);
+            if (selected != null && selected.custom) {
+                float ay = top + 128 * density;
+                float actionW = Math.min(104 * density, getWidth() * 0.19f);
+                float actionLeft = cx - (actionW * 3 + gap * 2) / 2;
+                bindRect.set(actionLeft, ay, actionLeft + actionW, ay + 36 * density);
+                hideRect.set(actionLeft + actionW + gap, ay, actionLeft + actionW * 2 + gap, ay + 36 * density);
+                removeRect.set(actionLeft + (actionW + gap) * 2, ay,
+                        actionLeft + (actionW + gap) * 2 + actionW, ay + 36 * density);
+                drawPill(c, bindRect, "KEYS", false);
+                drawPill(c, hideRect, selected.hidden ? "SHOW" : "HIDE", false);
+                drawPill(c, removeRect, removeArmed ? "CONFIRM" : "REMOVE", removeArmed);
+            } else {
+                bindRect.setEmpty();
+                hideRect.setEmpty();
+                removeRect.setEmpty();
+            }
         } else {
             smallerRect.setEmpty();
             biggerRect.setEmpty();
+            bindRect.setEmpty();
+            hideRect.setEmpty();
+            removeRect.setEmpty();
         }
     }
 
@@ -992,6 +1223,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
 
     @Override
     protected void onDetachedFromWindow() {
+        releaseAll();
+        keyboard.hide();
         removeCallbacks(uiShotPoll);
         super.onDetachedFromWindow();
     }
@@ -1000,15 +1233,19 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     protected void onDraw(Canvas canvas) {
         if (editing) {
             drawEditor(canvas);
-            return;
+        } else {
+            if (!controlsHidden()) drawPill(canvas, modeRect, gameMode ? "GAME" : "MENU", gameMode);
+            drawGear(canvas);
+            if (showFps) drawPerf(canvas);
+            if (gameMode && !controlsHidden()) drawStick(canvas);
+            for (Button b : allButtons) {
+                if (visible(b)) drawButton(canvas, b);
+            }
+            if (panelOpen) drawPanel(canvas);
         }
-        if (!controlsHidden()) drawPill(canvas, modeRect, gameMode ? "GAME" : "MENU", gameMode);
-        drawGear(canvas);
-        if (showFps) drawPerf(canvas);
-        if (gameMode && !controlsHidden()) drawStick(canvas);
-        for (Button b : buttons) {
-            if (visible(b)) drawButton(canvas, b);
+        if (keyboard.isVisible()) {
+            canvas.drawColor(0x77000000);
+            keyboard.draw(canvas);
         }
-        if (panelOpen) drawPanel(canvas);
     }
 }

@@ -71,6 +71,9 @@ const KeyMap kKeys[] = {
     {SDL_SCANCODE_DOWN, 0x28, 0x50, true}, {SDL_SCANCODE_PAGEDOWN, 0x22, 0x51, true},
     {SDL_SCANCODE_INSERT, 0x2d, 0x52, true}, {SDL_SCANCODE_DELETE, 0x2e, 0x53, true},
     {SDL_SCANCODE_PAUSE, 0x13, 0x45, false},
+    // The remaining standard 104-key keys: VK_SNAPSHOT/LWIN/RWIN/APPS and DIK_SYSRQ/LWIN/RWIN/APPS.
+    {SDL_SCANCODE_PRINTSCREEN, 0x2c, 0x37, true}, {SDL_SCANCODE_LGUI, 0x5b, 0x5b, true},
+    {SDL_SCANCODE_RGUI, 0x5c, 0x5c, true}, {SDL_SCANCODE_MENU, 0x5d, 0x5d, true},
 };
 
 const KeyMap* FindKey(SDL_Scancode s) {

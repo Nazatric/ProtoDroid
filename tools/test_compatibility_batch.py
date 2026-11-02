@@ -27,8 +27,9 @@ assert "b.numberKey && !numberPad && !powerButtons" in visible
 assert "b.quickPower && !b.numberKey && !powerButtons" in visible
 press = touch.split("private void press(Button b, int pointer)", 1)[1].split("private void release", 1)[0]
 assert "numberPad = !numberPad;" in press
-assert "SDLActivity.showTextInput(0, 0, 1, 1);" in press
-assert press.index("if (b.keyboard)") < press.index("key(b.keycode, true)"), "IME action must not become a keyboard keycode"
+assert "keyboard.show();" in press, "ABC must open ProtoDroid's in-game PC keyboard"
+assert "SDLActivity.showTextInput" not in touch, "the old Android IME action returned"
+assert press.index("if (b.keyboard)") < press.index("key(b.keycode, true)"), "keyboard action must not become a keycode"
 
 assert '"game_aa_level", "game_shadow_detail", "game_graphic_quality", "decode_16bit"' in settings
 assert "{0, 2, 0, 1, 1, 1, 1}" in settings
@@ -58,4 +59,4 @@ on_create = activity.split("protected void onCreate", 1)[1]
 assert "orientation == 0" not in on_create, "Auto must retain the manifest sensorLandscape behavior"
 assert 'android:screenOrientation="sensorLandscape"' in manifest
 assert "https://github.com/Nazatric/ProtoDroid/releases" in readme and "**VERSIONS**" in readme
-print("Touch/IME, AA/quality, orientation-default, and archive documentation checks passed")
+print("Touch keyboard, AA/quality, orientation-default, and archive documentation checks passed")

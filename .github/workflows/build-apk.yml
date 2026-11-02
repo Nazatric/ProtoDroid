@@ -303,6 +303,12 @@ jobs:
       - name: Test compatibility controls and graphics policies
         run: python3 tools/test_compatibility_batch.py
 
+      - name: Test in-game keyboard and custom layout policies
+        run: |
+          set -euo pipefail
+          python3 tools/test_touch_controls.py
+          python3 tools/test_sdl_controls_patch.py
+
       - name: Compile and run AA preset migration tests
         run: |
           set -euo pipefail
@@ -312,6 +318,20 @@ jobs:
             android/java/com/protodroid/AaPolicy.java \
             android/tests/com/protodroid/AaPolicyTest.java
           java -cp /tmp/protodroid-aa-policy-test com.protodroid.AaPolicyTest
+
+      - name: Compile and run keyboard/custom-button model tests
+        run: |
+          set -euo pipefail
+          test -d /tmp/protodroid-json/src/main/java/org/json
+          rm -rf /tmp/protodroid-controls-model-test
+          mkdir -p /tmp/protodroid-controls-model-test
+          javac --release 11 -d /tmp/protodroid-controls-model-test \
+            $(find /tmp/protodroid-json/src/main/java/org/json -name '*.java' -print) \
+            android/java/com/protodroid/ControlKeys.java \
+            android/java/com/protodroid/CustomButtonStore.java \
+            android/java/com/protodroid/TouchKeyState.java \
+            android/tests/com/protodroid/ControlsModelTest.java
+          java -cp /tmp/protodroid-controls-model-test com.protodroid.ControlsModelTest
 
       - name: Test diagnostic-tour launcher cheat code
         run: |

@@ -76,7 +76,7 @@ The launcher’s **Settings** page keeps graphics, drivers, and engine policies.
 
 - **Graphics:** Resolution, Textures, DXT1 color, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
 - **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **FXAA** filters the completed frame with built-in MSAA disabled to avoid Prototype’s missing-texture AA path; **2x/4x MSAA** retain the original behavior. **Game default** leaves the engine’s own device-dependent choice intact.
-- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons. In game, **123** toggles number keys independently, **ABC** opens the Android keyboard, and **DESCEND** sends `V`.
+- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons. **ABC** opens a compact in-game PC keyboard with a full 104-key mode. The layout editor adds movable one- or two-key buttons with rebind, hide, and remove actions. **123** toggles number keys and **DESCEND** sends `V`.
 - **Interface:** Screen orientation, Opacity, and Show FPS. Fixed Landscape/Reverse is an optional recovery for devices that choose the wrong direction; Auto remains the default.
 - **Engine fixes:** Optional FOV, shadow-map, tick/QTE, loose-file, developer-menu, VRAM-report, and texture-dump policies. Safe defaults remain unchanged until you opt in.
 
