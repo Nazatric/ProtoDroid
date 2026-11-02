@@ -27,6 +27,11 @@ case "$SIGNING_IDENTITY" in
 esac
 ABIS=("${@:-arm64-v8a}")
 
+if [ ! -s "$ROOT/android/assets/launcher/index.html" ]; then
+    echo "ERROR: offline launcher is missing; run npm ci --prefix launcher && npm run build --prefix launcher"
+    exit 1
+fi
+
 OUT=$ROOT/build/apk
 rm -rf "$OUT"
 mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/pkg"
