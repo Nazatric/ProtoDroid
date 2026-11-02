@@ -563,6 +563,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         layoutButtons(w, h);
         lastMouseX = w / 2f;
         lastMouseY = h / 2f;
+        updateSmartMode();
     }
 
     private void layoutButtons(int w, int h) {
@@ -1216,6 +1217,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             case MotionEvent.ACTION_CANCEL:
                 releaseAll();
                 modePointer = gearPointer = -1;
+                updateSmartMode();
                 break;
             default:
                 break;
