@@ -62,6 +62,7 @@ internal class ProtoDroidLauncherHost(
     private var foundInApp = false
     private var missingUv = false
     private var tourArmed = false
+    private var modsRequested = false
 
     private val updateManager = UpdateManager(activity, object : UpdateManager.Callback {
         override fun onStateChanged(state: UpdateManager.State) {
@@ -70,7 +71,7 @@ internal class ProtoDroidLauncherHost(
 
         override fun onUninstallRequired(versionName: String) {
             warningVersion = versionName
-            publishUpdate(updateManager.currentState())
+            updateState.value = updateState.value.copy(warningVersion = versionName)
         }
     })
 
@@ -80,8 +81,7 @@ internal class ProtoDroidLauncherHost(
         if (closed) return
         refreshSettings()
         checkGameData()
-        refreshMods()
-        refreshLog()
+        if (modsRequested) refreshMods()
         publishUpdate(updateManager.currentState())
         updateManager.onResume()
     }
@@ -264,6 +264,7 @@ internal class ProtoDroidLauncherHost(
     }
 
     override fun refreshMods() {
+        modsRequested = true
         val models = ModManager.list(activity).map { mod ->
             val kinds = buildList {
                 if (mod.files.isNotBlank()) add("Game data")

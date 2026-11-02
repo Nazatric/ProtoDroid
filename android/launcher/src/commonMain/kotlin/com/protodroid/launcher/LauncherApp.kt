@@ -345,8 +345,8 @@ private fun HomeScreen(
                 )
                 Text("ProtoDroid", fontFamily = OswaldFamily(), fontSize = 13.sp, letterSpacing = 2.sp, color = Bone)
                 Spacer(Modifier.weight(1f))
-                if (!gameData.hasFileAccess) StatusTag("ACCESS NEEDED", BloodBright)
-                else if (gameData.gameDataReady) StatusTag("READY", Bone)
+                if (gameData.gameDataReady) StatusTag("READY", Bone)
+                else if (!gameData.hasFileAccess) StatusTag("ACCESS NEEDED", BloodBright)
                 else StatusTag("NO GAME DATA", BloodBright)
             }
 
@@ -460,7 +460,7 @@ private fun GameStatusPanel(
                 Text("FPS ${settings.value("fps_limit")}", fontFamily = MonoFamily(), fontSize = 10.sp, color = Bone.copy(alpha = 0.86f))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ActionButton(if (gameData.hasFileAccess) "CHECK" else "ALLOW ACCESS", Modifier.weight(1f), onAccess)
+                ActionButton(if (gameData.hasFileAccess || gameData.gameDataReady) "CHECK" else "ALLOW ACCESS", Modifier.weight(1f), onAccess)
                 OutlineButton("SETTINGS", onSettings)
             }
         }
@@ -542,6 +542,7 @@ private fun SetupScreen(host: LauncherHost, data: GameDataStatus, onBack: () -> 
                     ) {
                         if (!data.hasFileAccess && !data.gameDataReady) {
                             ActionButton("ALLOW FILE ACCESS", onClick = host::requestFileAccess)
+                            OutlineButton("CHECK APP FOLDER", onClick = host::checkGameData)
                         } else {
                             ActionButton("CONTINUE", onClick = onContinue)
                             if (!data.gameDataReady) OutlineButton("CHECK AGAIN", onClick = host::checkGameData)
@@ -749,6 +750,7 @@ private fun ModeRow(title: String, description: String, selected: Boolean, onCli
 
 @Composable
 private fun ModsScreen(mods: List<LauncherMod>, host: LauncherHost, onBack: () -> Unit) {
+    LaunchedEffect(Unit) { host.refreshMods() }
     PageFrame("MODS", binkScenes, onBack) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),
@@ -951,7 +953,10 @@ private fun AboutScreen(
 
 @Composable
 private fun UpdateWarning(version: String, host: LauncherHost) {
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.88f)), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.88f)).clickable { },
+        contentAlignment = Alignment.Center,
+    ) {
         Surface(
             Modifier.fillMaxWidth(0.82f).widthIn(max = 560.dp),
             color = PanelInk,

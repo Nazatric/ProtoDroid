@@ -40,13 +40,19 @@ read -r VERSION_NAME VERSION_CODE <<< "$VERSION_INFO"
 echo "=== Package version: $VERSION_NAME (versionCode $VERSION_CODE) ==="
 
 # Compile the production Java/Kotlin launcher, Compose resources, SDL activity and Android manifest into an unsigned
-# base APK. Native libraries are still staged, stripped and verified below by this script, not fetched by Gradle.
+# base APK. CI may supply the base from its early Compose job so a compiler failure stops the run before the native
+# build and the exact same base is packaged. Native libraries are still staged and verified below, never by Gradle.
 export SDL_SRC
-(
-    cd "$ROOT/android"
-    ./gradlew --no-daemon --stacktrace :launcher:assembleRelease
-)
-COMPOSE_APK="$ROOT/android/launcher/build/outputs/apk/release/launcher-release-unsigned.apk"
+if [ -n "${COMPOSE_BASE_APK:-}" ]; then
+    COMPOSE_APK=$COMPOSE_BASE_APK
+    echo "=== Using early Compose base: $COMPOSE_APK ==="
+else
+    (
+        cd "$ROOT/android"
+        ./gradlew --no-daemon --stacktrace :launcher:assembleRelease 2>&1 | tee /tmp/protodroid-compose-build.log
+    )
+    COMPOSE_APK="$ROOT/android/launcher/build/outputs/apk/release/launcher-release-unsigned.apk"
+fi
 if [ ! -s "$COMPOSE_APK" ]; then
     echo "ERROR: unsigned native Compose base APK is missing at $COMPOSE_APK"
     exit 1

@@ -67,6 +67,9 @@ for marker in (
     assert marker in host, f"production host is missing {marker}"
 assert "onLogoTap" in app and "logoTourCode.onLogoTap" in host
 assert "tourCode.onLetter" in host and "host.onLetter" in activity
+assert 'if (gameData.gameDataReady) StatusTag("READY", Bone)' in app
+assert "CHECK APP FOLDER" in app and "host.checkGameData()" in activity
+assert "if (modsRequested) refreshMods()" in host, "startup must not scan every mod before the library is used"
 assert "OPEN TOUCH EDITOR" in app and "SETTINGS → CONTROLS → TOUCH LAYOUT" in app
 assert "host::openMods" in app and "host::openDriverPackages" in app
 assert "host::openReleases" in app and "private fun UpdateWarning" in app
@@ -91,8 +94,11 @@ for path in resources:
         assert data[:4] in (b"\x00\x01\x00\x00", b"true", b"OTTO"), f"invalid font {path}"
 
 assert ":launcher:assembleRelease" in packager and "launcher-release-unsigned.apk" in packager
+assert "COMPOSE_BASE_APK" in packager, "CI must be able to package the exact early-compiled Compose base"
 assert "npm " not in packager and "classes.dex lib" not in packager
 assert "setup-node" not in workflow and "npm ci --prefix launcher" not in workflow
+assert "  compose-launcher:\n" in workflow and "name: compose-launcher-base" in workflow
+assert "needs: [build-deps, build-turnip, compose-launcher," in workflow
 assert 'android:name="com.protodroid.SetupActivity"' in manifest
 assert 'android:name="com.protodroid.DriverActivity"' in manifest
 with zipfile.ZipFile(ROOT / "android/gradle/wrapper/gradle-wrapper.jar") as wrapper:
