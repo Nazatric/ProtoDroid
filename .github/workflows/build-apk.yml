@@ -690,10 +690,11 @@ jobs:
         id: compose
         env:
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          SDL_SRC: /home/runner/SDL2-2.32.10
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon --stacktrace :launcher:assembleRelease 2>&1 | tee /tmp/protodroid-compose-build.log
+          ./gradlew --no-daemon --console=plain :launcher:assembleRelease 2>&1 | tee /tmp/protodroid-compose-build.log
 
       - name: Report Compose compiler failure
         if: failure() && steps.compose.outcome == 'failure'
