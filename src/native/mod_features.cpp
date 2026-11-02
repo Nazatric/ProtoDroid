@@ -9,6 +9,7 @@
 
 #include "guest.h"
 #include "mod_feature_policy.h"
+#include "smart_controls.h"
 #include "win.h"
 
 namespace native {
@@ -179,6 +180,7 @@ void ModFeaturesInitialize() {
             ModHookInstall(kButtonStruggle, ButtonDetour, &g_button_original);
         }
     }
+    SmartControlsInitialize();
     UnlockDeveloperMenu();
 }
 

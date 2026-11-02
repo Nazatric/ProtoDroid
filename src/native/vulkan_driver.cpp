@@ -258,6 +258,11 @@ void ConfigureWrapperLogging(bool probe) {
     setenv("WRAPPER_CACHE_PATH", cache_dir.c_str(), 1);
     setenv("WRAPPER_DIAG_FILE", diag_path.c_str(), 1);
     setenv("WRAPPER_DIAG_APPID", "com.protodroid", 1);
+    // Mesa implements the core-1.3 lowering for a DXVK/1.3 application request, but its
+    // wrapper_effective_api_version() still reports the base version unless this override is present. Advertising
+    // the effective interface is only half of negotiation: ProbeRequiredDxvkFeatures below must still validate the
+    // actual lowered features/extensions before this route can reach DXVK. Never set this for a direct driver.
+    setenv("WRAPPER_VK_VERSION", "1.3", 1);
     // GameNative's diagnostic mode includes per-texture output; shader/BC logging adds further large artifacts. Keep
     // that cost out of ordinary Play; the deliberate tour opts into it and uses its isolated log directory.
     setenv("WRAPPER_DIAG", tour ? "1" : "0", 1);

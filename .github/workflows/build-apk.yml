@@ -24,6 +24,11 @@ on:
         required: true
         default: false
         type: boolean
+      allow_certificate_change:
+        description: Explicitly allow a different signing certificate (existing users must uninstall once)
+        required: true
+        default: false
+        type: boolean
   repository_dispatch:
     types: [publish-apk-release]
 
@@ -36,7 +41,7 @@ jobs:
       - name: Install host test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends zlib1g-dev python3-yaml
+          sudo apt-get install -y --no-install-recommends zlib1g-dev python3-yaml glslang-tools
 
       - name: Compile and run graphics UBSAN tests
         run: |
@@ -74,15 +79,32 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf /tmp/protodroid-plugin-test
-          mkdir -p /tmp/protodroid-plugin-test/native/example /tmp/protodroid-plugin-test/native/custom
+          mkdir -p /tmp/protodroid-plugin-test/native/example /tmp/protodroid-plugin-test/native/custom \
+            /tmp/protodroid-plugin-test/native/legacy2
           gcc -std=c11 -O1 -fPIC -shared -Imodding/include modding/example/plugin.c \
             -o /tmp/protodroid-plugin-test/native/example/libexample.so
           gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin.c \
             -o /tmp/protodroid-plugin-test/native/custom/libtest.so
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin_v2.c \
+            -o /tmp/protodroid-plugin-test/native/legacy2/libtest2.so
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
           g++ $CXXFLAGS src/native/tests/mod_plugin_test.cpp -ldl -o /tmp/mod_plugin_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/mod_plugin_test
+
+      - name: Compile and run native package dependency tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native -Isrc/recomp"
+          g++ $CXXFLAGS src/native/mod_platform.cpp src/native/tests/mod_platform_test.cpp -o /tmp/mod_platform_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_platform_test
+
+      - name: Compile and run sandboxed Lua runtime tests
+        run: bash tools/test_mod_script_runtime.sh /tmp/protodroid-script-host
+
+      - name: Run Lua runtime ASan/UBSan checks
+        run: PROTODROID_SCRIPT_ASAN=1 bash tools/test_mod_script_runtime.sh /tmp/protodroid-script-asan
 
       - name: Compile and run loose-file overlay tests
         run: |
@@ -142,6 +164,14 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/diagnostic_tour_plan_test
 
+      - name: Compile and run smart controls context tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/smart_controls_test.cpp -o /tmp/smart_controls_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/smart_controls_test
+
       - name: Test diagnostic-tour binary probe and isolated-exit policy
         run: python3 tools/test_diagnostic_tour_runtime.py
 
@@ -178,6 +208,13 @@ jobs:
             git -C /tmp/protodroid-dxvk-test apply "$patch"
           done
           python3 tools/test_dxvk_unified_memory.py /tmp/protodroid-dxvk-test/src/dxvk/dxvk_memory.cpp
+          python3 tools/test_dxvk_depth_resolve.py /tmp/protodroid-dxvk-test/src/d3d9/d3d9_device.cpp
+          python3 tools/test_dxvk_fxaa.py /tmp/protodroid-dxvk-test
+          glslangValidator --quiet -V --target-env vulkan1.3 \
+            -I/tmp/protodroid-dxvk-test/src/dxvk/shaders \
+            /tmp/protodroid-dxvk-test/src/dxvk/shaders/dxvk_present_frag_fxaa.frag \
+            -o /tmp/protodroid-fxaa.spv
+          test -s /tmp/protodroid-fxaa.spv
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-test/src/dxvk"
           g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
@@ -191,18 +228,35 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/video_settings_test
 
+      - name: Compile and run AA compatibility policy tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/aa_policy_test.cpp -o /tmp/aa_policy_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/aa_policy_test
+
       - name: Test Android version increments
         run: python3 tools/test_bump_version.py
 
       - name: Validate GitHub issue forms
         run: python3 tools/test_issue_templates.py
 
+      - name: Test release version and signing approvals
+        run: |
+          python3 tools/test_release_policy.py
+          python3 tools/test_release_workflow.py
+
       - name: Test Drivers navigation touch cleanup
         run: python3 tools/test_driver_screen_navigation.py
+
+      - name: Test launcher immersive startup compatibility
+        run: python3 tools/test_immersive_mode.py
 
       - name: Test launcher update metadata and recovery policy
         run: |
           set -euo pipefail
+          python3 tools/test_launcher_update_action.py
           git clone -q --depth 1 --branch 20240303 https://github.com/stleary/JSON-java.git /tmp/protodroid-json
           rm -rf /tmp/protodroid-update-test
           mkdir -p /tmp/protodroid-update-test
@@ -233,8 +287,12 @@ jobs:
           rm -rf /tmp/protodroid-mod-test
           mkdir -p /tmp/protodroid-mod-test
           javac --release 11 -cp "$ANDROID_JAR" -d /tmp/protodroid-mod-test \
+            android/java/com/protodroid/ImmersiveMode.java \
             android/java/com/protodroid/ModManifest.java \
+            android/java/com/protodroid/ModConfig.java \
+            android/java/com/protodroid/ModConfigActivity.java \
             android/java/com/protodroid/ModManager.java \
+            android/java/com/protodroid/AaPolicy.java \
             android/java/com/protodroid/GameSettings.java \
             android/java/com/protodroid/LauncherMotion.java \
             android/java/com/protodroid/ModsView.java \
@@ -243,7 +301,47 @@ jobs:
           java -cp "/tmp/protodroid-mod-test:$ANDROID_JAR" com.protodroid.ModPlatformTest
 
       - name: Test native mod generated-source and default policies
-        run: python3 tools/test_native_mod_platform.py
+        run: |
+          python3 tools/test_native_mod_platform.py
+          python3 tools/generate_engine_symbols.py --check
+
+      - name: Test Vulkan wrapper negotiation policy
+        run: python3 tools/test_vulkan_wrapper_policy.py
+
+      - name: Test compatibility controls and graphics policies
+        run: python3 tools/test_compatibility_batch.py
+
+      - name: Test in-game keyboard and custom layout policies
+        run: |
+          set -euo pipefail
+          python3 tools/test_touch_controls.py
+          python3 tools/test_smart_controls.py
+          python3 tools/test_sdl_controls_patch.py
+
+      - name: Compile and run AA preset migration tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-aa-policy-test
+          mkdir -p /tmp/protodroid-aa-policy-test
+          javac --release 11 -d /tmp/protodroid-aa-policy-test \
+            android/java/com/protodroid/AaPolicy.java \
+            android/tests/com/protodroid/AaPolicyTest.java
+          java -cp /tmp/protodroid-aa-policy-test com.protodroid.AaPolicyTest
+
+      - name: Compile and run keyboard/custom-button model tests
+        run: |
+          set -euo pipefail
+          test -d /tmp/protodroid-json/src/main/java/org/json
+          rm -rf /tmp/protodroid-controls-model-test
+          mkdir -p /tmp/protodroid-controls-model-test
+          javac --release 11 -d /tmp/protodroid-controls-model-test \
+            $(find /tmp/protodroid-json/src/main/java/org/json -name '*.java' -print) \
+            android/java/com/protodroid/ControlKeys.java \
+            android/java/com/protodroid/CustomButtonStore.java \
+            android/java/com/protodroid/TouchKeyState.java \
+            android/java/com/protodroid/SmartControlsModel.java \
+            android/tests/com/protodroid/ControlsModelTest.java
+          java -cp /tmp/protodroid-controls-model-test com.protodroid.ControlsModelTest
 
       - name: Test diagnostic-tour launcher cheat code
         run: |
@@ -339,15 +437,29 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf /tmp/protodroid-plugin-test
-          mkdir -p /tmp/protodroid-plugin-test/native/example /tmp/protodroid-plugin-test/native/custom
+          mkdir -p /tmp/protodroid-plugin-test/native/example /tmp/protodroid-plugin-test/native/custom \
+            /tmp/protodroid-plugin-test/native/legacy2
           gcc -std=c11 -O1 -fPIC -shared -Imodding/include modding/example/plugin.c \
             -o /tmp/protodroid-plugin-test/native/example/libexample.so
           gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin.c \
             -o /tmp/protodroid-plugin-test/native/custom/libtest.so
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin_v2.c \
+            -o /tmp/protodroid-plugin-test/native/legacy2/libtest2.so
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
           g++ $CXXFLAGS src/native/tests/mod_plugin_test.cpp -ldl -o /tmp/mod_plugin_test_arm64
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/mod_plugin_test_arm64
+
+      - name: Compile and run native ARM64 package dependency tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native -Isrc/recomp"
+          g++ $CXXFLAGS src/native/mod_platform.cpp src/native/tests/mod_platform_test.cpp -o /tmp/mod_platform_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_platform_test_arm64
+
+      - name: Compile and run native ARM64 sandboxed Lua runtime tests
+        run: bash tools/test_mod_script_runtime.sh /tmp/protodroid-script-arm64
 
       - name: Compile and run native ARM64 loose-file overlay tests
         run: |
@@ -541,6 +653,8 @@ jobs:
     needs: [build-deps, build-turnip, bink-tests, arm64-graphics-tests, driver-package-tests]
     env:
       SOURCE_REVISION: ${{ github.sha }}
+      PUBLISH_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release == true) }}
+      ALLOW_EPHEMERAL_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.allow_ephemeral_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_ephemeral_release == true) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -870,7 +984,7 @@ jobs:
           done
           printf 'nativeBuild=compiled\nsourceRevision=%s\n' "$SOURCE_REVISION" > build/native-build.txt
 
-      - name: Build source ARM64 example plugin
+      - name: Build source ARM64 plugin and Lua examples
         if: env.HAS_DLL == '1'
         run: |
           set -euo pipefail
@@ -880,6 +994,8 @@ jobs:
           "$TOOLS/llvm-readelf" -h build/mod-example/libprotodroid_example.so | grep -q 'AArch64'
           "$TOOLS/llvm-nm" -D build/mod-example/libprotodroid_example.so | grep -q 'ProtoDroidPluginInit'
           unzip -l build/protodroid-example-arm64.zip
+          modding/script-example/build-package.sh
+          unzip -l build/protodroid-script-example.zip
 
       - name: Upload make logs
         if: always()
@@ -943,7 +1059,7 @@ jobs:
           "$TOOLS/llvm-nm" -D "$LIB" | tee /tmp/dxvk-nm.txt
 
       - name: Setup protected release signing identity
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main' && !inputs.allow_ephemeral_release
+        if: github.ref == 'refs/heads/main' && env.PUBLISH_RELEASE == 'true' && env.ALLOW_EPHEMERAL_RELEASE != 'true'
         env:
           KEYSTORE_B64: ${{ secrets.PROTODROID_ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASS: ${{ secrets.PROTODROID_ANDROID_KEYSTORE_PASSWORD }}
@@ -978,7 +1094,7 @@ jobs:
           ls -lh "$KEYSTORE"
 
       - name: Setup disposable CI signing identity
-        if: github.event_name != 'workflow_dispatch' || !inputs.publish_release || github.ref != 'refs/heads/main' || inputs.allow_ephemeral_release
+        if: github.ref != 'refs/heads/main' || env.PUBLISH_RELEASE != 'true' || env.ALLOW_EPHEMERAL_RELEASE == 'true'
         run: |
           set -euo pipefail
           # Random non-default credentials exercise the generic apksigner path without making artifacts update-stable.
@@ -1097,7 +1213,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: protodroid-mod-example
-          path: build/protodroid-example-arm64.zip
+          path: |
+            build/protodroid-example-arm64.zip
+            build/protodroid-script-example.zip
           retention-days: 30
           if-no-files-found: error
 
@@ -1134,8 +1252,7 @@ jobs:
     if: >
       github.ref == 'refs/heads/main' &&
       ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
-      (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release &&
-      github.event.client_payload.allow_ephemeral_release))
+      (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release == true))
     steps:
       - name: Check out release notes
         uses: actions/checkout@v4
@@ -1149,7 +1266,8 @@ jobs:
       - name: Verify this is a new sequential release version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ALLOW_EPHEMERAL: ${{ inputs.allow_ephemeral_release || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_ephemeral_release) }}
+          ALLOW_EPHEMERAL: ${{ (github.event_name == 'workflow_dispatch' && inputs.allow_ephemeral_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_ephemeral_release == true) }}
+          ALLOW_CERTIFICATE_CHANGE: ${{ (github.event_name == 'workflow_dispatch' && inputs.allow_certificate_change) || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_certificate_change == true) }}
         run: |
           set -euo pipefail
           test -s release-apk/prototype.apk
@@ -1187,42 +1305,8 @@ jobs:
             exit 1
           fi
           gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/protodroid-releases.json
-          python3 - "$versionName" "$versionCode" "$certificateSha256" /tmp/protodroid-releases.json <<'PY'
-          import json
-          import os
-          import re
-          import sys
-          allow_ephemeral = os.environ.get("ALLOW_EPHEMERAL") == "true"
-          current = tuple(map(int, sys.argv[1].split(".")))
-          current_code = int(sys.argv[2])
-          current_certificate = sys.argv[3]
-          with open(sys.argv[4], encoding="utf-8") as source:
-              releases = json.load(source)
-          versions = []
-          codes = []
-          certificates = {}
-          for release in releases:
-              match = re.fullmatch(r"protodroid-v([0-9]+)\.([0-9]+)", release.get("tag_name", ""))
-              body = release.get("body") or ""
-              if match:
-                  version = tuple(map(int, match.groups()))
-                  versions.append(version)
-                  certificate = re.search(r"Signing certificate SHA-256: `([0-9a-f]{64})`", body)
-                  if certificate:
-                      certificates[version] = certificate.group(1)
-              code = re.search(r"versionCode[ =]([0-9]+)", body)
-              if code:
-                  codes.append(int(code.group(1)))
-          if versions and current <= max(versions):
-              raise SystemExit("APK version is not newer than the latest release; run tools/bump_version.py")
-          if codes and current_code <= max(codes):
-              raise SystemExit("APK versionCode is not newer than the latest release; run tools/bump_version.py")
-          if versions:
-              previous_certificate = certificates.get(max(versions))
-              if previous_certificate and current_certificate != previous_certificate and not allow_ephemeral:
-                  raise SystemExit("APK signing certificate differs from the latest release; refusing an update-breaking release")
-          print(f"Release version and signing identity accepted: {sys.argv[1]} (versionCode {current_code})")
-          PY
+          python3 tools/release_policy.py "$versionName" "$versionCode" "$certificateSha256" /tmp/protodroid-releases.json "$identity"
+
           {
             echo "RELEASE_TAG=$TAG"
             echo "RELEASE_VERSION=$versionName"

@@ -18,9 +18,17 @@ texture_skip_min_size = 512
 # automatically; 1/0 forces it on/off.
 #decode_dxt = 1
 
+# DXT1 decoding on GPUs without BC: 0 keeps full 32-bit color; 1 uses lower-bandwidth 16-bit color.
+# The standalone Android default is 1 when the GPU supports A1R5G5B5. High selects 0; Low/Medium select 1.
+#decode_16bit = 0
+
 # Maximum texture anisotropy. Android defaults to 1 (linear); Settings offers 1/2/4/8.
 # At 1, anisotropic min/mag/mip filters become linear. An explicit d3d9.samplerAnisotropy in DXVK config is preserved.
 #max_anisotropy = 1
+
+# Anti-aliasing: -1 = Game default, 0 = Off, 1 = 2x MSAA, 2 = 4x MSAA, 3 = FXAA.
+# FXAA filters the completed frame while keeping Prototype's built-in MSAA disabled, including after Video-menu reads.
+#game_aa_level = 3
 
 # Audio backend: aaudio (default) or openslES. Try openslES if the sound stutters while the game runs smoothly.
 #audio_driver = openslES
@@ -57,6 +65,10 @@ texture_skip_min_size = 512
 # Menu presentation: keep silent/ambient Bink video at its normal rate without making BinkWait
 # sleep the main menu render thread. 1 (default) unlocks menu UI rendering; 0 restores blocking waits.
 unlock_menu_fps = 1
+
+# Android touch presentation: 0 = Classic (default), 1 = Smart. Smart adds core icons and uses a guarded,
+# player-associated engine validity probe for the built-in Special/Consume label. Unknown or stale context stays Special.
+#touch_controls = 1
 
 # Audio mixer and vsync debugging. audio_stats=1 (default) logs real output underruns only;
 # 2 logs every five-second timing window, and 0 disables the diagnostics and their callback timers.

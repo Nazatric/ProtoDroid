@@ -34,7 +34,7 @@ final class GameSettings {
     private static final Object INI_LOCK = new Object();
     private static final String[] PRESET_KEYS = {
             "render_height", "texture_skip_mips", "max_anisotropy",
-            "game_aa_level", "game_shadow_detail", "game_graphic_quality",
+            "game_aa_level", "game_shadow_detail", "game_graphic_quality", "decode_16bit",
     };
 
     static final class Setting {
@@ -68,8 +68,9 @@ final class GameSettings {
 
         int defaultIndex() {
             // Defaults live beside their setting, so adding an option cannot misalign a parallel defaults array.
-            if (key.equals("render_height") || key.equals("texture_skip_mips") || key.equals("unlock_menu_fps")
-                    || key.equals("ui_scale") || key.equals("ui_vibrate") || key.equals("fix_button_tap_tick_rate")) {
+            if (key.equals("render_height") || key.equals("texture_skip_mips") || key.equals("decode_16bit")
+                    || key.equals("unlock_menu_fps") || key.equals("ui_scale") || key.equals("ui_vibrate")
+                    || key.equals("fix_button_tap_tick_rate")) {
                 return 1;
             }
             if (key.equals("ui_cam") || key.equals("ui_opacity") || key.equals("fov_offset")) return 2;
@@ -78,10 +79,56 @@ final class GameSettings {
     }
 
     static boolean isLiveEngineSetting(Setting setting) {
-        return setting.key.equals("fps_limit");
+        return setting.key.equals("fps_limit") || setting.key.equals("battery_saver")
+                || setting.key.equals("unlock_menu_fps") || setting.key.equals("touch_controls");
+    }
+
+    static boolean isGameplaySetting(Setting setting) {
+        if (isLiveEngineSetting(setting)) return true;
+        return setting.key.startsWith("ui_");
+    }
+
+    /** Short, on-demand explanations; the settings page shows these only for the active row. */
+    static String helpFor(Setting setting) {
+        switch (setting.key) {
+            case "render_height": return "Internal render height. Applies the next time you play.";
+            case "texture_skip_mips": return "Full keeps every texture level. Lower choices save memory on the next Play.";
+            case "decode_16bit": return "Decoded DXT1 color on GPUs without BC. 32-bit preserves more color; 16-bit saves memory and bandwidth. Applies on the next Play.";
+            case "max_anisotropy": return "Texture sharpness at glancing angles. Applies on the next Play.";
+            case "fps_limit": return "Caps the engine loop. Your display and FIFO still pace presented frames.";
+            case "battery_saver": return "Limits the engine to 30 FPS when the selected cap is higher or unlimited.";
+            case "unlock_menu_fps": return "Keeps silent menu movies responsive. Audio-backed movies retain their normal pacing.";
+            case "vulkan_driver": return "Auto is recommended. Change drivers from the Drivers screen when recovery is needed.";
+            case "game_aa_level": return "FXAA filters the final image with built-in MSAA disabled. 2x/4x keep the game's original MSAA. Applies on the next Play.";
+            case "game_shadow_detail": return "The game's shadow quality. Game default preserves dynamic shadows and their original detail.";
+            case "game_graphic_quality": return "The game's general graphics quality. Applies on the next Play.";
+            case "touch_controls": return "Smart uses a guarded player-context probe for Consume and adds core icons. Missing or stale context keeps Special; Classic preserves the original overlay.";
+            case "touch_layout": return "Move, resize, hide, or add touch buttons without starting the game.";
+            case "ui_scale": return "Changes touch-button size immediately. Touch layout opens the full editor.";
+            case "ui_vibrate": return "Vibrates for touch-control feedback when the device supports it.";
+            case "ui_pad_hide": return "Hides touch controls while a gamepad is connected.";
+            case "ui_stick_run": return "Pushing the movement stick to its edge also sprints.";
+            case "ui_cam": return "Adjusts swipe camera speed without changing the game configuration.";
+            case "ui_invert": return "Inverts vertical camera swipes.";
+            case "ui_power_buttons": return "Shows additional power and disguise buttons. The in-game 123 button opens number keys separately.";
+            case "display_orientation": return "Auto follows either landscape direction. Fixed directions can recover a device that chooses the wrong one; applies on the next Play.";
+            case "ui_opacity": return "Changes touch-control visibility without changing game brightness.";
+            case "ui_fps": return "Shows FPS, frame times, and app memory over the game.";
+            case "fov_offset": return "Offsets the camera field of view. Original uses the game's value.";
+            case "shadow_map_resolution": return "Optional shadow-map size override. Larger maps can cost performance and memory.";
+            case "remove_tick_rate_limit": return "Removes the identified simulation wait for high-refresh play. Leave Off for ordinary behavior.";
+            case "fix_button_tap_tick_rate": return "Adjusts button-tap timing only when Remove tick limit is enabled.";
+            case "prefer_loose_files": return "Prefers eligible unpacked game data while keeping saves and write paths unchanged.";
+            case "unlock_dev_menu": return "Experimental developer-menu patch. Ambiguous engine data is refused and logged.";
+            case "vram_report_mb": return "Changes the memory amount reported to the game; it does not add physical memory.";
+            case "dump_textures": return "Writes original DDS textures and replacement keys for mod authors. Uses extra storage.";
+            default: return "Changes save automatically. Engine options apply on the next Play.";
+        }
     }
 
     static int categoryOf(Setting setting) {
+        if (setting.key.equals("touch_layout")) return CATEGORY_CONTROLS;
+        if (setting.key.equals("touch_controls")) return CATEGORY_CONTROLS;
         if (setting.key.equals("fov_offset") || setting.key.equals("shadow_map_resolution")
                 || setting.key.equals("remove_tick_rate_limit") || setting.key.equals("fix_button_tap_tick_rate")
                 || setting.key.equals("prefer_loose_files") || setting.key.equals("unlock_dev_menu")
@@ -89,7 +136,8 @@ final class GameSettings {
             return CATEGORY_FIXES;
         }
         if (setting.key.startsWith("game_")) return CATEGORY_GAME_VIDEO;
-        if (setting.key.equals("ui_opacity") || setting.key.equals("ui_fps")) return CATEGORY_INTERFACE;
+        if (setting.key.equals("display_orientation") || setting.key.equals("ui_opacity")
+                || setting.key.equals("ui_fps")) return CATEGORY_INTERFACE;
         if (setting.key.startsWith("ui_")) return CATEGORY_CONTROLS;
         return CATEGORY_GRAPHICS;
     }
@@ -100,6 +148,8 @@ final class GameSettings {
                     new int[] {540, 720, 900, 1080}, true),
             new Setting("Textures", "texture_skip_mips", new String[] {"Full", "Half", "Quarter"},
                     new int[] {0, 1, 2}, true),
+            new Setting("DXT1 color", "decode_16bit", new String[] {"32-bit", "16-bit"},
+                    new int[] {0, 1}, true),
             new Setting("Anisotropy", "max_anisotropy", new String[] {"1x", "2x", "4x", "8x"},
                     new int[] {1, 2, 4, 8}, true),
             new Setting("FPS limit", "fps_limit",
@@ -110,13 +160,19 @@ final class GameSettings {
             new Setting("GPU driver", "vulkan_driver", new String[] {"Auto", "System", "Turnip", "Custom"},
                     new int[] {0, 1, 2, 3}, true, new String[] {"auto", "system", "turnip", "custom"}),
             // The game's own GameDB video settings. -1 leaves its device-dependent default untouched.
-            new Setting("Anti-Alias Level", "game_aa_level", new String[] {"Game default", "Off", "2x", "4x"},
-                    new int[] {-1, 0, 1, 2}, true),
+            // Append-only: preference indices 0..3 and INI values -1/0/1/2 keep their original meaning.
+            new Setting("Anti-Alias Level", "game_aa_level",
+                    new String[] {"Game default", "Off", "2x MSAA", "4x MSAA", "FXAA"},
+                    new int[] {-1, 0, 1, 2, AaPolicy.FXAA_VALUE}, true),
             new Setting("Shadow Detail", "game_shadow_detail", new String[] {"Game default", "Low", "Medium", "High"},
                     new int[] {-1, 0, 1, 2}, true),
             new Setting("Graphic Quality", "game_graphic_quality", new String[] {"Game default", "Low", "Medium", "High"},
                     new int[] {-1, 0, 1, 2}, true),
             // Touch and gamepad controls.
+            new Setting("Touch controls", "touch_controls", new String[] {"Classic", "Smart"},
+                    new int[] {0, 1}, true),
+            new Setting("Screen orientation", "display_orientation", new String[] {"Auto", "Landscape", "Reverse"},
+                    new int[] {0, 1, 2}, false),
             new Setting("Button size", "ui_scale", new String[] {"80%", "100%", "120%", "140%"},
                     new int[] {80, 100, 120, 140}, false),
             new Setting("Vibration", "ui_vibrate", new String[] {"Off", "On"}, new int[] {0, 1}, false),
@@ -126,6 +182,7 @@ final class GameSettings {
                     new int[] {50, 75, 100, 150, 200}, false),
             new Setting("Invert Y", "ui_invert", new String[] {"Off", "On"}, new int[] {0, 1}, false),
             new Setting("Extra buttons", "ui_power_buttons", new String[] {"Off", "On"}, new int[] {0, 1}, false),
+            new Setting("Touch layout", "touch_layout", new String[] {"EDIT"}, new int[] {0}, false),
             // Interface visibility.
             new Setting("Opacity", "ui_opacity", new String[] {"40%", "60%", "80%", "100%"},
                     new int[] {40, 60, 80, 100}, false),
@@ -155,18 +212,24 @@ final class GameSettings {
 
     // Presets cover both port and game video options. FPS, battery and every control preference stay untouched.
     private static final int[][] PRESET_VALUES = {
-            {0, 2, 0, 1, 1, 1},  // Low: 540p, quarter, 1x; AA off, low shadows and game quality
-            {1, 1, 0, 2, 2, 2},  // Medium: 720p, half, 1x; 2x AA, medium shadows and game quality
-            {3, 0, 3, 3, 3, 3},  // High: 1080p, full, 8x; 4x AA, high shadows and game quality
+            {0, 2, 0, 1, 1, 1, 1},  // Low: 540p, quarter, 1x; reduced DXT1 color, AA off, low shadows/quality
+            {1, 1, 0, 4, 2, 2, 1},  // Medium: 720p, half, 1x; reduced DXT1 color, FXAA, medium shadows/quality
+            {3, 0, 3, 4, 3, 3, 0},  // High: 1080p, full, 8x; full DXT1 color, FXAA, high shadows/quality
     };
 
     private final Context context;
     private final SharedPreferences prefs;
+    final Setting[] gameplaySettings;
     private int graphicsPreset;
 
     GameSettings(Context context) {
         this.context = context.getApplicationContext();
         prefs = this.context.getSharedPreferences("controls", Context.MODE_PRIVATE);
+        Setting[] live = new Setting[settings.length];
+        int liveCount = 0;
+        for (Setting setting : settings) if (isGameplaySetting(setting)) live[liveCount++] = setting;
+        gameplaySettings = new Setting[liveCount];
+        System.arraycopy(live, 0, gameplaySettings, 0, liveCount);
         for (int i = 0; i < settings.length; i++) {
             Setting setting = settings[i];
             setting.index = Math.max(0, Math.min(setting.values.length - 1,
@@ -174,6 +237,17 @@ final class GameSettings {
         }
         graphicsPreset = prefs.getInt(PRESET_KEY, detectPreset());
         if (graphicsPreset < PRESET_LOW || graphicsPreset > PRESET_CUSTOM) graphicsPreset = PRESET_CUSTOM;
+
+        // Updating the preset definitions alone would leave existing users on the exact MSAA values that caused the
+        // corruption. Migrate only those old preset-owned AA indices. setIndex() marks manual changes Custom, so a
+        // custom configuration or a deliberate return to MSAA is never rewritten here.
+        Setting aa = settings[settingIndex("game_aa_level")];
+        int migratedAa = AaPolicy.migratePresetAaIndex(graphicsPreset, aa.index);
+        if (migratedAa != aa.index) {
+            aa.index = migratedAa;
+            prefs.edit().putInt(aa.key, migratedAa).apply();
+            writeEngineSettings(new String[] {aa.key});
+        }
     }
 
     int graphicsPreset() {
@@ -220,13 +294,16 @@ final class GameSettings {
         }
         graphicsPreset = preset;
         editor.putInt(PRESET_KEY, preset).apply();
-        // A preset owns only its six graphics keys. In particular, do not rewrite an explicitly configured
+        // A preset owns only its seven graphics keys. In particular, do not rewrite an explicitly configured
         // fps_limit/battery_saver/unlock_menu_fps value from an unrelated preference default.
         writeEngineSettings(PRESET_KEYS);
     }
 
     void setIndex(int index, int next) {
-        Setting setting = settings[index];
+        setIndex(settings[index], next);
+    }
+
+    void setIndex(Setting setting, int next) {
         setting.index = (next % setting.values.length + setting.values.length) % setting.values.length;
         SharedPreferences.Editor editor = prefs.edit().putInt(setting.key, setting.index);
         if (isPresetSetting(setting)) {

@@ -1,10 +1,8 @@
 package com.protodroid;
 
 import android.app.Activity;
-import android.app.AlarmManager;
-import android.app.PendingIntent;
+import android.app.AlertDialog;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BlurMaskFilter;
@@ -17,10 +15,13 @@ import android.graphics.Typeface;
 import android.hardware.input.InputManager;
 import android.view.HapticFeedbackConstants;
 import android.os.Build;
+import android.text.InputType;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
+import android.widget.EditText;
 
 import org.libsdl.app.SDLActivity;
 
@@ -49,8 +50,15 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     static native float nativeFrameP99Ms();
     static native int nativeMemoryMiB();
     static native void nativeSetFpsLimit(int fps);
+    static native void nativeSetMenuFpsUnlocked(boolean unlocked);
+    static native void nativeSetSmartControls(boolean enabled);
+    static native int nativeSmartSpecialContext();
 
     private static final int MOUSE_LEFT = 1, MOUSE_RIGHT = 2, MOUSE_MIDDLE = 4;
+    private static final int ACTION_TOGGLE_NUMBERS = -1, ACTION_SHOW_KEYBOARD = -2;
+    private static final int BUTTON_ATTACK = 2, BUTTON_SPECIAL = 3, BUTTON_GRAB = 4, BUTTON_JUMP = 5;
+    private static final int ICON_NONE = 0, ICON_ATTACK = 1, ICON_SPECIAL = 2, ICON_CONSUME = 3,
+            ICON_GRAB = 4, ICON_JUMP = 5;
     private static final int RED = 0xffe0261e, RED_DIM = 0xff7a1410, INK = 0xff0b0b0b;
 
     /**
@@ -59,14 +67,22 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
      * replaces it with a position in fractions of the view.
      */
     private static final class Button {
-        final String label;
-        final int keycode, mouseButton;
+        String label;
+        final String defaultLabel;
+        boolean labelEdited;
+        int keycode;
+        int secondKeycode;
+        long customId;
+        int builtInIndex = -1;
+        boolean custom, hidden;
+        int mouseButton;
         final boolean fromRight, fromBottom;
         final float dx, dy, sizeDp;
         final boolean gameOnly;
         float customX = -1, customY = -1;
         float size = 1;  // the layout editor's per-button size factor
         boolean quickPower;  // the extra buttons: shown only with the "Extra buttons" setting
+        final boolean numberKey, numberToggle, keyboard;
         // POWERS and DISGUISE hold a selection wheel open: sliding the finger that holds the button moves the mouse,
         // which is how the game picks an entry, so one thumb is enough. fx/fy: where that finger is.
         final boolean wheel;
@@ -76,7 +92,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
 
         Button(String label, int keycode, int mouseButton, boolean fromRight, float dx, boolean fromBottom, float dy,
                 float sizeDp, boolean gameOnly) {
-            this.label = label;
+            this.label = this.defaultLabel = label;
             this.keycode = keycode;
             this.mouseButton = mouseButton;
             this.fromRight = fromRight;
@@ -85,11 +101,56 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             this.dy = dy;
             this.sizeDp = sizeDp;
             this.gameOnly = gameOnly;
+            this.numberKey = keycode == KeyEvent.KEYCODE_1 || keycode == KeyEvent.KEYCODE_2
+                    || keycode == KeyEvent.KEYCODE_3 || keycode == KeyEvent.KEYCODE_4;
+            this.numberToggle = keycode == ACTION_TOGGLE_NUMBERS;
+            this.keyboard = keycode == ACTION_SHOW_KEYBOARD;
             this.quickPower = keycode == KeyEvent.KEYCODE_F || keycode == KeyEvent.KEYCODE_1
                     || keycode == KeyEvent.KEYCODE_2 || keycode == KeyEvent.KEYCODE_3 || keycode == KeyEvent.KEYCODE_4
                     || keycode == KeyEvent.KEYCODE_DPAD_DOWN || keycode == KeyEvent.KEYCODE_F1
                     || keycode == KeyEvent.KEYCODE_F2;
             this.wheel = keycode == KeyEvent.KEYCODE_R || keycode == KeyEvent.KEYCODE_F;
+        }
+
+        Button(CustomButtonStore.Entry entry) {
+            this.defaultLabel = ControlKeys.bindingLabel(entry.key1, entry.key2, entry.mouseButton);
+            String customLabel = ControlKeys.cleanLabel(entry.label);
+            this.labelEdited = !customLabel.isEmpty();
+            this.label = labelEdited ? customLabel : defaultLabel;
+            this.keycode = entry.key1;
+            this.secondKeycode = entry.key2;
+            this.customId = entry.id;
+            this.custom = true;
+            this.hidden = entry.hidden;
+            this.mouseButton = entry.mouseButton;
+            this.fromRight = true;
+            this.dx = 130;
+            this.fromBottom = true;
+            this.dy = 290;
+            this.sizeDp = 28;
+            this.gameOnly = false;
+            this.numberKey = this.numberToggle = this.keyboard = false;
+            this.quickPower = this.wheel = false;
+            this.customX = entry.x;
+            this.customY = entry.y;
+            this.size = entry.size;
+        }
+
+        CustomButtonStore.Entry toEntry() {
+            CustomButtonStore.Entry entry = new CustomButtonStore.Entry(customId, keycode, secondKeycode);
+            entry.mouseButton = mouseButton;
+            entry.x = customX;
+            entry.y = customY;
+            entry.size = size;
+            entry.hidden = hidden;
+            entry.label = labelEdited ? label : "";
+            return entry;
+        }
+
+        String bindingText() {
+            if (numberToggle) return "1-4 PAD";
+            if (keyboard) return "PC KEYS";
+            return ControlKeys.bindingLabel(keycode, secondKeycode, mouseButton);
         }
 
         boolean hit(float x, float y) {
@@ -113,49 +174,71 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         new Button("POWERS", KeyEvent.KEYCODE_R, 0, true, 190, false, 33, 24, true),  // Power Select Menu: R
         // Extra buttons use the reference port's PC Keyboard Setup keys: disguise powers menu, last attack,
         // defense and sensory power; then last disguise power, Web of Intrigue, take a disguise and back to Alex.
-        // Appended so every saved position above keeps its index. All remain hidden unless Extra buttons is enabled.
+        // Appended so every saved position above keeps its index. Non-number extras remain hidden unless enabled;
+        // the numbered power keys can also be opened with the compact 123 control for detector/QTE number prompts.
         new Button("DSG MENU", KeyEvent.KEYCODE_F, 0, true, 370, false, 33, 24, true),
-        new Button("ATK PWR", KeyEvent.KEYCODE_1, 0, true, 280, false, 95, 22, true),
-        new Button("DEFENSE", KeyEvent.KEYCODE_3, 0, true, 190, false, 95, 22, true),
-        new Button("SENSE", KeyEvent.KEYCODE_4, 0, true, 100, false, 95, 22, true),
-        new Button("DSG PWR", KeyEvent.KEYCODE_2, 0, true, 370, false, 95, 22, true),
+        new Button("1 ATK", KeyEvent.KEYCODE_1, 0, true, 280, false, 95, 22, true),
+        new Button("3 DEF", KeyEvent.KEYCODE_3, 0, true, 190, false, 95, 22, true),
+        new Button("4 SENSE", KeyEvent.KEYCODE_4, 0, true, 100, false, 95, 22, true),
+        new Button("2 DSG", KeyEvent.KEYCODE_2, 0, true, 370, false, 95, 22, true),
         new Button("WEB", KeyEvent.KEYCODE_DPAD_DOWN, 0, true, 460, false, 33, 22, true),
         new Button("DISGUISE", KeyEvent.KEYCODE_F1, 0, true, 460, false, 95, 22, true),
         new Button("ALEX", KeyEvent.KEYCODE_F2, 0, true, 550, false, 95, 22, true),
+        // New controls are appended as well: existing saved positions and sizes retain their original indices.
+        new Button("123", ACTION_TOGGLE_NUMBERS, 0, false, 145, false, 33, 22, true),
+        new Button("ABC", ACTION_SHOW_KEYBOARD, 0, false, 210, false, 33, 22, false),
+        new Button("DESCEND", KeyEvent.KEYCODE_V, 0, true, 258, true, 215, 25, true),
     };
+    private final List<Button> customButtons = new ArrayList<>();
+    private final List<Button> allButtons = new ArrayList<>();
+    private long nextCustomId = 1;
 
     // ---- settings ----
     private final SharedPreferences prefs;
     private final GameSettings settingsStore;
     private final GameSettings.Setting[] settings;
+    private final boolean layoutOnly;
     private float opacity, scale;
-    private boolean vibrate, showFps, hideWithPad, autoRun, invertY, powerButtons;
+    private boolean vibrate, showFps, hideWithPad, autoRun, invertY, powerButtons, smartControls;
     private float camGain;
+    private InputManager inputManager;
     private boolean padConnected;
-    private boolean panelOpen = false, restartNeeded = false;
-    private final RectF panel = new RectF(), restartRect = new RectF(), closeRect = new RectF(),
-            layoutRect = new RectF();
+    private boolean panelOpen = false;
+    private final RectF panel = new RectF(), closeRect = new RectF(), layoutRect = new RectF();
 
     // ---- layout editor ----
     private boolean editing = false;
-    private final RectF doneRect = new RectF(), resetRect = new RectF();
+    private final RectF editorBar = new RectF(), selectionBar = new RectF();
+    private final RectF doneRect = new RectF(), resetRect = new RectF(), addRect = new RectF(), stickRect = new RectF();
     private final RectF smallerRect = new RectF(), biggerRect = new RectF();
+    private final RectF textRect = new RectF(), bindRect = new RectF(), hideRect = new RectF(), removeRect = new RectF();
     private Button selected;          // the button (or stick) the size buttons act on
-    private boolean selectedStick;
+    private boolean selectedStick, removeArmed;
+    private Button bindingTarget;
+    private boolean bindingNew;
     private float stickSize = 1;
     private Button dragButton;
     private boolean dragStick;
     private int dragPointer = -1;
     private float dragDx, dragDy;
+    private boolean snapXActive, snapYActive;
+    private float snapGuideX, snapGuideY;
+    private long snapTargetKey = Long.MIN_VALUE;
     private float stickCustomX = -1, stickCustomY = -1;
+    private boolean stickHidden;
     private final List<RectF> leftArrows = new ArrayList<>(), rightArrows = new ArrayList<>();
 
     // ---- drawing ----
     private final float density;
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG), edge = new Paint(Paint.ANTI_ALIAS_FLAG),
-            glow = new Paint(Paint.ANTI_ALIAS_FLAG), text = new Paint(Paint.ANTI_ALIAS_FLAG);
+            glow = new Paint(Paint.ANTI_ALIAS_FLAG), text = new Paint(Paint.ANTI_ALIAS_FLAG),
+            iconPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
+    private final TouchKeyboard keyboard;
+    private final TouchKeyState keyState;
     private boolean gameMode = false;
+    private int smartSpecialContext = SmartControlsModel.CONTEXT_UNKNOWN;
+    private boolean numberPad = false;
     private final RectF modeRect = new RectF(), gearRect = new RectF();
     private int modePointer = -1, gearPointer = -1;
 
@@ -173,13 +256,44 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private final Map<Integer, Button> pointerButton = new HashMap<>();
 
     public TouchControls(Context context) {
+        this(context, false);
+    }
+
+    /** Standalone launcher editing shares preferences but never starts or configures the SDL runtime. */
+    public TouchControls(Context context, boolean layoutOnly) {
         super(context);
+        this.layoutOnly = layoutOnly;
         density = context.getResources().getDisplayMetrics().density;
         prefs = context.getSharedPreferences("controls", Context.MODE_PRIVATE);
         settingsStore = new GameSettings(context);
-        settings = settingsStore.settings;
+        settings = settingsStore.gameplaySettings;
+        keyState = new TouchKeyState((keycode, down) -> {
+            if (down) SDLActivity.onNativeKeyDown(keycode);
+            else SDLActivity.onNativeKeyUp(keycode);
+        });
+        keyboard = new TouchKeyboard(density, new TouchKeyboard.Callback() {
+            @Override public void key(int keycode, boolean down) {
+                TouchControls.this.key(keycode, down);
+            }
+
+            @Override public void closed() {
+                bindingTarget = null;
+                bindingNew = false;
+                invalidate();
+            }
+
+            @Override public void bindingDone(int first, int second, int mouseButton) {
+                finishBinding(first, second, mouseButton);
+            }
+
+            @Override public void feedback() {
+                buzz();
+            }
+        });
         loadLayout();
         applyUiSettings();
+        if (!layoutOnly) applyLiveSettings();
+        if (layoutOnly) setBackgroundColor(0xff080808);
         Typeface face = Typeface.create("sans-serif-condensed", Typeface.BOLD);
         text.setTypeface(face);
         text.setTextAlign(Paint.Align.CENTER);
@@ -187,11 +301,14 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         edge.setStyle(Paint.Style.STROKE);
         glow.setStyle(Paint.Style.STROKE);
         glow.setMaskFilter(new BlurMaskFilter(6 * density, BlurMaskFilter.Blur.NORMAL));
+        iconPaint.setStyle(Paint.Style.STROKE);
+        iconPaint.setStrokeCap(Paint.Cap.ROUND);
+        iconPaint.setStrokeJoin(Paint.Join.ROUND);
         setHapticFeedbackEnabled(true);
-        InputManager im = (InputManager) context.getSystemService(Context.INPUT_SERVICE);
-        if (im != null) {
-            im.registerInputDeviceListener(this, null);
-            padConnected = findGamepad(im);
+        inputManager = (InputManager) context.getSystemService(Context.INPUT_SERVICE);
+        if (inputManager != null) {
+            inputManager.registerInputDeviceListener(this, null);
+            padConnected = findGamepad(inputManager);
         }
         // Refresh the performance overlay twice a second.
         postDelayed(new Runnable() {
@@ -242,18 +359,112 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         camGain = settingsStore.valueOf("ui_cam") / 100f;
         invertY = settingsStore.valueOf("ui_invert") != 0;
         powerButtons = settingsStore.valueOf("ui_power_buttons") != 0;
+        smartControls = SmartControlsModel.isSmart(settingsStore.valueOf("touch_controls"));
+        smartSpecialContext = SmartControlsModel.CONTEXT_UNKNOWN;
         layoutButtons(getWidth(), getHeight());
     }
 
+    private void applyLiveSettings() {
+        int requested = settingsStore.valueOf("fps_limit");
+        boolean batterySaver = settingsStore.valueOf("battery_saver") != 0;
+        int effective = batterySaver && (requested == 0 || requested > 30) ? 30 : requested;
+        nativeSetFpsLimit(effective);
+        nativeSetMenuFpsUnlocked(settingsStore.valueOf("unlock_menu_fps") != 0);
+        updateSmartMode();
+    }
+
+    private boolean smartPollingActive() {
+        return !layoutOnly && isAttachedToWindow() && getWindowVisibility() == VISIBLE
+                && smartControls && gameMode && !editing && !panelOpen && !controlsHidden();
+    }
+
+    private final Runnable smartContextPoll = new Runnable() {
+        @Override public void run() {
+            refreshSmartContext();
+            if (smartPollingActive()) postDelayed(this, 50);
+        }
+    };
+
+    private void refreshSmartContext() {
+        int next = SmartControlsModel.CONTEXT_UNKNOWN;
+        if (smartPollingActive()) {
+            try {
+                next = nativeSmartSpecialContext();
+            } catch (UnsatisfiedLinkError ignored) {
+                // A host without the native probe keeps the truthful Special fallback.
+            }
+        }
+        if (next != smartSpecialContext) {
+            smartSpecialContext = next;
+            invalidate();
+        }
+    }
+
+    private void updateSmartMode() {
+        if (layoutOnly || smartContextPoll == null) return;
+        final boolean active = smartPollingActive();
+        try {
+            nativeSetSmartControls(active);
+        } catch (UnsatisfiedLinkError ignored) {
+            // The Java model still falls back to Special if this native entry point is absent.
+        }
+        if (!active) smartSpecialContext = SmartControlsModel.CONTEXT_UNKNOWN;
+        removeCallbacks(smartContextPoll);
+        if (active) {
+            refreshSmartContext();
+            postDelayed(smartContextPoll, 50);
+        }
+        invalidate();
+    }
+
+    private static void defaultCustomGeometry(CustomButtonStore.Entry entry, int index) {
+        entry.x = 0.40f + (index % 4) * 0.10f;
+        entry.y = 0.40f + ((index / 4) % 3) * 0.14f;
+    }
+
+    private void rebuildAllButtons() {
+        allButtons.clear();
+        for (Button b : buttons) allButtons.add(b);
+        allButtons.addAll(customButtons);
+    }
+
     private void loadLayout() {
+        // These indices are the original persistence contract. New controls never enter this array.
         for (int i = 0; i < buttons.length; i++) {
-            buttons[i].customX = prefs.getFloat("pos" + i + "x", -1);
-            buttons[i].customY = prefs.getFloat("pos" + i + "y", -1);
-            buttons[i].size = prefs.getFloat("size" + i, 1);
+            Button b = buttons[i];
+            b.builtInIndex = i;
+            b.customX = prefs.getFloat("pos" + i + "x", -1);
+            b.customY = prefs.getFloat("pos" + i + "y", -1);
+            b.size = prefs.getFloat("size" + i, 1);
+            b.hidden = prefs.getBoolean("hide" + i, false);
+            String label = ControlKeys.cleanLabel(prefs.getString("label" + i, ""));
+            b.labelEdited = !label.isEmpty();
+            b.label = b.labelEdited ? label : b.defaultLabel;
         }
         stickCustomX = prefs.getFloat("stick_x", -1);
         stickCustomY = prefs.getFloat("stick_y", -1);
         stickSize = prefs.getFloat("stick_size", 1);
+        stickHidden = prefs.getBoolean("stick_hidden", false);
+        customButtons.clear();
+        long maxId = 0;
+        List<CustomButtonStore.Entry> entries = CustomButtonStore.decode(
+                prefs.getString(CustomButtonStore.PREFERENCE, "[]"));
+        for (int i = 0; i < entries.size(); ++i) {
+            CustomButtonStore.Entry entry = entries.get(i);
+            if (entry.x < 0 || entry.y < 0) defaultCustomGeometry(entry, i);
+            customButtons.add(new Button(entry));
+            maxId = Math.max(maxId, entry.id);
+        }
+        nextCustomId = Math.max(maxId + 1, prefs.getLong("custom_next_id", 1));
+        if (nextCustomId <= 0) nextCustomId = maxId + 1;
+        rebuildAllButtons();
+    }
+
+    private void saveCustomButtons() {
+        List<CustomButtonStore.Entry> entries = new ArrayList<>();
+        for (Button b : customButtons) entries.add(b.toEntry());
+        prefs.edit().putString(CustomButtonStore.PREFERENCE, CustomButtonStore.encode(entries))
+                .putLong("custom_next_id", nextCustomId).apply();
     }
 
     private void saveLayout() {
@@ -261,13 +472,16 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         SharedPreferences.Editor ed = prefs.edit();
         for (int i = 0; i < buttons.length; i++) {
             Button b = buttons[i];
-            ed.putFloat("size" + i, b.size);
+            ed.putFloat("size" + i, b.size).putBoolean("hide" + i, b.hidden);
+            if (b.labelEdited) ed.putString("label" + i, b.label);
+            else ed.remove("label" + i);
             if (b.customX < 0) continue;
             ed.putFloat("pos" + i + "x", b.cx / w).putFloat("pos" + i + "y", b.cy / h);
         }
-        ed.putFloat("stick_size", stickSize);
+        ed.putFloat("stick_size", stickSize).putBoolean("stick_hidden", stickHidden);
         if (stickCustomX >= 0) ed.putFloat("stick_x", stickHomeX / w).putFloat("stick_y", stickHomeY / h);
         ed.apply();
+        saveCustomButtons();
     }
 
     private void resetLayout() {
@@ -275,13 +489,31 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         for (int i = 0; i < buttons.length; i++) {
             buttons[i].customX = buttons[i].customY = -1;
             buttons[i].size = 1;
-            ed.remove("pos" + i + "x").remove("pos" + i + "y").remove("size" + i);
+            buttons[i].hidden = false;
+            buttons[i].label = buttons[i].defaultLabel;
+            buttons[i].labelEdited = false;
+            ed.remove("pos" + i + "x").remove("pos" + i + "y").remove("size" + i)
+                    .remove("hide" + i).remove("label" + i);
+        }
+        for (int i = 0; i < customButtons.size(); ++i) {
+            CustomButtonStore.Entry entry = customButtons.get(i).toEntry();
+            defaultCustomGeometry(entry, i);
+            customButtons.get(i).customX = entry.x;
+            customButtons.get(i).customY = entry.y;
+            customButtons.get(i).size = 1;
+            customButtons.get(i).hidden = false;
+            customButtons.get(i).labelEdited = false;
+            customButtons.get(i).label = customButtons.get(i).bindingText();
         }
         stickCustomX = stickCustomY = -1;
         stickSize = 1;
+        stickHidden = false;
         selected = null;
         selectedStick = false;
-        ed.remove("stick_x").remove("stick_y").remove("stick_size").apply();
+        removeArmed = false;
+        ed.remove("stick_x").remove("stick_y").remove("stick_size").remove("stick_hidden").apply();
+        saveCustomButtons();
+        cache.clear();
         layoutButtons(getWidth(), getHeight());
     }
 
@@ -307,6 +539,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void updatePads() {
         InputManager im = (InputManager) getContext().getSystemService(Context.INPUT_SERVICE);
         if (im != null) padConnected = findGamepad(im);
+        updateSmartMode();
         invalidate();
     }
 
@@ -321,6 +554,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     // ---- layout ----
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        releaseAll();
+        dragPointer = modePointer = gearPointer = -1;
+        dragButton = null;
+        dragStick = false;
+        clearSnap();
+        removeArmed = false;
         layoutButtons(w, h);
         lastMouseX = w / 2f;
         lastMouseY = h / 2f;
@@ -328,7 +567,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
 
     private void layoutButtons(int w, int h) {
         final float u = density * scale;
-        for (Button b : buttons) {
+        for (Button b : allButtons) {
             b.r = b.sizeDp * u * b.size;
             if (b.customX >= 0) {
                 b.cx = b.customX * w;
@@ -352,12 +591,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         gearRect.set(w - 58 * density, 12 * density, w - 14 * density, 56 * density);
         float pw = Math.min(w * 0.92f, 860 * density), ph = Math.min(h * 0.94f, 500 * density);
         panel.set((w - pw) / 2, (h - ph) / 2, (w + pw) / 2, (h + ph) / 2);
+        keyboard.layout(w, h);
     }
 
     // ---- input to SDL ----
     private void key(int keycode, boolean down) {
-        if (down) SDLActivity.onNativeKeyDown(keycode);
-        else SDLActivity.onNativeKeyUp(keycode);
+        keyState.set(keycode, down);
     }
 
     private void mouseButton(int bit, boolean down, float x, float y) {
@@ -397,10 +636,30 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     }
 
     private void press(Button b, int pointer) {
+        if (b.numberToggle) {
+            releaseAll();
+            numberPad = !numberPad;
+            buzz();
+            return;
+        }
+        if (b.keyboard) {
+            releaseAll();
+            buzz();
+            keyboard.show();
+            keyboard.layout(getWidth(), getHeight());
+            return;
+        }
         b.pointer = pointer;
         pointerButton.put(pointer, b);
         buzz();
-        if (b.mouseButton != 0) mouseButton(b.mouseButton, true, lastMouseX, lastMouseY);
+        if (b.custom) {
+            if (b.mouseButton != 0) {
+                mouseButton(b.mouseButton, true, lastMouseX, lastMouseY);
+            } else {
+                key(b.keycode, true);
+                if (b.secondKeycode != 0) key(b.secondKeycode, true);
+            }
+        } else if (b.mouseButton != 0) mouseButton(b.mouseButton, true, lastMouseX, lastMouseY);
         else if (b.keycode == KeyEvent.KEYCODE_SHIFT_LEFT) setRun(stickRun, true);
         else key(b.keycode, true);
     }
@@ -408,7 +667,14 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void release(Button b) {
         pointerButton.remove(b.pointer);
         b.pointer = -1;
-        if (b.mouseButton != 0) mouseButton(b.mouseButton, false, lastMouseX, lastMouseY);
+        if (b.custom) {
+            if (b.mouseButton != 0) {
+                mouseButton(b.mouseButton, false, lastMouseX, lastMouseY);
+            } else {
+                if (b.secondKeycode != 0) key(b.secondKeycode, false);
+                key(b.keycode, false);
+            }
+        } else if (b.mouseButton != 0) mouseButton(b.mouseButton, false, lastMouseX, lastMouseY);
         else if (b.keycode == KeyEvent.KEYCODE_SHIFT_LEFT) setRun(stickRun, false);
         else key(b.keycode, false);
     }
@@ -453,23 +719,236 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     }
 
     private void releaseAll() {
-        for (Button b : buttons) if (b.pointer >= 0) release(b);
+        keyboard.releaseAll();
+        for (Button b : allButtons) if (b.pointer >= 0) release(b);
         if (stickPointer >= 0) releaseStick();
         setRun(false, false);
         if (lookPointer >= 0 && !gameMode) mouseButton(MOUSE_LEFT, false, lookX, lookY);
         lookPointer = -1;
+        keyState.releaseAll();  // fail closed after rotation/cancellation or an interrupted editor transition
     }
 
     private boolean visible(Button b) {
-        if (b.quickPower && !powerButtons) return false;  // off by default: the screen was too busy
-        return editing || (!controlsHidden() && (gameMode || !b.gameOnly));
+        if (editing) return true;  // hidden and optional controls must remain recoverable/editable
+        if (b.hidden) return false;
+        if (b.numberKey && !numberPad && !powerButtons) return false;
+        if (b.quickPower && !b.numberKey && !powerButtons) return false;  // optional screen-space extras
+        return !controlsHidden() && (gameMode || !b.gameOnly);
     }
 
     // ---- layout editor ----
     private void startEditing() {
+        keyboard.hide();
         releaseAll();
+        bindingTarget = null;
+        bindingNew = false;
+        removeArmed = false;
+        clearSnap();
         panelOpen = false;
         editing = true;
+        updateSmartMode();
+    }
+
+    void openLayoutEditor() {
+        startEditing();
+        invalidate();
+    }
+
+    /** @return true when Back only closed the picker; otherwise the host may finish after the layout is saved. */
+    boolean handleBack() {
+        if (keyboard.isVisible()) {
+            keyboard.hide();
+            bindingTarget = null;
+            bindingNew = false;
+            invalidate();
+            return true;
+        }
+        if (editing) saveLayout();
+        return false;
+    }
+
+    private void finishEditing() {
+        saveLayout();
+        removeArmed = false;
+        buzz();
+        if (layoutOnly) {
+            // Stay in the editor until the activity is gone; a final normal frame must not touch SDL/FPS natives.
+            if (getContext() instanceof Activity) ((Activity) getContext()).finish();
+            return;
+        }
+        editing = false;
+        updateSmartMode();
+    }
+
+    private void startBinding(Button target) {
+        releaseAll();
+        bindingTarget = target;
+        bindingNew = target == null;
+        removeArmed = false;
+        keyboard.showPicker(target == null ? 0 : target.keycode, target == null ? 0 : target.secondKeycode,
+                target == null ? 0 : target.mouseButton);
+        keyboard.layout(getWidth(), getHeight());
+    }
+
+    private String defaultButtonText(Button b) {
+        return b.custom ? b.bindingText() : b.defaultLabel;
+    }
+
+    private void editButtonText(final Button target) {
+        if (target == null) return;
+        releaseAll();
+        removeArmed = false;
+        final EditText input = new EditText(getContext());
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        input.setText(target.label);
+        input.setSelection(input.getText().length());
+        input.setHint("Button text");
+        new AlertDialog.Builder(getContext())
+                .setTitle("BUTTON TEXT")
+                .setView(input)
+                .setPositiveButton("SAVE", (dialog, which) -> {
+                    String value = ControlKeys.cleanLabel(input.getText().toString());
+                    target.labelEdited = !value.isEmpty();
+                    target.label = target.labelEdited ? value : defaultButtonText(target);
+                    cache.clear();
+                    saveLayout();
+                    layoutButtons(getWidth(), getHeight());
+                    invalidate();
+                })
+                .setNeutralButton("DEFAULT", (dialog, which) -> {
+                    target.labelEdited = false;
+                    target.label = defaultButtonText(target);
+                    cache.clear();
+                    saveLayout();
+                    layoutButtons(getWidth(), getHeight());
+                    invalidate();
+                })
+                .setNegativeButton("CANCEL", null)
+                .show();
+    }
+
+    private void finishBinding(int first, int second, int mouseButton) {
+        if (!CustomButtonStore.validBinding(first, second, mouseButton)) return;
+        if (bindingNew) {
+            if (customButtons.size() >= CustomButtonStore.MAX_BUTTONS) return;
+            CustomButtonStore.Entry entry = new CustomButtonStore.Entry(nextCustomId++, first, second);
+            entry.mouseButton = mouseButton;
+            defaultCustomGeometry(entry, customButtons.size());
+            Button created = new Button(entry);
+            customButtons.add(created);
+            rebuildAllButtons();
+            selected = created;
+            selectedStick = false;
+        } else if (bindingTarget != null && bindingTarget.custom) {
+            bindingTarget.keycode = first;
+            bindingTarget.secondKeycode = second;
+            bindingTarget.mouseButton = mouseButton;
+            if (!bindingTarget.labelEdited) bindingTarget.label = ControlKeys.bindingLabel(first, second, mouseButton);
+            selected = bindingTarget;
+            selectedStick = false;
+        }
+        bindingTarget = null;
+        bindingNew = false;
+        cache.clear();
+        saveCustomButtons();
+        layoutButtons(getWidth(), getHeight());
+        invalidate();
+    }
+
+    private void clearSnap() {
+        snapXActive = snapYActive = false;
+        snapTargetKey = Long.MIN_VALUE;
+    }
+
+    private long buttonSnapKey(Button b) {
+        if (b == null) return -1;
+        return b.custom ? 1000000L + b.customId : b.builtInIndex + 1L;
+    }
+
+    /** Snap in editor space only. These pointy-topped hexagons have vertical sides; side contact is horizontal. */
+    private void snapDrag(float nx, float ny) {
+        final float threshold = 8f * density;
+        float bestX = threshold, bestY = threshold;
+        long xTarget = Long.MIN_VALUE, yTarget = Long.MIN_VALUE;
+        snapXActive = snapYActive = false;
+        snappedX = nx;
+        snappedY = ny;
+        float movingRadius = dragButton != null ? dragButton.r : stickR;
+        for (Button target : allButtons) {
+            if (target == dragButton) continue;
+            long key = buttonSnapKey(target);
+            float dx = Math.abs(nx - target.cx);
+            if (dx <= bestX) {
+                bestX = dx;
+                snappedX = target.cx;
+                snapGuideX = target.cx;
+                snapXActive = true;
+                xTarget = key;
+            }
+            float dy = Math.abs(ny - target.cy);
+            if (dy <= bestY) {
+                bestY = dy;
+                snappedY = target.cy;
+                snapGuideY = target.cy;
+                snapYActive = true;
+                yTarget = key;
+            }
+            if (!dragStick && movingRadius > 0 && target.r > 0) {
+                float edgeDistance = (float) (Math.sqrt(3.0) * 0.5 * (movingRadius + target.r));
+                float edgeDelta = Math.abs(Math.abs(nx - target.cx) - edgeDistance);
+                // Side contact is useful only while the polygons have vertical overlap.
+                if (edgeDelta <= bestX && Math.abs(ny - target.cy) <= (movingRadius + target.r) * 0.9f) {
+                    float direction = nx >= target.cx ? 1f : -1f;
+                    bestX = edgeDelta;
+                    snappedX = target.cx + direction * edgeDistance;
+                    snapGuideX = target.cx + direction * target.r * (float) (Math.sqrt(3.0) * 0.5);
+                    snapXActive = true;
+                    xTarget = key;
+                }
+            }
+        }
+        if (dragButton != null || dragStick) {
+            long stickKey = -1;
+            float sx = stickHomeX, sy = stickHomeY;
+            if (!dragStick) {
+                float dx = Math.abs(nx - sx);
+                if (dx <= bestX) {
+                    bestX = dx;
+                    snappedX = sx;
+                    snapGuideX = sx;
+                    snapXActive = true;
+                    xTarget = stickKey;
+                }
+                float dy = Math.abs(ny - sy);
+                if (dy <= bestY) {
+                    bestY = dy;
+                    snappedY = sy;
+                    snapGuideY = sy;
+                    snapYActive = true;
+                    yTarget = stickKey;
+                }
+            }
+        }
+        long newTarget = xTarget == Long.MIN_VALUE ? yTarget
+                : yTarget == Long.MIN_VALUE ? xTarget : xTarget * 131L + yTarget;
+        if (newTarget != snapTargetKey) {
+            if (newTarget != Long.MIN_VALUE) buzz();
+            snapTargetKey = newTarget;
+        }
+        float w = getWidth(), h = getHeight();
+        float r = movingRadius;
+        snappedX = clampCenter(snappedX, r, w);
+        snappedY = clampCenter(snappedY, r, h);
+    }
+
+    private float snappedX, snappedY;
+
+    private static float clampCenter(float value, float radius, float extent) {
+        if (extent <= 0) return value;
+        if (extent <= radius * 2) return extent / 2f;
+        return Math.max(radius, Math.min(extent - radius, value));
     }
 
     private void editTouch(MotionEvent e, int action, int id, float x, float y) {
@@ -478,9 +957,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             case MotionEvent.ACTION_POINTER_DOWN:
                 if (dragPointer >= 0) break;
                 if (doneRect.contains(x, y)) {
-                    saveLayout();
-                    editing = false;
-                    buzz();
+                    finishEditing();
                     break;
                 }
                 if (resetRect.contains(x, y)) {
@@ -488,7 +965,54 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     buzz();
                     break;
                 }
+                if (addRect.contains(x, y)) {
+                    if (customButtons.size() < CustomButtonStore.MAX_BUTTONS) startBinding(null);
+                    buzz();
+                    break;
+                }
+                if (stickRect.contains(x, y)) {
+                    selected = null;
+                    selectedStick = true;
+                    stickHidden = false;
+                    removeArmed = false;
+                    saveLayout();
+                    buzz();
+                    break;
+                }
+                if (selected != null && textRect.contains(x, y)) {
+                    editButtonText(selected);
+                    buzz();
+                    break;
+                }
+                if (selected != null && selected.custom && bindRect.contains(x, y)) {
+                    startBinding(selected);
+                    buzz();
+                    break;
+                }
+                if ((selected != null || selectedStick) && hideRect.contains(x, y)) {
+                    if (selected != null) selected.hidden = !selected.hidden;
+                    else stickHidden = !stickHidden;
+                    removeArmed = false;
+                    saveLayout();
+                    buzz();
+                    break;
+                }
+                if (selected != null && selected.custom && removeRect.contains(x, y)) {
+                    if (removeArmed) {
+                        customButtons.remove(selected);
+                        rebuildAllButtons();
+                        selected = null;
+                        removeArmed = false;
+                        saveCustomButtons();
+                        layoutButtons(getWidth(), getHeight());
+                    } else {
+                        removeArmed = true;
+                    }
+                    buzz();
+                    break;
+                }
                 if ((selected != null || selectedStick) && (smallerRect.contains(x, y) || biggerRect.contains(x, y))) {
+                    removeArmed = false;
                     float step = biggerRect.contains(x, y) ? 0.1f : -0.1f;
                     if (selected != null) {
                         selected.size = Math.max(0.6f, Math.min(2f, selected.size + step));
@@ -504,7 +1028,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     buzz();
                     break;
                 }
-                for (Button b : buttons) {
+                // Opaque editor chrome owns its touches; never drag a control hidden underneath it.
+                if (editorBar.contains(x, y) || selectionBar.contains(x, y)) {
+                    removeArmed = false;
+                    break;
+                }
+                for (Button b : allButtons) {
                     if (visible(b) && b.hit(x, y)) {
                         dragButton = b;
                         dragDx = b.cx - x;
@@ -524,15 +1053,24 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     dragPointer = id;
                     selected = dragButton;
                     selectedStick = dragStick;
+                    removeArmed = false;
+                    clearSnap();
                     buzz();
                 }
                 break;
             case MotionEvent.ACTION_MOVE: {
                 int i = e.findPointerIndex(dragPointer);
-                if (i < 0) break;
+                if (i < 0) {
+                    clearSnap();
+                    break;
+                }
                 float w = getWidth(), h = getHeight();
-                float nx = Math.max(0, Math.min(w, e.getX(i) + dragDx));
-                float ny = Math.max(0, Math.min(h, e.getY(i) + dragDy));
+                float movingRadius = dragButton != null ? dragButton.r : stickR;
+                float nx = clampCenter(e.getX(i) + dragDx, movingRadius, w);
+                float ny = clampCenter(e.getY(i) + dragDy, movingRadius, h);
+                snapDrag(nx, ny);
+                nx = snappedX;
+                ny = snappedY;
                 if (dragButton != null) {
                     dragButton.cx = nx;
                     dragButton.cy = ny;
@@ -553,6 +1091,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     dragPointer = -1;
                     dragButton = null;
                     dragStick = false;
+                    clearSnap();
                 }
                 break;
             default:
@@ -567,6 +1106,11 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         int index = e.getActionIndex();
         int id = e.getPointerId(index);
         float x = e.getX(index), y = e.getY(index);
+        if (keyboard.isVisible()) {
+            keyboard.onTouch(e, action, id, x, y);
+            invalidate();
+            return true;
+        }
         if (panelOpen) {
             if (action == MotionEvent.ACTION_UP) panelTap(x, y);
             invalidate();
@@ -592,7 +1136,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     break;
                 }
                 Button hit = null;
-                for (Button b : buttons) {
+                for (Button b : allButtons) {
                     if (visible(b) && b.pointer < 0 && b.hit(x, y)) {
                         hit = b;
                         break;
@@ -602,8 +1146,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     hit.fx = x;
                     hit.fy = y;
                     press(hit, id);
-                } else if (gameMode && !controlsHidden() && stickPointer < 0 && x < getWidth() * 0.4f
-                        && y > getHeight() * 0.35f) {
+                } else if (gameMode && !controlsHidden() && !stickHidden && stickPointer < 0
+                        && x < getWidth() * 0.4f && y > getHeight() * 0.35f) {
                     stickPointer = id;
                     stickX = x;  // the stick centres where the thumb lands
                     stickY = y;
@@ -649,6 +1193,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     if (gearRect.contains(x, y)) {
                         releaseAll();
                         panelOpen = true;
+                        updateSmartMode();
                         buzz();
                     }
                 } else if (id == modePointer) {
@@ -656,6 +1201,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     if (modeRect.contains(x, y)) {
                         releaseAll();
                         gameMode = !gameMode;
+                        updateSmartMode();
                         buzz();
                     }
                 } else if (pointerButton.containsKey(id)) {
@@ -682,10 +1228,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void panelTap(float x, float y) {
         if (closeRect.contains(x, y) || !panel.contains(x, y)) {
             panelOpen = false;
-            return;
-        }
-        if (restartNeeded && restartRect.contains(x, y)) {
-            restartApp();
+            updateSmartMode();
             return;
         }
         if (layoutRect.contains(x, y)) {
@@ -696,24 +1239,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             int delta = leftArrows.get(i).contains(x, y) ? -1 : rightArrows.get(i).contains(x, y) ? 1 : 0;
             if (delta == 0) continue;
             GameSettings.Setting s = settings[i];
-            settingsStore.setIndex(i, s.index + delta);
+            settingsStore.setIndex(s, s.index + delta);
             buzz();
-            if (s.key.equals("fps_limit")) nativeSetFpsLimit(s.value());  // applies right away
-            else if (s.engine && !GameSettings.isLiveEngineSetting(s)) restartNeeded = true;
             applyUiSettings();
+            applyLiveSettings();
             return;
         }
-    }
-
-    private void restartApp() {
-        Context ctx = getContext();
-        Intent intent = new Intent(ctx, ProtoActivity.class);
-        PendingIntent pi = PendingIntent.getActivity(ctx, 0, intent,
-                PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
-        if (am != null) am.set(AlarmManager.RTC, System.currentTimeMillis() + 400, pi);
-        if (ctx instanceof Activity) ((Activity) ctx).finishAffinity();
-        System.exit(0);
     }
 
     // ---- drawing ----
@@ -745,6 +1276,96 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         c.drawLine(r.right, r.bottom, r.right, r.bottom - len, p);
     }
 
+    private String buttonLabel(Button b) {
+        if (!editing && smartControls && gameMode && b.builtInIndex == BUTTON_SPECIAL) {
+            return SmartControlsModel.specialLabel(smartSpecialContext);
+        }
+        return b.label;
+    }
+
+    private int smartIcon(Button b) {
+        if (editing || !smartControls || !gameMode || b.hidden) return ICON_NONE;
+        switch (b.builtInIndex) {
+            case BUTTON_ATTACK: return ICON_ATTACK;
+            case BUTTON_SPECIAL:
+                return smartSpecialContext == SmartControlsModel.CONTEXT_CONSUME ? ICON_CONSUME : ICON_SPECIAL;
+            case BUTTON_GRAB: return ICON_GRAB;
+            case BUTTON_JUMP: return ICON_JUMP;
+            default: return ICON_NONE;
+        }
+    }
+
+    /** Small Prototype-inspired vector marks; no assets, allocations, or gesture recognizers on the input path. */
+    private void paintSmartIcon(Canvas c, int icon, float cx, float cy, float r, boolean down) {
+        if (icon == ICON_NONE) return;
+        iconPaint.setStrokeWidth(Math.max(1.4f * density, r * 0.14f));
+        iconPaint.setColor(alpha(down ? 0xffffffff : 0xffffb7ae, 1f));
+        switch (icon) {
+            case ICON_ATTACK:
+                // Alex's three claw slashes.
+                for (int i = -1; i <= 1; ++i) {
+                    float offset = i * r * 0.42f;
+                    c.drawLine(cx - r * 0.62f + offset, cy - r * 0.62f,
+                            cx + r * 0.20f + offset, cy + r * 0.66f, iconPaint);
+                }
+                break;
+            case ICON_SPECIAL:
+                // A central tendril with two asymmetric branches.
+                path.reset();
+                path.moveTo(cx, cy + r * 0.78f);
+                path.lineTo(cx - r * 0.16f, cy + r * 0.20f);
+                path.lineTo(cx + r * 0.18f, cy - r * 0.18f);
+                path.lineTo(cx, cy - r * 0.78f);
+                path.moveTo(cx - r * 0.04f, cy + r * 0.28f);
+                path.lineTo(cx - r * 0.62f, cy - r * 0.10f);
+                path.lineTo(cx - r * 0.78f, cy - r * 0.52f);
+                path.moveTo(cx + r * 0.08f, cy + r * 0.02f);
+                path.lineTo(cx + r * 0.64f, cy + r * 0.20f);
+                path.lineTo(cx + r * 0.82f, cy - r * 0.18f);
+                c.drawPath(path, iconPaint);
+                break;
+            case ICON_CONSUME:
+                // Biomass/DNA strands and cross-links: distinct from the ordinary tendril Special mark.
+                path.reset();
+                path.moveTo(cx - r * 0.46f, cy - r * 0.76f);
+                path.quadTo(cx + r * 0.62f, cy - r * 0.32f, cx - r * 0.42f, cy + r * 0.06f);
+                path.quadTo(cx - r * 0.94f, cy + r * 0.38f, cx + r * 0.42f, cy + r * 0.76f);
+                path.moveTo(cx + r * 0.46f, cy - r * 0.76f);
+                path.quadTo(cx - r * 0.62f, cy - r * 0.32f, cx + r * 0.42f, cy + r * 0.06f);
+                path.quadTo(cx + r * 0.94f, cy + r * 0.38f, cx - r * 0.42f, cy + r * 0.76f);
+                c.drawPath(path, iconPaint);
+                c.drawLine(cx - r * 0.34f, cy - r * 0.40f, cx + r * 0.34f, cy - r * 0.40f, iconPaint);
+                c.drawLine(cx - r * 0.38f, cy, cx + r * 0.38f, cy, iconPaint);
+                c.drawLine(cx - r * 0.34f, cy + r * 0.40f, cx + r * 0.34f, cy + r * 0.40f, iconPaint);
+                break;
+            case ICON_GRAB:
+                // Closing brackets around a target, rather than an ambiguous hand silhouette.
+                c.drawCircle(cx, cy, r * 0.24f, iconPaint);
+                path.reset();
+                path.moveTo(cx - r * 0.30f, cy - r * 0.70f);
+                path.lineTo(cx - r * 0.76f, cy - r * 0.70f);
+                path.lineTo(cx - r * 0.76f, cy + r * 0.70f);
+                path.lineTo(cx - r * 0.30f, cy + r * 0.70f);
+                path.moveTo(cx + r * 0.30f, cy - r * 0.70f);
+                path.lineTo(cx + r * 0.76f, cy - r * 0.70f);
+                path.lineTo(cx + r * 0.76f, cy + r * 0.70f);
+                path.lineTo(cx + r * 0.30f, cy + r * 0.70f);
+                c.drawPath(path, iconPaint);
+                break;
+            case ICON_JUMP:
+                path.reset();
+                path.moveTo(cx - r * 0.72f, cy + r * 0.14f);
+                path.lineTo(cx, cy - r * 0.62f);
+                path.lineTo(cx + r * 0.72f, cy + r * 0.14f);
+                path.moveTo(cx, cy - r * 0.50f);
+                path.lineTo(cx, cy + r * 0.72f);
+                c.drawPath(path, iconPaint);
+                break;
+            default:
+                break;
+        }
+    }
+
     private void drawButton(Canvas c, Button b) {
         final boolean down = b.pointer >= 0;
         if (down && b.wheel) {  // where the held finger points the wheel
@@ -753,9 +1374,15 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             c.drawLine(b.cx, b.cy, b.fx, b.fy, edge);
             c.drawCircle(b.fx, b.fy, 10 * density, edge);
         }
-        Bitmap bmp = cached(b.label + (down ? ":1:" : ":0:") + b.r, b.r + 12 * density,
-                (cc, x, y) -> paintButton(cc, b, x, y, down));
+        final String label = buttonLabel(b);
+        final int icon = smartIcon(b);
+        Bitmap bmp = cached(label + ":" + b.bindingText() + (editing ? ":E" : ":N")
+                        + (down ? ":1:" : ":0:") + (b.hidden ? ":H:" : ":V:") + b.r + ":I" + icon,
+                b.r + 12 * density, (cc, x, y) -> paintButton(cc, b, x, y, down));
+        float savedOpacity = opacity;
+        if (editing && b != selected) opacity *= 0.52f;
         blitCentered(c, bmp, b.cx, b.cy);
+        opacity = savedOpacity;
     }
 
     private void paintButton(Canvas c, Button b, float bx, float by, boolean down) {
@@ -773,9 +1400,37 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         edge.setStrokeWidth(0.8f * density);
         edge.setColor(alpha(RED_DIM, 0.9f));
         c.drawPath(path, edge);
-        text.setTextSize(Math.min(14 * density, b.r * 0.42f));
+        final String label = buttonLabel(b);
+        final int icon = smartIcon(b);
+        float labelSize = Math.min(14 * density, b.r * 0.42f);
+        text.setTextSize(labelSize);
+        while (labelSize > 7 * density && text.measureText(label) > b.r * 1.45f) {
+            labelSize -= density;
+            text.setTextSize(labelSize);
+        }
         text.setColor(alpha(down ? 0xffffffff : 0xffffd6d0, 1f));
-        c.drawText(b.label, bx, by + text.getTextSize() * 0.36f, text);
+        if (icon != ICON_NONE) {
+            paintSmartIcon(c, icon, bx, by - b.r * 0.42f, b.r * 0.52f, down);
+        }
+        float labelBaseline = editing ? by - b.r * 0.20f
+                : icon != ICON_NONE ? by + b.r * 0.58f : by + labelSize * (b.hidden ? 0.05f : 0.36f);
+        c.drawText(label, bx, labelBaseline, text);
+        if (editing) {
+            String binding = b.bindingText();
+            float bindingSize = Math.min(9 * density, b.r * 0.25f);
+            text.setTextSize(bindingSize);
+            while (bindingSize > 6 * density && text.measureText(binding) > b.r * 1.45f) {
+                bindingSize -= density;
+                text.setTextSize(bindingSize);
+            }
+            text.setColor(alpha(0xffffa69d, 1f));
+            c.drawText(binding, bx, by + b.r * (b.hidden ? 0.30f : 0.52f), text);
+        }
+        if (b.hidden) {
+            text.setTextSize(Math.max(7 * density, labelSize * 0.65f));
+            text.setColor(alpha(0xffff8d82, 1f));
+            c.drawText("HIDDEN", bx, editing ? by + b.r * 0.78f : by + labelSize * 1.15f, text);
+        }
     }
 
     private void drawStick(Canvas c) {
@@ -821,9 +1476,14 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         edge.setStrokeWidth(1.5f * density);
         edge.setColor(alpha(RED, 1f));
         brackets(c, r, 9 * density, edge);
-        text.setTextSize(14 * density);
+        float labelSize = 14 * density;
+        text.setTextSize(labelSize);
+        while (labelSize > 8 * density && text.measureText(label) > r.width() - 12 * density) {
+            labelSize -= density;
+            text.setTextSize(labelSize);
+        }
         text.setColor(alpha(0xffffe0dc, 1f));
-        c.drawText(label, r.centerX(), r.centerY() + 5 * density, text);
+        c.drawText(label, r.centerX(), r.centerY() + labelSize * 0.36f, text);
     }
 
     private void drawGear(Canvas c) {
@@ -888,8 +1548,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             float y = top + rowH * (i % rows) + rowH / 2;
             text.setTextAlign(Paint.Align.LEFT);
             text.setColor(0xffe8d6d4);
-            c.drawText(s.label + (s.engine && !GameSettings.isLiveEngineSetting(s) ? " *" : ""), colLeft, y + 5 * density,
-                    text);
+            c.drawText(s.label, colLeft, y + 5 * density, text);
             float vx = colRight - 62 * density;
             RectF l = new RectF(vx - 64 * density, y - rowH / 2, vx - 32 * density, y + rowH / 2);
             RectF r = new RectF(vx + 32 * density, y - rowH / 2, vx + 64 * density, y + rowH / 2);
@@ -912,48 +1571,154 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         drawPill(c, layoutRect, "LAYOUT", false);
         closeRect.set(cx + pillW * 0.5f + gap, by - 18 * density, cx + pillW * 1.5f + gap, by + 18 * density);
         drawPill(c, closeRect, "CLOSE", false);
-        restartRect.set(cx - pillW * 0.5f, by - 18 * density, cx + pillW * 0.5f, by + 18 * density);
-        if (restartNeeded) {
-            drawPill(c, restartRect, "RESTART", true);
-        } else {
-            text.setTextSize(11 * density);
-            text.setColor(0xff9a8a88);
-            c.drawText("* applies after restart", restartRect.centerX(), by + 4 * density, text);
-        }
     }
 
     private void drawEditor(Canvas c) {
-        c.drawColor(0x66000000);
+        c.drawColor(0x77000000);
+        float savedOpacity = opacity;
+        if (!selectedStick) opacity *= 0.52f;
         drawStick(c);
-        for (Button b : buttons) {
+        opacity = savedOpacity;
+        if (stickHidden) {
+            text.setTextAlign(Paint.Align.CENTER);
+            text.setTextSize(11 * density);
+            text.setColor(0xffff8d82);
+            c.drawText("HIDDEN", stickHomeX, stickHomeY + 4 * density, text);
+        }
+        for (Button b : allButtons) {
             if (visible(b)) drawButton(c, b);
         }
-        float cx = getWidth() * 0.38f, top = 16 * density;  // left of centre: clear of the buttons on the top right
-        text.setTextSize(15 * density);
-        text.setColor(0xffffe0dc);
-        c.drawText("Drag the buttons and the stick, tap one to resize it", cx, top + 70 * density, text);
-        resetRect.set(cx - 162 * density, top, cx - 12 * density, top + 38 * density);
-        doneRect.set(cx + 12 * density, top, cx + 162 * density, top + 38 * density);
-        drawPill(c, resetRect, "RESET", false);
-        drawPill(c, doneRect, "DONE", true);
         if (selected != null || selectedStick) {
-            float sx = selected != null ? selected.cx : stickHomeX, sy = selected != null ? selected.cy : stickHomeY;
+            float sx = selected != null ? selected.cx : stickHomeX;
+            float sy = selected != null ? selected.cy : stickHomeY;
             float sr = selected != null ? selected.r : stickR;
             edge.setStrokeWidth(2.5f * density);
             edge.setColor(0xffffffff);
             c.drawCircle(sx, sy, sr + 6 * density, edge);
-            float y = top + 96 * density, size = selected != null ? selected.size : stickSize;
-            smallerRect.set(cx - 150 * density, y, cx - 60 * density, y + 38 * density);
-            biggerRect.set(cx + 60 * density, y, cx + 150 * density, y + 38 * density);
+        }
+        if (snapXActive || snapYActive) {
+            edge.setStyle(Paint.Style.STROKE);
+            edge.setStrokeWidth(1.2f * density);
+            edge.setColor(0x99ff9b8f);
+            if (snapXActive) c.drawLine(snapGuideX, 0, snapGuideX, getHeight(), edge);
+            if (snapYActive) c.drawLine(0, snapGuideY, getWidth(), snapGuideY, edge);
+        }
+
+        float margin = 10 * density;
+        float top = 8 * density;
+        editorBar.set(margin, top, getWidth() - margin, top + 64 * density);
+        fill.setStyle(Paint.Style.FILL);
+        fill.setColor(0xf5100d0f);
+        c.drawRect(editorBar, fill);
+        edge.setStrokeWidth(1.2f * density);
+        edge.setColor(0x88504a4d);
+        c.drawRect(editorBar, edge);
+        edge.setColor(RED);
+        c.drawLine(editorBar.left, editorBar.bottom, editorBar.right, editorBar.bottom, edge);
+
+        float gap = 6 * density;
+        float actionsWidth = Math.min(312 * density, editorBar.width() * 0.70f);
+        float actionW = (actionsWidth - gap * 3) / 4f;
+        float actionRight = editorBar.right - 10 * density;
+        float actionTop = editorBar.top + 10 * density;
+        float actionBottom = actionTop + 44 * density;
+        doneRect.set(actionRight - actionW, actionTop, actionRight, actionBottom);
+        resetRect.set(doneRect.left - gap - actionW, actionTop, doneRect.left - gap, actionBottom);
+        stickRect.set(resetRect.left - gap - actionW, actionTop, resetRect.left - gap, actionBottom);
+        addRect.set(stickRect.left - gap - actionW, actionTop, stickRect.left - gap, actionBottom);
+
+        float titleLeft = editorBar.left + 14 * density;
+        float titleWidth = Math.max(1f, addRect.left - titleLeft - 10 * density);
+        text.setTextAlign(Paint.Align.LEFT);
+        text.setColor(0xffffeee8);
+        text.setTextSize(15 * density);
+        while (text.measureText("TOUCH LAYOUT") > titleWidth && text.getTextSize() > 10 * density) {
+            text.setTextSize(text.getTextSize() - density);
+        }
+        c.drawText("TOUCH LAYOUT", titleLeft, editorBar.top + 25 * density, text);
+        if (titleWidth > 105 * density) {
+            text.setTextSize(10 * density);
+            text.setColor(0xffb8aaa5);
+            c.drawText("Drag to move • tap for options", titleLeft, editorBar.top + 45 * density, text);
+        }
+        text.setTextAlign(Paint.Align.CENTER);
+        drawPill(c, addRect, customButtons.size() >= CustomButtonStore.MAX_BUTTONS ? "MAX 24" : "ADD", false);
+        drawPill(c, stickRect, stickHidden ? "ADD STICK" : "STICK", false);
+        drawPill(c, resetRect, "RESET", false);
+        drawPill(c, doneRect, "DONE", true);
+
+        if (selected != null || selectedStick) {
+            float panelWidth = Math.min(getWidth() - margin * 2, 620 * density);
+            float panelLeft = (getWidth() - panelWidth) / 2f;
+            selectionBar.set(panelLeft, getHeight() - 98 * density,
+                    panelLeft + panelWidth, getHeight() - 10 * density);
+            fill.setStyle(Paint.Style.FILL);
+            fill.setColor(0xf7100d0f);
+            c.drawRect(selectionBar, fill);
+            edge.setStrokeWidth(1.2f * density);
+            edge.setColor(0x88504a4d);
+            c.drawRect(selectionBar, edge);
+            edge.setColor(RED);
+            c.drawLine(selectionBar.left, selectionBar.top, selectionBar.right, selectionBar.top, edge);
+
+            float size = selected != null ? selected.size : stickSize;
+            String name = selected != null ? selected.label : "STICK";
+            String binding = selected != null ? selected.bindingText() : "MOVE";
+            boolean hidden = selected != null ? selected.hidden : stickHidden;
+            text.setTextSize(13 * density);
+            text.setColor(0xffffe0dc);
+            c.drawText(name + "  •  " + binding + "  •  SIZE " + Math.round(size * 100) + "%",
+                    selectionBar.centerX(), selectionBar.top + 22 * density, text);
+
+            boolean custom = selected != null && selected.custom;
+            boolean hasText = selected != null;
+            int count = custom ? 6 : hasText ? 4 : 3;
+            float rowWidth = Math.min(selectionBar.width() - 20 * density,
+                    (custom ? 590 : hasText ? 390 : 310) * density);
+            float itemWidth = (rowWidth - gap * (count - 1)) / count;
+            float x = selectionBar.centerX() - rowWidth / 2f;
+            float y = selectionBar.top + 34 * density;
+            float bottom = y + 44 * density;
+            smallerRect.set(x, y, x + itemWidth, bottom);
+            biggerRect.set(x + itemWidth + gap, y, x + itemWidth * 2 + gap, bottom);
+            int next = 2;
+            if (hasText) {
+                textRect.set(x + (itemWidth + gap) * next, y,
+                        x + (itemWidth + gap) * next + itemWidth, bottom);
+                drawPill(c, textRect, "TEXT", false);
+                next++;
+            } else {
+                textRect.setEmpty();
+            }
+            if (custom) {
+                bindRect.set(x + (itemWidth + gap) * next, y,
+                        x + (itemWidth + gap) * next + itemWidth, bottom);
+                drawPill(c, bindRect, "BIND", false);
+                next++;
+            } else {
+                bindRect.setEmpty();
+            }
+            hideRect.set(x + (itemWidth + gap) * next, y,
+                    x + (itemWidth + gap) * next + itemWidth, bottom);
             drawPill(c, smallerRect, "\u2212", false);
             drawPill(c, biggerRect, "+", false);
-            text.setTextSize(15 * density);
-            text.setColor(0xffffe0dc);
-            c.drawText((selected != null ? selected.label : "STICK") + "  " + Math.round(size * 100) + "%", cx,
-                    y + 25 * density, text);
+            drawPill(c, hideRect, hidden ? "SHOW" : "HIDE", false);
+            next++;
+            if (custom) {
+                removeRect.set(x + (itemWidth + gap) * next, y,
+                        x + (itemWidth + gap) * next + itemWidth, bottom);
+                drawPill(c, removeRect, removeArmed ? "CONFIRM" : "DELETE", removeArmed);
+            } else {
+                removeRect.setEmpty();
+            }
         } else {
+            selectionBar.setEmpty();
             smallerRect.setEmpty();
             biggerRect.setEmpty();
+            textRect.setEmpty();
+            bindRect.setEmpty();
+            hideRect.setEmpty();
+            removeRect.setEmpty();
         }
     }
 
@@ -978,14 +1743,44 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     };
 
     @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
+        updateSmartMode();
+    }
+
+    @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        if (inputManager == null) {
+            inputManager = (InputManager) getContext().getSystemService(Context.INPUT_SERVICE);
+            if (inputManager != null) {
+                inputManager.registerInputDeviceListener(this, null);
+                padConnected = findGamepad(inputManager);
+            }
+        }
+        updateSmartMode();
         postDelayed(uiShotPoll, 1000);
     }
 
     @Override
     protected void onDetachedFromWindow() {
+        if (inputManager != null) {
+            inputManager.unregisterInputDeviceListener(this);
+            inputManager = null;
+        }
+        releaseAll();
+        clearSnap();
+        keyboard.hide();
         removeCallbacks(uiShotPoll);
+        removeCallbacks(smartContextPoll);
+        smartSpecialContext = SmartControlsModel.CONTEXT_UNKNOWN;
+        if (!layoutOnly) {
+            try {
+                nativeSetSmartControls(false);
+            } catch (UnsatisfiedLinkError ignored) {
+                // Nothing else owns the native context after this view is detached.
+            }
+        }
         super.onDetachedFromWindow();
     }
 
@@ -993,15 +1788,19 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     protected void onDraw(Canvas canvas) {
         if (editing) {
             drawEditor(canvas);
-            return;
+        } else {
+            if (!controlsHidden()) drawPill(canvas, modeRect, gameMode ? "GAME" : "MENU", gameMode);
+            drawGear(canvas);
+            if (showFps) drawPerf(canvas);
+            if (gameMode && !controlsHidden() && !stickHidden) drawStick(canvas);
+            for (Button b : allButtons) {
+                if (visible(b)) drawButton(canvas, b);
+            }
+            if (panelOpen) drawPanel(canvas);
         }
-        if (!controlsHidden()) drawPill(canvas, modeRect, gameMode ? "GAME" : "MENU", gameMode);
-        drawGear(canvas);
-        if (showFps) drawPerf(canvas);
-        if (gameMode && !controlsHidden()) drawStick(canvas);
-        for (Button b : buttons) {
-            if (visible(b)) drawButton(canvas, b);
+        if (keyboard.isVisible()) {
+            canvas.drawColor(0x77000000);
+            keyboard.draw(canvas);
         }
-        if (panelOpen) drawPanel(canvas);
     }
 }

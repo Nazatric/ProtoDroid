@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "win.h"
+#include "aa_policy.h"
 #include "d3d9_dxt.h"
 #include "d3d9_state.h"
 #include "diagnostics.h"
@@ -299,6 +300,12 @@ D3DPRESENT_PARAMETERS ToHost(uint32_t g) {
     p.Flags = R32(g + 44);
     p.FullScreen_RefreshRateInHz = R32(g + 48);
     p.PresentationInterval = R32(g + 52);
+    // FXAA replaces, rather than stacks on top of, Prototype's built-in MSAA. GameDB enforcement covers the
+    // engine's offscreen effects path; this boundary also keeps every present/reset swapchain single-sampled if a
+    // stale profile or an unhooked engine path still requests MSAA. Original MSAA modes are not modified.
+    const int aa = SettingInt("game_aa_level", kAaGameDefault);
+    p.MultiSampleType = D3DMULTISAMPLE_TYPE(AaPresentSampleType(aa, uint32_t(p.MultiSampleType)));
+    p.MultiSampleQuality = AaPresentSampleQuality(aa, p.MultiSampleQuality);
     // Android: the SDL window already covers the screen and exclusive fullscreen has no meaning there.
 #ifdef __ANDROID__
     const bool windowed = true;
@@ -313,6 +320,12 @@ D3DPRESENT_PARAMETERS ToHost(uint32_t g) {
     p.PresentationInterval = D3D9PresentationInterval(p.PresentationInterval, true);
 #endif
     return p;
+}
+
+void LogFxaaPresentPolicy(const char* operation, uint32_t g, const D3DPRESENT_PARAMETERS& p) {
+    if (!AaUsesFxaa(SettingInt("game_aa_level", kAaGameDefault))) return;
+    Log("AA policy: %s FXAA present msaa %u/%u -> %u/%u", operation, R32(g + 16), R32(g + 20),
+        uint32_t(p.MultiSampleType), p.MultiSampleQuality);
 }
 
 void ToGuest(const D3DPRESENT_PARAMETERS& p, uint32_t g) {
@@ -765,6 +778,7 @@ bool WaitForWindow(int seconds);  // below, with the surface state
 M(IDirect3D9, CreateDevice) {
     const int64_t create_device_start_ns = MonotonicNanos();
     D3DPRESENT_PARAMETERS pp = ToHost(Arg(c, 5));
+    LogFxaaPresentPolicy("CreateDevice", Arg(c, 5), pp);
     IDirect3DDevice9* dev = nullptr;
     // The Vulkan surface needs the window on screen: if the player switched to another app during startup, the
     // device would fail with a lost surface. Wait for the window, and retry a failure that happened while it was gone.
@@ -824,6 +838,7 @@ M(IDirect3DDevice9, SetCursorProperties) {
 }
 M(IDirect3DDevice9, CreateAdditionalSwapChain) {
     D3DPRESENT_PARAMETERS pp = ToHost(Arg(c, 1));
+    LogFxaaPresentPolicy("CreateAdditionalSwapChain", Arg(c, 1), pp);
     IDirect3DSwapChain9* sc = nullptr;
     HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->CreateAdditionalSwapChain(&pp, &sc);
     ToGuest(pp, Arg(c, 1));
@@ -833,6 +848,7 @@ M(IDirect3DDevice9, CreateAdditionalSwapChain) {
 M(IDirect3DDevice9, Reset) {
     const int64_t reset_start_ns = MonotonicNanos();
     D3DPRESENT_PARAMETERS pp = ToHost(Arg(c, 1));
+    LogFxaaPresentPolicy("Reset", Arg(c, 1), pp);
     // Matching width/height/format alone is not enough to skip Reset: D3D9 also resets device state and default-pool
     // resources. ToHost keeps the Android interval stable, avoiding the observed cutscene presentation-mode change.
     DrainGraves(true);

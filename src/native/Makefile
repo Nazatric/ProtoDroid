@@ -6,6 +6,7 @@
 PLATFORM ?= linux
 # Generated for the rebased engine: recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native (see guest.h)
 RECOMP_DIR ?= ../../build/recomp/native
+LUA_DIR := ../../third_party/lua-5.4.8
 DXVK ?= $(HOME)/protodroid-data/deps/dxvk
 # CI supplies SOURCE_REVISION=${{ github.sha }}; local builds identify their checked-out commit when Git is available.
 # Keep this in the native binary as well as the APK metadata so a device log cannot be tied to the wrong source tree.
@@ -81,9 +82,16 @@ endif
 SRCS := main.cpp diagnostic_tour.cpp diagnostics.cpp memory.cpp loader.cpp imports.cpp runtime.cpp thread.cpp path.cpp save_path.cpp kernel32.cpp msvcr80.cpp user32.cpp \
         advapi32.cpp misc.cpp d3d9.cpp d3d9_dxt.cpp input.cpp xaudio2.cpp bink.cpp bink_media.cpp bink_blit.cpp dinput.cpp gamepad.cpp config.cpp watchdog.cpp hot_audio.cpp hot_skin.cpp \
         vulkan_driver.cpp perf_hint.cpp present_stats.cpp state_cache.cpp video_settings.cpp \
-        mod_platform.cpp mod_files.cpp mod_textures.cpp mod_hook.cpp mod_features.cpp mod_plugins.cpp
+        mod_platform.cpp mod_files.cpp mod_textures.cpp mod_hook.cpp mod_features.cpp mod_plugins.cpp mod_settings.cpp \
+        mod_symbols.cpp mod_scripts.cpp smart_controls.cpp
+LUA_SRCS := $(LUA_DIR)/lapi.c $(LUA_DIR)/lcode.c $(LUA_DIR)/lctype.c $(LUA_DIR)/ldebug.c $(LUA_DIR)/ldo.c \
+            $(LUA_DIR)/ldump.c $(LUA_DIR)/lfunc.c $(LUA_DIR)/lgc.c $(LUA_DIR)/llex.c $(LUA_DIR)/lmem.c \
+            $(LUA_DIR)/lobject.c $(LUA_DIR)/lopcodes.c $(LUA_DIR)/lparser.c $(LUA_DIR)/lstate.c $(LUA_DIR)/lstring.c \
+            $(LUA_DIR)/ltable.c $(LUA_DIR)/ltm.c $(LUA_DIR)/lundump.c $(LUA_DIR)/lvm.c $(LUA_DIR)/lzio.c \
+            $(LUA_DIR)/lauxlib.c $(LUA_DIR)/lbaselib.c $(LUA_DIR)/lmathlib.c $(LUA_DIR)/lstrlib.c \
+            $(LUA_DIR)/ltablib.c $(LUA_DIR)/lutf8lib.c
 GEN := $(wildcard $(RECOMP_DIR)/*.c)
-OBJS = $(SRCS:%.cpp=$(OUT)/%.o) $(GEN:$(RECOMP_DIR)/%.c=$(OUT)/gen/%.o)
+OBJS = $(SRCS:%.cpp=$(OUT)/%.o) $(GEN:$(RECOMP_DIR)/%.c=$(OUT)/gen/%.o) $(LUA_SRCS:$(LUA_DIR)/%.c=$(OUT)/lua/%.o)
 
 all: $(OUT)/$(BINARY) $(EXTRA)
 
@@ -117,7 +125,16 @@ $(OUT)/vulkan_driver.o: gpu_profile.h
 $(OUT)/video_settings.o: video_settings.h
 $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/bink_media.o $(OUT)/kernel32.o $(OUT)/msvcr80.o $(OUT)/mod_platform.o $(OUT)/mod_files.o \
 $(OUT)/mod_textures.o $(OUT)/mod_hook.o $(OUT)/mod_features.o $(OUT)/mod_plugins.o: mod_platform.h
-$(OUT)/mod_plugins.o: ../../modding/include/protodroid_plugin.h
+$(OUT)/mod_plugins.o: ../../modding/include/protodroid_plugin.h mod_settings.h mod_symbols.h
+$(OUT)/mod_scripts.o: mod_platform.h mod_settings.h mod_symbols.h $(LUA_DIR)/lua.h $(LUA_DIR)/lauxlib.h $(LUA_DIR)/lualib.h
+$(OUT)/mod_symbols.o: mod_symbols.h mod_symbols.inc
+$(OUT)/mod_settings.o: mod_settings.h mod_platform.h
+$(OUT)/mod_features.o $(OUT)/main.o: smart_controls.h
+$(OUT)/smart_controls.o: smart_controls.h mod_platform.h timing_window.h
+
+$(OUT)/lua/%.o: $(LUA_DIR)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=c99 -O2 -g0 -fno-strict-aliasing -fwrapv $(TARGET_FLAGS) -I$(LUA_DIR) -c -o $@ $<
 
 $(OUT)/%.o: %.cpp guest.h win.h turnip_load.h ../recomp/runtime.h d3d9_gen.inc
 	@mkdir -p $(dir $@)

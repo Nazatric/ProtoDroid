@@ -57,12 +57,18 @@ for value in (512, 1024, 2048, 4096, 8192):
     require(f"value == {value}" in feature_policy, f"documented shadow override {value} is missing")
 require("ModScaleShadowResolution" in features and "4096.0" not in features,
         "shadow detour does not use the complete bounded scaling policy")
-require('SettingInt("unlock_menu_fps", 1)' in text("src/native/bink.cpp"), "default-On menu FPS unlock changed")
+main_source = text("src/native/main.cpp")
+bink_source = text("src/native/bink.cpp")
+require('SettingInt("unlock_menu_fps", 1)' in main_source and
+        'BinkMenuWaitUnlocked(MenuFpsUnlocked() ? 1 : 0, audio_streams)' in bink_source,
+        "default-On live menu FPS unlock or Bink-open consumption changed")
+require('Java_com_protodroid_TouchControls_nativeSetMenuFpsUnlocked' in main_source,
+        "live menu FPS JNI setter is missing")
 require('SettingInt("vram_report_mb", 0)' in text("src/native/main.cpp"), "VRAM report cap is not default-off")
 
 platform = text("src/native/mod_platform.cpp")
 order = [platform.index(name) for name in ("ModFilesInitialize", "ModTexturesInitialize", "ModFeaturesInitialize",
-                                          "ModPluginsInitialize")]
+                                          "ModPluginsInitialize", "ModScriptsInitialize")]
 require(order == sorted(order), "mod startup subsystem order changed")
 require("ModPlatformFrame();" in text("src/native/main.cpp"), "plugin frame lifecycle is not wired")
 require("ModPlatformShutdown();" in text("src/native/main.cpp"), "plugin shutdown lifecycle is not wired")
@@ -81,7 +87,29 @@ require("ProtoDroidTextureV1" in text("src/native/mod_textures.cpp")
         and "ProtoDroidTextureV1" in text("re/native-mod-platform.md"), "texture key contract mismatch")
 require("if (ModTexturesEnabled())" in text("src/native/d3d9.cpp"),
         "ordinary texture unlocks lost the disabled fast path")
-require("#define PD_PLUGIN_API_VERSION 1u" in text("modding/include/protodroid_plugin.h"), "plugin ABI version changed")
+plugin_header = text("modding/include/protodroid_plugin.h")
+require("#define PD_PLUGIN_API_VERSION 3u" in plugin_header and
+        "#define PD_PLUGIN_API_VERSION_V1 1u" in plugin_header and
+        "#define PD_PLUGIN_API_VERSION_V2 2u" in plugin_header and
+        "PD_HOST_API_V1_SIZE" in plugin_header and "PD_HOST_API_V2_SIZE" in plugin_header,
+        "appended ABI v3 must retain the exact v1/v2 contracts")
+plugins = text("src/native/mod_plugins.cpp")
+for getter in ("ApiGetModBoolean", "ApiGetModNumber", "ApiGetModString", "ModSettingsLoad",
+               "ApiLookupSymbol", "ApiEmitEvent"):
+    require(getter in plugins, f"native per-mod/extension path missing: {getter}")
+require("PD_HOST_API_V1_SIZE" in plugins and "PD_HOST_API_V2_SIZE" in plugins and
+        "plugin->info.abi_version != abi" in plugins,
+        "host does not select and validate the manifest-requested plugin ABI")
+scripts = text("src/native/mod_scripts.cpp")
+for marker in ("lua_newstate", "kLuaMemoryLimit", "kInstructionLimit", "luaL_loadbufferx",
+               "ModSymbolResolve", "GuestCallArray", "ModHookInstall", "ModScriptsEmit"):
+    require(marker in scripts, f"sandboxed script runtime path missing: {marker}")
+require("mod_scripts.cpp" in text("src/native/Makefile") and "mod_symbols.inc" in text("src/native/Makefile"),
+        "script runtime or generated symbols are absent from real native builds")
+textures = text("src/native/mod_textures.cpp")
+require("ReadDdsLevel" in textures and "uint64_t offset" in textures and "std::vector<uint8_t> bytes;" not in textures,
+        "DDS replacements must retain offsets rather than permanent whole-file level buffers")
+require("ModConfig.java" in text(".github/workflows/build-apk.yml"), "mod configuration is absent from host CI")
 build_deps = text("android/build-deps.sh")
 require("5dfc8546954ce3b3198132ab13fddb89ee92cdd7" in build_deps,
         "Dobby source revision is not pinned")
@@ -102,8 +130,16 @@ require('new int[] {0, 512, 1024, 2048, 4096, 8192}' in settings,
 for marker in ("INI_LOCK", "protodroid.ini.tmp", "stream.getFD().sync()",
                "StandardCopyOption.ATOMIC_MOVE", "Toast.makeText"):
     require(marker in settings, f"engine INI durability/visibility regression: {marker}")
+touch_controls = text("android/java/com/protodroid/TouchControls.java")
+require("settingsStore.setIndex(s, s.index + delta)" in touch_controls and
+        "settingsStore.gameplaySettings" in touch_controls and "restartNeeded" not in touch_controls,
+        "filtered in-game settings must write the selected setting without restart-only rows")
+require("applyLiveSettings();" in touch_controls and "nativeSetMenuFpsUnlocked" in touch_controls,
+        "live FPS/menu state is not applied by the gear panel")
 mods_view = text("android/java/com/protodroid/ModsView.java")
 mods_activity = text("android/java/com/protodroid/ModsActivity.java")
+require("ACTION_FIXES" not in mods_view and "ACTION_CONFIGURE" in mods_view,
+        "Mods must be a library with per-mod configuration, not an engine-fixes panel")
 motion = text("android/java/com/protodroid/LauncherMotion.java")
 require("ValueAnimator.areAnimatorsEnabled()" in motion, "Android reduced-motion policy is not authoritative")
 require("contentShiftX" in mods_view and "actionBounds[action].offset(contentShiftX" in mods_view,
@@ -124,7 +160,11 @@ require('unlink((mod.root + "/launch-error.txt").c_str());' in platform,
 require("dlclose(" not in text("src/native/mod_plugins.cpp"), "plugin code must remain process-lifetime")
 
 focus = text("android/java/com/protodroid/SetupView.java")
-require(focus.count("ACTION_MODS, ACTION_DRIVERS") >= 7, "Mods is missing from a launcher focus order")
+# Four non-settings branches: launcher/setup, each with or without a pressable update action.
+require(focus.count("ACTION_MODS, ACTION_DRIVERS") >= 4 and
+        "settingsOrder.add(ACTION_MODS)" in focus and "settingsOrder.add(ACTION_DRIVERS)" in focus and
+        "SETTING_ACTION_BASE + i * 2 + 1" in focus,
+        "Mods/Drivers or progressive setting-help targets are missing from launcher focus order")
 require("paths-ignore:\n      - '**.md'" in text(".github/workflows/build-apk.yml"), "workflow trigger unexpectedly changed")
 
 print("native mod source/signature tests passed")

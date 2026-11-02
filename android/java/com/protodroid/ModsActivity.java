@@ -22,9 +22,10 @@ public final class ModsActivity extends Activity implements ModsView.Listener {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Window window = getWindow();
+        ImmersiveMode.apply(this);
         window.setStatusBarColor(Color.BLACK);
         window.setNavigationBarColor(Color.BLACK);
-        view = new ModsView(this, new GameSettings(this), this);
+        view = new ModsView(this, this);
         setContentView(view);
         LauncherMotion.transition(this);
     }
@@ -32,7 +33,14 @@ public final class ModsActivity extends Activity implements ModsView.Listener {
     @Override
     protected void onResume() {
         super.onResume();
+        ImmersiveMode.apply(this);
         if (view != null && !busy) view.reload();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) ImmersiveMode.apply(this);
     }
 
     @Override
@@ -75,6 +83,15 @@ public final class ModsActivity extends Activity implements ModsView.Listener {
             return (enabled ? "Enabled '" : "Disabled '") + mod.name
                     + "'. The change applies on the next Play.";
         });
+    }
+
+    @Override
+    public void onConfigure(ModManifest mod) {
+        if (busy || mod.options.isEmpty()) return;
+        Intent intent = new Intent(this, ModConfigActivity.class);
+        intent.putExtra(ModConfigActivity.EXTRA_MOD_ID, mod.id);
+        startActivity(intent);
+        LauncherMotion.transition(this);
     }
 
     @Override

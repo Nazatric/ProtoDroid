@@ -29,6 +29,7 @@ import android.view.WindowInsets;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Locale;
 
 /**
@@ -43,6 +44,7 @@ final class SetupView extends View {
         void onPlay();
         void onDrivers();
         void onMods();
+        void onTouchLayout();
         void onExit();
         void onUpdate();
         void onUpdateConfirm();
@@ -98,6 +100,7 @@ final class SetupView extends View {
     private static final int ACTION_UPDATE_RELEASES = 15;
     private static final int ACTION_TOUR = 16;
     private static final int ACTION_MODS = 17;
+    private static final int ACTION_TOUCH_LAYOUT = 18;
     private static final int SETTING_ACTION_BASE = 32;
 
     private static final int BUTTON_NORMAL = 0;
@@ -136,10 +139,12 @@ final class SetupView extends View {
     private final RectF logoBounds = new RectF();
     private final RectF updateBounds = new RectF();
     private final RectF updateReleasesBounds = new RectF();
+    private final RectF archiveBounds = new RectF();
     private final RectF updateWarningConfirmBounds = new RectF();
     private final RectF updateWarningCancelBounds = new RectF();
     private final RectF[] settingLeftBounds;
     private final RectF[] settingRightBounds;
+    private final RectF[] settingRowBounds;
     private final float[] buttonFill = new float[24];
     private final long startedAt = SystemClock.uptimeMillis();
     private final float density;
@@ -183,6 +188,12 @@ final class SetupView extends View {
     private StaticLayout primaryNoteLayout;
     private StaticLayout secondaryPathLayout;
     private StaticLayout secondaryNoteLayout;
+    private int helpSetting = -1;
+    private long helpUntil;
+    private StaticLayout helpLayout;
+    private int helpLayoutSetting = -2;
+    private int helpLayoutWidth = -1;
+    private float helpLayoutUnit = -1f;
 
     SetupView(Context context, Listener listener) {
         super(context);
@@ -190,9 +201,11 @@ final class SetupView extends View {
         gameSettings = new GameSettings(context);
         settingLeftBounds = new RectF[gameSettings.settings.length];
         settingRightBounds = new RectF[gameSettings.settings.length];
+        settingRowBounds = new RectF[gameSettings.settings.length];
         for (int i = 0; i < gameSettings.settings.length; i++) {
             settingLeftBounds[i] = new RectF();
             settingRightBounds[i] = new RectF();
+            settingRowBounds[i] = new RectF();
         }
         density = getResources().getDisplayMetrics().density;
         fontScale = getResources().getConfiguration().fontScale;
@@ -309,8 +322,47 @@ final class SetupView extends View {
         }
     }
 
+    private int settingForAction(int action) {
+        if (action == ACTION_TOUCH_LAYOUT) {
+            for (int i = 0; i < gameSettings.settings.length; ++i) {
+                if (gameSettings.settings[i].key.equals("touch_layout")) return i;
+            }
+            return -1;
+        }
+        if (action < SETTING_ACTION_BASE) return -1;
+        int index = (action - SETTING_ACTION_BASE) / 2;
+        return index >= 0 && index < gameSettings.settings.length ? index : -1;
+    }
+
+    private int settingIndexAt(float x, float y) {
+        if (!settingsOpen || !settingsListBounds.contains(x, y)) return -1;
+        for (int i = 0; i < settingRowBounds.length; ++i) {
+            if (settingRowBounds[i].contains(x, y)) return i;
+        }
+        return -1;
+    }
+
+    private void showHelpForAction(int action, long durationMs) {
+        int index = settingForAction(action);
+        helpSetting = index;
+        helpUntil = index >= 0 && durationMs > 0 ? SystemClock.uptimeMillis() + durationMs : 0L;
+        invalidate();
+        if (index >= 0 && durationMs > 0) postInvalidateDelayed(durationMs + 20L);
+    }
+
+    private void ensureFocusedSettingVisible(int index) {
+        if (index < 0 || index >= settingRowBounds.length || settingRowBounds[index].isEmpty()
+                || settingsListBounds.isEmpty()) return;
+        RectF row = settingRowBounds[index];
+        if (row.top < settingsListBounds.top) scrollY -= settingsListBounds.top - row.top;
+        else if (row.bottom > settingsListBounds.bottom) scrollY += row.bottom - settingsListBounds.bottom;
+        scrollY = Math.max(0f, Math.min(scrollY, maxScrollY));
+    }
+
     private void showSettings() {
         settingsOpen = true;
+        helpSetting = -1;
+        helpUntil = 0L;
         scrollY = 0f;
         focusedAction = ACTION_NONE;
         pressedAction = ACTION_NONE;
@@ -321,6 +373,8 @@ final class SetupView extends View {
     boolean closeSettings() {
         if (!settingsOpen) return false;
         settingsOpen = false;
+        helpSetting = -1;
+        helpUntil = 0L;
         scrollY = 0f;
         focusedAction = ACTION_NONE;
         pressedAction = ACTION_NONE;
@@ -707,7 +761,7 @@ final class SetupView extends View {
                 || updateState.status == UpdateManager.State.READY ? BUTTON_PRIMARY : BUTTON_NORMAL;
         drawButton(canvas, ACTION_UPDATE, updateBounds, button, variant, updateState.canPress(), busy, u, now, dt);
         if (recovery) {
-            drawButton(canvas, ACTION_UPDATE_RELEASES, updateReleasesBounds, "GO TO RELEASES",
+            drawButton(canvas, ACTION_UPDATE_RELEASES, updateReleasesBounds, "ALL VERSIONS",
                     BUTTON_PRIMARY, true, false, u, now, dt);
         }
         if (updateState.status == UpdateManager.State.DOWNLOADING && updateState.progress >= 0) {
@@ -1077,6 +1131,11 @@ final class SetupView extends View {
                     BUTTON_NORMAL, !state.checking, state.checking, u, now, dt);
         }
 
+        float archiveWidth = Math.min(128f * u, rightWidth);
+        archiveBounds.set(right - archiveWidth, hudY + 10f * u, right, hudY + 46f * u);
+        drawButton(canvas, ACTION_UPDATE_RELEASES, archiveBounds, "VERSIONS", BUTTON_GHOST,
+                true, false, u, now, dt);
+
         float chipsHeight = chipsHeight(rightWidth, u);
         float chipsTop = contentBottom - chipsHeight;
         drawPathPanel(canvas, rightLeft, chipsTop - 8f * u, rightWidth, u, now);
@@ -1095,7 +1154,7 @@ final class SetupView extends View {
         float updateHeight = updateBannerHeight(u);
         float contentHeight = 46f * u + 14f * u + 2f * u + 14f * u + 46f * u + 14f * u
                 + headline * 2f * u + 14f * u + 18f * u + 14f * u + 42f * u + 14f * u
-                + updateHeight + (updateHeight > 0f ? 8f * u : 0f)
+                + updateHeight + (updateHeight > 0f ? 8f * u : 0f) + 50f * u
                 + panelHeight(u) + 14f * u + chipsHeight(width, u);
         float available = getHeight() - insetTop - insetBottom - 32f * u;
         maxScrollY = Math.max(0f, contentHeight - available);
@@ -1140,6 +1199,11 @@ final class SetupView extends View {
                     BUTTON_NORMAL, !state.checking, state.checking, u, now, dt);
         }
         y += 56f * u;
+        float archiveWidth = Math.min(128f * u, width);
+        archiveBounds.set(right - archiveWidth, y, right, y + 36f * u);
+        drawButton(canvas, ACTION_UPDATE_RELEASES, archiveBounds, "VERSIONS", BUTTON_GHOST,
+                true, false, u, now, dt);
+        y += 50f * u;
         float panelHeight = panelHeight(u);
         drawPathPanel(canvas, left, y + panelHeight, width, u, now);
         y += panelHeight + 14f * u;
@@ -1160,6 +1224,22 @@ final class SetupView extends View {
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(withAlpha(RED_HOT, setting.engine ? 0.42f : 0.20f));
         canvas.drawRect(bounds.left, bounds.top + 5f * u, bounds.left + 2f * u, bounds.bottom - 5f * u, paint);
+
+        if (setting.key.equals("touch_layout")) {
+            settingLeftBounds[index].setEmpty();
+            settingRightBounds[index].setEmpty();
+            if (pressedAction == ACTION_TOUCH_LAYOUT || focusedAction == ACTION_TOUCH_LAYOUT) {
+                paint.setColor(withAlpha(RED, 0.28f));
+                canvas.drawRect(bounds, paint);
+            }
+            float valueWidth = Math.min(104f * u, bounds.width() * 0.34f);
+            RectF value = new RectF(bounds.right - valueWidth - 8f * u, bounds.top,
+                    bounds.right - 8f * u, bounds.bottom);
+            drawLine(canvas, setting.label, bounds.left + 12f * u, bounds.top, bounds.height(),
+                    12.5f, 600, BONE, 0.4f, u, Math.max(1f, value.left - bounds.left - 20f * u));
+            drawCentered(canvas, "EDIT  \u203a", value, 12.5f, 700, RED_HOT, 0.25f, u, 3f * u);
+            return;
+        }
 
         float groupWidth = Math.min(164f * u, bounds.width() * 0.52f);
         float groupLeft = bounds.right - groupWidth - 4f * u;
@@ -1239,12 +1319,42 @@ final class SetupView extends View {
         drawButton(canvas, ACTION_SETTINGS_DONE, settingsDoneBounds, "DONE", BUTTON_NORMAL,
                 true, false, u, now, dt);
         float noteWidth = Math.max(1f, modBounds.left - left - 12f * u);
+        int focusedSetting = settingForAction(focusedAction);
+        int pressedSetting = settingForAction(pressedAction);
+        boolean helpVisible = helpSetting >= 0 && (focusedSetting == helpSetting || pressedSetting == helpSetting
+                || now < helpUntil);
+        float listBottom = bottom - (helpVisible ? 94f : 48f) * u;
+        if (helpVisible) {
+            RectF helpBounds = new RectF(left, bottom - 88f * u, right, bottom - 44f * u);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xe6121014);
+            canvas.drawPath(cutPath(helpBounds, 6f * u), paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1f, 0.7f * u));
+            paint.setColor(withAlpha(RED_HOT, 0.55f));
+            canvas.drawPath(cutPath(helpBounds, 6f * u), paint);
+            paint.setStyle(Paint.Style.FILL);
+            int helpWidth = Math.max(1, Math.round(helpBounds.width() - 20f * u));
+            if (helpLayout == null || helpLayoutSetting != helpSetting || helpLayoutWidth != helpWidth
+                    || helpLayoutUnit != u) {
+                String message = gameSettings.settings[helpSetting].label + " — "
+                        + GameSettings.helpFor(gameSettings.settings[helpSetting]);
+                helpLayout = wrapped(message, 10f, 500, BONE, 0.15f, u, helpWidth);
+                helpLayoutSetting = helpSetting;
+                helpLayoutWidth = helpWidth;
+                helpLayoutUnit = u;
+            }
+            int clippedHelp = canvas.save();
+            canvas.clipRect(helpBounds);
+            drawStatic(canvas, helpLayout, helpBounds.left + 10f * u, helpBounds.top + 5f * u);
+            canvas.restoreToCount(clippedHelp);
+        }
         drawLine(canvas, "SAVED AUTOMATICALLY", left, bottom - 36f * u, 14f * u,
                 9.5f, 600, DIM, 1.2f, u, noteWidth);
         drawLine(canvas, "ENGINE OPTIONS APPLY ON PLAY", left, bottom - 19f * u, 14f * u,
                 9.5f, 500, DIM, 0.8f, u, noteWidth);
 
-        settingsListBounds.set(left, listTop, right, Math.max(listTop + 1f, bottom - 48f * u));
+        settingsListBounds.set(left, listTop, right, Math.max(listTop + 1f, listBottom));
         int columns = portrait ? 1 : 2;
         float rowHeight = (portrait ? 44f : 38f) * u;
         float headerHeight = 28f * u;
@@ -1287,6 +1397,7 @@ final class SetupView extends View {
                     GameSettings.Setting setting = gameSettings.settings[i];
                     if (GameSettings.categoryOf(setting) != category) continue;
                     RectF rowBounds = new RectF(x, y + 2f * u, x + columnWidth, y + rowHeight - 2f * u);
+                    settingRowBounds[i].set(rowBounds);
                     if (rowBounds.bottom < settingsListBounds.top || rowBounds.top > settingsListBounds.bottom) {
                         settingLeftBounds[i].setEmpty();
                         settingRightBounds[i].setEmpty();
@@ -1320,15 +1431,15 @@ final class SetupView extends View {
         float eased = progress < 0.5f ? 4f * progress * progress * progress
                 : 1f - (float) Math.pow(-2f * progress + 2f, 3) / 2f;
         float x = getWidth() * eased * 1.03f;
+        // Artwork stays visible from the first frame. The intro is a thin scan accent, not an opaque black curtain.
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(Color.BLACK);
-        canvas.drawRect(x, 0f, getWidth() + 2f, getHeight(), paint);
-        paint.setShader(new LinearGradient(x - 90f, 0f, x, 0f,
-                new int[]{Color.TRANSPARENT, withAlpha(RED_HOT, 0.60f)}, null, Shader.TileMode.CLAMP));
-        canvas.drawRect(x - 90f, 0f, x, getHeight(), paint);
+        paint.setShader(new LinearGradient(x - 90f, 0f, x + 2f, 0f,
+                new int[]{Color.TRANSPARENT, withAlpha(RED_HOT, 0.30f * (1f - progress)), Color.TRANSPARENT},
+                null, Shader.TileMode.CLAMP));
+        canvas.drawRect(x - 90f, 0f, x + 2f, getHeight(), paint);
         paint.setShader(null);
-        paint.setColor(RED_HOT);
-        canvas.drawRect(x - 3f, 0f, x, getHeight(), paint);
+        paint.setColor(withAlpha(RED_HOT, 0.85f * (1f - progress)));
+        canvas.drawRect(x - 2f, 0f, x + 1f, getHeight(), paint);
     }
 
     @Override
@@ -1367,6 +1478,8 @@ final class SetupView extends View {
             if (modBounds.contains(x, y)) return ACTION_MODS;
             if (settingsListBounds.contains(x, y)) {
                 for (int i = 0; i < gameSettings.settings.length; i++) {
+                    if (gameSettings.settings[i].key.equals("touch_layout")
+                            && settingRowBounds[i].contains(x, y)) return ACTION_TOUCH_LAYOUT;
                     if (settingLeftBounds[i].contains(x, y)) return SETTING_ACTION_BASE + i * 2;
                     if (settingRightBounds[i].contains(x, y)) return SETTING_ACTION_BASE + i * 2 + 1;
                 }
@@ -1377,6 +1490,7 @@ final class SetupView extends View {
             return ACTION_UPDATE_RELEASES;
         }
         if (updateState.visible() && updateState.canPress() && updateBounds.contains(x, y)) return ACTION_UPDATE;
+        if (archiveBounds.contains(x, y)) return ACTION_UPDATE_RELEASES;
         if (launcherMode()) {
             if (allowBounds.contains(x, y)) return ACTION_SETTINGS;
             if (checkBounds.contains(x, y)) return ACTION_PLAY;
@@ -1396,6 +1510,12 @@ final class SetupView extends View {
                 requestFocus();
                 focusedAction = ACTION_NONE;
                 pressedAction = actionAt(x, y);
+                int helpAction = pressedAction;
+                if (settingsOpen && settingForAction(helpAction) < 0) {
+                    int index = settingIndexAt(x, y);
+                    if (index >= 0) helpAction = SETTING_ACTION_BASE + index * 2;
+                }
+                showHelpForAction(helpAction, 3500L);
                 splatAction = motionEnabled ? pressedAction : ACTION_NONE;
                 splatX = x;
                 splatY = y;
@@ -1458,6 +1578,10 @@ final class SetupView extends View {
             listener.onMods();
             return;
         }
+        if (action == ACTION_TOUCH_LAYOUT) {
+            listener.onTouchLayout();
+            return;
+        }
         if (action == ACTION_UPDATE) {
             listener.onUpdate();
             return;
@@ -1480,6 +1604,7 @@ final class SetupView extends View {
             if (index >= 0 && index < gameSettings.settings.length) {
                 GameSettings.Setting setting = gameSettings.settings[index];
                 gameSettings.setIndex(index, setting.index + delta);
+                showHelpForAction(action, 3500L);
                 invalidate();
             }
             return;
@@ -1516,26 +1641,37 @@ final class SetupView extends View {
         if (updateWarningVisible) {
             order = new int[] {ACTION_UPDATE_CONFIRM, ACTION_UPDATE_CANCEL};
         } else if (settingsOpen) {
-            order = new int[] {ACTION_PRESET_LOW, ACTION_PRESET_MEDIUM, ACTION_PRESET_HIGH,
-                    ACTION_PRESET_CUSTOM, ACTION_MODS, ACTION_DRIVERS, ACTION_SETTINGS_DONE, ACTION_EXIT};
+            ArrayList<Integer> settingsOrder = new ArrayList<>();
+            settingsOrder.add(ACTION_PRESET_LOW);
+            settingsOrder.add(ACTION_PRESET_MEDIUM);
+            settingsOrder.add(ACTION_PRESET_HIGH);
+            settingsOrder.add(ACTION_PRESET_CUSTOM);
+            for (int i = 0; i < gameSettings.settings.length; ++i) {
+                if (gameSettings.settings[i].key.equals("touch_layout")) {
+                    settingsOrder.add(ACTION_TOUCH_LAYOUT);
+                } else {
+                    settingsOrder.add(SETTING_ACTION_BASE + i * 2);
+                    settingsOrder.add(SETTING_ACTION_BASE + i * 2 + 1);
+                }
+            }
+            settingsOrder.add(ACTION_MODS);
+            settingsOrder.add(ACTION_DRIVERS);
+            settingsOrder.add(ACTION_SETTINGS_DONE);
+            settingsOrder.add(ACTION_EXIT);
+            order = new int[settingsOrder.size()];
+            for (int i = 0; i < order.length; ++i) order[i] = settingsOrder.get(i);
         } else if (launcherMode()) {
-            if (updateState.status == UpdateManager.State.ERROR) {
-                order = new int[] {ACTION_UPDATE, ACTION_UPDATE_RELEASES, ACTION_SETTINGS, ACTION_PLAY,
-                        ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
-            } else {
-                order = updateState.visible() && updateState.canPress()
-                        ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
-                        : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
-            }
+            order = updateState.visible() && updateState.canPress()
+                    ? new int[] {ACTION_UPDATE, ACTION_SETTINGS, ACTION_PLAY, ACTION_UPDATE_RELEASES,
+                            ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
+                    : new int[] {ACTION_SETTINGS, ACTION_PLAY, ACTION_UPDATE_RELEASES,
+                            ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
         } else {
-            if (updateState.status == UpdateManager.State.ERROR) {
-                order = new int[] {ACTION_UPDATE, ACTION_UPDATE_RELEASES, ACTION_ALLOW, ACTION_CHECK,
-                        ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
-            } else {
-                order = updateState.visible() && updateState.canPress()
-                        ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
-                        : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
-            }
+            order = updateState.visible() && updateState.canPress()
+                    ? new int[] {ACTION_UPDATE, ACTION_ALLOW, ACTION_CHECK, ACTION_UPDATE_RELEASES,
+                            ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT}
+                    : new int[] {ACTION_ALLOW, ACTION_CHECK, ACTION_UPDATE_RELEASES,
+                            ACTION_MODS, ACTION_DRIVERS, ACTION_EXIT};
         }
         int index = -1;
         for (int i = 0; i < order.length; i++) if (order[i] == current) index = i;
@@ -1549,12 +1685,33 @@ final class SetupView extends View {
     }
 
     @Override
+    public boolean onHoverEvent(MotionEvent event) {
+        if (settingsOpen) {
+            if (event.getActionMasked() == MotionEvent.ACTION_HOVER_MOVE) {
+                int action = actionAt(event.getX(), event.getY());
+                int index = settingForAction(action);
+                if (index < 0) index = settingIndexAt(event.getX(), event.getY());
+                if (index >= 0) showHelpForAction(SETTING_ACTION_BASE + index * 2, 3500L);
+            } else if (event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT
+                    && settingForAction(focusedAction) < 0) {
+                helpSetting = -1;
+                helpUntil = 0L;
+                invalidate();
+            }
+            return true;
+        }
+        return super.onHoverEvent(event);
+    }
+
+    @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_UP
                 || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_DOWN
                 || keyCode == KeyEvent.KEYCODE_TAB) {
             int direction = keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_UP ? -1 : 1;
             focusedAction = nextFocusable(focusedAction, direction);
+            ensureFocusedSettingVisible(settingForAction(focusedAction));
+            showHelpForAction(focusedAction, 0L);
             invalidate();
             return true;
         }

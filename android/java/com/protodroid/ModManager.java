@@ -25,8 +25,10 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -37,9 +39,9 @@ import java.util.zip.ZipFile;
 /** Local mod import, lifecycle and launch preparation. Original game files are never import targets. */
 final class ModManager {
     private static final String TAG = "ProtoDroidMods";
-    private static final long MAX_ARCHIVE_BYTES = 512L * 1024L * 1024L;
-    private static final long MAX_EXTRACTED_BYTES = 1024L * 1024L * 1024L;
-    private static final int MAX_ENTRIES = 4096;
+    private static final long MAX_ARCHIVE_BYTES = 4L * 1024L * 1024L * 1024L;
+    private static final long MAX_EXTRACTED_BYTES = 8L * 1024L * 1024L * 1024L;
+    private static final int MAX_ENTRIES = 65536;
     private static final int BUFFER = 64 * 1024;
 
     private ModManager() {}
@@ -65,8 +67,16 @@ final class ModManager {
     }
 
     static List<ModManifest> list(Context context) {
+        return list(modsDir(context));
+    }
+
+    static List<ModManifest> list(File root) {
+        return list(root, true);
+    }
+
+    private static List<ModManifest> list(File root, boolean resolve) {
         ArrayList<ModManifest> result = new ArrayList<>();
-        File[] children = modsDir(context).listFiles();
+        File[] children = root.listFiles();
         if (children != null) {
             for (File child : children) {
                 if (!child.isDirectory() || child.getName().startsWith(".")) continue;
@@ -78,7 +88,42 @@ final class ModManager {
             if (priority != 0) return priority;
             return a.name.compareToIgnoreCase(b.name);
         });
+        if (resolve) resolveDependencies(result);
         return result;
+    }
+
+    static void resolveDependencies(List<ModManifest> mods) {
+        Map<String, ModManifest> byId = new HashMap<>();
+        for (ModManifest mod : mods) byId.put(mod.id, mod);
+        Map<String, Integer> states = new HashMap<>();
+        for (ModManifest mod : mods) resolveDependency(mod, byId, states);
+    }
+
+    private static void resolveDependency(ModManifest mod, Map<String, ModManifest> byId,
+                                          Map<String, Integer> states) {
+        if (!mod.error.isEmpty() || Integer.valueOf(2).equals(states.get(mod.id))) return;
+        if (Integer.valueOf(1).equals(states.get(mod.id))) {
+            mod.error = "Dependency cycle involving '" + mod.id + "'";
+            return;
+        }
+        states.put(mod.id, 1);
+        for (String dependencyId : mod.dependencies) {
+            ModManifest dependency = byId.get(dependencyId);
+            if (dependency == null) {
+                mod.error = "Missing dependency '" + dependencyId + "'";
+                break;
+            }
+            resolveDependency(dependency, byId, states);
+            if (!dependency.error.isEmpty()) {
+                mod.error = "Dependency '" + dependencyId + "' is unavailable: " + dependency.error;
+                break;
+            }
+            if (mod.enabled && !dependency.enabled) {
+                mod.error = "Dependency '" + dependencyId + "' is disabled";
+                break;
+            }
+        }
+        states.put(mod.id, 2);
     }
 
     static int activeCount(List<ModManifest> mods) {
@@ -94,8 +139,20 @@ final class ModManager {
     static void setEnabled(File root, String id, boolean enabled) throws IOException {
         File directory = directChild(root, id);
         if (Files.isSymbolicLink(directory.toPath())) throw new IOException("Mod folder must not be a symbolic link");
-        ModManifest current = ModManifest.read(directory);
+        ModManifest current = enabled ? ModManifest.parseValidated(directory, true) : ModManifest.read(directory);
+        if (!current.id.equals(id)) throw new IOException("Mod ID does not match its folder name");
         if (enabled && !current.error.isEmpty()) throw new IOException(current.error);
+        if (enabled) {
+            List<ModManifest> installed = list(root, false);
+            for (ModManifest mod : installed) {
+                if (mod.id.equals(id)) {
+                    mod.enabled = true;
+                    resolveDependencies(installed);
+                    if (!mod.error.isEmpty()) throw new IOException(mod.error);
+                    break;
+                }
+            }
+        }
         File marker = new File(directory, ModManifest.ENABLED_NAME);
         if (!enabled) {
             if (marker.exists() && !marker.delete()) throw new IOException("Could not disable mod");

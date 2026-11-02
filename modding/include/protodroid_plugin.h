@@ -1,7 +1,7 @@
 #ifndef PROTODROID_PLUGIN_H
 #define PROTODROID_PLUGIN_H
 
-/* ProtoDroid native ARM64 plugin ABI v1. This is not the Windows ASI ABI. */
+/* ProtoDroid native ARM64 plugin ABI v1/v2/v3. This is not the Windows ASI ABI. */
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -10,7 +10,9 @@
 extern "C" {
 #endif
 
-#define PD_PLUGIN_API_VERSION 1u
+#define PD_PLUGIN_API_VERSION 3u
+#define PD_PLUGIN_API_VERSION_V1 1u
+#define PD_PLUGIN_API_VERSION_V2 2u
 #define PD_PLUGIN_INIT_SYMBOL "ProtoDroidPluginInit"
 #define PD_PLUGIN_SHUTDOWN_SYMBOL "ProtoDroidPluginShutdown"
 
@@ -74,8 +76,30 @@ typedef struct PdHostApi {
 
     /* Register during ProtoDroidPluginInit only. */
     bool (*on_event)(void* context, PdEvent event, PdEventCallback callback, void* userdata);
+
+    /* Legacy process-wide engine INI lookup retained for ABI v1. Prefer the per-mod getters below in new plugins. */
     int (*get_config_int)(void* context, const char* key, int default_value);
+
+    /* ABI v2: values from this plugin's own protodroid-settings.ini, never another mod or the engine INI.
+       Missing/unparsable values return the supplied default. The string getter copies a UTF-8 value and returns false
+       when output is null, too small, or output_size is zero. All getters are safe during init and frame events. */
+    bool (*get_mod_boolean)(void* context, const char* key, bool default_value);
+    double (*get_mod_number)(void* context, const char* key, double default_value);
+    bool (*get_mod_string)(void* context, const char* key, const char* default_value,
+                           char* output, uint32_t output_size);
+
+    /* ABI v3: exact qualified name from the generated engine inventory. Ordinals are 1-based in ascending RVA order.
+       On success, rva can be passed to guest_call or hook_engine. Names do not establish a callable signature. */
+    bool (*lookup_symbol)(void* context, const char* qualified_name, uint32_t ordinal, uint32_t* rva);
+
+    /* ABI v3: queue a named event for sandboxed script packages. Events carry at most eight u32 arguments and are
+       dispatched on the next engine-frame boundary. Returns false for invalid names/arguments or a full queue. */
+    bool (*emit_event)(void* context, const char* name, const uint32_t* arguments, uint32_t argument_count);
 } PdHostApi;
+
+/* Exact byte sizes seen by existing plugins. New fields are appended, never inserted. */
+#define PD_HOST_API_V1_SIZE ((uint32_t)offsetof(PdHostApi, get_mod_boolean))
+#define PD_HOST_API_V2_SIZE ((uint32_t)offsetof(PdHostApi, lookup_symbol))
 
 typedef struct PdPluginInfo {
     uint32_t abi_version;

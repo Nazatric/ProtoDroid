@@ -6,6 +6,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -21,6 +23,8 @@ public final class ModPlatformTest {
             testTextures(temporary.resolve("textures"));
             testArchives(temporary.resolve("archives"));
             testLegacyWrappedLayouts(temporary.resolve("legacy-wrapped"));
+            testScriptsAndDependencies(temporary.resolve("scripts"));
+            testModConfig(temporary.resolve("mod-config"));
             System.out.println("ProtoDroid mod platform tests passed: " + checks + " checks");
         } finally {
             Files.walk(temporary).sorted(Comparator.reverseOrder()).forEach(path -> {
@@ -70,6 +74,13 @@ public final class ModPlatformTest {
         check(!ModManifest.read(traversal).error.isEmpty(), "loose-file traversal is rejected");
         File empty = createMod(root, "empty.mod", "", false);
         check(ModManifest.read(empty).error.contains("no files"), "empty package is rejected");
+        File mismatch = createMod(root, "actual.id", "files = files\n", true);
+        String mismatchMetadata = Files.readString(new File(mismatch, ModManifest.FILE_NAME).toPath());
+        Files.writeString(new File(mismatch, ModManifest.FILE_NAME).toPath(),
+                mismatchMetadata.replace("id = actual.id", "id = declared.id"));
+        expectIOException(() -> ModManager.setEnabled(root, "actual.id", true),
+                "deep enable retains folder/ID validation");
+        check(!new File(mismatch, ModManifest.ENABLED_NAME).exists(), "mismatched package stays disabled");
 
         if (System.getProperty("os.name").toLowerCase().contains("linux")) {
             Path externalDirectory = Files.createDirectory(path.getParent().resolve("external"));
@@ -107,6 +118,8 @@ public final class ModPlatformTest {
         File mod = createMod(root, "example.textures", "textures = textures.ini\n", false);
         String hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         Files.writeString(new File(mod, "textures.ini").toPath(), "[hashes]\n" + hash + " = replacement.dds\n");
+        check(ModManifest.read(mod).error.isEmpty(), "library listing does not open every DDS payload");
+        expectIOException(() -> ModManifest.parseValidated(mod, true), "deep validation still requires the DDS");
         Files.write(new File(mod, "replacement.dds").toPath(), dds(true));
         check(ModManifest.parseValidated(mod, true).textures.equals("textures.ini"), "valid DDS mapping");
 
@@ -187,6 +200,142 @@ public final class ModPlatformTest {
         ModManifest plugin = ModManifest.parseValidated(pluginStaging, true);
         check(plugin.plugin.equals("lib/arm64-v8a/libexample.so") && plugin.files.isEmpty(),
                 "wrapped ARM64 plugin retains its native layout");
+    }
+
+    private static void testScriptsAndDependencies(Path path) throws Exception {
+        File root = Files.createDirectories(path).toFile();
+        File library = createScriptMod(root, "example.library", "", "return { value = 42 }\n");
+        ModManifest parsed = ModManifest.parseValidated(library, true);
+        check(parsed.error.isEmpty() && parsed.api == 2 && parsed.scriptApi == 1 && parsed.hasExecutableContent(),
+                "valid API-2 Lua package: " + parsed.error);
+        check(parsed.contentLabel().contains("Lua script"), "library labels script content");
+
+        File dependent = createScriptMod(root, "example.dependent", "example.library", "pd.log('dependent')\n");
+        ModManager.setEnabled(root, "example.library", true);
+        ModManager.setEnabled(root, "example.dependent", true);
+        check(ModManager.activeCount(ModManager.list(root)) == 2, "enabled dependency graph is active");
+        ModManager.setEnabled(root, "example.library", false);
+        ModManifest blocked = findMod(ModManager.list(root), "example.dependent");
+        check(blocked.error.contains("disabled"), "enabled dependent reports a disabled dependency");
+        expectIOException(() -> ModManager.setEnabled(root, "example.dependent", true),
+                "already-enabled marker is not rewritten across an invalid graph");
+        ModManager.setEnabled(root, "example.library", true);
+        check(ModManager.activeCount(ModManager.list(root)) == 2, "re-enabling dependency restores graph");
+
+        File missing = createScriptMod(root, "example.missing", "not.installed", "pd.log('no')\n");
+        check(findMod(ModManager.list(root), "example.missing").error.contains("Missing dependency"),
+                "missing dependency is visible in library listing");
+        expectIOException(() -> ModManager.setEnabled(root, "example.missing", true), "missing dependency cannot enable");
+
+        createScriptMod(root, "example.cycle.a", "example.cycle.b", "pd.log('a')\n");
+        createScriptMod(root, "example.cycle.b", "example.cycle.a", "pd.log('b')\n");
+        check(findMod(ModManager.list(root), "example.cycle.a").error.contains("cycle")
+                        || findMod(ModManager.list(root), "example.cycle.a").error.contains("unavailable"),
+                "dependency cycle is rejected");
+
+        File apiOne = createMod(root, "example.api1", "script = scripts/main.lua\n", false);
+        writeScript(apiOne, "scripts/main.lua", "pd.log('bad api')\n");
+        check(ModManifest.read(apiOne).error.contains("package API 2"), "API 1 cannot silently ignore scripts");
+
+        File unicode = createScriptMod(root, "example.unicode", "", "pd.log('bad path')\n");
+        File metadata = new File(unicode, ModManifest.FILE_NAME);
+        Files.writeString(metadata.toPath(), Files.readString(metadata.toPath()).replace("scripts/main.lua", "scripts/máin.lua"));
+        check(ModManifest.read(unicode).error.contains("Unsafe characters"), "Unicode script path is rejected consistently");
+
+        File duplicate = createMod(root, "example.duplicate", "files = files\n", true);
+        Files.writeString(new File(duplicate, ModManifest.FILE_NAME).toPath(),
+                Files.readString(new File(duplicate, ModManifest.FILE_NAME).toPath())
+                        .replace("api = 1", "api = 2\ndepends = example.library, example.library"));
+        check(ModManifest.read(duplicate).error.contains("duplicate"), "duplicate dependencies are rejected");
+
+        File declared = createMod(root, "example.declared", "files = files\nscript_api = 1\n", true);
+        check(ModManifest.read(declared).error.contains("match a Lua entrypoint"),
+                "script API cannot be declared without script content");
+
+        File nul = createScriptMod(root, "example.nul", "", "pd.log('before')\n");
+        byte[] nulSource = {'p', 'd', 0, 'x'};
+        Files.write(new File(nul, "scripts/main.lua").toPath(), nulSource);
+        check(ModManifest.read(nul).error.isEmpty(), "shallow listing does not open every script payload");
+        expectIOException(() -> ModManifest.parseValidated(nul, true), "deep validation rejects NUL Lua source");
+
+        File bytecode = createScriptMod(root, "example.bytecode", "", "pd.log('before')\n");
+        Files.write(new File(bytecode, "scripts/main.lua").toPath(), new byte[] {0x1b, 'L', 'u', 'a'});
+        expectIOException(() -> ModManifest.parseValidated(bytecode, true), "deep validation rejects Lua bytecode");
+
+        File oversized = createScriptMod(root, "example.oversized", "", "pd.log('before')\n");
+        Files.write(new File(oversized, "scripts/main.lua").toPath(), new byte[1024 * 1024 + 1]);
+        expectIOException(() -> ModManifest.parseValidated(oversized, true), "deep validation enforces script size");
+
+        ModManifest example = ModManifest.parseValidated(new File("modding/script-example/package"), true);
+        check(example.api == 2 && example.scriptApi == 1 && example.options.size() == 3 && example.hasExecutableContent(),
+                "shipped Lua example is a valid configurable API-2 package");
+    }
+
+    private static ModManifest findMod(java.util.List<ModManifest> mods, String id) {
+        for (ModManifest mod : mods) if (mod.id.equals(id)) return mod;
+        throw new AssertionError("Missing test mod " + id);
+    }
+
+    private static File createScriptMod(File root, String id, String dependencies, String source) throws IOException {
+        File mod = createMod(root, id, "script = scripts/main.lua\nscript_api = 1\n", false);
+        File metadata = new File(mod, ModManifest.FILE_NAME);
+        String text = Files.readString(metadata.toPath()).replace("\napi = 1\n", "\napi = 2\n");
+        if (!dependencies.isEmpty()) text = text.replace("name = Test mod", "name = Test mod\ndepends = " + dependencies);
+        Files.writeString(metadata.toPath(), text);
+        writeScript(mod, "scripts/main.lua", source);
+        return mod;
+    }
+
+    private static void writeScript(File mod, String relative, String source) throws IOException {
+        File file = new File(mod, relative);
+        if (!file.getParentFile().mkdirs() && !file.getParentFile().isDirectory()) throw new IOException("script directory");
+        Files.writeString(file.toPath(), source, StandardCharsets.UTF_8);
+    }
+
+    private static void testModConfig(Path path) throws Exception {
+        File root = Files.createDirectories(path).toFile();
+        String options = "files = files\n\n"
+                + "[setting.enabled]\ntype = toggle\nlabel = Enabled\ndefault = 1\norder = 10\n"
+                + "[setting.amount]\ntype = slider\nlabel = Amount\ndefault = 5\nmin = -20\nmax = 20\nstep = 0.5\n"
+                + "[setting.mode]\ntype = choice\nlabel = Mode\noptions = Quiet|Every 300 frames\ndefault = Quiet\n"
+                + "[setting.note]\ntype = text\nlabel = Note\ndefault = Hello\nmax_length = 80\n";
+        File mod = createMod(root, "config.mod", options, true);
+        ModManifest parsed = ModManifest.read(mod);
+        check(parsed.error.isEmpty() && parsed.options.size() == 4 && parsed.pluginApi == 1,
+                "four author options with legacy package/plugin defaults: " + parsed.error);
+        check(parsed.options.get(0).id.equals("enabled"), "option order is respected");
+        Files.writeString(new File(mod, ModConfig.FILE_NAME).toPath(), "future.value = keep\n");
+        LinkedHashMap<String, String> changes = new LinkedHashMap<>();
+        changes.put("enabled", "off");
+        changes.put("amount", "7.5");
+        changes.put("mode", "Every 300 frames");
+        changes.put("note", "Hello = world");
+        ModConfig.saveValues(mod, parsed.options, changes);
+        Map<String, String> saved = ModConfig.loadValues(mod);
+        check(saved.get("enabled").equals("0") && saved.get("amount").equals("7.5"),
+                "toggle and stepped slider persist canonically");
+        check(saved.get("mode").equals("Every 300 frames") && saved.get("note").equals("Hello = world"),
+                "choice and text values persist");
+        check(saved.get("future.value").equals("keep"), "unknown safe values survive edits");
+        String before = Files.readString(new File(mod, ModConfig.FILE_NAME).toPath());
+        changes.put("amount", "99");
+        expectIOException(() -> ModConfig.saveValues(mod, parsed.options, changes), "out-of-range slider");
+        check(Files.readString(new File(mod, ModConfig.FILE_NAME).toPath()).equals(before),
+                "failed validation leaves previous settings untouched");
+        changes.put("amount", "7.5");
+        changes.put("note", "bad\nvalue");
+        expectIOException(() -> ModConfig.saveValues(mod, parsed.options, changes), "multiline text rejection");
+
+        File invalid = createMod(root, "invalid.choice", "files = files\n\n"
+                + "[setting.mode]\ntype = choice\nlabel = Mode\noptions = Same|same\ndefault = Same\n", true);
+        check(ModManifest.read(invalid).error.contains("duplicate choice"), "duplicate choices are visible");
+        File invalidApi = createMod(root, "invalid.api", "files = files\nplugin_api = 2\n", true);
+        check(ModManifest.read(invalidApi).error.contains("plugin API"), "plugin API requires native content");
+
+        File example = new File("modding/example/package");
+        ModManifest exampleManifest = ModManifest.parseValidated(example, false);
+        check(exampleManifest.pluginApi == 3 && exampleManifest.api == 2 && exampleManifest.options.size() == 4,
+                "shipped example opts into package API 2/native ABI v3 and demonstrates all option types");
     }
 
     private static File createMod(File root, String id, String content, boolean files) throws IOException {

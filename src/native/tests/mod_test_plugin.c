@@ -36,11 +36,11 @@ static void TestShutdownEvent(void* userdata) {
 }
 
 int32_t ProtoDroidPluginInit(const PdHostApi* host, PdPluginInfo* info) {
-    if (!host || !info || host->abi_version != PD_PLUGIN_API_VERSION || host->struct_size < sizeof(PdHostApi)) {
+    if (!host || !info || host->abi_version != PD_PLUGIN_API_VERSION_V1 || host->struct_size < PD_HOST_API_V1_SIZE) {
         return -1;
     }
     host_api = host;
-    info->abi_version = PD_PLUGIN_API_VERSION;
+    info->abi_version = PD_PLUGIN_API_VERSION_V1;
     info->struct_size = sizeof(PdPluginInfo);
     info->name = "Host API test";
     info->version = "1";

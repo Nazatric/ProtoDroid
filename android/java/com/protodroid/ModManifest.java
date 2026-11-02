@@ -15,11 +15,13 @@ import java.util.Map;
 
 /** Schema-1 mod metadata. Kept free of Android imports so its safety policy has host-side tests. */
 final class ModManifest {
-    static final int API_VERSION = 1;
+    static final int API_VERSION = 2;
+    private static final int MAX_SCRIPT_BYTES = 1024 * 1024;
     static final String FILE_NAME = "protodroid-mod.ini";
     static final String ENABLED_NAME = "enabled";
     static final String ENGINE_SHA256 = "d331be205bdde99897952ee88261ab7e63c5c65e36a4660e2a367886a3537071";
     private static final int MAX_METADATA_BYTES = 128 * 1024;
+    private static final int MAX_TEXTURE_MAPPINGS = 65536;
 
     final File directory;
     String id = "";
@@ -31,11 +33,16 @@ final class ModManifest {
     String files = "";
     String textures = "";
     String plugin = "";
+    String script = "";
+    final ArrayList<String> dependencies = new ArrayList<>();
     String engineSha256 = "";
     String error = "";         // metadata/compatibility validation failure
     String launchError = "";  // previous native load failure; a valid package may retry on the next Play
     int priority = 100;
-    int api = API_VERSION;
+    int api = 1;
+    int pluginApi = 1;
+    int scriptApi = 1;
+    final ArrayList<ModConfig.Option> options = new ArrayList<>();
     boolean enabled;
 
     private ModManifest(File directory) {
@@ -47,7 +54,9 @@ final class ModManifest {
             if (Files.isSymbolicLink(directory.toPath())) {
                 throw new IOException("Mod folder must not be a symbolic link");
             }
-            ModManifest manifest = parseValidated(directory, true);
+            // Library listing must not open every payload in a large pack. Import/enable perform deep validation;
+            // native launch performs its own path checks and lazy DDS validation as well.
+            ModManifest manifest = parseValidated(directory, false);
             if (!manifest.id.equals(directory.getName())) {
                 throw new IOException("Mod ID does not match its folder name");
             }
@@ -109,20 +118,39 @@ final class ModManifest {
         result.files = value(values, "content.files");
         result.textures = value(values, "content.textures");
         result.plugin = value(values, "content.plugin");
+        result.script = value(values, "content.script");
+        parseDependencies(value(values, "mod.depends"), result.id, result.dependencies);
+        result.options.addAll(ModConfig.parseOptions(values));
         String schema = value(values, "mod.schema");
         String api = value(values, "mod.api");
         String priority = value(values, "mod.priority");
+        String pluginApi = value(values, "content.plugin_api");
+        String scriptApi = value(values, "content.script_api");
         try {
             if (!schema.isEmpty() && Integer.parseInt(schema) != 1) {
                 throw new IOException("Unsupported mod schema " + schema);
             }
             if (!api.isEmpty()) result.api = Integer.parseInt(api);
             if (!priority.isEmpty()) result.priority = Integer.parseInt(priority);
+            if (!pluginApi.isEmpty()) result.pluginApi = Integer.parseInt(pluginApi);
+            if (!scriptApi.isEmpty()) result.scriptApi = Integer.parseInt(scriptApi);
         } catch (NumberFormatException e) {
             throw new IOException("Schema, API and priority must be integers");
         }
-        result.validate(deep);
+        result.validate(deep, !scriptApi.isEmpty());
         return result;
+    }
+
+    private static void parseDependencies(String text, String owner, List<String> output) throws IOException {
+        if (text.isEmpty()) return;
+        if (text.length() > 2048) throw new IOException("Dependency list is too long");
+        for (String entry : text.split(",", -1)) {
+            String dependency = entry.trim();
+            if (!isSafeId(dependency) || dependency.equals(owner) || output.contains(dependency) || output.size() >= 32) {
+                throw new IOException("Invalid, duplicate, self, or excessive dependency '" + dependency + "'");
+            }
+            output.add(dependency);
+        }
     }
 
     private static String value(Map<String, String> values, String key) {
@@ -130,7 +158,7 @@ final class ModManifest {
         return value == null ? "" : value;
     }
 
-    private void validate(boolean deep) throws IOException {
+    private void validate(boolean deep, boolean scriptApiDeclared) throws IOException {
         if (!isSafeId(id)) throw new IOException("Invalid mod ID; use lowercase letters, digits, '.', '_' or '-'");
         if (name.trim().isEmpty() || name.length() > 80 || hasControl(name)) {
             throw new IOException("Mod name is empty, too long or contains control characters");
@@ -139,8 +167,19 @@ final class ModManifest {
                 || hasControl(version) || hasControl(author) || hasControl(description)) {
             throw new IOException("Invalid or oversized mod metadata");
         }
-        if (api != API_VERSION) throw new IOException("Requires mod API " + api + "; installed API is " + API_VERSION);
+        if (api < 1 || api > API_VERSION) {
+            throw new IOException("Requires mod API " + api + "; installed API supports 1 through " + API_VERSION);
+        }
         if (priority < -10000 || priority > 10000) throw new IOException("Priority is outside the supported range");
+        if (pluginApi < 1 || pluginApi > 3 || (plugin.isEmpty() && pluginApi != 1)) {
+            throw new IOException("Native plugin API must be 1, 2 or 3 and match native content");
+        }
+        if (scriptApi != 1 || (script.isEmpty() && scriptApiDeclared)) {
+            throw new IOException("Script API must be 1 and match a Lua entrypoint");
+        }
+        if (api < 2 && (!script.isEmpty() || !dependencies.isEmpty() || pluginApi >= 3)) {
+            throw new IOException("Scripts, dependencies and plugin API 3 require package API 2");
+        }
         if (!engineSha256.isEmpty() && !ENGINE_SHA256.equals(engineSha256)) {
             throw new IOException("Built for a different engine; the installed Steam build is required");
         }
@@ -148,8 +187,10 @@ final class ModManifest {
         files = checkedRelative(files, "files", true);
         textures = checkedRelative(textures, "textures", false);
         plugin = checkedRelative(plugin, "plugin", false);
-        if (files.isEmpty() && textures.isEmpty() && plugin.isEmpty()) {
-            throw new IOException("Mod has no files, textures or native plugin content");
+        script = checkedRelative(script, "Lua entrypoint", false);
+        if (!script.isEmpty() && !isSafeScriptPath(script)) throw new IOException("Unsafe characters in Lua entrypoint path");
+        if (files.isEmpty() && textures.isEmpty() && plugin.isEmpty() && script.isEmpty()) {
+            throw new IOException("Mod has no files, textures, native plugin or Lua content");
         }
         if (!plugin.isEmpty() && (!plugin.startsWith("lib/arm64-v8a/") || !plugin.endsWith(".so"))) {
             throw new IOException("Native plugin must be under lib/arm64-v8a and end in .so");
@@ -157,6 +198,7 @@ final class ModManifest {
         if (!textures.isEmpty() && !textures.endsWith(".ini")) {
             throw new IOException("Texture mapping must be an .ini file");
         }
+        if (!script.isEmpty() && !script.endsWith(".lua")) throw new IOException("Lua entrypoint must end in .lua");
         if (!cover.isEmpty() && !isImage(cover)) throw new IOException("Cover must be PNG, JPEG or WebP");
         if (!deep) return;
         if (!files.isEmpty() && !resolved(files).isDirectory()) {
@@ -164,6 +206,7 @@ final class ModManifest {
         }
         if (!cover.isEmpty() && !resolved(cover).isFile()) throw new IOException("Cover image is missing");
         if (!plugin.isEmpty()) validateElf64Arm64(resolved(plugin));
+        if (!script.isEmpty()) validateScript(resolved(script));
         if (!textures.isEmpty()) validateTextures(resolved(textures));
     }
 
@@ -198,7 +241,32 @@ final class ModManifest {
         if (!files.isEmpty()) kinds.add("Loose files");
         if (!textures.isEmpty()) kinds.add("Textures");
         if (!plugin.isEmpty()) kinds.add("ARM64 plugin");
+        if (!script.isEmpty()) kinds.add("Lua script");
         return String.join(" · ", kinds);
+    }
+
+    boolean hasExecutableContent() {
+        return !plugin.isEmpty() || !script.isEmpty();
+    }
+
+    private static boolean isSafeScriptPath(String value) {
+        for (int i = 0; i < value.length(); ++i) {
+            char c = value.charAt(i);
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+                    || c == '/' || c == '.' || c == '_' || c == '-')) return false;
+        }
+        return true;
+    }
+
+    private static void validateScript(File file) throws IOException {
+        if (Files.isSymbolicLink(file.toPath()) || !file.isFile()) {
+            throw new IOException("Lua entrypoint must be a regular, non-symlink file");
+        }
+        long length = file.length();
+        if (length <= 0 || length > MAX_SCRIPT_BYTES) throw new IOException("Lua entrypoint is empty or exceeds 1 MiB");
+        byte[] source = Files.readAllBytes(file.toPath());
+        if (source.length > 0 && source[0] == 0x1b) throw new IOException("Lua bytecode is not accepted; use text source");
+        for (byte value : source) if (value == 0) throw new IOException("Lua source must not contain NUL bytes");
     }
 
     static String safeRelativePath(String value, boolean allowDot) {
@@ -248,7 +316,7 @@ final class ModManifest {
 
     static void validateTextures(File ini) throws IOException {
         if (!ini.isFile()) throw new IOException("Texture mapping is missing");
-        if (ini.length() > 4 * 1024 * 1024) throw new IOException("Texture mapping is too large");
+        if (ini.length() > 64L * 1024L * 1024L) throw new IOException("Texture mapping is too large");
         int count = 0;
         HashSet<String> keys = new HashSet<>();
         String section = "";
@@ -279,7 +347,7 @@ final class ModManifest {
                     throw new IOException("Texture replacement is missing or unsafe: " + relative);
                 }
                 validateDds(dds);
-                if (++count > 4096) throw new IOException("Texture mapping contains too many replacements");
+                if (++count > MAX_TEXTURE_MAPPINGS) throw new IOException("Texture mapping contains too many replacements");
             }
         }
         if (count == 0) throw new IOException("Texture mapping contains no replacements");

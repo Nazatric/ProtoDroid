@@ -37,18 +37,21 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
- * Launcher-only updater. The system DownloadManager owns the bytes and their completion notification, so the APK
- * remains available in public Downloads even when Android kills this activity during a signature-changing uninstall.
+ * Launcher-only updater. Available releases open their exact GitHub page. For an existing system download,
+ * DownloadManager owns the bytes/completion notification so verification and installation can recover in public
+ * Downloads even when Android kills this activity during a signature-changing uninstall.
  */
 final class UpdateManager {
     private static final String TAG = "ProtoDroidUpdate";
     private static final String API_URL = "https://api.github.com/repos/Nazatric/ProtoDroid/releases/latest";
-    private static final String RELEASES_URL = "https://github.com/Nazatric/ProtoDroid/releases/latest";
+    private static final String LATEST_RELEASE_URL = "https://github.com/Nazatric/ProtoDroid/releases/latest";
+    private static final String RELEASES_URL = "https://github.com/Nazatric/ProtoDroid/releases";
     private static final String PREFS = "launcher_updates";
     private static final String KEY_DOWNLOAD_ID = "download_id";
     private static final String KEY_VERSION_NAME = "version_name";
     private static final String KEY_VERSION_CODE = "version_code";
     private static final String KEY_URL = "url";
+    private static final String KEY_RELEASE_URL = "release_url";
     private static final String KEY_SIZE = "size";
     private static final String KEY_APK_SHA256 = "apk_sha256";
     private static final String KEY_CERTIFICATE_SHA256 = "certificate_sha256";
@@ -202,7 +205,9 @@ final class UpdateManager {
         if (closed) return;
         switch (state.status) {
             case State.AVAILABLE:
-                beginDownload();
+                // The requested simple update path opens the fetched release directly. Existing system downloads
+                // retain the verified recovery/install flow below.
+                onLatestReleasePressed();
                 break;
             case State.READY:
                 if (state.requiresUninstall) callback.onUninstallRequired(state.versionName);
@@ -217,9 +222,20 @@ final class UpdateManager {
         }
     }
 
+    private void onLatestReleasePressed() {
+        if (closed) return;
+        String url = release == null || release.htmlUrl.isEmpty() ? LATEST_RELEASE_URL : release.htmlUrl;
+        openRelease(url);
+    }
+
     void onReleasesPressed() {
         if (closed) return;
-        Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL));
+        // Recovery is always the official archive, never a third-party mirror or whichever release is newest.
+        openRelease(RELEASES_URL);
+    }
+
+    private void openRelease(String url) {
+        Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
         browser.addCategory(Intent.CATEGORY_BROWSABLE);
         try {
             activity.startActivity(browser);
@@ -747,6 +763,7 @@ final class UpdateManager {
                 .putString(KEY_VERSION_NAME, release.versionName)
                 .putLong(KEY_VERSION_CODE, release.versionCode)
                 .putString(KEY_URL, release.downloadUrl)
+                .putString(KEY_RELEASE_URL, release.htmlUrl)
                 .putLong(KEY_SIZE, release.sizeBytes)
                 .putString(KEY_APK_SHA256, release.apkSha256)
                 .putString(KEY_CERTIFICATE_SHA256, release.certificateSha256)
@@ -763,7 +780,8 @@ final class UpdateManager {
         if (name == null || url == null || apkSha256 == null || certificate == null || code <= 0L || size <= 0L) {
             return null;
         }
-        return new UpdateRelease(name, code, url, size, apkSha256, certificate);
+        String htmlUrl = prefs.getString(KEY_RELEASE_URL, LATEST_RELEASE_URL);
+        return new UpdateRelease(name, code, htmlUrl, url, size, apkSha256, certificate);
     }
 
     private void removeDownload() {
@@ -782,7 +800,8 @@ final class UpdateManager {
 
     private void clearDownloadPrefs() {
         prefs.edit().remove(KEY_DOWNLOAD_ID).remove(KEY_VERSION_NAME).remove(KEY_VERSION_CODE).remove(KEY_URL)
-                .remove(KEY_SIZE).remove(KEY_APK_SHA256).remove(KEY_CERTIFICATE_SHA256).apply();
+                .remove(KEY_RELEASE_URL).remove(KEY_SIZE).remove(KEY_APK_SHA256).remove(KEY_CERTIFICATE_SHA256)
+                .apply();
     }
 
     private long installedVersionCode() {
