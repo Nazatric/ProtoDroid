@@ -2,7 +2,8 @@
 
 ## 0.15
 
-- Added default helicopter **DESCEND** (`V`), an independent numbered **123** touch pad, and **ABC** Android keyboard input through SDL. Existing custom-layout indices and Extra buttons behavior are preserved. Added optional fixed Landscape/Reverse recovery while keeping Auto orientation by default.
+- Added default helicopter **DESCEND** (`V`), an independent numbered **123** touch pad, and **ABC** paged PC keyboard input through SDL. Existing custom-layout indices and Extra buttons behavior are preserved. Added optional fixed Landscape/Reverse recovery while keeping Auto orientation by default.
+- Added editable built-in/custom button text with default restore, editor binding subtitles, custom left/right/middle mouse bindings, center/hexagon-edge snapping, and explicit **ADD STICK** recovery. Existing keyboard/chord custom records remain compatible; mouse and keyboard chords are mutually exclusive.
 - Made High retain full 32-bit decoded DXT1 color; Low/Medium and the standalone default keep the lower-bandwidth 16-bit path. Added a persistent **VERSIONS** action for official older APKs while exact-release updates and verified download recovery remain separate.
 - Corrected the Vulkan 1.1 compatibility wrapper’s DXVK-facing effective API advertisement without lowering DXVK’s requirements or bypassing its isolated feature/extension probe. Physical Mali, PowerVR, long-session, and visual outcomes remain unverified.
 - Simplified the in-game gear to live FPS/battery/menu pacing, touch controls, FPS overlay, and Layout. Restart-only graphics and engine/mod experiments remain in the launcher, where concise explanations appear on touch, hover, or focus. Menu-FPS changes now use atomic live state consumed when Bink movies open.

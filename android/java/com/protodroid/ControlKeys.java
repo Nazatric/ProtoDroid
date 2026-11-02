@@ -207,4 +207,30 @@ final class ControlKeys {
         if (!isSupported(first)) return "NEW";
         return shortNameOf(first) + (isSupported(second) ? "+" + shortNameOf(second) : "");
     }
+
+    static String mouseLabel(int button) {
+        if (button == 1) return "LMB";
+        if (button == 2) return "RMB";
+        if (button == 4) return "MMB";
+        return "?";
+    }
+
+    static String bindingLabel(int first, int second, int mouseButton) {
+        return mouseButton != 0 ? mouseLabel(mouseButton) : chordLabel(first, second);
+    }
+
+    /** Short, single-line user text shared by Android and the host JSON model tests. */
+    static String cleanLabel(String value) {
+        if (value == null) return "";
+        StringBuilder cleaned = new StringBuilder();
+        int count = 0;
+        for (int offset = 0; offset < value.length() && count < 16;) {
+            int codePoint = value.codePointAt(offset);
+            offset += Character.charCount(codePoint);
+            if (Character.isISOControl(codePoint)) continue;
+            cleaned.appendCodePoint(codePoint);
+            ++count;
+        }
+        return cleaned.toString().trim();
+    }
 }

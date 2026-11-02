@@ -65,8 +65,8 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 | --- | --- |
 | **Graphics** | The original renderer through D3D9 and DXVK, with resolution, texture, anisotropy, AA, shadow, and game-quality settings. Mali and Adreno receive device-specific compatibility handling without a shared visual downgrade. |
 | **Movies and audio** | Full-screen Bink videos, ambient menu movies, RCF-resident files, and XAudio2 through FAudio. **Unlock menu FPS** is on by default. |
-| **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, helicopter descend, a numbered 1–4 pad, a paged PC keyboard, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. |
-| **Performance** | ARM64 hot-path replacements, optimized DXT decoding, stable FIFO presentation, ADPF hints, unrestricted CPU scheduling, and persistent DXVK state caching. |
+| **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, helicopter descend, a numbered 1–4 pad, a paged PC keyboard, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. The editor supports custom keyboard chords or left/right/middle mouse bindings, editable labels, and polygon snapping. |
+| **Performance** | ARM64 hot-path replacements, optimized DXT decoding, FIFO presentation at interval 1, ADPF hints, Android-controlled CPU scheduling, and persistent DXVK state caching. |
 | **Saves** | Shared profiles and saves that you can back up, replace, or delete with a file manager. Existing saves migrate without being overwritten. |
 | **Mods** | An optional local library for overlays, large keyed texture packs, sandboxed Lua engine scripts, and independently rebuilt ARM64 plugins, with dependencies, author options, and next-Play activation. |
 
@@ -76,7 +76,7 @@ The launcher’s **Settings** page keeps graphics, drivers, and engine policies.
 
 - **Graphics:** Resolution, Textures, DXT1 color, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
 - **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **FXAA** filters the completed frame with built-in MSAA disabled to avoid Prototype’s missing-texture AA path; **2x/4x MSAA** retain the original behavior. **Game default** leaves the engine’s own device-dependent choice intact.
-- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, Extra buttons, and **Touch layout → EDIT**. **ABC** opens a smaller paged PC keyboard: **MAIN**, **MORE**, and **NUMPAD** retain all 104 keys with conventional labels. Edit layouts here without starting the game, or use the in-game gear: drag, resize, hide/show any control, and add one- or two-key buttons with rebind and confirmed delete actions. **123** toggles number keys and **DESCEND** sends `V`.
+- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, Extra buttons, and **Touch layout → EDIT**. **ABC** opens a smaller paged PC keyboard: **MAIN**, **MORE**, and **NUMPAD** retain all 104 keys with conventional labels. Edit layouts here without starting the game, or use the in-game gear: drag, resize, hide/show any control, edit button text or restore its default, and see each button’s binding in the editor. Add custom one- or two-key buttons or left/right/middle mouse buttons with rebind and confirmed delete actions. Center and hexagon-edge guides help align polygons; **ADD STICK** restores a hidden stick. Built-in special bindings stay fixed; custom buttons are rebindable. **123** toggles number keys and **DESCEND** sends `V`.
 - **Interface:** Screen orientation, Opacity, and Show FPS. Fixed Landscape/Reverse is an optional recovery for devices that choose the wrong direction; Auto remains the default.
 - **Engine fixes:** Optional FOV, shadow-map, tick/QTE, loose-file, developer-menu, VRAM-report, and texture-dump policies. Safe defaults remain unchanged until you opt in.
 
@@ -225,7 +225,7 @@ Automatic checks use a 15-minute backoff and do not block Play. Update errors of
 - **D3D9 on Vulkan:** a generated bridge forwards drawing to DXVK 2.5.3. Android patches cover Mali and Adreno behavior, descriptor compatibility, pipeline compilation, presentation, and persistent caching.
 - **Bink through FFmpeg:** a minimal FFmpeg build decodes loose and RCF-resident movies. Decoded YUV planes are copied directly into the textures supplied by the game.
 - **XAudio2 through FAudio:** FAudio handles voice processing and mixing, with SDL audio output and Android-friendly pacing.
-- **SDL2 and Android UI:** SDL owns the window and platform events. A native Android layer provides the launcher, touch controls, gamepad support, layout editor, and settings.
+- **SDL2 and Android UI:** SDL owns the window and platform events. The Android Java UI layer provides the launcher, touch controls, gamepad support, layout editor, and settings.
 
 ## Developer guide
 

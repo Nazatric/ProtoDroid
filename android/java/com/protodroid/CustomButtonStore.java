@@ -16,9 +16,10 @@ final class CustomButtonStore {
 
     static final class Entry {
         long id;
-        int key1, key2;
+        int key1, key2, mouseButton;
         float x = -1, y = -1, size = 1;
         boolean hidden;
+        String label = "";
 
         Entry(long id, int key1, int key2) {
             this.id = id;
@@ -28,10 +29,12 @@ final class CustomButtonStore {
 
         Entry copy() {
             Entry result = new Entry(id, key1, key2);
+            result.mouseButton = mouseButton;
             result.x = x;
             result.y = y;
             result.size = size;
             result.hidden = hidden;
+            result.label = label;
             return result;
         }
     }
@@ -41,6 +44,15 @@ final class CustomButtonStore {
     static boolean validBinding(int key1, int key2) {
         return ControlKeys.isSupported(key1) && (key2 == 0
                 || (ControlKeys.isSupported(key2) && key2 != key1));
+    }
+
+    static boolean validMouseButton(int button) {
+        return button == 1 || button == 2 || button == 4;
+    }
+
+    static boolean validBinding(int key1, int key2, int mouseButton) {
+        if (mouseButton != 0) return key1 == 0 && key2 == 0 && validMouseButton(mouseButton);
+        return validBinding(key1, key2);
     }
 
     private static float coordinate(JSONObject object, String name) {
@@ -66,12 +78,15 @@ final class CustomButtonStore {
                 if (object == null) continue;
                 long id = object.optLong("id", 0);
                 int key1 = object.optInt("key1", 0), key2 = object.optInt("key2", 0);
-                if (id <= 0 || !ids.add(id) || !validBinding(key1, key2)) continue;
+                int mouseButton = object.optInt("mouse", 0);
+                if (id <= 0 || !ids.add(id) || !validBinding(key1, key2, mouseButton)) continue;
                 Entry entry = new Entry(id, key1, key2);
+                entry.mouseButton = mouseButton;
                 entry.x = coordinate(object, "x");
                 entry.y = coordinate(object, "y");
                 entry.size = size(object);
                 entry.hidden = object.optBoolean("hidden", false);
+                entry.label = ControlKeys.cleanLabel(object.optString("label", ""));
                 result.add(entry);
             }
         } catch (Exception ignored) {
@@ -86,7 +101,8 @@ final class CustomButtonStore {
         Set<Long> ids = new HashSet<>();
         int count = 0;
         for (Entry source : entries) {
-            if (source == null || source.id <= 0 || !ids.add(source.id) || !validBinding(source.key1, source.key2)) {
+            if (source == null || source.id <= 0 || !ids.add(source.id)
+                    || !validBinding(source.key1, source.key2, source.mouseButton)) {
                 continue;
             }
             if (++count > MAX_BUTTONS) break;
@@ -96,13 +112,15 @@ final class CustomButtonStore {
                 object.put("id", entry.id);
                 object.put("key1", entry.key1);
                 object.put("key2", entry.key2);
+                object.put("mouse", entry.mouseButton);
                 object.put("x", saneCoordinate(entry.x));
                 object.put("y", saneCoordinate(entry.y));
                 object.put("size", saneSize(entry.size));
                 object.put("hidden", entry.hidden);
+                object.put("label", ControlKeys.cleanLabel(entry.label));
                 array.put(object);
             } catch (JSONException ignored) {
-                // All values above are primitive and finite; skip rather than corrupt the remaining records.
+                // Values are validated above; skip rather than corrupt the remaining records.
             }
         }
         return array.toString();

@@ -43,6 +43,20 @@ public final class ControlsModelTest {
         check(!CustomButtonStore.validBinding(ControlKeys.C, ControlKeys.C), "duplicate chord accepted");
         check(CustomButtonStore.validBinding(ControlKeys.C, 0), "single key rejected");
         check(CustomButtonStore.validBinding(ControlKeys.CTRL_LEFT, ControlKeys.C), "two-key chord rejected");
+        check("LMB".equals(ControlKeys.mouseLabel(1)) && "RMB".equals(ControlKeys.mouseLabel(2))
+                && "MMB".equals(ControlKeys.mouseLabel(4)), "mouse binding labels");
+        check("LMB".equals(ControlKeys.bindingLabel(0, 0, 1)), "mouse binding label selection");
+        check(CustomButtonStore.validBinding(0, 0, 1)
+                && CustomButtonStore.validBinding(0, 0, 2)
+                && CustomButtonStore.validBinding(0, 0, 4), "valid mouse bindings rejected");
+        check(!CustomButtonStore.validBinding(ControlKeys.C, 0, 1)
+                && !CustomButtonStore.validBinding(0, ControlKeys.C, 1)
+                && !CustomButtonStore.validBinding(0, 0, 3), "mixed/unknown mouse binding accepted");
+        check("AB".equals(ControlKeys.cleanLabel("  A\n\0B  ")), "label control-character cleanup");
+        check(ControlKeys.cleanLabel(null).isEmpty() && ControlKeys.cleanLabel("   ").isEmpty(),
+                "empty labels must use their defaults");
+        check(ControlKeys.cleanLabel("12345678901234567890").equals("1234567890123456"),
+                "label length limit");
     }
 
     private static void persistence() {
@@ -62,6 +76,29 @@ public final class ControlsModelTest {
         check(restored.x == 0.25f && restored.y == 0.75f && restored.size == 1.4f && restored.hidden,
                 "round-trip geometry/hidden state");
         check(output.get(1).key2 == ControlKeys.C && !output.get(1).hidden, "round-trip chord");
+        check(output.get(0).mouseButton == 0 && output.get(0).label.isEmpty(),
+                "keyboard records must not acquire a mouse binding or label");
+
+        for (int mouse : new int[] {1, 2, 4}) {
+            CustomButtonStore.Entry click = new CustomButtonStore.Entry(20 + mouse, 0, 0);
+            click.mouseButton = mouse;
+            click.label = "  Click\n" + mouse + "  ";
+            List<CustomButtonStore.Entry> clicks = CustomButtonStore.decode(
+                    CustomButtonStore.encode(java.util.Collections.singletonList(click)));
+            check(clicks.size() == 1 && clicks.get(0).mouseButton == mouse
+                    && clicks.get(0).key1 == 0 && clicks.get(0).key2 == 0,
+                    "mouse round-trip binding " + mouse);
+            check(clicks.get(0).label.equals("Click" + mouse), "mouse label round-trip");
+        }
+        List<CustomButtonStore.Entry> old = CustomButtonStore.decode(
+                "[{\"id\":31,\"key1\":31,\"key2\":0,\"x\":0.2,\"y\":0.3}]");
+        check(old.size() == 1 && old.get(0).mouseButton == 0 && old.get(0).label.isEmpty(),
+                "legacy keyboard record compatibility");
+        check(CustomButtonStore.decode("[{\"id\":32,\"key1\":0,\"key2\":0,\"mouse\":1}]").size() == 1,
+                "mouse-only JSON record rejected");
+        check(CustomButtonStore.decode("[{\"id\":33,\"key1\":31,\"key2\":0,\"mouse\":1}]").isEmpty()
+                && CustomButtonStore.decode("[{\"id\":34,\"key1\":0,\"key2\":0,\"mouse\":8}]").isEmpty(),
+                "mixed/unknown mouse JSON records accepted");
 
         check(CustomButtonStore.decode("not json").isEmpty(), "malformed JSON must be safe");
         check(CustomButtonStore.decode("[null,{},1]").isEmpty(), "wrong JSON records must be safe");

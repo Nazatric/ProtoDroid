@@ -32,9 +32,11 @@ def rows(name):
 main_blocks, main = rows("MAIN_ROWS")
 more_blocks, more = rows("MORE_ROWS")
 numpad_blocks, numpad = rows("NUMPAD_ROWS")
+mouse_blocks, mouse = rows("MOUSE_ROWS")
 assert len(main_blocks) == 4 and len(main) == len(set(main)) == 45
 assert len(more_blocks) == 5 and len(more) == len(set(more)) == 42
 assert len(numpad_blocks) == 5 and len(numpad) == len(set(numpad)) == 17
+assert len(mouse_blocks) == 1 and set(mouse) == {"MOUSE_PICK_LEFT", "MOUSE_PICK_RIGHT", "MOUSE_PICK_MIDDLE"}
 assert all(key in main for key in ("UP", "DOWN", "LEFT", "RIGHT")), "cheat-screen arrows left MAIN"
 paged = main + more + numpad
 assert len(paged) == len(set(paged)) == 104, "pages must partition all 104 keys without duplicates"
@@ -52,14 +54,18 @@ keycap_body = catalog.split("static String keycap(int code)", 1)[1].split("stati
 for case in re.findall(r"\bcase ([A-Z][A-Z0-9_]*):", keycap_body):
     assert case in registered, f"keycap uses a non-catalog constant: {case}"
 for comparison in re.findall(r"\bcode == ([A-Z][A-Z0-9_]*)", keyboard):
+    if comparison.startswith("MOUSE_PICK_"):
+        continue
     assert comparison in registered, f"keyboard uses a non-catalog key constant: {comparison}"
 assert "KEY_0 = 7" in catalog and "NUM_LOCK = 143" in catalog and "NUMPAD_ENTER = 160" in catalog
 
 # Compact coverage and familiar labels replace the rejected 80/95%-height red grid and glyph/N-prefixed keycaps.
 assert 'page == PAGE_MAIN ? 0.58f : 0.64f' in keyboard and 'picker ? 0.66f' in keyboard
 assert 'page == PAGE_NUMPAD ? 0.62f : 0.90f' in keyboard
-assert 'String[] pageNames = {"MAIN", "MORE", "NUMPAD"}' in keyboard
-assert "ControlKeys.keycap(cap.code)" in keyboard and "shortNameOf(cap.code)" not in keyboard
+assert 'String[] pageNames = {"MAIN", "MORE", "NUMPAD", "MOUSE"}' in keyboard
+assert "String label = capLabel(cap.code);" in keyboard and "shortNameOf(cap.code)" not in keyboard
+assert 'return ControlKeys.keycap(code);' in keyboard and 'return "LEFT CLICK";' in keyboard
+assert "picker ? 4 : 3" in keyboard and "MOUSE_ROWS" in keyboard
 assert 'key(RIGHT, "Right Arrow", "RIGHT")' in catalog and '"NUM " + i' in catalog
 assert '"N" + i' not in catalog and '"→"' not in catalog and '"←"' not in catalog
 assert 'if (code >= NUMPAD_0 && code <= NUMPAD_9) return String.valueOf(code - NUMPAD_0);' in catalog
@@ -82,8 +88,10 @@ assert "counts.put(keycode, count + 1)" in state and "if (count == 0) return;" i
 assert "acquisitionOrder.get(i), false" in state and "counts.clear();" in state
 
 assert "private void startBinding(Button target)" in touch and "keyboard.showPicker" in touch
-assert "private void finishBinding(int first, int second)" in touch
-for action in ("drawPill(c, addRect", "drawPill(c, bindRect", "drawPill(c, hideRect", "drawPill(c, removeRect"):
+assert "private void finishBinding(int first, int second, int mouseButton)" in touch
+assert "bindingDone(int first, int second, int mouseButton)" in keyboard
+assert "showPicker(target == null ? 0 : target.keycode" in touch
+for action in ("drawPill(c, addRect", "drawPill(c, stickRect", "drawPill(c, textRect", "drawPill(c, bindRect", "drawPill(c, hideRect", "drawPill(c, removeRect"):
     assert action in touch, f"layout editor action missing: {action}"
 assert 'removeArmed ? "CONFIRM" : "DELETE"' in touch, "custom-button deletion is not confirmed"
 assert "if (selected != null) selected.hidden = !selected.hidden;" in touch
@@ -100,13 +108,26 @@ assert "allButtons.addAll(customButtons);" in touch, "custom records reindexed t
 assert "private final RectF editorBar" in touch and "selectionBar" in touch
 assert "editorBar.contains(x, y) || selectionBar.contains(x, y)" in touch
 assert "if (editing && b != selected) opacity *= 0.52f;" in touch
+assert 'prefs.getString("label" + i, "")' in touch and 'putString("label" + i, b.label)' in touch
+assert 'remove("label" + i)' in touch and "defaultButtonText" in touch
+assert "editButtonText(selected)" in touch and 'setNeutralButton("DEFAULT"' in touch
+assert 'stickHidden ? "ADD STICK" : "STICK"' in touch and "stickHidden = false;" in touch
+assert "snapDrag(nx, ny)" in touch and "Math.sqrt(3.0)" in touch
+assert "snapGuideX" in touch and "snapGuideY" in touch and "clearSnap();" in touch
+assert "clampCenter" in touch and "snapTargetKey" in touch
+assert "mouseButton(b.mouseButton, true" in press and "mouseButton(b.mouseButton, false" in release
+assert "entry.mouseButton = mouseButton;" in touch and "entry.label = labelEdited ? label" in touch
+assert "b.bindingText()" in touch and "editing ? by - b.r * 0.20f" in touch
 
 # Picker taps select only; normal taps inject. Modifiers latch for a sequential mobile chord and release after a key.
 down = keyboard.split("case MotionEvent.ACTION_POINTER_DOWN:", 1)[1].split("case MotionEvent.ACTION_UP:", 1)[0]
-assert "if (!picker && !ControlKeys.isModifier(cap.code)) callback.key(cap.code, true);" in down
+assert "if (!picker && !isMousePick(cap.code) && !ControlKeys.isModifier(cap.code)) callback.key(cap.code, true);" in down
 assert "if (picker)" in keyboard and "chooseBinding(cap.code);" in keyboard
 assert "latchedModifiers.add(cap.code);" in keyboard and "releaseModifiers();" in keyboard
-assert "CustomButtonStore.validBinding(bindingFirst, bindingSecond)" in keyboard
+assert "CustomButtonStore.validBinding(bindingFirst, bindingSecond, bindingMouse)" in keyboard
+assert "bindingMouse = mouseBit(code);" in keyboard and "bindingFirst = bindingSecond = 0;" in keyboard
+assert "ACTION_PAGE_MOUSE" in keyboard and "pageCount()" in keyboard
+assert "ACTION_CLEAR = 6" in keyboard and "ACTION_DONE = 7" in keyboard, "mouse page collides with picker commands"
 assert "layout(lastViewWidth, lastViewHeight);" in keyboard
 assert "lastViewWidth = viewWidth;" in keyboard and "lastViewHeight = viewHeight;" in keyboard
 assert "case MotionEvent.ACTION_CANCEL:" in keyboard

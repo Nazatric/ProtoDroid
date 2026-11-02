@@ -24,7 +24,7 @@ final class TouchKeyboard {
     interface Callback {
         void key(int keycode, boolean down);
         void closed();
-        void bindingDone(int first, int second);
+        void bindingDone(int first, int second, int mouseButton);
         void feedback();
     }
 
@@ -33,12 +33,15 @@ final class TouchKeyboard {
     private static final int ACTION_PAGE_MAIN = 2;
     private static final int ACTION_PAGE_MORE = 3;
     private static final int ACTION_PAGE_NUMPAD = 4;
-    private static final int ACTION_CLEAR = 5;
-    private static final int ACTION_DONE = 6;
+    // Page actions occupy 2..5; picker commands must stay outside that range.
+    private static final int ACTION_CLEAR = 6;
+    private static final int ACTION_DONE = 7;
 
     private static final int PAGE_MAIN = 0;
     private static final int PAGE_MORE = 1;
     private static final int PAGE_NUMPAD = 2;
+    private static final int PAGE_MOUSE = 3;
+    private static final int ACTION_PAGE_MOUSE = ACTION_PAGE_MAIN + PAGE_MOUSE;
 
     private static final List<int[]> MAIN_ROWS = rows(
             keys(ESCAPE, TAB, Q, W, E, R, T, Y, U, I, O, P, BACKSPACE),
@@ -62,6 +65,13 @@ final class TouchKeyboard {
             keys(NUMPAD_1, NUMPAD_2, NUMPAD_3, NUMPAD_ENTER),
             keys(NUMPAD_0, NUMPAD_PERIOD));
 
+    // Negative codes are picker-only mouse actions, never part of the PC keyboard catalog.
+    private static final int MOUSE_PICK_LEFT = -101;
+    private static final int MOUSE_PICK_RIGHT = -102;
+    private static final int MOUSE_PICK_MIDDLE = -103;
+    private static final List<int[]> MOUSE_ROWS = rows(
+            keys(MOUSE_PICK_LEFT, MOUSE_PICK_RIGHT, MOUSE_PICK_MIDDLE));
+
     private static final class Cap {
         final int code;
         final RectF rect = new RectF();
@@ -81,14 +91,14 @@ final class TouchKeyboard {
     private final RectF closeRect = new RectF();
     private final RectF clearRect = new RectF();
     private final RectF doneRect = new RectF();
-    private final RectF[] pageRects = {new RectF(), new RectF(), new RectF()};
+    private final RectF[] pageRects = {new RectF(), new RectF(), new RectF(), new RectF()};
     private final Map<Integer, Cap> pointers = new HashMap<>();
     private final Set<Integer> latchedModifiers = new HashSet<>();
 
     private boolean visible, picker;
     private int page = PAGE_MAIN;
     private int actionPointer = -1, action = ACTION_NONE;
-    private int bindingFirst, bindingSecond;
+    private int bindingFirst, bindingSecond, bindingMouse;
     private int lastViewWidth, lastViewHeight;
 
     TouchKeyboard(float density, Callback callback) {
@@ -109,18 +119,19 @@ final class TouchKeyboard {
         visible = true;
         picker = false;
         page = PAGE_MAIN;
-        bindingFirst = bindingSecond = 0;
+        bindingFirst = bindingSecond = bindingMouse = 0;
         actionPointer = -1;
         action = ACTION_NONE;
     }
 
-    void showPicker(int first, int second) {
+    void showPicker(int first, int second, int mouseButton) {
         releaseAll();
         visible = true;
         picker = true;
-        page = PAGE_MAIN;
-        bindingFirst = ControlKeys.isSupported(first) ? first : 0;
-        bindingSecond = CustomButtonStore.validBinding(bindingFirst, second) ? second : 0;
+        bindingMouse = CustomButtonStore.validMouseButton(mouseButton) ? mouseButton : 0;
+        page = bindingMouse != 0 ? PAGE_MOUSE : PAGE_MAIN;
+        bindingFirst = bindingMouse == 0 && ControlKeys.isSupported(first) ? first : 0;
+        bindingSecond = CustomButtonStore.validBinding(bindingFirst, second, bindingMouse) ? second : 0;
         actionPointer = -1;
         action = ACTION_NONE;
     }
@@ -179,23 +190,25 @@ final class TouchKeyboard {
                 panel.right - 4f * density, panel.top + 40f * density);
         clearRect.setEmpty();
         doneRect.setEmpty();
+        for (RectF rect : pageRects) rect.setEmpty();
+        int pageCount = pageCount();
         if (picker) {
             doneRect.set(closeRect.left - 62f * density, panel.top + 4f * density,
                     closeRect.left - 6f * density, panel.top + 40f * density);
             clearRect.set(doneRect.left - 62f * density, panel.top + 4f * density,
                     doneRect.left - 6f * density, panel.top + 40f * density);
-            float tabsWidth = Math.min(panel.width() - 16f * density, 252f * density);
+            float tabsWidth = Math.min(panel.width() - 16f * density, 336f * density);
             float tabsLeft = (panel.left + panel.right - tabsWidth) / 2f;
-            float tabWidth = tabsWidth / 3f;
-            for (int i = 0; i < 3; i++) {
+            float tabWidth = tabsWidth / pageCount;
+            for (int i = 0; i < pageCount; i++) {
                 pageRects[i].set(tabsLeft + i * tabWidth, panel.top + 42f * density,
                         tabsLeft + (i + 1) * tabWidth - 3f * density, panel.top + 68f * density);
             }
         } else {
             float tabsLeft = panel.left + 70f * density;
             float tabsRight = closeRect.left - 6f * density;
-            float tabWidth = Math.max(1f, (tabsRight - tabsLeft) / 3f);
-            for (int i = 0; i < 3; i++) {
+            float tabWidth = Math.max(1f, (tabsRight - tabsLeft) / pageCount);
+            for (int i = 0; i < pageCount; i++) {
                 pageRects[i].set(tabsLeft + i * tabWidth, panel.top + 7f * density,
                         tabsLeft + (i + 1) * tabWidth - 3f * density, panel.top + 37f * density);
             }
@@ -205,7 +218,30 @@ final class TouchKeyboard {
     private List<int[]> rowsForPage() {
         if (page == PAGE_MORE) return MORE_ROWS;
         if (page == PAGE_NUMPAD) return NUMPAD_ROWS;
+        if (page == PAGE_MOUSE) return MOUSE_ROWS;
         return MAIN_ROWS;
+    }
+
+    private int pageCount() {
+        return picker ? 4 : 3;
+    }
+
+    private static boolean isMousePick(int code) {
+        return code == MOUSE_PICK_LEFT || code == MOUSE_PICK_RIGHT || code == MOUSE_PICK_MIDDLE;
+    }
+
+    private static int mouseBit(int code) {
+        if (code == MOUSE_PICK_LEFT) return 1;
+        if (code == MOUSE_PICK_RIGHT) return 2;
+        if (code == MOUSE_PICK_MIDDLE) return 4;
+        return 0;
+    }
+
+    private static String capLabel(int code) {
+        if (code == MOUSE_PICK_LEFT) return "LEFT CLICK";
+        if (code == MOUSE_PICK_RIGHT) return "RIGHT CLICK";
+        if (code == MOUSE_PICK_MIDDLE) return "MIDDLE CLICK";
+        return ControlKeys.keycap(code);
     }
 
     private static float weight(int code) {
@@ -231,11 +267,17 @@ final class TouchKeyboard {
         if (closeRect.contains(x, y)) return ACTION_CLOSE;
         if (picker && clearRect.contains(x, y)) return ACTION_CLEAR;
         if (picker && doneRect.contains(x, y)) return ACTION_DONE;
-        for (int i = 0; i < 3; i++) if (pageRects[i].contains(x, y)) return ACTION_PAGE_MAIN + i;
+        for (int i = 0; i < pageCount(); i++) if (pageRects[i].contains(x, y)) return ACTION_PAGE_MAIN + i;
         return ACTION_NONE;
     }
 
     private void chooseBinding(int code) {
+        if (isMousePick(code)) {
+            bindingFirst = bindingSecond = 0;
+            bindingMouse = mouseBit(code);
+            return;
+        }
+        bindingMouse = 0;
         if (code == bindingFirst) {
             bindingFirst = bindingSecond;
             bindingSecond = 0;
@@ -257,7 +299,7 @@ final class TouchKeyboard {
 
     void releaseAll() {
         for (Cap cap : pointers.values()) {
-            if (!picker && !ControlKeys.isModifier(cap.code)) callback.key(cap.code, false);
+            if (!picker && !isMousePick(cap.code) && !ControlKeys.isModifier(cap.code)) callback.key(cap.code, false);
         }
         pointers.clear();
         releaseModifiers();
@@ -272,18 +314,19 @@ final class TouchKeyboard {
                 callback.closed();
                 break;
             case ACTION_CLEAR:
-                bindingFirst = bindingSecond = 0;
+                bindingFirst = bindingSecond = bindingMouse = 0;
                 break;
             case ACTION_DONE:
-                if (CustomButtonStore.validBinding(bindingFirst, bindingSecond)) {
-                    int first = bindingFirst, second = bindingSecond;
+                if (CustomButtonStore.validBinding(bindingFirst, bindingSecond, bindingMouse)) {
+                    int first = bindingFirst, second = bindingSecond, mouse = bindingMouse;
                     hide();
-                    callback.bindingDone(first, second);
+                    callback.bindingDone(first, second, mouse);
                 }
                 break;
             case ACTION_PAGE_MAIN:
             case ACTION_PAGE_MORE:
             case ACTION_PAGE_NUMPAD:
+            case ACTION_PAGE_MOUSE:
                 releaseAll();
                 page = requested - ACTION_PAGE_MAIN;
                 layout(lastViewWidth, lastViewHeight);
@@ -310,7 +353,7 @@ final class TouchKeyboard {
                 if (cap != null && !pointers.containsKey(id)) {
                     pointers.put(id, cap);
                     callback.feedback();
-                    if (!picker && !ControlKeys.isModifier(cap.code)) callback.key(cap.code, true);
+                    if (!picker && !isMousePick(cap.code) && !ControlKeys.isModifier(cap.code)) callback.key(cap.code, true);
                 }
                 return true;
             }
@@ -367,19 +410,21 @@ final class TouchKeyboard {
                 panel.right - 8f * density, panel.top + 2f * density, paint);
 
         if (picker) {
-            String binding = bindingFirst == 0 ? "TAP 1 OR 2 KEYS"
+            String binding = bindingMouse != 0 ? ControlKeys.mouseLabel(bindingMouse)
+                    : bindingFirst == 0 ? "TAP 1 OR 2 KEYS"
                     : ControlKeys.chordLabel(bindingFirst, bindingSecond);
             text(canvas, "BIND  " + binding, panel.left + 12f * density,
                     panel.top + 4f * density, clearRect.left - panel.left - 20f * density,
                     36f * density, 13f, 0xfff0e8e1, false);
             drawAction(canvas, clearRect, "CLEAR", false);
-            drawAction(canvas, doneRect, "DONE", bindingFirst != 0);
+            drawAction(canvas, doneRect, "DONE",
+                    CustomButtonStore.validBinding(bindingFirst, bindingSecond, bindingMouse));
         } else {
             text(canvas, "KEYS", panel.left + 12f * density, panel.top + 4f * density,
                     54f * density, 36f * density, 13f, 0xffe8dfd8, false);
         }
-        String[] pageNames = {"MAIN", "MORE", "NUMPAD"};
-        for (int i = 0; i < 3; i++) {
+        String[] pageNames = {"MAIN", "MORE", "NUMPAD", "MOUSE"};
+        for (int i = 0; i < pageCount(); i++) {
             boolean chosen = page == i;
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(chosen ? 0xb33b1115 : 0x00111111);
@@ -391,7 +436,8 @@ final class TouchKeyboard {
 
         for (Cap cap : caps) {
             boolean held = pointers.containsValue(cap) || latchedModifiers.contains(cap.code);
-            boolean chosen = picker && (cap.code == bindingFirst || cap.code == bindingSecond);
+            boolean chosen = picker && (cap.code == bindingFirst || cap.code == bindingSecond
+                    || (isMousePick(cap.code) && mouseBit(cap.code) == bindingMouse));
             float radius = 3f * density;
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(held || chosen ? 0xe05a171b : 0xed202023);
@@ -404,7 +450,7 @@ final class TouchKeyboard {
             paint.setColor(held || chosen ? 0xffee7779 : 0x33111111);
             canvas.drawRect(cap.rect.left + 3f * density, cap.rect.bottom - 2f * density,
                     cap.rect.right - 3f * density, cap.rect.bottom - density, paint);
-            String label = ControlKeys.keycap(cap.code);
+            String label = capLabel(cap.code);
             float size = label.length() > 5 ? 10f : (label.length() > 3 ? 11f : 14f);
             textCentered(canvas, label, cap.rect, size, held || chosen ? 0xffffffff : 0xffeee7e1, false);
         }
