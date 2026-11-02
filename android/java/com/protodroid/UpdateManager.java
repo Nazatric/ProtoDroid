@@ -288,11 +288,6 @@ final class UpdateManager {
         else publishError("Storage permission is needed to keep the APK in Downloads", true);
     }
 
-    /** Explicit About-screen action; automatic resume checks retain their existing backoff policy. */
-    void onCheckUpdatesPressed() {
-        checkForUpdates(true);
-    }
-
     private void checkForUpdates(boolean manual) {
         if (checking || verifying || closed) return;
         long sinceCheck = System.currentTimeMillis() - prefs.getLong(KEY_LAST_CHECK, 0L);
