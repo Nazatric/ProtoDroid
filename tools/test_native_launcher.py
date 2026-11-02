@@ -59,6 +59,7 @@ for path in resources:
         assert data[:4] in (b"\x00\x01\x00\x00", b"true", b"OTTO"), f"invalid font {path}"
 
 assert "javac --release 11" in packager and '"$BUILD_TOOLS/aapt2" link' in packager
+assert 'zip -q -r "$OUT/base.apk" classes.dex lib' in packager, "non-Gradle builds must package their compiled DEX"
 assert "gradlew" not in packager and "COMPOSE_BASE_APK" not in packager
 assert "sdl_version.py\" verify-class" in packager and "signed SDL" in packager
 assert "compose-launcher" not in workflow and "test_compose_launcher.py" not in workflow
