@@ -25,7 +25,7 @@ import java.io.File;
 public class SetupActivity extends Activity {
     private static final int REQUEST_STORAGE = 1;
 
-    private SetupView setupView;
+    private LauncherView setupView;
     private final DiagnosticTourCode tourCode = new DiagnosticTourCode();
     private boolean tourArmed;
     private DriverView driverView;
@@ -55,8 +55,8 @@ public class SetupActivity extends Activity {
 
     private void showSetup(File app, File shared) {
         if (setupView == null) {
-            // Keep the automatic found-game launch path as light as before: artwork is decoded only when help is needed.
-            setupView = new SetupView(this, new SetupView.Listener() {
+            // Keep one WebView instance so native Drivers can temporarily replace it without losing launcher state.
+            setupView = new LauncherView(this, new LauncherView.Listener() {
                 @Override
                 public void onAllowFileAccess() {
                     requestAccess();
@@ -92,6 +92,11 @@ public class SetupActivity extends Activity {
                 @Override
                 public void onExit() {
                     finish();
+                }
+
+                @Override
+                public void onUpdateCheck() {
+                    updateManager.onCheckUpdatesPressed();
                 }
 
                 @Override
@@ -135,19 +140,23 @@ public class SetupActivity extends Activity {
             status = foundGame != null ? "Tour: automatic tests, then app closes" : "Tour armed; game files required";
         }
         setupView.setTourArmed(tourArmed);
-        setupView.setState(new SetupView.State(
+        setupView.setState(new LauncherView.State(
                 access,
                 foundGame != null,
                 false,
                 status,
                 shared.getAbsolutePath(),
                 appPath,
-                sharedSub.getAbsolutePath()));
+                sharedSub.getAbsolutePath(),
+                foundGame == null ? "" : foundGame.getAbsolutePath(),
+                foundGame != null || missingUv,
+                foundGame != null));
     }
 
     private void showDrivers() {
         if (driverView != null || setupView == null) return;
         driverView = new DriverView(this, setupView.gameSettings(), driverManager, this::closeDrivers);
+        setupView.onPause();
         setContentView(driverView);
         if (LauncherMotion.enabled()) {
             driverView.setAlpha(0f);
@@ -160,6 +169,8 @@ public class SetupActivity extends Activity {
         driverManager.setObserver(null);
         driverView = null;
         setContentView(setupView);
+        setupView.onResume();
+        setupView.notifyResume();
         if (LauncherMotion.enabled()) {
             setupView.setAlpha(0f);
             setupView.animate().alpha(1f).setDuration(220).start();
@@ -189,6 +200,10 @@ public class SetupActivity extends Activity {
         super.onResume();
         ImmersiveMode.apply(this);
         check();  // also after coming back from the permission screen
+        if (setupView != null && driverView == null) {
+            setupView.onResume();
+            setupView.notifyResume();
+        }
         updateManager.onResume();
     }
 
@@ -201,6 +216,7 @@ public class SetupActivity extends Activity {
     @Override
     protected void onPause() {
         updateManager.onPause();
+        if (setupView != null) setupView.onPause();
         super.onPause();
     }
 
@@ -208,6 +224,7 @@ public class SetupActivity extends Activity {
     protected void onDestroy() {
         driverManager.close();
         updateManager.close();
+        if (setupView != null) setupView.destroy();
         super.onDestroy();
     }
 
@@ -231,10 +248,11 @@ public class SetupActivity extends Activity {
 
     private void play() {
         check();  // also refreshes after files were copied while this screen remained open
-        if (foundGame != null) launch(foundInApp ? null : foundGame, tourArmed);
+        boolean started = foundGame != null && launch(foundInApp ? null : foundGame, tourArmed);
+        if (!started && setupView != null) setupView.notifyResume();
     }
 
-    private void launch(File gameDir, boolean tour) {
+    private boolean launch(File gameDir, boolean tour) {
         try {
             if (tour) Os.setenv("PROTODROID_DIAGNOSTIC_TOUR", "1", true);
             else Os.unsetenv("PROTODROID_DIAGNOSTIC_TOUR");
@@ -243,7 +261,7 @@ public class SetupActivity extends Activity {
                             ? "Could not arm the diagnostic tour; normal Play was not substituted."
                             : "Could not clear diagnostic-tour mode; Play was cancelled to protect your saves.",
                     Toast.LENGTH_LONG).show();
-            return;
+            return false;
         }
         try {
             if (gameDir == null) Os.unsetenv("PROTODROID_GAME");
@@ -267,6 +285,7 @@ public class SetupActivity extends Activity {
         }
         startActivity(new Intent(this, ProtoActivity.class));
         finish();
+        return true;
     }
 
     private void toggleDiagnosticTour() {
@@ -278,6 +297,14 @@ public class SetupActivity extends Activity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (driverView == null && setupView != null
+                && (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_A || event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_B)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_A) setupView.performFocusedAction();
+                else setupView.navigateBack();
+            }
+            return true;
+        }
         if (driverView == null && event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
             int unicode = event.getUnicodeChar();
             if (unicode > 0 && tourCode.onLetter((char) unicode)) {
@@ -321,8 +348,10 @@ public class SetupActivity extends Activity {
             closeDrivers();
             return;
         }
-        if (setupView != null && setupView.closeUpdateWarning()) return;
-        if (setupView != null && setupView.closeSettings()) return;
+        if (setupView != null) {
+            setupView.navigateBack();
+            return;
+        }
         super.onBackPressed();
     }
 

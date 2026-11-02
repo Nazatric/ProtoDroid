@@ -310,6 +310,18 @@ final class GameSettings {
         if (setting.engine) writeEngineSettings(new String[] {setting.key});
     }
 
+    /** Launcher-only full reset. Touch-layout geometry and all non-ProtoDroid INI content remain untouched. */
+    void resetToDefaults() {
+        SharedPreferences.Editor editor = prefs.edit();
+        for (Setting setting : settings) {
+            setting.index = setting.defaultIndex();
+            editor.putInt(setting.key, setting.index);
+        }
+        graphicsPreset = detectPreset();
+        editor.putInt(PRESET_KEY, graphicsPreset).apply();
+        writeEngineSettings();
+    }
+
     void setDriverMode(int mode) {
         if (mode < 0 || mode > 3) return;
         setIndex(settingIndex("vulkan_driver"), mode);

@@ -37,6 +37,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+
+      - name: Typecheck and test the offline launcher
+        run: |
+          npm ci --prefix launcher
+          npm run check --prefix launcher
 
       - name: Install host test dependencies
         run: |
@@ -275,6 +285,16 @@ jobs:
             android/java/com/protodroid/GameFiles.java \
             android/tests/com/protodroid/GameFilesTest.java
           java -cp /tmp/protodroid-game-files-test com.protodroid.GameFilesTest
+
+      - name: Compile and run launcher real-log tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-launcher-log-test
+          mkdir -p /tmp/protodroid-launcher-log-test
+          javac --release 11 -d /tmp/protodroid-launcher-log-test \
+            android/java/com/protodroid/LauncherLog.java \
+            android/tests/com/protodroid/LauncherLogTest.java
+          java -cp /tmp/protodroid-launcher-log-test com.protodroid.LauncherLogTest
 
       - name: Compile and run mod package and lifecycle tests
         run: |
@@ -657,6 +677,16 @@ jobs:
       ALLOW_EPHEMERAL_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.allow_ephemeral_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_ephemeral_release == true) }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+
+      - name: Build the offline launcher asset from source
+        run: |
+          npm ci --prefix launcher
+          npm run build --prefix launcher
 
       - name: Install tools
         run: |
