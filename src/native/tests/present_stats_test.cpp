@@ -92,7 +92,25 @@ void TestDisabledDetailedCollection() {
     tracker.AddPresent(1000000000ll, 7, false);
     for (int i = 1; i <= 10000; ++i) tracker.AddPresent(1000000000ll + i * 16666667ll, 7, false);
     Check(tracker.TakeDetailed().count == 0, "disabled detailed diagnostics retained per-frame samples");
+    Check(tracker.DetailedTotals().intervals == 0 && tracker.DetailedTotals().total_ns == 0,
+          "disabled detailed diagnostics retained cumulative timing work");
     Check(tracker.Snapshot().frames > 0, "disabling detailed diagnostics broke the one-second ADPF/overlay window");
+}
+
+void TestDetailedCumulativeTotals() {
+    native::PresentStatsTracker tracker;
+    tracker.AddPresent(1000000000ll, 9, true);
+    tracker.AddPresent(1010000000ll, 9, true);
+    tracker.AddPresent(1030000000ll, 9, true);
+    tracker.AddPresent(1040000000ll, 9, false);
+    const auto totals = tracker.DetailedTotals();
+    Check(totals.intervals == 2, "detailed totals included a disabled interval or lost an enabled one");
+    Check(totals.total_ns == 30000000ll, "detailed total duration is inaccurate");
+    Check(totals.max_ns == 20000000ll, "detailed maximum interval is inaccurate");
+    tracker.ResetDetailedTotals();
+    const auto reset = tracker.DetailedTotals();
+    Check(reset.intervals == 0 && reset.total_ns == 0 && reset.max_ns == 0,
+          "phase-boundary reset retained old Present totals");
 }
 
 }  // namespace
@@ -104,6 +122,7 @@ int main() {
     TestNoLoopCounterLeak();
     TestCumulativePresentCount();
     TestDisabledDetailedCollection();
-    std::puts("present-stats tests passed (baseline, ADPF count, FPS, percentiles)");
+    TestDetailedCumulativeTotals();
+    std::puts("present-stats tests passed (baseline, ADPF count, FPS, percentiles, detailed totals)");
     return 0;
 }

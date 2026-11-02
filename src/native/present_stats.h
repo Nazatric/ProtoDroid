@@ -19,6 +19,14 @@ struct PresentStatsSnapshot {
     uint64_t frames = 0;
 };
 
+// Intervals collected only while detailed diagnostics are active. The tour resets these totals at each phase boundary
+// to report exact per-phase average/max without stealing the diagnostics worker's one-second percentile samples.
+struct PresentStatsTotals {
+    uint64_t intervals = 0;
+    uint64_t total_ns = 0;
+    int64_t max_ns = 0;
+};
+
 class PresentStatsTracker {
 public:
     PresentStatsTracker() { samples_.reserve(4096); }  // avoid repeated first-window allocations in fast menus
@@ -37,7 +45,12 @@ public:
         last_present_ns_ = now_ns;
         if (duration_ns <= 0) return 0;
 
-        if (collect_detailed) detailed_.Add(now_ns, duration_ns, tid);
+        if (collect_detailed) {
+            detailed_.Add(now_ns, duration_ns, tid);
+            ++detailed_totals_.intervals;
+            detailed_totals_.total_ns += uint64_t(duration_ns);
+            detailed_totals_.max_ns = std::max(detailed_totals_.max_ns, duration_ns);
+        }
         ++window_frames_;
         window_total_ns_ += duration_ns;
         window_max_ns_ = std::max(window_max_ns_, duration_ns);
@@ -49,6 +62,8 @@ public:
     }
 
     PresentStatsSnapshot Snapshot() const { return current_; }
+    PresentStatsTotals DetailedTotals() const { return detailed_totals_; }
+    void ResetDetailedTotals() { detailed_totals_ = {}; }
     TimingWindowSnapshot TakeDetailed() { return detailed_.Take(); }
 
 private:
@@ -81,12 +96,15 @@ private:
     std::vector<int64_t> samples_;
     PresentStatsSnapshot current_;
     TimingWindow detailed_;
+    PresentStatsTotals detailed_totals_;
 };
 
 // Process-wide thread-safe adapter used by D3D9 Present, the main-loop logger, and the Android overlay.
 int64_t RecordPresent();  // monotonic clock read and tracker update; returns the ADPF interval, or zero
 uint64_t PresentedFrameCount();  // cumulative successful Presents; unlike Snapshot().frames, never resets each window
 PresentStatsSnapshot GetPresentStats();
+PresentStatsTotals GetDetailedPresentTotals();
+void ResetDetailedPresentTotals();
 void SetPresentDetailedEnabled(bool enabled);
 bool PresentDetailedEnabled();
 TimingWindowSnapshot TakePresentDetailedStats();

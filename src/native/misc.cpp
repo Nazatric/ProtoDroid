@@ -7,6 +7,7 @@
 #include <cstring>
 #include <string>
 
+#include "guest_time.h"
 #include "win.h"
 
 namespace native {
@@ -22,8 +23,9 @@ auto g_start = std::chrono::steady_clock::now();
 
 // WINMM
 F(timeGetTime) {
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - g_start);
-    Return(c, uint32_t(ms.count()));
+    const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - g_start).count());
+    Return(c, uint32_t(GuestElapsedNanos(ns) / 1000000ull));
 }
 F(timeSetEvent) {
     Log("timeSetEvent(%u ms, callback %08x) ignored", Arg(c, 0), Arg(c, 2));

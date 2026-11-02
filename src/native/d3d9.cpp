@@ -826,7 +826,7 @@ M(IDirect3D9, CreateDevice) {
                   "See app_process64_d3d9.log for the reason."
                 : "DXVK found no compatible Vulkan GPU with the selected driver. "
                   "See app_process64_d3d9.log for the missing driver or features.";
-        if (autoRecovery) message += " Auto will try System on the next launch.";
+        if (autoRecovery) message += " Auto will re-check System and its compatibility fallback on the next launch.";
         StartupFailure(message.c_str());
     }
     if (OverrideModes()) SetClientSize(int(pp.BackBufferWidth), int(pp.BackBufferHeight));

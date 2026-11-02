@@ -43,6 +43,7 @@ extern "C" {
 #include "bink_media.h"
 #include "bink_pacing.h"
 #include "guest.h"
+#include "guest_time.h"
 
 namespace native {
 namespace {
@@ -1472,8 +1473,8 @@ B(BinkLogoAddress) { Return(c, 0, 0); }
 B(BinkRestoreCursor) { Return(c, 0, 1); }
 B(RADTimerRead) {
     static const auto start = Clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
-    Return(c, static_cast<uint32_t>(ms), 0);
+    const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
+    Return(c, static_cast<uint32_t>(GuestElapsedNanos(ns) / 1000000ull), 0);
 }
 
 #undef B

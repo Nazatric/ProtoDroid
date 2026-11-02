@@ -9,6 +9,7 @@
 #include <dlfcn.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <mutex>
 #include <vector>
 
@@ -29,6 +30,8 @@ struct Api {
 
 std::mutex g_mutex;
 APerformanceHintSession* g_session = nullptr;
+// Most unsupported/older devices never create a session. Avoid taking the session mutex on every Present there.
+std::atomic<bool> g_session_active{false};
 std::vector<int32_t> g_tids;
 int64_t g_target_ns = 16666667;
 uint64_t g_reports = 0, g_report_errors = 0, g_target_updates = 0, g_target_errors = 0;
@@ -72,6 +75,7 @@ void PerfHintStart(int fps_target) {
     };
     bool retried = false;
     g_session = detail::CreateHintSession(g_tids, current, create, set_threads, retried);
+    g_session_active.store(g_session != nullptr, std::memory_order_release);
     Log("perf hint: %s%s (target %.1f ms, %zu threads)", g_session ? "session" : "unavailable",
         retried ? " after retry" : "", double(g_target_ns) / 1e6, g_tids.size());
 }
@@ -97,7 +101,7 @@ void PerfHintTarget(int fps_target) {
 }
 
 void PerfHintFrame(int64_t work_ns) {
-    if (work_ns <= 0) return;
+    if (work_ns <= 0 || !g_session_active.load(std::memory_order_acquire)) return;
     // NDK session methods are not thread-safe: worker registration can arrive from the audio thread while the
     // engine reports a frame, so reportActual must use the same lock as setThreads/updateTarget.
     std::lock_guard<std::mutex> lock(g_mutex);

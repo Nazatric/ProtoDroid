@@ -17,6 +17,7 @@
 #include <time.h>
 
 #include "diagnostic_tour_plan.h"
+#include "guest_time.h"
 #include "input.h"
 #include "present_stats.h"
 #include "timing_window.h"
@@ -74,7 +75,7 @@ int64_t g_tour_deadline_ns = 0;
 
 constexpr int64_t kGameplayTimeoutNs = 120ll * 1000 * 1000 * 1000;
 constexpr int64_t kPresentStallTimeoutNs = 30ll * 1000 * 1000 * 1000;
-constexpr int64_t kTourTimeoutNs = 10ll * 60 * 1000 * 1000 * 1000;
+constexpr int64_t kTourTimeoutNs = 20ll * 60 * 1000 * 1000 * 1000;
 
 int64_t ProcessCpuNanos() {
     timespec time {};
@@ -139,6 +140,7 @@ bool WriteMarker(const char* path, const char* text, bool sync_directory = true)
     return ok;
 }
 
+void Record(const char* fmt, bool durable, ...) __attribute__((format(printf, 1, 3)));
 void Record(const char* fmt, bool durable, ...) {
     if (g_journal_fd < 0) return;
     char line[2048];
@@ -256,21 +258,26 @@ void Finish(int result, const char* reason) {
     const double cpu_percent = CpuPercent(cpu_ns, wall_ns);
     Record("result=%s reason=%s gameplay_dispatches=%u wall_ms=%.3f process_cpu_ms=%.3f "
            "process_cpu_utilization_pct=%.2f actions_executed=%llu action_frames=%llu presented_frames=%llu "
+           "plan_phases=%zu plan_action_frames=%u guest_clock_scale=%u host_clock_scale=1 "
            "visual_verification=not-performed physical_device_validation=not-performed",
            true, name, reason ? reason : "none", gameplay_dispatches, Millis(wall_ns),
            Millis(cpu_ns), cpu_percent, (unsigned long long)actions, (unsigned long long)g_action_frames,
-           (unsigned long long)tour_presented);
+           (unsigned long long)tour_presented, kTourPhaseCount, TourPlannedActionFrames(),
+           kDiagnosticTourGuestClockScale);
     char marker[2048];
     snprintf(marker, sizeof(marker),
              "result=%s\nreason=%s\nphase=%s\npresent=%llu\ngameplay_dispatches=%u\n"
              "wall_ms=%.3f\nprocess_cpu_ms=%.3f\nprocess_cpu_utilization_pct=%.2f\n"
              "actions_executed=%llu\naction_frames=%llu\npresented_frames=%llu\n"
+             "plan_phases=%zu\nplan_action_frames=%u\n"
+             "guest_clock_scale=%u\nhost_clock_scale=1\nimport_profile=enabled\n"
              "exit_behavior=intentional-isolated-process-close\n"
              "visual_verification=not-performed\nscript_completion_is_not_visual_correctness=true\n",
              name, reason ? reason : "none", g_phase_name.load(std::memory_order_relaxed),
              (unsigned long long)presented, gameplay_dispatches, Millis(wall_ns), Millis(cpu_ns),
              cpu_percent, (unsigned long long)actions, (unsigned long long)g_action_frames,
-             (unsigned long long)tour_presented);
+             (unsigned long long)tour_presented, kTourPhaseCount, TourPlannedActionFrames(),
+             kDiagnosticTourGuestClockScale);
     if (!WriteMarker(g_result_path, marker, false))
         Log("diagnostic tour: could not write durable result marker %s: %s", g_result_path, strerror(errno));
     snprintf(marker, sizeof(marker), "phase=%s\nstatus=%s\nreason=%s\npresent=%llu\ngameplay_dispatches=%u\n"
@@ -306,16 +313,17 @@ void BeginPhase(size_t index) {
             continue;
         }
         g_phase_present_start = PresentedFrameCount();
+        ResetDetailedPresentTotals();
         g_phase_action_start = g_actions_executed.load(std::memory_order_acquire);
         g_phase_started_ns = MonotonicNanos();
         g_phase_cpu_start_ns = ProcessCpuNanos();
         g_phase_gameplay_start = g_gameplay_dispatches.load(std::memory_order_acquire);
         g_phase_active = true;
-        Log("tour phase begin: %s (%zu/%zu), at least %u presented frames; one action frame per engine update; coverage=%s",
+        Log("tour phase begin: %s (%zu/%zu), at least %u presented frames; guest clock 4x; one action frame per engine update; coverage=%s",
             phase.name, index + 1, kTourPhaseCount, phase.frames, phase.coverage);
-        Record("phase=%s index=%zu status=running minimum_present_frames=%u "
+        Record("phase=%s index=%zu status=running minimum_present_frames=%u guest_clock_scale=%u "
                "action_frame_policy=one-per-engine-update-with-new-present",
-               false, phase.name, index, phase.frames);
+               false, phase.name, index, phase.frames, kDiagnosticTourGuestClockScale);
         RunDueActions();
         return;
     }
@@ -345,16 +353,23 @@ void CompletePhase() {
     const int64_t cpu_ns = g_phase_cpu_start_ns >= 0 && cpu_end_ns >= g_phase_cpu_start_ns
                                ? cpu_end_ns - g_phase_cpu_start_ns : -1;
     const PresentStatsSnapshot present_stats = GetPresentStats();
+    const PresentStatsTotals phase_present = GetDetailedPresentTotals();
+    const double phase_average_ms = phase_present.intervals
+                                        ? double(phase_present.total_ns) / double(phase_present.intervals) / 1e6
+                                        : 0.0;
     Log("tour phase tested (inputs, presents, gameplay task activity): %s; dispatches=%u; presented=%llu; "
         "wall_ms=%.3f", phase.name, dispatches, (unsigned long long)presented_frames, Millis(wall_ns));
     Record("phase=%s index=%zu status=tested meaning=requested-inputs-rendered-dwell-and-gameplay-task-activity-completed "
            "gameplay_dispatches=%u presented_frames=%llu action_frames=%u actions_executed=%llu "
-           "wall_ms=%.3f process_cpu_ms=%.3f process_cpu_utilization_pct=%.2f "
+           "wall_ms=%.3f process_cpu_ms=%.3f process_cpu_utilization_pct=%.2f guest_clock_scale=%u "
+           "phase_present_intervals=%llu phase_present_average_ms=%.3f phase_present_max_ms=%.3f "
            "present_window=last-completed-rolling-window present_window_frames=%llu present_window_fps=%.3f "
            "present_window_average_ms=%.3f present_window_p99_ms=%.3f present_window_max_ms=%.3f "
            "visual_verification=not-performed",
            true, phase.name, g_phase_index, dispatches, (unsigned long long)presented_frames, g_cursor.frame(),
            (unsigned long long)actions, Millis(wall_ns), Millis(cpu_ns), CpuPercent(cpu_ns, wall_ns),
+           kDiagnosticTourGuestClockScale, (unsigned long long)phase_present.intervals, phase_average_ms,
+           double(phase_present.max_ns) / 1e6,
            (unsigned long long)present_stats.frames, present_stats.fps, present_stats.average_ms,
            present_stats.p99_ms, present_stats.max_ms);
     BeginPhase(g_phase_index + 1);
@@ -421,8 +436,10 @@ bool DiagnosticTourStart(const char* isolated_cache_dir) {
     Record("run status=requested source=%s command_line=%s logs=%s saves=%s cache=%s", true, PROTODROID_SOURCE_REVISION,
            kDiagnosticTourCommandLine, kDiagnosticTourLogDir, kDiagnosticTourSaveDir, isolated_cache_dir);
     Record("policy normal_play_unchanged=true normal_save_migration=false normal_cache_migration=false "
-           "visual_verification=not-performed",
-           true);
+           "plan_phases=%zu plan_action_frames=%u plan_actions=%zu guest_clock_scale=%u "
+           "guest_timers=QPC,GetTickCount,timeGetTime,RADTimerRead host_clock_scale=1 "
+           "import_profile=enabled visual_verification=not-performed",
+           true, kTourPhaseCount, TourPlannedActionFrames(), TourPlannedActionCount(), kDiagnosticTourGuestClockScale);
     for (size_t i = 0; i < kTourPhaseCount; ++i)
         Record("phase=%s index=%zu status=requested coverage=%s", false, kTourPhases[i].name, i,
                kTourPhases[i].coverage);
@@ -498,12 +515,13 @@ bool DiagnosticTourPump() {
         g_tour_started_ns = now;
         g_tour_cpu_start_ns = ProcessCpuNanos();
         g_tour_present_start = g_present_cursor;
-        Record("tour status=running start_present=%llu", true, (unsigned long long)g_present_cursor);
+        Record("tour status=running start_present=%llu guest_clock_scale=%u import_profile=enabled", true,
+               (unsigned long long)g_present_cursor, kDiagnosticTourGuestClockScale);
         BeginPhase(0);
         return !g_finished.load(std::memory_order_acquire);
     }
     if (now > g_tour_deadline_ns) {
-        FailFromPump("ten-minute presented-frame tour deadline expired");
+        FailFromPump("twenty-minute presented-frame tour deadline expired");
         return false;
     }
     const uint64_t presented = PresentedFrameCount();

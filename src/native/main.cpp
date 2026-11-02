@@ -36,6 +36,7 @@
 #include "diagnostics.h"
 #include "dxvk_config.h"
 #include "guest.h"
+#include "guest_time.h"
 #include "input.h"
 #include "mod_platform.h"
 #include "present_stats.h"
@@ -463,11 +464,13 @@ int main(int argc, char** argv) {
         unsetenv("PROTODROID_PIPELINE_TRACE");
         unsetenv("PROTODROID_PIPELINE_TRACE_DIR");
         unsetenv("PROTODROID_PIPELINE_TIMING");
+        unsetenv("PROTODROID_IMPORT_PROFILE");
         unsetenv("DXVK_LOG_TIMESTAMPS");
     }
 #else
     const bool diagnostic_tour = false;
 #endif
+    native::SetGuestClockDiagnosticTour(diagnostic_tour);
 #ifdef __ANDROID__
     RedirectStderrToLogcat();
     setenv("DXVK_LOG_LEVEL", "info", 0);
@@ -487,6 +490,8 @@ int main(int argc, char** argv) {
     g_data_dir = base;
     if (diagnostic_tour) {
         diagnostic_cache_dir = std::string(base) + "/diagnostic-tour-cache";
+        // Set this before the journal records its profiling policy, and before any engine import can be dispatched.
+        setenv("PROTODROID_IMPORT_PROFILE", "1", 1);
         if (!native::DiagnosticTourStart(diagnostic_cache_dir.c_str())) {
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Prototype",
                                      "The diagnostic tour could not create its isolated log/cache directories.",
@@ -613,6 +618,11 @@ int main(int argc, char** argv) {
     const bool detailed_diagnostics = diagnostic_tour ||
                                       SettingInt("detailed_diagnostics", kDetailedDiagnosticsDefault) != 0;
     if (detailed_diagnostics) setenv("DXVK_LOG_TIMESTAMPS", "1", diagnostic_tour ? 1 : 0);
+    if (diagnostic_tour) {
+        // Import profiling remains opt-in for ordinary Play. The longer tour needs guest/import attribution to
+        // correlate accelerated movement, streaming, combat, and any device-specific stall.
+        Log("diagnostic tour: guest/import profiling enabled; 4x guest elapsed clocks, real-time host metrics");
+    }
     setenv("PROTODROID_PIPELINE_TIMING",
            (diagnostic_tour || SettingInt("pipeline_timing", detailed_diagnostics ? 1 : 0)) ? "1" : "0",
            diagnostic_tour ? 1 : 0);

@@ -32,6 +32,16 @@ PresentStatsSnapshot GetPresentStats() {
     return g_stats.Snapshot();
 }
 
+PresentStatsTotals GetDetailedPresentTotals() {
+    std::lock_guard<std::mutex> lock(g_stats_mutex);
+    return g_stats.DetailedTotals();
+}
+
+void ResetDetailedPresentTotals() {
+    std::lock_guard<std::mutex> lock(g_stats_mutex);
+    g_stats.ResetDetailedTotals();
+}
+
 void SetPresentDetailedEnabled(bool enabled) { g_detailed_enabled.store(enabled, std::memory_order_release); }
 bool PresentDetailedEnabled() { return g_detailed_enabled.load(std::memory_order_acquire); }
 

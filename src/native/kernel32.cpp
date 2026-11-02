@@ -20,6 +20,8 @@
 
 #include "win.h"
 #include "cpu_affinity.h"
+#include "diagnostics.h"
+#include "guest_time.h"
 #include "mod_platform.h"
 
 namespace native {
@@ -73,8 +75,9 @@ void CloseKernelHandle(uint32_t handle) {
 void SetLastError(uint32_t code) { tl_last_error = code; }
 uint32_t GetLastError() { return tl_last_error; }
 
-// Storage diagnostics: the engine streams assets, music and speech through synchronous Win32 calls. Normal calls
-// update relaxed atomics only. The event list is locked and allocates only after an operation has already taken >50 ms.
+// Storage diagnostics: the engine streams assets, music and speech through synchronous Win32 calls. Ordinary Play
+// performs the syscall and error handling without diagnostic clocks or counter atomics. Detailed mode (including the
+// tour) records relaxed counters; its event list locks/allocates only after an operation has already taken >50 ms.
 struct IoEvent {
     bool write = false;
     uint64_t microseconds = 0;
@@ -395,12 +398,15 @@ K(GetCurrentThreadId) { Return(c, CurrentTid()); }
 K(GetCurrentProcess) { Return(c, kCurrentProcess); }
 K(GetCurrentThread) { Return(c, kCurrentThread); }
 K(GetTickCount) {
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - g_start);
-    Return(c, uint32_t(ms.count()));
+    const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - g_start).count());
+    Return(c, uint32_t(GuestElapsedNanos(ns) / 1000000ull));
 }
 K(QueryPerformanceCounter) {
-    auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - g_start);
-    W64(Arg(c, 0), uint64_t(ns.count() / 100));
+    const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - g_start).count());
+    // Frequency remains 10 MHz: the tour accelerates the guest's observed elapsed time, not the host clock or FPS.
+    W64(Arg(c, 0), GuestElapsedNanos(ns) / 100ull);
     Return(c, 1, 1);
 }
 K(QueryPerformanceFrequency) {
@@ -817,8 +823,10 @@ K(CreateFileA) {
         mkdir(dir.c_str(), 0755);
     }
     int fd = open(host.c_str(), flags | O_CLOEXEC, 0644);
-    g_io.opens.fetch_add(1, std::memory_order_relaxed);
-    if (fd < 0) g_io.open_errors.fetch_add(1, std::memory_order_relaxed);
+    if (DetailedDiagnosticsEnabled()) {
+        g_io.opens.fetch_add(1, std::memory_order_relaxed);
+        if (fd < 0) g_io.open_errors.fetch_add(1, std::memory_order_relaxed);
+    }
     static const bool trace = getenv("PROTODROID_TRACE_FILES") != nullptr;
     if (trace) Log("CreateFileA(%s, %x, disp %u) -> %s", name, access, disposition, fd < 0 ? strerror(errno) : "ok");
     if (fd < 0) {
@@ -853,27 +861,30 @@ K(ReadFile) {
     File* f = FileOf(Arg(c, 0));
     uint32_t buf = Arg(c, 1), n = Arg(c, 2), out = Arg(c, 3), ov = Arg(c, 4);
     if (!f) {
-        g_io.read_errors.fetch_add(1, std::memory_order_relaxed);
+        if (DetailedDiagnosticsEnabled()) g_io.read_errors.fetch_add(1, std::memory_order_relaxed);
         SetLastError(ERROR_INVALID_HANDLE);
         Return(c, 0, 5);
         return;
     }
     const int64_t offset = ov ? int64_t(uint64_t(R32(ov + 8)) | (uint64_t(R32(ov + 12)) << 32)) : -1;
-    auto t0 = std::chrono::steady_clock::now();
+    const bool timing = DetailedDiagnosticsEnabled();
+    const auto t0 = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     ssize_t r = ov ? pread(f->fd, Ptr<void>(buf), n, off_t(offset)) : read(f->fd, Ptr<void>(buf), n);
     const int io_error = r < 0 ? errno : 0;
-    const uint64_t ns = uint64_t(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count());
-    const uint64_t us = ns / 1000;
-    g_io.reads.fetch_add(1, std::memory_order_relaxed);
-    g_io.read_ns.fetch_add(ns, std::memory_order_relaxed);
-    if (r > 0) g_io.read_bytes.fetch_add(uint64_t(r), std::memory_order_relaxed);
-    if (r < 0) g_io.read_errors.fetch_add(1, std::memory_order_relaxed);
-    if (us > 10000) g_io.over10.fetch_add(1, std::memory_order_relaxed);
-    if (us > 50000) g_io.over50.fetch_add(1, std::memory_order_relaxed);
-    if (us > 100000) g_io.over100.fetch_add(1, std::memory_order_relaxed);
-    RecordMax(g_io.max_read_us, us);
-    if (us > 50000) RecordSlowIo(false, f->path, r > 0 ? uint64_t(r) : 0, offset, us);
+    if (timing) {
+        const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - t0).count());
+        const uint64_t us = ns / 1000;
+        g_io.reads.fetch_add(1, std::memory_order_relaxed);
+        g_io.read_ns.fetch_add(ns, std::memory_order_relaxed);
+        if (r > 0) g_io.read_bytes.fetch_add(uint64_t(r), std::memory_order_relaxed);
+        if (r < 0) g_io.read_errors.fetch_add(1, std::memory_order_relaxed);
+        if (us > 10000) g_io.over10.fetch_add(1, std::memory_order_relaxed);
+        if (us > 50000) g_io.over50.fetch_add(1, std::memory_order_relaxed);
+        if (us > 100000) g_io.over100.fetch_add(1, std::memory_order_relaxed);
+        RecordMax(g_io.max_read_us, us);
+        if (us > 50000) RecordSlowIo(false, f->path, r > 0 ? uint64_t(r) : 0, offset, us);
+    }
     if (r < 0) {
         SetLastError(ErrnoToWin(io_error));
         Return(c, 0, 5);
@@ -887,27 +898,30 @@ K(WriteFile) {
     File* f = FileOf(Arg(c, 0));
     uint32_t buf = Arg(c, 1), n = Arg(c, 2), out = Arg(c, 3), ov = Arg(c, 4);
     if (!f) {
-        g_io.write_errors.fetch_add(1, std::memory_order_relaxed);
+        if (DetailedDiagnosticsEnabled()) g_io.write_errors.fetch_add(1, std::memory_order_relaxed);
         SetLastError(ERROR_INVALID_HANDLE);
         Return(c, 0, 5);
         return;
     }
     const int64_t offset = ov ? int64_t(uint64_t(R32(ov + 8)) | (uint64_t(R32(ov + 12)) << 32)) : -1;
-    auto t0 = std::chrono::steady_clock::now();
+    const bool timing = DetailedDiagnosticsEnabled();
+    const auto t0 = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     ssize_t r = ov ? pwrite(f->fd, Ptr<void>(buf), n, off_t(offset)) : write(f->fd, Ptr<void>(buf), n);
     const int io_error = r < 0 ? errno : 0;
-    const uint64_t ns = uint64_t(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count());
-    const uint64_t us = ns / 1000;
-    g_io.writes.fetch_add(1, std::memory_order_relaxed);
-    g_io.write_ns.fetch_add(ns, std::memory_order_relaxed);
-    if (r > 0) g_io.write_bytes.fetch_add(uint64_t(r), std::memory_order_relaxed);
-    if (r < 0) g_io.write_errors.fetch_add(1, std::memory_order_relaxed);
-    if (us > 10000) g_io.over10.fetch_add(1, std::memory_order_relaxed);
-    if (us > 50000) g_io.over50.fetch_add(1, std::memory_order_relaxed);
-    if (us > 100000) g_io.over100.fetch_add(1, std::memory_order_relaxed);
-    RecordMax(g_io.max_write_us, us);
-    if (us > 50000) RecordSlowIo(true, f->path, r > 0 ? uint64_t(r) : 0, offset, us);
+    if (timing) {
+        const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - t0).count());
+        const uint64_t us = ns / 1000;
+        g_io.writes.fetch_add(1, std::memory_order_relaxed);
+        g_io.write_ns.fetch_add(ns, std::memory_order_relaxed);
+        if (r > 0) g_io.write_bytes.fetch_add(uint64_t(r), std::memory_order_relaxed);
+        if (r < 0) g_io.write_errors.fetch_add(1, std::memory_order_relaxed);
+        if (us > 10000) g_io.over10.fetch_add(1, std::memory_order_relaxed);
+        if (us > 50000) g_io.over50.fetch_add(1, std::memory_order_relaxed);
+        if (us > 100000) g_io.over100.fetch_add(1, std::memory_order_relaxed);
+        RecordMax(g_io.max_write_us, us);
+        if (us > 50000) RecordSlowIo(true, f->path, r > 0 ? uint64_t(r) : 0, offset, us);
+    }
     if (r < 0) {
         SetLastError(ErrnoToWin(io_error));
         Return(c, 0, 5);

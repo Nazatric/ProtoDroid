@@ -26,6 +26,7 @@ void TestPlanIntegrity() {
     uint64_t frame_total = 0;
     bool shadows = false, powers = false, skips = false;
     bool target = false, grab = false, power_wheel = false, disguise_wheel = false, forms = false;
+    bool climb = false, glide = false, sustained = false, release = false, streaming_glide = false;
     for (size_t i = 0; i < native::kTourPhaseCount; ++i) {
         const auto& phase = native::kTourPhases[i];
         Check(phase.name && *phase.name && names.insert(phase.name).second, "phase names are not unique");
@@ -62,10 +63,19 @@ void TestPlanIntegrity() {
         power_wheel = power_wheel || std::strstr(phase.name, "power_wheel") != nullptr;
         disguise_wheel = disguise_wheel || std::strstr(phase.name, "disguise_wheel") != nullptr;
         forms = forms || std::strstr(phase.name, "disguise_forms") != nullptr;
+        climb = climb || std::strstr(phase.name, "building_climb") != nullptr;
+        glide = glide || std::strstr(phase.name, "glide_dash") != nullptr;
+        sustained = sustained || std::strstr(phase.name, "sustained_") != nullptr;
+        release = release || std::strstr(phase.name, "input_release") != nullptr;
+        streaming_glide = streaming_glide || std::strstr(phase.name, "assets_streaming_glide") != nullptr;
     }
-    Check(action_total > 60 && frame_total >= 2000, "tour does not contain the expected sequential coverage");
+    Check(native::TourPlannedActionFrames() == frame_total, "exported action-frame total is inaccurate");
+    Check(native::TourPlannedActionCount() == action_total, "exported action count is inaccurate");
+    Check(action_total > 300 && frame_total >= 10000, "tour does not contain the expected long sequential coverage");
     Check(shadows && powers && skips, "shadow/power coverage or honest skip records are missing");
     Check(target && grab && power_wheel && disguise_wheel && forms, "target/grab/wheel/form phases are missing");
+    Check(climb && glide && sustained && release && streaming_glide,
+          "climb/glide/sustained/release/streaming coverage is missing");
 }
 
 void TestCursorUsesActionFrames() {
@@ -127,6 +137,7 @@ int main() {
     TestCursorUsesActionFrames();
     TestPresentBatchPolicy();
     TestGameplayProbeTargets();
-    std::puts("diagnostic-tour plan tests passed (22 phases, probe targets, uncompressed action timing, sequential actions, skips, input cleanup)");
+    std::printf("diagnostic-tour plan tests passed (%zu phases, 10k+ action frames, climb/glide/combat, probe targets, uncompressed timing, input cleanup)\n",
+                native::kTourPhaseCount);
     return 0;
 }

@@ -222,9 +222,9 @@ std::string GpuModel() {
 }
 
 // Crash guard (working directory = the app's files folder): while a Turnip run has not yet reached
-// VulkanDriverConfirm, a crash (the crash handler calls VulkanDriverCrashed) writes turnip_failed, and auto mode then
-// uses the system driver for this build, unless that driver cannot run the game anyway (Vulkan < 1.2: nothing to
-// lose by trying Turnip again). Quitting, being closed from the launcher or killed by the system is no failure: it
+// VulkanDriverConfirm, a crash (the crash handler calls VulkanDriverCrashed) writes turnip_failed. Auto then keeps a
+// genuinely usable system driver, or runs the normal direct/wrapper policy when Vulkan < 1.2 instead of crash-looping
+// the same failed Turnip build. Quitting, being closed from the launcher or killed by the system is no failure: it
 // used to count as one and locked phones whose only usable driver is Turnip out of the game. vulkan_driver = turnip
 // forces Turnip. A failed test in the child process is not recorded: it costs a second and is retried at every start.
 constexpr const char* kFailed = "turnip_failed";
@@ -361,7 +361,7 @@ void VulkanDriverConfirm() {
 }
 
 // A graceful DXVK initialization failure is just as much a failed driver attempt as a native crash. Record it before
-// StartupFailure abandons the active attempt; only Auto promises a system-driver retry on the next launch.
+// StartupFailure abandons the active attempt; only Auto promises a fresh direct/wrapper policy on the next launch.
 bool VulkanDriverStartupFailed(const char* reason) {
     if (g_wrapper_pending) {
         if (WriteDriverFailureMarker(kWrapperFailed, kBuild, reason))
@@ -377,7 +377,7 @@ bool VulkanDriverStartupFailed(const char* reason) {
         return false;
     }
     Log("vulkan: recorded selected-driver initialization failure: %s", reason);
-    if (automatic) Log("vulkan: Auto will try the system driver on the next launch");
+    if (automatic) Log("vulkan: Auto will re-check the direct system/wrapper policy on the next launch");
     return automatic;
 }
 
@@ -459,7 +459,12 @@ void SelectVulkanDriver() {
             Log("vulkan: using the system driver (explicit Turnip/custom selection retries)");
             return;
         }
-        Log("vulkan: the system driver cannot run the game, trying the driver again");
+        // A graceful DXVK failure can happen after the isolated Turnip probe succeeded. On a direct <1.2 path,
+        // retrying that same Turnip build would repeat the failure on every Auto launch. The established wrapper
+        // policy performs a fresh isolated capability probe; explicit Turnip/custom selections are unaffected.
+        Log("vulkan: the direct system driver is unusable; trying Auto's compatibility-wrapper fallback");
+        AutomaticSystemDevice();
+        return;
     }
 
     const std::string model = adreno ? GpuModel() : "";

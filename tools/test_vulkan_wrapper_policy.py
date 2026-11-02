@@ -29,4 +29,7 @@ system = driver.split("uint32_t SystemDriverApi", 1)[1].split("void LogSystemExt
 assert "ConfigureWrapperLogging" not in system and "WRAPPER_VK_VERSION" not in system, (
     "a direct system driver must never receive the wrapper override"
 )
-print("Vulkan wrapper effective-version and required-feature policy checks passed")
+failed = driver.split("else if (std::string why = FailedBefore()", 1)[1].split("const std::string model", 1)[0]
+assert "AutomaticSystemDevice();" in failed, "a failed Auto Turnip attempt must not bypass the wrapper fallback"
+assert "trying the driver again" not in failed, "Auto would retry the same failed Turnip build on a <1.2 system"
+print("Vulkan wrapper effective-version, required-feature, and failed-driver recovery checks passed")

@@ -171,13 +171,15 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/present_stats_test
 
-      - name: Compile and run diagnostic-tour plan tests
+      - name: Compile and run diagnostic-tour plan and guest-clock tests
         run: |
           set -euo pipefail
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
           g++ $CXXFLAGS src/native/tests/diagnostic_tour_plan_test.cpp -o /tmp/diagnostic_tour_plan_test
+          g++ $CXXFLAGS src/native/tests/guest_time_test.cpp -o /tmp/guest_time_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/diagnostic_tour_plan_test
+          /tmp/guest_time_test
 
       - name: Test diagnostic-tour binary probe and isolated-exit policy
         run: python3 tools/test_diagnostic_tour_runtime.py
@@ -217,6 +219,7 @@ jobs:
           python3 tools/test_dxvk_unified_memory.py /tmp/protodroid-dxvk-test/src/dxvk/dxvk_memory.cpp
           python3 tools/test_dxvk_depth_resolve.py /tmp/protodroid-dxvk-test/src/d3d9/d3d9_device.cpp
           python3 tools/test_dxvk_fxaa.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_device_preflight.py /tmp/protodroid-dxvk-test
           glslangValidator --quiet -V --target-env vulkan1.3 \
             -I/tmp/protodroid-dxvk-test/src/dxvk/shaders \
             /tmp/protodroid-dxvk-test/src/dxvk/shaders/dxvk_present_frag_fxaa.frag \
@@ -324,6 +327,9 @@ jobs:
 
       - name: Test Vulkan wrapper negotiation policy
         run: python3 tools/test_vulkan_wrapper_policy.py
+
+      - name: Test ordinary-play hot-path and failed-driver recovery policies
+        run: python3 tools/test_runtime_performance.py
 
       - name: Test compatibility controls and graphics policies
         run: python3 tools/test_compatibility_batch.py
@@ -512,9 +518,11 @@ jobs:
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
           g++ $CXXFLAGS src/native/tests/diagnostic_tour_plan_test.cpp -o /tmp/diagnostic_tour_plan_test_arm64
           g++ $CXXFLAGS src/native/present_stats.cpp src/native/tests/present_stats_test.cpp -o /tmp/present_stats_test_arm64
+          g++ $CXXFLAGS src/native/tests/guest_time_test.cpp -o /tmp/guest_time_test_arm64
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/diagnostic_tour_plan_test_arm64
           /tmp/present_stats_test_arm64
+          /tmp/guest_time_test_arm64
 
       - name: Compile and run native ARM64 CPU affinity tests
         run: |
