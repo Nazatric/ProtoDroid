@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from sdl_version import source_version
+
 ROOT = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix="protodroid-sdl-controls-") as directory:
     subprocess.run(
@@ -16,6 +18,7 @@ with tempfile.TemporaryDirectory(prefix="protodroid-sdl-controls-") as directory
         subprocess.run(["git", "-C", directory, "apply", "--check", str(patch)], check=True)
         subprocess.run(["git", "-C", directory, "apply", str(patch)], check=True)
     source = (Path(directory) / "src/video/android/SDL_androidkeyboard.c").read_text(encoding="utf-8")
+    assert source_version(Path(directory)) == "2.30.9"
 
 assert "SDL_SCANCODE_NUMLOCKCLEAR,     /* AKEYCODE_NUM_LOCK */" in source
 assert "SDL_SCANCODE_UNKNOWN,          /* AKEYCODE_NUM_LOCK */" not in source

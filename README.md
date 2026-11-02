@@ -72,7 +72,7 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 
 ## Settings and drivers
 
-The native Compose launcher’s **Settings** page keeps graphics, drivers, and engine policies. Its rows show short explanations on touch or keyboard focus; changes save automatically and engine options apply on **Play**. The in-game gear is a smaller live panel: FPS/battery/menu pacing, touch controls, FPS overlay, and **Layout**. Restart-only graphics and engine/mod experiments stay out of that panel.
+The original native Android launcher’s **Settings** page keeps graphics, drivers, and engine policies. Its rows show short explanations on touch or keyboard focus; changes save automatically and engine options apply on **Play**. The in-game gear is a smaller live panel: FPS/battery/menu pacing, touch controls, FPS overlay, and **Layout**. Restart-only graphics and engine/mod experiments stay out of that panel.
 
 - **Graphics:** Resolution, Textures, DXT1 color, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
 - **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **FXAA** filters the completed frame with built-in MSAA disabled to avoid Prototype’s missing-texture AA path; **2x/4x MSAA** retain the original behavior. **Game default** leaves the engine’s own device-dependent choice intact.
@@ -165,6 +165,8 @@ Android presentation is fixed to **FIFO, interval 1** for both device creation a
 
 ## Logs and diagnostics
 
+Open **Diagnostics** on the launcher for **About / Device** information and bounded, read-only log tails. **Refresh** rereads the selected file; **Copy log tail** copies only the displayed text and never changes the original log.
+
 Depending on storage access, logs are available in:
 
 - `/storage/emulated/0/Android/data/com.protodroid/files/`
@@ -210,13 +212,13 @@ Use the [guided issue forms](https://github.com/Nazatric/ProtoDroid/issues/new/c
 
 ## Updates
 
-The launcher checks the latest published GitHub release and compares its integer `versionCode`. For an available update, **OPEN RELEASE** opens that release’s GitHub page directly. **ALL RELEASES** always opens the [official release archive](https://github.com/Nazatric/ProtoDroid/releases) for older APKs; no third-party mirror is used. Recovery for an existing in-app download still verifies its APK hash, package/version, and signing certificate before offering installation.
+The launcher checks the latest published GitHub release and compares its integer `versionCode`. An available update offers **DOWNLOAD**, then **INSTALL** after verification. **VERSIONS** always opens the [official release archive](https://github.com/Nazatric/ProtoDroid/releases) for older APKs; no third-party mirror is used. Recovery for an existing in-app download still verifies its APK hash, package/version, and signing certificate before offering installation.
 
 - **Same certificate:** Android can update in place.
 - **Different certificate:** Android requires a one-time uninstall first. Shared saves and files under `/storage/emulated/0/Prototype` are separate; back up important app-private data.
 - **If Android closes ProtoDroid during an existing verified-download uninstall:** open its completed download notification or the APK in Downloads.
 
-Automatic checks use a 15-minute backoff and do not block Play. Update errors offer Retry and **ALL RELEASES**. Older APKs use the signing rules above; back up important data before reinstalling a different certificate.
+Automatic checks use a 15-minute backoff and do not block Play. Update errors offer Retry and **ALL VERSIONS**. Older APKs use the signing rules above; back up important data before reinstalling a different certificate.
 
 ## Under the hood
 
@@ -225,7 +227,7 @@ Automatic checks use a 15-minute backoff and do not block Play. Update errors of
 - **D3D9 on Vulkan:** a generated bridge forwards drawing to DXVK 2.5.3. Android patches cover Mali and Adreno behavior, descriptor compatibility, pipeline compilation, presentation, and persistent caching.
 - **Bink through FFmpeg:** a minimal FFmpeg build decodes loose and RCF-resident movies. Decoded YUV planes are copied directly into the textures supplied by the game.
 - **XAudio2 through FAudio:** FAudio handles voice processing and mixing, with SDL audio output and Android-friendly pacing.
-- **SDL2 and Android UI:** SDL owns the game window and platform events. A native Kotlin Compose launcher connects to the existing Android settings, driver, update, mod, log, touch-control, and layout services without a WebView.
+- **SDL2 and Android UI:** SDL owns the game window and platform events. The original native Android launcher connects to the existing settings, driver, update, mod, diagnostics, touch-control, and layout services without a WebView or Compose runtime.
 
 ## Developer guide
 
@@ -264,7 +266,7 @@ tools/cool_make.sh -C src/native PLATFORM=android ABI=arm64-v8a \
 android/build-apk.sh arm64-v8a
 ```
 
-`tools/cool_make.sh` runs a parallel build and pauses when the host reaches its configured temperature limit. Ordinary `make` with the same variables works too. `android/build-apk.sh` uses the included Gradle wrapper for the Kotlin Compose launcher, then keeps the native-library packaging and signing checks. Local native builds record the checked-out Git commit when available; CI embeds the exact workflow commit and verifies it before a release.
+`tools/cool_make.sh` runs a parallel build and pauses when the host reaches its configured temperature limit. Ordinary `make` with the same variables works too. `android/build-apk.sh` compiles the native Android launcher with `javac`/`d8`, packages resources with `aapt2`, and retains native-library and signing checks. SDL source, compiled Java constants, native-library provenance, and signed-package bytes are checked against one pinned version. Local native builds record the checked-out Git commit when available; CI embeds the exact workflow commit and verifies it before a release.
 
 </details>
 

@@ -143,8 +143,8 @@ assert "if (editing)" in touch and "keyboard.draw(canvas);" in touch, "picker is
 
 # Launcher editing reuses saved controls without loading or configuring SDL.
 layout_activity = (JAVA / "TouchLayoutActivity.java").read_text(encoding="utf-8")
-compose_launcher = (ROOT / "android/launcher/src/commonMain/kotlin/com/protodroid/launcher/LauncherApp.kt").read_text(encoding="utf-8")
-setup_host = (ROOT / "android/launcher/src/androidMain/kotlin/com/protodroid/ProtoDroidLauncherHost.kt").read_text(encoding="utf-8")
+setup_view = (JAVA / "SetupView.java").read_text(encoding="utf-8")
+setup_activity = (JAVA / "SetupActivity.java").read_text(encoding="utf-8")
 settings = (JAVA / "GameSettings.java").read_text(encoding="utf-8")
 manifest = (ROOT / "android/AndroidManifest.xml").read_text(encoding="utf-8")
 assert "new TouchControls(this, true)" in layout_activity and "controls.openLayoutEditor();" in layout_activity
@@ -156,8 +156,8 @@ assert "private void finishEditing()" in touch and "((Activity) getContext()).fi
 assert "if (layoutOnly) {" in touch and "inputManager.unregisterInputDeviceListener(this);" in touch
 assert 'new Setting("Touch layout", "touch_layout", new String[] {"EDIT"}' in settings
 assert 'if (setting.key.equals("touch_layout")) return CATEGORY_CONTROLS;' in settings
-assert "LauncherPage.Layout" in compose_launcher and "OPEN TOUCH EDITOR" in compose_launcher
-assert "TouchLayoutActivity::class.java" in setup_host
+assert "ACTION_TOUCH_LAYOUT" in setup_view and "listener.onTouchLayout();" in setup_view
+assert "TouchLayoutActivity.class" in setup_activity
 assert 'android:name="com.protodroid.TouchLayoutActivity"' in manifest
 
 assert "104-key catalog" in model_test and "global release is not balanced reverse cleanup" in model_test

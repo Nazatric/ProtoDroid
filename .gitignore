@@ -15,7 +15,3 @@ re/decomp/
 
 # Generated runtime logs
 /*.log
-
-# Android/Gradle local state
-.gradle/
-local.properties

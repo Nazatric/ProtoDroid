@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 source = (ROOT / "android/java/com/protodroid/UpdateManager.java").read_text(encoding="utf-8")
-view = (ROOT / "android/launcher/src/commonMain/kotlin/com/protodroid/launcher/LauncherApp.kt").read_text(encoding="utf-8")
+view = (ROOT / "android/java/com/protodroid/SetupView.java").read_text(encoding="utf-8")
 
 primary = source.split("void onUpdatePressed()", 1)[1].split("private void onLatestReleasePressed()", 1)[0]
 available = primary.split("case State.AVAILABLE:", 1)[1].split("case State.READY:", 1)[0]
@@ -21,9 +21,8 @@ assert "private void verifyDownload" in source and "private void launchInstaller
     "existing system downloads must retain verification and install recovery"
 )
 
-# Compose About exposes the archive even when no update/error card is visible, plus the signature-change warning.
-assert 'OutlineButton("ALL RELEASES", host::openReleases)' in view
-assert 'OutlineButton("CHECK UPDATES", host::checkUpdates)' in view
-assert "private fun UpdateWarning" in view and "host::confirmUpdate" in view
-assert "UNINSTALL & INSTALL" in view and "Shared game files and saves in /Prototype stay in place" in view
+# Landscape and portrait expose the archive even when no update/error card is visible.
+assert view.count('ACTION_UPDATE_RELEASES, archiveBounds, "VERSIONS"') == 2
+assert "if (archiveBounds.contains(x, y)) return ACTION_UPDATE_RELEASES;" in view
+assert "settingsOrder.add(ACTION_UPDATE_RELEASES);" not in view, "do not crowd the existing Settings footer"
 print("Exact-release updates, persistent official archives, and download recovery checks passed")

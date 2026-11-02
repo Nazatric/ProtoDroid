@@ -52,14 +52,6 @@
         </activity>
 
         <activity
-            android:name="com.protodroid.DriverActivity"
-            android:label="Prototype — Drivers"
-            android:exported="false"
-            android:screenOrientation="sensorLandscape"
-            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
-            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
-
-        <activity
             android:name="com.protodroid.ModsActivity"
             android:label="Prototype — Mods"
             android:exported="false"
@@ -76,6 +68,14 @@
         <activity
             android:name="com.protodroid.TouchLayoutActivity"
             android:label="Prototype — Touch layout"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+
+        <activity
+            android:name="com.protodroid.DiagnosticsActivity"
+            android:label="Prototype — Diagnostics"
             android:exported="false"
             android:screenOrientation="sensorLandscape"
             android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"

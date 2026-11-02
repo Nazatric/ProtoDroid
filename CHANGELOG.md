@@ -2,7 +2,8 @@
 
 ## 0.15
 
-- Replaced the WebView/React launcher with the supplied Kotlin Compose design on native Android. Production settings and defaults, game detection/launch, drivers, validated mods, the full touch editor, real logs, updates, and the diagnostic-tour gesture are connected to the existing Android services; the preview host, partial INI writer, fake layout, and Web/Wasm targets are not packaged.
+- Restored the original pre-WebView native Android launcher and its `javac`/`d8`/`aapt2` packaging, removing the rejected Compose/Web presentation stack without changing game settings, drivers, mods, saves, touch editing, updates, or the diagnostic-tour gesture. A native **Diagnostics** screen retains read-only logs and factual About/device information.
+- Matched SDL2 Java and native sources at 2.30.9 and added source, compiled-class, native-library provenance, and signed-APK byte checks for the reported startup version mismatch. Physical-device startup still requires retesting; CI success alone is not a device claim.
 - Added default helicopter **DESCEND** (`V`), an independent numbered **123** touch pad, and **ABC** paged PC keyboard input through SDL. Existing custom-layout indices and Extra buttons behavior are preserved. Added optional fixed Landscape/Reverse recovery while keeping Auto orientation by default.
 - Added editable built-in/custom button text with default restore, editor binding subtitles, custom left/right/middle mouse bindings, center/hexagon-edge snapping, and explicit **ADD STICK** recovery. Existing keyboard/chord custom records remain compatible; mouse and keyboard chords are mutually exclusive.
 - Made High retain full 32-bit decoded DXT1 color; Low/Medium and the standalone default keep the lower-bandwidth 16-bit path. Added a persistent **VERSIONS** action for official older APKs while exact-release updates and verified download recovery remain separate.
