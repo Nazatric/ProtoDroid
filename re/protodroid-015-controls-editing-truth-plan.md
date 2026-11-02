@@ -55,6 +55,10 @@ Verified code supports FIFO interval 1, ADPF hints, logical-CPU reporting, Java 
 - Existing host/ARM64/native/mod/driver/update/readme policy suites and fresh SDL patching must remain green.
 - Finish with exact-commit Android Java/D8 and real ARM64 CI/APK verification. No merge, release, or physical-success claim.
 
-## Current status
+## Validation evidence and current status
 
-Implementation and local validation are complete: optional labels/mouse fields preserve old records; the picker has an isolated mouse page; every editor control exposes its binding; TEXT/DEFAULT, ADD STICK, side-edge/center snapping, and cleanup are implemented. README/changelog wording is corrected. Structural, compatibility, SDL, release, updater, issue-form, and patched-DXVK checks pass; modified Java syntax passes. No local JDK/Android SDK or physical device is available, so exact-commit CI remains required for Java model execution, Android compilation, ARM64 native packaging, and artifact verification. 0.15 remains unmerged and unreleased.
+Implementation and local validation are complete: optional labels/mouse fields preserve old records; the picker has an isolated mouse page; every editor control exposes its binding; TEXT/DEFAULT, ADD STICK, side-edge/center snapping, and cleanup are implemented. README/changelog wording is corrected. Structural, compatibility, SDL, release, updater, issue-form, and patched-DXVK checks pass; modified Java syntax passes.
+
+Exact source commit `192afe8b385d73fc7974611c0007e3b730639787` passed GitHub Actions run [41387648346](https://github.com/Nazatric/ProtoDroid/actions/runs/41387648346): driver-package tests, ARM64 graphics tests, dependency/Turnip builds, Bink tests, Android Java/D8 compilation, real ARM64 native/plugin compilation, signed APK packaging, embedded-DXVK verification, and artifact uploads all succeeded. The release job was skipped. Artifacts: `prototype-apk` **13116950902**, `debug-symbols` **13116384671**, `make-logs` **13116299832**, and `protodroid-mod-example` **13116653588**.
+
+No local JDK/Android SDK or physical device is available; CI/source tests are not physical confirmation. The new labels, mouse bindings, snapping, stick recovery, and ordinary gameplay still need on-device interaction validation. 0.15 remains unmerged and unreleased; v0.14 is still the latest release.
