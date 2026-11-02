@@ -164,14 +164,6 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/diagnostic_tour_plan_test
 
-      - name: Compile and run smart controls context tests
-        run: |
-          set -euo pipefail
-          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
-          g++ $CXXFLAGS src/native/tests/smart_controls_test.cpp -o /tmp/smart_controls_test
-          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
-          /tmp/smart_controls_test
-
       - name: Test diagnostic-tour binary probe and isolated-exit policy
         run: python3 tools/test_diagnostic_tour_runtime.py
 
@@ -315,7 +307,6 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/test_touch_controls.py
-          python3 tools/test_smart_controls.py
           python3 tools/test_sdl_controls_patch.py
 
       - name: Compile and run AA preset migration tests
@@ -339,7 +330,6 @@ jobs:
             android/java/com/protodroid/ControlKeys.java \
             android/java/com/protodroid/CustomButtonStore.java \
             android/java/com/protodroid/TouchKeyState.java \
-            android/java/com/protodroid/SmartControlsModel.java \
             android/tests/com/protodroid/ControlsModelTest.java
           java -cp /tmp/protodroid-controls-model-test com.protodroid.ControlsModelTest
 

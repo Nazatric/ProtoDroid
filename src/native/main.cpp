@@ -41,7 +41,6 @@
 #include "present_stats.h"
 #include "timing_window.h"
 #include "save_path.h"
-#include "smart_controls.h"
 #include "state_cache.h"
 #include "win.h"
 
@@ -401,13 +400,6 @@ extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetFps
 extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetMenuFpsUnlocked(
     JNIEnv*, jclass, jboolean unlocked) {
     native::g_unlock_menu_fps.store(unlocked != JNI_FALSE, std::memory_order_relaxed);
-}
-extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetSmartControls(
-    JNIEnv*, jclass, jboolean enabled) {
-    native::SmartControlsSetEnabled(enabled != JNI_FALSE);
-}
-extern "C" JNIEXPORT jint JNICALL Java_com_protodroid_TouchControls_nativeSmartSpecialContext(JNIEnv*, jclass) {
-    return native::SmartSpecialContextSnapshot();
 }
 #endif
 

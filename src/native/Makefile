@@ -83,7 +83,7 @@ SRCS := main.cpp diagnostic_tour.cpp diagnostics.cpp memory.cpp loader.cpp impor
         advapi32.cpp misc.cpp d3d9.cpp d3d9_dxt.cpp input.cpp xaudio2.cpp bink.cpp bink_media.cpp bink_blit.cpp dinput.cpp gamepad.cpp config.cpp watchdog.cpp hot_audio.cpp hot_skin.cpp \
         vulkan_driver.cpp perf_hint.cpp present_stats.cpp state_cache.cpp video_settings.cpp \
         mod_platform.cpp mod_files.cpp mod_textures.cpp mod_hook.cpp mod_features.cpp mod_plugins.cpp mod_settings.cpp \
-        mod_symbols.cpp mod_scripts.cpp smart_controls.cpp
+        mod_symbols.cpp mod_scripts.cpp
 LUA_SRCS := $(LUA_DIR)/lapi.c $(LUA_DIR)/lcode.c $(LUA_DIR)/lctype.c $(LUA_DIR)/ldebug.c $(LUA_DIR)/ldo.c \
             $(LUA_DIR)/ldump.c $(LUA_DIR)/lfunc.c $(LUA_DIR)/lgc.c $(LUA_DIR)/llex.c $(LUA_DIR)/lmem.c \
             $(LUA_DIR)/lobject.c $(LUA_DIR)/lopcodes.c $(LUA_DIR)/lparser.c $(LUA_DIR)/lstate.c $(LUA_DIR)/lstring.c \
@@ -129,8 +129,6 @@ $(OUT)/mod_plugins.o: ../../modding/include/protodroid_plugin.h mod_settings.h m
 $(OUT)/mod_scripts.o: mod_platform.h mod_settings.h mod_symbols.h $(LUA_DIR)/lua.h $(LUA_DIR)/lauxlib.h $(LUA_DIR)/lualib.h
 $(OUT)/mod_symbols.o: mod_symbols.h mod_symbols.inc
 $(OUT)/mod_settings.o: mod_settings.h mod_platform.h
-$(OUT)/mod_features.o $(OUT)/main.o: smart_controls.h
-$(OUT)/smart_controls.o: smart_controls.h mod_platform.h timing_window.h
 
 $(OUT)/lua/%.o: $(LUA_DIR)/%.c
 	@mkdir -p $(dir $@)

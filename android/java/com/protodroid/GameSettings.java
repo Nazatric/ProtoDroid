@@ -80,7 +80,7 @@ final class GameSettings {
 
     static boolean isLiveEngineSetting(Setting setting) {
         return setting.key.equals("fps_limit") || setting.key.equals("battery_saver")
-                || setting.key.equals("unlock_menu_fps") || setting.key.equals("touch_controls");
+                || setting.key.equals("unlock_menu_fps");
     }
 
     static boolean isGameplaySetting(Setting setting) {
@@ -102,7 +102,6 @@ final class GameSettings {
             case "game_aa_level": return "FXAA filters the final image with built-in MSAA disabled. 2x/4x keep the game's original MSAA. Applies on the next Play.";
             case "game_shadow_detail": return "The game's shadow quality. Game default preserves dynamic shadows and their original detail.";
             case "game_graphic_quality": return "The game's general graphics quality. Applies on the next Play.";
-            case "touch_controls": return "Smart uses a guarded player-context probe for Consume and adds core icons. Missing or stale context keeps Special; Classic preserves the original overlay.";
             case "touch_layout": return "Move, resize, hide, or add touch buttons without starting the game.";
             case "ui_scale": return "Changes touch-button size immediately. Touch layout opens the full editor.";
             case "ui_vibrate": return "Vibrates for touch-control feedback when the device supports it.";
@@ -128,7 +127,6 @@ final class GameSettings {
 
     static int categoryOf(Setting setting) {
         if (setting.key.equals("touch_layout")) return CATEGORY_CONTROLS;
-        if (setting.key.equals("touch_controls")) return CATEGORY_CONTROLS;
         if (setting.key.equals("fov_offset") || setting.key.equals("shadow_map_resolution")
                 || setting.key.equals("remove_tick_rate_limit") || setting.key.equals("fix_button_tap_tick_rate")
                 || setting.key.equals("prefer_loose_files") || setting.key.equals("unlock_dev_menu")
@@ -169,8 +167,6 @@ final class GameSettings {
             new Setting("Graphic Quality", "game_graphic_quality", new String[] {"Game default", "Low", "Medium", "High"},
                     new int[] {-1, 0, 1, 2}, true),
             // Touch and gamepad controls.
-            new Setting("Touch controls", "touch_controls", new String[] {"Classic", "Smart"},
-                    new int[] {0, 1}, true),
             new Setting("Screen orientation", "display_orientation", new String[] {"Auto", "Landscape", "Reverse"},
                     new int[] {0, 1, 2}, false),
             new Setting("Button size", "ui_scale", new String[] {"80%", "100%", "120%", "140%"},

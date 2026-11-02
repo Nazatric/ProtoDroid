@@ -147,26 +147,10 @@ public final class ControlsModelTest {
         check(events.size() == 6, "second global cleanup emitted duplicate keyups");
     }
 
-    private static void smartPresentation() {
-        check(!SmartControlsModel.isSmart(SmartControlsModel.CLASSIC)
-                && SmartControlsModel.isSmart(SmartControlsModel.SMART), "Classic/Smart mode selection");
-        check(!SmartControlsModel.isSmart(-1) && !SmartControlsModel.isSmart(2),
-                "unknown mode must not enable Smart");
-        check("CONSUME".equals(SmartControlsModel.specialLabel(SmartControlsModel.CONTEXT_CONSUME)),
-                "valid consume context not presented");
-        for (int context : new int[] {SmartControlsModel.CONTEXT_UNKNOWN, SmartControlsModel.CONTEXT_SPECIAL,
-                -1, 3, Integer.MAX_VALUE}) {
-            check("SPECIAL".equals(SmartControlsModel.specialLabel(context)),
-                    "unknown/non-consume context must preserve Special: " + context);
-        }
-    }
-
     public static void main(String[] args) {
         catalog();
         persistence();
         keyOwnership();
-        smartPresentation();
         System.out.println("104-key catalog, custom-button persistence, and touch-key ownership tests passed");
-        System.out.println("Smart Consume/Special fallback presentation tests passed");
     }
 }

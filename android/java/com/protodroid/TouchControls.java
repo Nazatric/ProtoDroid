@@ -51,14 +51,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     static native int nativeMemoryMiB();
     static native void nativeSetFpsLimit(int fps);
     static native void nativeSetMenuFpsUnlocked(boolean unlocked);
-    static native void nativeSetSmartControls(boolean enabled);
-    static native int nativeSmartSpecialContext();
 
     private static final int MOUSE_LEFT = 1, MOUSE_RIGHT = 2, MOUSE_MIDDLE = 4;
     private static final int ACTION_TOGGLE_NUMBERS = -1, ACTION_SHOW_KEYBOARD = -2;
-    private static final int BUTTON_ATTACK = 2, BUTTON_SPECIAL = 3, BUTTON_GRAB = 4, BUTTON_JUMP = 5;
-    private static final int ICON_NONE = 0, ICON_ATTACK = 1, ICON_SPECIAL = 2, ICON_CONSUME = 3,
-            ICON_GRAB = 4, ICON_JUMP = 5;
     private static final int RED = 0xffe0261e, RED_DIM = 0xff7a1410, INK = 0xff0b0b0b;
 
     /**
@@ -199,7 +194,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private final GameSettings.Setting[] settings;
     private final boolean layoutOnly;
     private float opacity, scale;
-    private boolean vibrate, showFps, hideWithPad, autoRun, invertY, powerButtons, smartControls;
+    private boolean vibrate, showFps, hideWithPad, autoRun, invertY, powerButtons;
     private float camGain;
     private InputManager inputManager;
     private boolean padConnected;
@@ -231,13 +226,11 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     // ---- drawing ----
     private final float density;
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG), edge = new Paint(Paint.ANTI_ALIAS_FLAG),
-            glow = new Paint(Paint.ANTI_ALIAS_FLAG), text = new Paint(Paint.ANTI_ALIAS_FLAG),
-            iconPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            glow = new Paint(Paint.ANTI_ALIAS_FLAG), text = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
     private final TouchKeyboard keyboard;
     private final TouchKeyState keyState;
     private boolean gameMode = false;
-    private int smartSpecialContext = SmartControlsModel.CONTEXT_UNKNOWN;
     private boolean numberPad = false;
     private final RectF modeRect = new RectF(), gearRect = new RectF();
     private int modePointer = -1, gearPointer = -1;
@@ -301,9 +294,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         edge.setStyle(Paint.Style.STROKE);
         glow.setStyle(Paint.Style.STROKE);
         glow.setMaskFilter(new BlurMaskFilter(6 * density, BlurMaskFilter.Blur.NORMAL));
-        iconPaint.setStyle(Paint.Style.STROKE);
-        iconPaint.setStrokeCap(Paint.Cap.ROUND);
-        iconPaint.setStrokeJoin(Paint.Join.ROUND);
         setHapticFeedbackEnabled(true);
         inputManager = (InputManager) context.getSystemService(Context.INPUT_SERVICE);
         if (inputManager != null) {
@@ -359,8 +349,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         camGain = settingsStore.valueOf("ui_cam") / 100f;
         invertY = settingsStore.valueOf("ui_invert") != 0;
         powerButtons = settingsStore.valueOf("ui_power_buttons") != 0;
-        smartControls = SmartControlsModel.isSmart(settingsStore.valueOf("touch_controls"));
-        smartSpecialContext = SmartControlsModel.CONTEXT_UNKNOWN;
         layoutButtons(getWidth(), getHeight());
     }
 
@@ -370,51 +358,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         int effective = batterySaver && (requested == 0 || requested > 30) ? 30 : requested;
         nativeSetFpsLimit(effective);
         nativeSetMenuFpsUnlocked(settingsStore.valueOf("unlock_menu_fps") != 0);
-        updateSmartMode();
-    }
-
-    private boolean smartPollingActive() {
-        return !layoutOnly && isAttachedToWindow() && getWindowVisibility() == VISIBLE
-                && smartControls && gameMode && !editing && !panelOpen && !controlsHidden();
-    }
-
-    private final Runnable smartContextPoll = new Runnable() {
-        @Override public void run() {
-            refreshSmartContext();
-            if (smartPollingActive()) postDelayed(this, 50);
-        }
-    };
-
-    private void refreshSmartContext() {
-        int next = SmartControlsModel.CONTEXT_UNKNOWN;
-        if (smartPollingActive()) {
-            try {
-                next = nativeSmartSpecialContext();
-            } catch (UnsatisfiedLinkError ignored) {
-                // A host without the native probe keeps the truthful Special fallback.
-            }
-        }
-        if (next != smartSpecialContext) {
-            smartSpecialContext = next;
-            invalidate();
-        }
-    }
-
-    private void updateSmartMode() {
-        if (layoutOnly || smartContextPoll == null) return;
-        final boolean active = smartPollingActive();
-        try {
-            nativeSetSmartControls(active);
-        } catch (UnsatisfiedLinkError ignored) {
-            // The Java model still falls back to Special if this native entry point is absent.
-        }
-        if (!active) smartSpecialContext = SmartControlsModel.CONTEXT_UNKNOWN;
-        removeCallbacks(smartContextPoll);
-        if (active) {
-            refreshSmartContext();
-            postDelayed(smartContextPoll, 50);
-        }
-        invalidate();
     }
 
     private static void defaultCustomGeometry(CustomButtonStore.Entry entry, int index) {
@@ -539,7 +482,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void updatePads() {
         InputManager im = (InputManager) getContext().getSystemService(Context.INPUT_SERVICE);
         if (im != null) padConnected = findGamepad(im);
-        updateSmartMode();
         invalidate();
     }
 
@@ -563,7 +505,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         layoutButtons(w, h);
         lastMouseX = w / 2f;
         lastMouseY = h / 2f;
-        updateSmartMode();
     }
 
     private void layoutButtons(int w, int h) {
@@ -747,7 +688,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         clearSnap();
         panelOpen = false;
         editing = true;
-        updateSmartMode();
     }
 
     void openLayoutEditor() {
@@ -778,7 +718,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             return;
         }
         editing = false;
-        updateSmartMode();
     }
 
     private void startBinding(Button target) {
@@ -1194,7 +1133,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     if (gearRect.contains(x, y)) {
                         releaseAll();
                         panelOpen = true;
-                        updateSmartMode();
                         buzz();
                     }
                 } else if (id == modePointer) {
@@ -1202,7 +1140,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     if (modeRect.contains(x, y)) {
                         releaseAll();
                         gameMode = !gameMode;
-                        updateSmartMode();
                         buzz();
                     }
                 } else if (pointerButton.containsKey(id)) {
@@ -1217,7 +1154,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             case MotionEvent.ACTION_CANCEL:
                 releaseAll();
                 modePointer = gearPointer = -1;
-                updateSmartMode();
                 break;
             default:
                 break;
@@ -1230,7 +1166,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void panelTap(float x, float y) {
         if (closeRect.contains(x, y) || !panel.contains(x, y)) {
             panelOpen = false;
-            updateSmartMode();
             return;
         }
         if (layoutRect.contains(x, y)) {
@@ -1278,96 +1213,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         c.drawLine(r.right, r.bottom, r.right, r.bottom - len, p);
     }
 
-    private String buttonLabel(Button b) {
-        if (!editing && smartControls && gameMode && b.builtInIndex == BUTTON_SPECIAL) {
-            return SmartControlsModel.specialLabel(smartSpecialContext);
-        }
-        return b.label;
-    }
-
-    private int smartIcon(Button b) {
-        if (editing || !smartControls || !gameMode || b.hidden) return ICON_NONE;
-        switch (b.builtInIndex) {
-            case BUTTON_ATTACK: return ICON_ATTACK;
-            case BUTTON_SPECIAL:
-                return smartSpecialContext == SmartControlsModel.CONTEXT_CONSUME ? ICON_CONSUME : ICON_SPECIAL;
-            case BUTTON_GRAB: return ICON_GRAB;
-            case BUTTON_JUMP: return ICON_JUMP;
-            default: return ICON_NONE;
-        }
-    }
-
-    /** Small Prototype-inspired vector marks; no assets, allocations, or gesture recognizers on the input path. */
-    private void paintSmartIcon(Canvas c, int icon, float cx, float cy, float r, boolean down) {
-        if (icon == ICON_NONE) return;
-        iconPaint.setStrokeWidth(Math.max(1.4f * density, r * 0.14f));
-        iconPaint.setColor(alpha(down ? 0xffffffff : 0xffffb7ae, 1f));
-        switch (icon) {
-            case ICON_ATTACK:
-                // Alex's three claw slashes.
-                for (int i = -1; i <= 1; ++i) {
-                    float offset = i * r * 0.42f;
-                    c.drawLine(cx - r * 0.62f + offset, cy - r * 0.62f,
-                            cx + r * 0.20f + offset, cy + r * 0.66f, iconPaint);
-                }
-                break;
-            case ICON_SPECIAL:
-                // A central tendril with two asymmetric branches.
-                path.reset();
-                path.moveTo(cx, cy + r * 0.78f);
-                path.lineTo(cx - r * 0.16f, cy + r * 0.20f);
-                path.lineTo(cx + r * 0.18f, cy - r * 0.18f);
-                path.lineTo(cx, cy - r * 0.78f);
-                path.moveTo(cx - r * 0.04f, cy + r * 0.28f);
-                path.lineTo(cx - r * 0.62f, cy - r * 0.10f);
-                path.lineTo(cx - r * 0.78f, cy - r * 0.52f);
-                path.moveTo(cx + r * 0.08f, cy + r * 0.02f);
-                path.lineTo(cx + r * 0.64f, cy + r * 0.20f);
-                path.lineTo(cx + r * 0.82f, cy - r * 0.18f);
-                c.drawPath(path, iconPaint);
-                break;
-            case ICON_CONSUME:
-                // Biomass/DNA strands and cross-links: distinct from the ordinary tendril Special mark.
-                path.reset();
-                path.moveTo(cx - r * 0.46f, cy - r * 0.76f);
-                path.quadTo(cx + r * 0.62f, cy - r * 0.32f, cx - r * 0.42f, cy + r * 0.06f);
-                path.quadTo(cx - r * 0.94f, cy + r * 0.38f, cx + r * 0.42f, cy + r * 0.76f);
-                path.moveTo(cx + r * 0.46f, cy - r * 0.76f);
-                path.quadTo(cx - r * 0.62f, cy - r * 0.32f, cx + r * 0.42f, cy + r * 0.06f);
-                path.quadTo(cx + r * 0.94f, cy + r * 0.38f, cx - r * 0.42f, cy + r * 0.76f);
-                c.drawPath(path, iconPaint);
-                c.drawLine(cx - r * 0.34f, cy - r * 0.40f, cx + r * 0.34f, cy - r * 0.40f, iconPaint);
-                c.drawLine(cx - r * 0.38f, cy, cx + r * 0.38f, cy, iconPaint);
-                c.drawLine(cx - r * 0.34f, cy + r * 0.40f, cx + r * 0.34f, cy + r * 0.40f, iconPaint);
-                break;
-            case ICON_GRAB:
-                // Closing brackets around a target, rather than an ambiguous hand silhouette.
-                c.drawCircle(cx, cy, r * 0.24f, iconPaint);
-                path.reset();
-                path.moveTo(cx - r * 0.30f, cy - r * 0.70f);
-                path.lineTo(cx - r * 0.76f, cy - r * 0.70f);
-                path.lineTo(cx - r * 0.76f, cy + r * 0.70f);
-                path.lineTo(cx - r * 0.30f, cy + r * 0.70f);
-                path.moveTo(cx + r * 0.30f, cy - r * 0.70f);
-                path.lineTo(cx + r * 0.76f, cy - r * 0.70f);
-                path.lineTo(cx + r * 0.76f, cy + r * 0.70f);
-                path.lineTo(cx + r * 0.30f, cy + r * 0.70f);
-                c.drawPath(path, iconPaint);
-                break;
-            case ICON_JUMP:
-                path.reset();
-                path.moveTo(cx - r * 0.72f, cy + r * 0.14f);
-                path.lineTo(cx, cy - r * 0.62f);
-                path.lineTo(cx + r * 0.72f, cy + r * 0.14f);
-                path.moveTo(cx, cy - r * 0.50f);
-                path.lineTo(cx, cy + r * 0.72f);
-                c.drawPath(path, iconPaint);
-                break;
-            default:
-                break;
-        }
-    }
-
     private void drawButton(Canvas c, Button b) {
         final boolean down = b.pointer >= 0;
         if (down && b.wheel) {  // where the held finger points the wheel
@@ -1376,10 +1221,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             c.drawLine(b.cx, b.cy, b.fx, b.fy, edge);
             c.drawCircle(b.fx, b.fy, 10 * density, edge);
         }
-        final String label = buttonLabel(b);
-        final int icon = smartIcon(b);
-        Bitmap bmp = cached(label + ":" + b.bindingText() + (editing ? ":E" : ":N")
-                        + (down ? ":1:" : ":0:") + (b.hidden ? ":H:" : ":V:") + b.r + ":I" + icon,
+        Bitmap bmp = cached(b.label + ":" + b.bindingText() + (editing ? ":E" : ":N")
+                        + (down ? ":1:" : ":0:") + (b.hidden ? ":H:" : ":V:") + b.r,
                 b.r + 12 * density, (cc, x, y) -> paintButton(cc, b, x, y, down));
         float savedOpacity = opacity;
         if (editing && b != selected) opacity *= 0.52f;
@@ -1402,21 +1245,15 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         edge.setStrokeWidth(0.8f * density);
         edge.setColor(alpha(RED_DIM, 0.9f));
         c.drawPath(path, edge);
-        final String label = buttonLabel(b);
-        final int icon = smartIcon(b);
         float labelSize = Math.min(14 * density, b.r * 0.42f);
         text.setTextSize(labelSize);
-        while (labelSize > 7 * density && text.measureText(label) > b.r * 1.45f) {
+        while (labelSize > 7 * density && text.measureText(b.label) > b.r * 1.45f) {
             labelSize -= density;
             text.setTextSize(labelSize);
         }
         text.setColor(alpha(down ? 0xffffffff : 0xffffd6d0, 1f));
-        if (icon != ICON_NONE) {
-            paintSmartIcon(c, icon, bx, by - b.r * 0.42f, b.r * 0.52f, down);
-        }
-        float labelBaseline = editing ? by - b.r * 0.20f
-                : icon != ICON_NONE ? by + b.r * 0.58f : by + labelSize * (b.hidden ? 0.05f : 0.36f);
-        c.drawText(label, bx, labelBaseline, text);
+        float labelBaseline = editing ? by - b.r * 0.20f : by + labelSize * (b.hidden ? 0.05f : 0.36f);
+        c.drawText(b.label, bx, labelBaseline, text);
         if (editing) {
             String binding = b.bindingText();
             float bindingSize = Math.min(9 * density, b.r * 0.25f);
@@ -1745,12 +1582,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     };
 
     @Override
-    protected void onWindowVisibilityChanged(int visibility) {
-        super.onWindowVisibilityChanged(visibility);
-        updateSmartMode();
-    }
-
-    @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         if (inputManager == null) {
@@ -1760,7 +1591,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                 padConnected = findGamepad(inputManager);
             }
         }
-        updateSmartMode();
         postDelayed(uiShotPoll, 1000);
     }
 
@@ -1774,15 +1604,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         clearSnap();
         keyboard.hide();
         removeCallbacks(uiShotPoll);
-        removeCallbacks(smartContextPoll);
-        smartSpecialContext = SmartControlsModel.CONTEXT_UNKNOWN;
-        if (!layoutOnly) {
-            try {
-                nativeSetSmartControls(false);
-            } catch (UnsatisfiedLinkError ignored) {
-                // Nothing else owns the native context after this view is detached.
-            }
-        }
         super.onDetachedFromWindow();
     }
 

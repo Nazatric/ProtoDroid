@@ -2,7 +2,6 @@
 
 ## 0.15
 
-- Added optional **Classic / Smart** touch controls. Smart adds lightweight core icons and changes only the built-in Special presentation to Consume for a fresh, player-associated, internally consistent engine validity probe; unresolved, unknown, stale, or unavailable state stays Special. Physical right-click input, custom bindings, multitouch, editor behavior, controllers, and Classic fallback remain unchanged. Real-device cadence and gameplay outcomes still require validation.
 - Added default helicopter **DESCEND** (`V`), an independent numbered **123** touch pad, and **ABC** paged PC keyboard input through SDL. Existing custom-layout indices and Extra buttons behavior are preserved. Added optional fixed Landscape/Reverse recovery while keeping Auto orientation by default.
 - Added editable built-in/custom button text with default restore, editor binding subtitles, custom left/right/middle mouse bindings, center/hexagon-edge snapping, and explicit **ADD STICK** recovery. Existing keyboard/chord custom records remain compatible; mouse and keyboard chords are mutually exclusive.
 - Made High retain full 32-bit decoded DXT1 color; Low/Medium and the standalone default keep the lower-bandwidth 16-bit path. Added a persistent **VERSIONS** action for official older APKs while exact-release updates and verified download recovery remain separate.

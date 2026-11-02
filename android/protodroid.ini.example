@@ -66,10 +66,6 @@ texture_skip_min_size = 512
 # sleep the main menu render thread. 1 (default) unlocks menu UI rendering; 0 restores blocking waits.
 unlock_menu_fps = 1
 
-# Android touch presentation: 0 = Classic (default), 1 = Smart. Smart adds core icons and uses a guarded,
-# player-associated engine validity probe for the built-in Special/Consume label. Unknown or stale context stays Special.
-#touch_controls = 1
-
 # Audio mixer and vsync debugging. audio_stats=1 (default) logs real output underruns only;
 # 2 logs every five-second timing window, and 0 disables the diagnostics and their callback timers.
 #present_stats = 1
