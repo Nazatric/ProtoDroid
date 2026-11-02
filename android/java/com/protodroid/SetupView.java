@@ -44,6 +44,7 @@ final class SetupView extends View {
         void onPlay();
         void onDrivers();
         void onMods();
+        void onTouchLayout();
         void onExit();
         void onUpdate();
         void onUpdateConfirm();
@@ -99,6 +100,7 @@ final class SetupView extends View {
     private static final int ACTION_UPDATE_RELEASES = 15;
     private static final int ACTION_TOUR = 16;
     private static final int ACTION_MODS = 17;
+    private static final int ACTION_TOUCH_LAYOUT = 18;
     private static final int SETTING_ACTION_BASE = 32;
 
     private static final int BUTTON_NORMAL = 0;
@@ -321,6 +323,12 @@ final class SetupView extends View {
     }
 
     private int settingForAction(int action) {
+        if (action == ACTION_TOUCH_LAYOUT) {
+            for (int i = 0; i < gameSettings.settings.length; ++i) {
+                if (gameSettings.settings[i].key.equals("touch_layout")) return i;
+            }
+            return -1;
+        }
         if (action < SETTING_ACTION_BASE) return -1;
         int index = (action - SETTING_ACTION_BASE) / 2;
         return index >= 0 && index < gameSettings.settings.length ? index : -1;
@@ -1217,6 +1225,22 @@ final class SetupView extends View {
         paint.setColor(withAlpha(RED_HOT, setting.engine ? 0.42f : 0.20f));
         canvas.drawRect(bounds.left, bounds.top + 5f * u, bounds.left + 2f * u, bounds.bottom - 5f * u, paint);
 
+        if (setting.key.equals("touch_layout")) {
+            settingLeftBounds[index].setEmpty();
+            settingRightBounds[index].setEmpty();
+            if (pressedAction == ACTION_TOUCH_LAYOUT || focusedAction == ACTION_TOUCH_LAYOUT) {
+                paint.setColor(withAlpha(RED, 0.28f));
+                canvas.drawRect(bounds, paint);
+            }
+            float valueWidth = Math.min(104f * u, bounds.width() * 0.34f);
+            RectF value = new RectF(bounds.right - valueWidth - 8f * u, bounds.top,
+                    bounds.right - 8f * u, bounds.bottom);
+            drawLine(canvas, setting.label, bounds.left + 12f * u, bounds.top, bounds.height(),
+                    12.5f, 600, BONE, 0.4f, u, Math.max(1f, value.left - bounds.left - 20f * u));
+            drawCentered(canvas, "EDIT  \u203a", value, 12.5f, 700, RED_HOT, 0.25f, u, 3f * u);
+            return;
+        }
+
         float groupWidth = Math.min(164f * u, bounds.width() * 0.52f);
         float groupLeft = bounds.right - groupWidth - 4f * u;
         float arrowWidth = Math.min(32f * u, groupWidth * 0.22f);
@@ -1454,6 +1478,8 @@ final class SetupView extends View {
             if (modBounds.contains(x, y)) return ACTION_MODS;
             if (settingsListBounds.contains(x, y)) {
                 for (int i = 0; i < gameSettings.settings.length; i++) {
+                    if (gameSettings.settings[i].key.equals("touch_layout")
+                            && settingRowBounds[i].contains(x, y)) return ACTION_TOUCH_LAYOUT;
                     if (settingLeftBounds[i].contains(x, y)) return SETTING_ACTION_BASE + i * 2;
                     if (settingRightBounds[i].contains(x, y)) return SETTING_ACTION_BASE + i * 2 + 1;
                 }
@@ -1552,6 +1578,10 @@ final class SetupView extends View {
             listener.onMods();
             return;
         }
+        if (action == ACTION_TOUCH_LAYOUT) {
+            listener.onTouchLayout();
+            return;
+        }
         if (action == ACTION_UPDATE) {
             listener.onUpdate();
             return;
@@ -1617,8 +1647,12 @@ final class SetupView extends View {
             settingsOrder.add(ACTION_PRESET_HIGH);
             settingsOrder.add(ACTION_PRESET_CUSTOM);
             for (int i = 0; i < gameSettings.settings.length; ++i) {
-                settingsOrder.add(SETTING_ACTION_BASE + i * 2);
-                settingsOrder.add(SETTING_ACTION_BASE + i * 2 + 1);
+                if (gameSettings.settings[i].key.equals("touch_layout")) {
+                    settingsOrder.add(ACTION_TOUCH_LAYOUT);
+                } else {
+                    settingsOrder.add(SETTING_ACTION_BASE + i * 2);
+                    settingsOrder.add(SETTING_ACTION_BASE + i * 2 + 1);
+                }
             }
             settingsOrder.add(ACTION_MODS);
             settingsOrder.add(ACTION_DRIVERS);

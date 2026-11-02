@@ -102,7 +102,8 @@ final class GameSettings {
             case "game_aa_level": return "FXAA filters the final image with built-in MSAA disabled. 2x/4x keep the game's original MSAA. Applies on the next Play.";
             case "game_shadow_detail": return "The game's shadow quality. Game default preserves dynamic shadows and their original detail.";
             case "game_graphic_quality": return "The game's general graphics quality. Applies on the next Play.";
-            case "ui_scale": return "Changes touch-button size immediately. Use Layout in the in-game gear to move controls.";
+            case "touch_layout": return "Move, resize, hide, or add touch buttons without starting the game.";
+            case "ui_scale": return "Changes touch-button size immediately. Touch layout opens the full editor.";
             case "ui_vibrate": return "Vibrates for touch-control feedback when the device supports it.";
             case "ui_pad_hide": return "Hides touch controls while a gamepad is connected.";
             case "ui_stick_run": return "Pushing the movement stick to its edge also sprints.";
@@ -125,6 +126,7 @@ final class GameSettings {
     }
 
     static int categoryOf(Setting setting) {
+        if (setting.key.equals("touch_layout")) return CATEGORY_CONTROLS;
         if (setting.key.equals("fov_offset") || setting.key.equals("shadow_map_resolution")
                 || setting.key.equals("remove_tick_rate_limit") || setting.key.equals("fix_button_tap_tick_rate")
                 || setting.key.equals("prefer_loose_files") || setting.key.equals("unlock_dev_menu")
@@ -176,6 +178,7 @@ final class GameSettings {
                     new int[] {50, 75, 100, 150, 200}, false),
             new Setting("Invert Y", "ui_invert", new String[] {"Off", "On"}, new int[] {0, 1}, false),
             new Setting("Extra buttons", "ui_power_buttons", new String[] {"Off", "On"}, new int[] {0, 1}, false),
+            new Setting("Touch layout", "touch_layout", new String[] {"EDIT"}, new int[] {0}, false),
             // Interface visibility.
             new Setting("Opacity", "ui_opacity", new String[] {"40%", "60%", "80%", "100%"},
                     new int[] {40, 60, 80, 100}, false),

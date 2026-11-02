@@ -1,5 +1,6 @@
 package com.protodroid;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -173,15 +174,18 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private final SharedPreferences prefs;
     private final GameSettings settingsStore;
     private final GameSettings.Setting[] settings;
+    private final boolean layoutOnly;
     private float opacity, scale;
     private boolean vibrate, showFps, hideWithPad, autoRun, invertY, powerButtons;
     private float camGain;
+    private InputManager inputManager;
     private boolean padConnected;
     private boolean panelOpen = false;
     private final RectF panel = new RectF(), closeRect = new RectF(), layoutRect = new RectF();
 
     // ---- layout editor ----
     private boolean editing = false;
+    private final RectF editorBar = new RectF(), selectionBar = new RectF();
     private final RectF doneRect = new RectF(), resetRect = new RectF(), addRect = new RectF();
     private final RectF smallerRect = new RectF(), biggerRect = new RectF();
     private final RectF bindRect = new RectF(), hideRect = new RectF(), removeRect = new RectF();
@@ -195,6 +199,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private int dragPointer = -1;
     private float dragDx, dragDy;
     private float stickCustomX = -1, stickCustomY = -1;
+    private boolean stickHidden;
     private final List<RectF> leftArrows = new ArrayList<>(), rightArrows = new ArrayList<>();
 
     // ---- drawing ----
@@ -223,7 +228,13 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private final Map<Integer, Button> pointerButton = new HashMap<>();
 
     public TouchControls(Context context) {
+        this(context, false);
+    }
+
+    /** Standalone launcher editing shares preferences but never starts or configures the SDL runtime. */
+    public TouchControls(Context context, boolean layoutOnly) {
         super(context);
+        this.layoutOnly = layoutOnly;
         density = context.getResources().getDisplayMetrics().density;
         prefs = context.getSharedPreferences("controls", Context.MODE_PRIVATE);
         settingsStore = new GameSettings(context);
@@ -253,7 +264,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         });
         loadLayout();
         applyUiSettings();
-        applyLiveSettings();
+        if (!layoutOnly) applyLiveSettings();
+        if (layoutOnly) setBackgroundColor(0xff080808);
         Typeface face = Typeface.create("sans-serif-condensed", Typeface.BOLD);
         text.setTypeface(face);
         text.setTextAlign(Paint.Align.CENTER);
@@ -262,10 +274,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         glow.setStyle(Paint.Style.STROKE);
         glow.setMaskFilter(new BlurMaskFilter(6 * density, BlurMaskFilter.Blur.NORMAL));
         setHapticFeedbackEnabled(true);
-        InputManager im = (InputManager) context.getSystemService(Context.INPUT_SERVICE);
-        if (im != null) {
-            im.registerInputDeviceListener(this, null);
-            padConnected = findGamepad(im);
+        inputManager = (InputManager) context.getSystemService(Context.INPUT_SERVICE);
+        if (inputManager != null) {
+            inputManager.registerInputDeviceListener(this, null);
+            padConnected = findGamepad(inputManager);
         }
         // Refresh the performance overlay twice a second.
         postDelayed(new Runnable() {
@@ -344,10 +356,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             buttons[i].customX = prefs.getFloat("pos" + i + "x", -1);
             buttons[i].customY = prefs.getFloat("pos" + i + "y", -1);
             buttons[i].size = prefs.getFloat("size" + i, 1);
+            buttons[i].hidden = prefs.getBoolean("hide" + i, false);
         }
         stickCustomX = prefs.getFloat("stick_x", -1);
         stickCustomY = prefs.getFloat("stick_y", -1);
         stickSize = prefs.getFloat("stick_size", 1);
+        stickHidden = prefs.getBoolean("stick_hidden", false);
         customButtons.clear();
         long maxId = 0;
         List<CustomButtonStore.Entry> entries = CustomButtonStore.decode(
@@ -375,11 +389,11 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         SharedPreferences.Editor ed = prefs.edit();
         for (int i = 0; i < buttons.length; i++) {
             Button b = buttons[i];
-            ed.putFloat("size" + i, b.size);
+            ed.putFloat("size" + i, b.size).putBoolean("hide" + i, b.hidden);
             if (b.customX < 0) continue;
             ed.putFloat("pos" + i + "x", b.cx / w).putFloat("pos" + i + "y", b.cy / h);
         }
-        ed.putFloat("stick_size", stickSize);
+        ed.putFloat("stick_size", stickSize).putBoolean("stick_hidden", stickHidden);
         if (stickCustomX >= 0) ed.putFloat("stick_x", stickHomeX / w).putFloat("stick_y", stickHomeY / h);
         ed.apply();
         saveCustomButtons();
@@ -390,7 +404,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         for (int i = 0; i < buttons.length; i++) {
             buttons[i].customX = buttons[i].customY = -1;
             buttons[i].size = 1;
-            ed.remove("pos" + i + "x").remove("pos" + i + "y").remove("size" + i);
+            buttons[i].hidden = false;
+            ed.remove("pos" + i + "x").remove("pos" + i + "y").remove("size" + i).remove("hide" + i);
         }
         for (int i = 0; i < customButtons.size(); ++i) {
             CustomButtonStore.Entry entry = customButtons.get(i).toEntry();
@@ -398,13 +413,15 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             customButtons.get(i).customX = entry.x;
             customButtons.get(i).customY = entry.y;
             customButtons.get(i).size = 1;
+            customButtons.get(i).hidden = false;
         }
         stickCustomX = stickCustomY = -1;
         stickSize = 1;
+        stickHidden = false;
         selected = null;
         selectedStick = false;
         removeArmed = false;
-        ed.remove("stick_x").remove("stick_y").remove("stick_size").apply();
+        ed.remove("stick_x").remove("stick_y").remove("stick_size").remove("stick_hidden").apply();
         saveCustomButtons();
         layoutButtons(getWidth(), getHeight());
     }
@@ -611,7 +628,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     }
 
     private boolean visible(Button b) {
-        if (b.custom && b.hidden && !editing) return false;
+        if (b.hidden && !editing) return false;
         if (b.numberKey && !numberPad && !powerButtons) return false;
         if (b.quickPower && !b.numberKey && !powerButtons) return false;  // optional screen-space extras
         return editing || (!controlsHidden() && (gameMode || !b.gameOnly));
@@ -626,6 +643,36 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         removeArmed = false;
         panelOpen = false;
         editing = true;
+    }
+
+    void openLayoutEditor() {
+        startEditing();
+        invalidate();
+    }
+
+    /** @return true when Back only closed the picker; otherwise the host may finish after the layout is saved. */
+    boolean handleBack() {
+        if (keyboard.isVisible()) {
+            keyboard.hide();
+            bindingTarget = null;
+            bindingNew = false;
+            invalidate();
+            return true;
+        }
+        if (editing) saveLayout();
+        return false;
+    }
+
+    private void finishEditing() {
+        saveLayout();
+        removeArmed = false;
+        buzz();
+        if (layoutOnly) {
+            // Stay in the editor until the activity is gone; a final normal frame must not touch SDL/FPS natives.
+            if (getContext() instanceof Activity) ((Activity) getContext()).finish();
+            return;
+        }
+        editing = false;
     }
 
     private void startBinding(Button target) {
@@ -669,10 +716,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             case MotionEvent.ACTION_POINTER_DOWN:
                 if (dragPointer >= 0) break;
                 if (doneRect.contains(x, y)) {
-                    saveLayout();
-                    editing = false;
-                    removeArmed = false;
-                    buzz();
+                    finishEditing();
                     break;
                 }
                 if (resetRect.contains(x, y)) {
@@ -690,10 +734,11 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     buzz();
                     break;
                 }
-                if (selected != null && selected.custom && hideRect.contains(x, y)) {
-                    selected.hidden = !selected.hidden;
+                if ((selected != null || selectedStick) && hideRect.contains(x, y)) {
+                    if (selected != null) selected.hidden = !selected.hidden;
+                    else stickHidden = !stickHidden;
                     removeArmed = false;
-                    saveCustomButtons();
+                    saveLayout();
                     buzz();
                     break;
                 }
@@ -726,6 +771,11 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                         stickHomeY = stickY = knobY = sy;
                     }
                     buzz();
+                    break;
+                }
+                // Opaque editor chrome owns its touches; never drag a control hidden underneath it.
+                if (editorBar.contains(x, y) || selectionBar.contains(x, y)) {
+                    removeArmed = false;
                     break;
                 }
                 for (Button b : allButtons) {
@@ -832,8 +882,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     hit.fx = x;
                     hit.fy = y;
                     press(hit, id);
-                } else if (gameMode && !controlsHidden() && stickPointer < 0 && x < getWidth() * 0.4f
-                        && y > getHeight() * 0.35f) {
+                } else if (gameMode && !controlsHidden() && !stickHidden && stickPointer < 0
+                        && x < getWidth() * 0.4f && y > getHeight() * 0.35f) {
                     stickPointer = id;
                     stickX = x;  // the stick centres where the thumb lands
                     stickY = y;
@@ -969,7 +1019,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         }
         Bitmap bmp = cached(b.label + (down ? ":1:" : ":0:") + (b.hidden ? ":H:" : ":V:") + b.r,
                 b.r + 12 * density, (cc, x, y) -> paintButton(cc, b, x, y, down));
+        float savedOpacity = opacity;
+        if (editing && b != selected) opacity *= 0.52f;
         blitCentered(c, bmp, b.cx, b.cy);
+        opacity = savedOpacity;
     }
 
     private void paintButton(Canvas c, Button b, float bx, float by, boolean down) {
@@ -995,7 +1048,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         }
         text.setColor(alpha(down ? 0xffffffff : 0xffffd6d0, 1f));
         c.drawText(b.label, bx, by + labelSize * (b.hidden ? 0.05f : 0.36f), text);
-        if (b.custom && b.hidden) {
+        if (b.hidden) {
             text.setTextSize(Math.max(7 * density, labelSize * 0.65f));
             text.setColor(alpha(0xffff8d82, 1f));
             c.drawText("HIDDEN", bx, by + labelSize * 1.15f, text);
@@ -1138,55 +1191,120 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     }
 
     private void drawEditor(Canvas c) {
-        c.drawColor(0x66000000);
+        c.drawColor(0x77000000);
+        float savedOpacity = opacity;
+        if (!selectedStick) opacity *= 0.52f;
         drawStick(c);
+        opacity = savedOpacity;
+        if (stickHidden) {
+            text.setTextAlign(Paint.Align.CENTER);
+            text.setTextSize(11 * density);
+            text.setColor(0xffff8d82);
+            c.drawText("HIDDEN", stickHomeX, stickHomeY + 4 * density, text);
+        }
         for (Button b : allButtons) {
             if (visible(b)) drawButton(c, b);
         }
-        float cx = getWidth() * 0.5f, top = 12 * density;
-        float pillW = Math.min(110 * density, getWidth() * 0.18f), gap = 12 * density;
-        float left = cx - (pillW * 3 + gap * 2) / 2;
-        addRect.set(left, top, left + pillW, top + 38 * density);
-        resetRect.set(left + pillW + gap, top, left + pillW * 2 + gap, top + 38 * density);
-        doneRect.set(left + (pillW + gap) * 2, top, left + (pillW + gap) * 2 + pillW, top + 38 * density);
-        drawPill(c, addRect, customButtons.size() >= CustomButtonStore.MAX_BUTTONS ? "MAX 24" : "ADD", false);
-        drawPill(c, resetRect, "RESET", false);
-        drawPill(c, doneRect, "DONE", true);
-        text.setTextSize(14 * density);
-        text.setColor(0xffffe0dc);
-        c.drawText("Drag / resize • ADD a one- or two-key button", cx, top + 60 * density, text);
         if (selected != null || selectedStick) {
-            float sx = selected != null ? selected.cx : stickHomeX, sy = selected != null ? selected.cy : stickHomeY;
+            float sx = selected != null ? selected.cx : stickHomeX;
+            float sy = selected != null ? selected.cy : stickHomeY;
             float sr = selected != null ? selected.r : stickR;
             edge.setStrokeWidth(2.5f * density);
             edge.setColor(0xffffffff);
             c.drawCircle(sx, sy, sr + 6 * density, edge);
-            float y = top + 82 * density, size = selected != null ? selected.size : stickSize;
-            smallerRect.set(cx - 150 * density, y, cx - 60 * density, y + 36 * density);
-            biggerRect.set(cx + 60 * density, y, cx + 150 * density, y + 36 * density);
+        }
+
+        float margin = 10 * density;
+        float top = 8 * density;
+        editorBar.set(margin, top, getWidth() - margin, top + 64 * density);
+        fill.setStyle(Paint.Style.FILL);
+        fill.setColor(0xf5100d0f);
+        c.drawRect(editorBar, fill);
+        edge.setStrokeWidth(1.2f * density);
+        edge.setColor(0x88504a4d);
+        c.drawRect(editorBar, edge);
+        edge.setColor(RED);
+        c.drawLine(editorBar.left, editorBar.bottom, editorBar.right, editorBar.bottom, edge);
+
+        float gap = 6 * density;
+        float actionsWidth = Math.min(234 * density, editorBar.width() * 0.62f);
+        float actionW = (actionsWidth - gap * 2) / 3f;
+        float actionRight = editorBar.right - 10 * density;
+        float actionTop = editorBar.top + 10 * density;
+        float actionBottom = actionTop + 44 * density;
+        doneRect.set(actionRight - actionW, actionTop, actionRight, actionBottom);
+        resetRect.set(doneRect.left - gap - actionW, actionTop, doneRect.left - gap, actionBottom);
+        addRect.set(resetRect.left - gap - actionW, actionTop, resetRect.left - gap, actionBottom);
+
+        float titleLeft = editorBar.left + 14 * density;
+        float titleWidth = Math.max(1f, addRect.left - titleLeft - 10 * density);
+        text.setTextAlign(Paint.Align.LEFT);
+        text.setColor(0xffffeee8);
+        text.setTextSize(15 * density);
+        while (text.measureText("TOUCH LAYOUT") > titleWidth && text.getTextSize() > 10 * density) {
+            text.setTextSize(text.getTextSize() - density);
+        }
+        c.drawText("TOUCH LAYOUT", titleLeft, editorBar.top + 25 * density, text);
+        if (titleWidth > 105 * density) {
+            text.setTextSize(10 * density);
+            text.setColor(0xffb8aaa5);
+            c.drawText("Drag to move • tap for options", titleLeft, editorBar.top + 45 * density, text);
+        }
+        text.setTextAlign(Paint.Align.CENTER);
+        drawPill(c, addRect, customButtons.size() >= CustomButtonStore.MAX_BUTTONS ? "MAX 24" : "ADD", false);
+        drawPill(c, resetRect, "RESET", false);
+        drawPill(c, doneRect, "DONE", true);
+
+        if (selected != null || selectedStick) {
+            float panelWidth = Math.min(getWidth() - margin * 2, 620 * density);
+            float panelLeft = (getWidth() - panelWidth) / 2f;
+            selectionBar.set(panelLeft, getHeight() - 98 * density,
+                    panelLeft + panelWidth, getHeight() - 10 * density);
+            fill.setStyle(Paint.Style.FILL);
+            fill.setColor(0xf7100d0f);
+            c.drawRect(selectionBar, fill);
+            edge.setStrokeWidth(1.2f * density);
+            edge.setColor(0x88504a4d);
+            c.drawRect(selectionBar, edge);
+            edge.setColor(RED);
+            c.drawLine(selectionBar.left, selectionBar.top, selectionBar.right, selectionBar.top, edge);
+
+            float size = selected != null ? selected.size : stickSize;
+            String name = selected != null ? selected.label : "STICK";
+            boolean hidden = selected != null ? selected.hidden : stickHidden;
+            text.setTextSize(14 * density);
+            text.setColor(0xffffe0dc);
+            c.drawText(name + "  •  SIZE " + Math.round(size * 100) + "%",
+                    selectionBar.centerX(), selectionBar.top + 22 * density, text);
+
+            boolean custom = selected != null && selected.custom;
+            int count = custom ? 5 : 3;
+            float rowWidth = Math.min(selectionBar.width() - 20 * density,
+                    (custom ? 510 : 310) * density);
+            float itemWidth = (rowWidth - gap * (count - 1)) / count;
+            float x = selectionBar.centerX() - rowWidth / 2f;
+            float y = selectionBar.top + 34 * density;
+            float bottom = y + 44 * density;
+            smallerRect.set(x, y, x + itemWidth, bottom);
+            biggerRect.set(x + itemWidth + gap, y, x + itemWidth * 2 + gap, bottom);
+            hideRect.set(x + (itemWidth + gap) * 2, y,
+                    x + (itemWidth + gap) * 2 + itemWidth, bottom);
             drawPill(c, smallerRect, "\u2212", false);
             drawPill(c, biggerRect, "+", false);
-            text.setTextSize(15 * density);
-            text.setColor(0xffffe0dc);
-            c.drawText((selected != null ? selected.label : "STICK") + "  " + Math.round(size * 100) + "%", cx,
-                    y + 24 * density, text);
-            if (selected != null && selected.custom) {
-                float ay = top + 128 * density;
-                float actionW = Math.min(104 * density, getWidth() * 0.19f);
-                float actionLeft = cx - (actionW * 3 + gap * 2) / 2;
-                bindRect.set(actionLeft, ay, actionLeft + actionW, ay + 36 * density);
-                hideRect.set(actionLeft + actionW + gap, ay, actionLeft + actionW * 2 + gap, ay + 36 * density);
-                removeRect.set(actionLeft + (actionW + gap) * 2, ay,
-                        actionLeft + (actionW + gap) * 2 + actionW, ay + 36 * density);
+            drawPill(c, hideRect, hidden ? "SHOW" : "HIDE", false);
+            if (custom) {
+                bindRect.set(x + (itemWidth + gap) * 3, y,
+                        x + (itemWidth + gap) * 3 + itemWidth, bottom);
+                removeRect.set(x + (itemWidth + gap) * 4, y,
+                        x + (itemWidth + gap) * 4 + itemWidth, bottom);
                 drawPill(c, bindRect, "KEYS", false);
-                drawPill(c, hideRect, selected.hidden ? "SHOW" : "HIDE", false);
-                drawPill(c, removeRect, removeArmed ? "CONFIRM" : "REMOVE", removeArmed);
+                drawPill(c, removeRect, removeArmed ? "CONFIRM" : "DELETE", removeArmed);
             } else {
                 bindRect.setEmpty();
-                hideRect.setEmpty();
                 removeRect.setEmpty();
             }
         } else {
+            selectionBar.setEmpty();
             smallerRect.setEmpty();
             biggerRect.setEmpty();
             bindRect.setEmpty();
@@ -1218,11 +1336,22 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        if (inputManager == null) {
+            inputManager = (InputManager) getContext().getSystemService(Context.INPUT_SERVICE);
+            if (inputManager != null) {
+                inputManager.registerInputDeviceListener(this, null);
+                padConnected = findGamepad(inputManager);
+            }
+        }
         postDelayed(uiShotPoll, 1000);
     }
 
     @Override
     protected void onDetachedFromWindow() {
+        if (inputManager != null) {
+            inputManager.unregisterInputDeviceListener(this);
+            inputManager = null;
+        }
         releaseAll();
         keyboard.hide();
         removeCallbacks(uiShotPoll);
@@ -1237,7 +1366,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             if (!controlsHidden()) drawPill(canvas, modeRect, gameMode ? "GAME" : "MENU", gameMode);
             drawGear(canvas);
             if (showFps) drawPerf(canvas);
-            if (gameMode && !controlsHidden()) drawStick(canvas);
+            if (gameMode && !controlsHidden() && !stickHidden) drawStick(canvas);
             for (Button b : allButtons) {
                 if (visible(b)) drawButton(canvas, b);
             }

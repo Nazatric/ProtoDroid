@@ -65,7 +65,7 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 | --- | --- |
 | **Graphics** | The original renderer through D3D9 and DXVK, with resolution, texture, anisotropy, AA, shadow, and game-quality settings. Mali and Adreno receive device-specific compatibility handling without a shared visual downgrade. |
 | **Movies and audio** | Full-screen Bink videos, ambient menu movies, RCF-resident files, and XAudio2 through FAudio. **Unlock menu FPS** is on by default. |
-| **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, helicopter descend, a numbered 1–4 pad, Android keyboard input, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. |
+| **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, helicopter descend, a numbered 1–4 pad, a paged PC keyboard, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. |
 | **Performance** | ARM64 hot-path replacements, optimized DXT decoding, stable FIFO presentation, ADPF hints, unrestricted CPU scheduling, and persistent DXVK state caching. |
 | **Saves** | Shared profiles and saves that you can back up, replace, or delete with a file manager. Existing saves migrate without being overwritten. |
 | **Mods** | An optional local library for overlays, large keyed texture packs, sandboxed Lua engine scripts, and independently rebuilt ARM64 plugins, with dependencies, author options, and next-Play activation. |
@@ -76,11 +76,11 @@ The launcher’s **Settings** page keeps graphics, drivers, and engine policies.
 
 - **Graphics:** Resolution, Textures, DXT1 color, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
 - **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **FXAA** filters the completed frame with built-in MSAA disabled to avoid Prototype’s missing-texture AA path; **2x/4x MSAA** retain the original behavior. **Game default** leaves the engine’s own device-dependent choice intact.
-- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons. **ABC** opens a compact in-game PC keyboard with a full 104-key mode. The layout editor adds movable one- or two-key buttons with rebind, hide, and remove actions. **123** toggles number keys and **DESCEND** sends `V`.
+- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, Extra buttons, and **Touch layout → EDIT**. **ABC** opens a smaller paged PC keyboard: **MAIN**, **MORE**, and **NUMPAD** retain all 104 keys with conventional labels. Edit layouts here without starting the game, or use the in-game gear: drag, resize, hide/show any control, and add one- or two-key buttons with rebind and confirmed delete actions. **123** toggles number keys and **DESCEND** sends `V`.
 - **Interface:** Screen orientation, Opacity, and Show FPS. Fixed Landscape/Reverse is an optional recovery for devices that choose the wrong direction; Auto remains the default.
 - **Engine fixes:** Optional FOV, shadow-map, tick/QTE, loose-file, developer-menu, VRAM-report, and texture-dump policies. Safe defaults remain unchanged until you opt in.
 
-**Low, Medium, and High presets** update only the graphics and game-video options. Medium/High use FXAA; High keeps full 32-bit decoded DXT1 color, while Low/Medium retain the lower-bandwidth 16-bit path. Exact old Medium/High AA preset values migrate to FXAA once; Custom and explicit MSAA choices are preserved. Your FPS and control preferences stay as they are. Choose **Custom** after changing an individual graphics row. Use **LAYOUT** to drag controls into place, resize them, or reset the layout.
+**Low, Medium, and High presets** update only the graphics and game-video options. Medium/High use FXAA; High keeps full 32-bit decoded DXT1 color, while Low/Medium retain the lower-bandwidth 16-bit path. Exact old Medium/High AA preset values migrate to FXAA once; Custom and explicit MSAA choices are preserved. Your FPS and control preferences stay as they are. Choose **Custom** after changing an individual graphics row. Use **Settings → Controls → Touch layout** or the in-game **LAYOUT** editor to arrange controls or reset the layout.
 
 ### Mods and engine fixes
 

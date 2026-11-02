@@ -84,6 +84,12 @@ public class SetupActivity extends Activity {
                 }
 
                 @Override
+                public void onTouchLayout() {
+                    startActivity(new Intent(SetupActivity.this, TouchLayoutActivity.class));
+                    LauncherMotion.transition(SetupActivity.this);
+                }
+
+                @Override
                 public void onExit() {
                     finish();
                 }

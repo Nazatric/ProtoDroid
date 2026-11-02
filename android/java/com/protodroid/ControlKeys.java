@@ -67,7 +67,7 @@ final class ControlKeys {
                 String.valueOf((i + 1) % 10));
         key(MINUS, "Minus / underscore", "-");
         key(EQUALS, "Equals / plus", "=");
-        key(BACKSPACE, "Backspace", "BKSP");
+        key(BACKSPACE, "Backspace", "BACKSPACE");
         key(INSERT, "Insert", "INS");
         key(HOME, "Home", "HOME");
         key(PAGE_UP, "Page Up", "PGUP");
@@ -98,7 +98,7 @@ final class ControlKeys {
         key(PERIOD, "Period / greater than", ".");
         key(SLASH, "Slash / question", "/");
         key(SHIFT_RIGHT, "Right Shift", "RSHIFT");
-        key(UP, "Up Arrow", "↑");
+        key(UP, "Up Arrow", "UP");
 
         key(CTRL_LEFT, "Left Control", "LCTRL");
         key(META_LEFT, "Left Windows", "LWIN");
@@ -108,18 +108,18 @@ final class ControlKeys {
         key(META_RIGHT, "Right Windows", "RWIN");
         key(MENU, "Application Menu", "MENU");
         key(CTRL_RIGHT, "Right Control", "RCTRL");
-        key(LEFT, "Left Arrow", "←");
-        key(DOWN, "Down Arrow", "↓");
-        key(RIGHT, "Right Arrow", "→");
+        key(LEFT, "Left Arrow", "LEFT");
+        key(DOWN, "Down Arrow", "DOWN");
+        key(RIGHT, "Right Arrow", "RIGHT");
 
-        key(NUM_LOCK, "Num Lock", "NUMLK");
-        key(NUMPAD_DIVIDE, "Numpad Divide", "N/");
-        key(NUMPAD_MULTIPLY, "Numpad Multiply", "N*");
-        key(NUMPAD_SUBTRACT, "Numpad Minus", "N-");
-        for (int i = 0; i < 10; ++i) key(NUMPAD_0 + i, "Numpad " + i, "N" + i);
-        key(NUMPAD_ADD, "Numpad Plus", "N+");
-        key(NUMPAD_ENTER, "Numpad Enter", "NENT");
-        key(NUMPAD_PERIOD, "Numpad Decimal", "N.");
+        key(NUM_LOCK, "Num Lock", "NUM LOCK");
+        key(NUMPAD_DIVIDE, "Numpad Divide", "NUM /");
+        key(NUMPAD_MULTIPLY, "Numpad Multiply", "NUM *");
+        key(NUMPAD_SUBTRACT, "Numpad Minus", "NUM -");
+        for (int i = 0; i < 10; ++i) key(NUMPAD_0 + i, "Numpad " + i, "NUM " + i);
+        key(NUMPAD_ADD, "Numpad Plus", "NUM +");
+        key(NUMPAD_ENTER, "Numpad Enter", "NUM ENT");
+        key(NUMPAD_PERIOD, "Numpad Decimal", "NUM .");
 
         ALL = Collections.unmodifiableList(new ArrayList<>(BY_CODE.values()));
         if (ALL.size() != 104) throw new ExceptionInInitializerError("PC key catalog is " + ALL.size());
@@ -148,6 +148,59 @@ final class ControlKeys {
     static String shortNameOf(int code) {
         Key key = BY_CODE.get(code);
         return key == null ? "?" : key.shortName;
+    }
+
+    /** Familiar keycap text; binding labels retain their more specific L/R names. */
+    static String keycap(int code) {
+        if (code >= NUMPAD_0 && code <= NUMPAD_9) return String.valueOf(code - NUMPAD_0);
+        switch (code) {
+            case ESCAPE:
+                return "ESC";
+            case DELETE:
+                return "DEL";
+            case BACKSPACE:
+                return "BACKSPACE";
+            case SCROLL_LOCK:
+                return "SCROLL";
+            case CAPS_LOCK:
+                return "CAPS";
+            case SHIFT_LEFT:
+            case SHIFT_RIGHT:
+                return "SHIFT";
+            case CTRL_LEFT:
+            case CTRL_RIGHT:
+                return "CTRL";
+            case ALT_LEFT:
+            case ALT_RIGHT:
+                return "ALT";
+            case META_LEFT:
+            case META_RIGHT:
+                return "WIN";
+            case UP:
+                return "UP";
+            case DOWN:
+                return "DOWN";
+            case LEFT:
+                return "LEFT";
+            case RIGHT:
+                return "RIGHT";
+            case NUM_LOCK:
+                return "NUM";
+            case NUMPAD_DIVIDE:
+                return "/";
+            case NUMPAD_MULTIPLY:
+                return "*";
+            case NUMPAD_SUBTRACT:
+                return "-";
+            case NUMPAD_ADD:
+                return "+";
+            case NUMPAD_PERIOD:
+                return ".";
+            case NUMPAD_ENTER:
+                return "ENTER";
+            default:
+                return shortNameOf(code);
+        }
     }
 
     static String chordLabel(int first, int second) {

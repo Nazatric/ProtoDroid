@@ -28,6 +28,17 @@ public final class ControlsModelTest {
         check(ControlKeys.isModifier(ControlKeys.CTRL_LEFT) && !ControlKeys.isModifier(ControlKeys.CAPS_LOCK),
                 "modifier classification");
         check("LCTRL+C".equals(ControlKeys.chordLabel(ControlKeys.CTRL_LEFT, ControlKeys.C)), "chord label");
+        check("RIGHT".equals(ControlKeys.keycap(ControlKeys.RIGHT))
+                && "LEFT".equals(ControlKeys.keycap(ControlKeys.LEFT)), "unambiguous arrow keycaps");
+        check("0".equals(ControlKeys.keycap(ControlKeys.NUMPAD_0))
+                && "9".equals(ControlKeys.keycap(ControlKeys.NUMPAD_9)), "ordinary numpad digits");
+        check("BACKSPACE".equals(ControlKeys.keycap(ControlKeys.BACKSPACE)), "clear Backspace keycap");
+        check("RIGHT".equals(ControlKeys.chordLabel(ControlKeys.RIGHT, 0))
+                && "NUM 0".equals(ControlKeys.chordLabel(ControlKeys.NUMPAD_0, 0)),
+                "rejected arrow/N-prefixed shorthand returned in binding labels");
+        check("SHIFT".equals(ControlKeys.keycap(ControlKeys.SHIFT_LEFT))
+                && "CTRL".equals(ControlKeys.keycap(ControlKeys.CTRL_RIGHT))
+                && "WIN".equals(ControlKeys.keycap(ControlKeys.META_LEFT)), "standard modifier keycaps");
         check(!CustomButtonStore.validBinding(0, 0), "unbound button accepted");
         check(!CustomButtonStore.validBinding(ControlKeys.C, ControlKeys.C), "duplicate chord accepted");
         check(CustomButtonStore.validBinding(ControlKeys.C, 0), "single key rejected");
