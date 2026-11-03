@@ -115,7 +115,9 @@ for abi in "${ABIS[@]}"; do
 done
 echo "=== Packaging base.apk ==="
 du -sh "$OUT/pkg"/lib/*/* 2>&1 | head -n 20
-(cd "$OUT/pkg" && zip -q -r "$OUT/base.apk" classes.dex lib && echo "zip done" && ls -lh "$OUT/base.apk" && unzip -l "$OUT/base.apk" | head -n 100)
+# Native code dominates this package. Maximum DEFLATE costs build time only; every signed-entry verification below
+# still compares the extracted bytes with the exact compiled/staged inputs.
+(cd "$OUT/pkg" && zip -9 -q -r "$OUT/base.apk" classes.dex lib && echo "zip done (DEFLATE level 9)" && ls -lh "$OUT/base.apk" && unzip -l "$OUT/base.apk" | head -n 100)
 
 "$BUILD_TOOLS/zipalign" -P 16 -f 4 "$OUT/base.apk" "$OUT/aligned.apk"
 "$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-key-alias "$KEY_ALIAS" \
