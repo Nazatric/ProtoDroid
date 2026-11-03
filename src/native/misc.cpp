@@ -99,6 +99,15 @@ F(GetErrorInfo) {
     Return(c, 1, 2);  // S_FALSE
 }
 
+// DSOUND: Android audio uses the native XAudio2 path. Enumerate no DirectSound devices rather than inventing one.
+F(DirectSoundEnumerateA) {
+    if (!Arg(c, 0)) {
+        Return(c, 0x80070057u, 2);  // DSERR_INVALIDPARAM / E_INVALIDARG
+        return;
+    }
+    Return(c, 0, 2);  // DS_OK: an empty enumeration never invokes the callback
+}
+
 // SETUPAPI / iphlpapi / RPCRT4: device and network enumeration finds nothing.
 F(SetupDiGetClassDevsA) { Return(c, 0xffffffffu, 4); }
 F(SetupDiEnumDeviceInterfaces) { Return(c, 0, 5); }
@@ -128,8 +137,40 @@ F(WSAStartup) {
 }
 F(WSACleanup) { Return(c, 0); }
 F(WSAGetLastError) { Return(c, 10050); }  // WSAENETDOWN
+F(accept) { Return(c, 0xffffffffu, 3); }   // INVALID_SOCKET
+F(bind) { Return(c, 0xffffffffu, 3); }     // SOCKET_ERROR
+F(connect) { Return(c, 0xffffffffu, 3); }
+F(getpeername) { Return(c, 0xffffffffu, 3); }
+F(getsockname) { Return(c, 0xffffffffu, 3); }
+F(getsockopt) { Return(c, 0xffffffffu, 5); }
+F(ioctlsocket) { Return(c, 0xffffffffu, 3); }
+F(listen) { Return(c, 0xffffffffu, 2); }
+F(recv) { Return(c, 0xffffffffu, 4); }
+F(recvfrom) { Return(c, 0xffffffffu, 6); }
+F(select) { Return(c, 0xffffffffu, 5); }
+F(send) { Return(c, 0xffffffffu, 4); }
+F(sendto) { Return(c, 0xffffffffu, 6); }
+F(setsockopt) { Return(c, 0xffffffffu, 5); }
+F(shutdown) { Return(c, 0xffffffffu, 2); }
 F(socket) { Return(c, 0xffffffffu, 3); }
 F(closesocket) { Return(c, 0, 1); }
+F(WSAFDIsSet) {
+    const uint32_t set = Arg(c, 1);
+    if (!Ptr<void>(set)) {
+        Return(c, 0, 2);
+        return;
+    }
+    const uint32_t socket = Arg(c, 0);
+    const uint32_t count = R32(set);
+    const uint32_t bounded = count < 64 ? count : 64;  // Win32 FD_SETSIZE
+    for (uint32_t i = 0; i < bounded; ++i) {
+        if (R32(set + 4 + 4 * i) == socket) {
+            Return(c, 1, 2);
+            return;
+        }
+    }
+    Return(c, 0, 2);
+}
 F(htons) { Return(c, uint32_t(__builtin_bswap16(uint16_t(Arg(c, 0)))), 1); }
 F(ntohs) { Return(c, uint32_t(__builtin_bswap16(uint16_t(Arg(c, 0)))), 1); }
 F(htonl) { Return(c, __builtin_bswap32(Arg(c, 0)), 1); }
@@ -144,6 +185,7 @@ F(WSACancelAsyncRequest) { Return(c, 0, 1); }
 #define E(dll, name) {dll, #name, x_##name}
 #define O(ord, name) {"ws2_32.dll", "#" #ord, x_##name}
 #define OLE(ord, name) {"oleaut32.dll", "#" #ord, x_##name}
+#define DS(ord, name) {"dsound.dll", "#" #ord, x_##name}
 const ImportDef kMisc[] = {
     E("winmm.dll", timeGetTime), E("winmm.dll", timeSetEvent), E("winmm.dll", timeKillEvent),
     E("winmm.dll", waveOutGetNumDevs), E("winmm.dll", waveOutGetDevCapsA), E("winmm.dll", waveOutOpen),
@@ -160,22 +202,32 @@ const ImportDef kMisc[] = {
     OLE(2, SysAllocString), OLE(4, SysAllocStringLen), OLE(6, SysFreeString), OLE(8, VariantInit),
     OLE(9, VariantClear), OLE(12, VariantChangeType), OLE(200, GetErrorInfo), OLE(201, SetErrorInfo),
     OLE(202, CreateErrorInfo),
+    E("dsound.dll", DirectSoundEnumerateA), DS(2, DirectSoundEnumerateA),
     E("setupapi.dll", SetupDiGetClassDevsA), E("setupapi.dll", SetupDiEnumDeviceInterfaces),
     E("setupapi.dll", SetupDiGetDeviceInterfaceDetailA), E("setupapi.dll", SetupDiGetDeviceRegistryPropertyA),
     E("setupapi.dll", SetupDiGetDeviceInterfaceAlias), E("setupapi.dll", SetupDiDestroyDeviceInfoList),
     E("iphlpapi.dll", GetAdaptersInfo), E("iphlpapi.dll", GetIpAddrTable), E("iphlpapi.dll", GetIfEntry),
     E("iphlpapi.dll", GetPerAdapterInfo), E("rpcrt4.dll", UuidToStringA), E("rpcrt4.dll", RpcStringFreeA),
     E("ws2_32.dll", WSAStartup), E("ws2_32.dll", WSACleanup), E("ws2_32.dll", WSAGetLastError),
+    E("ws2_32.dll", accept), E("ws2_32.dll", bind), E("ws2_32.dll", connect), E("ws2_32.dll", getpeername),
+    E("ws2_32.dll", getsockname), E("ws2_32.dll", getsockopt), E("ws2_32.dll", ioctlsocket),
+    E("ws2_32.dll", listen), E("ws2_32.dll", recv), E("ws2_32.dll", recvfrom), E("ws2_32.dll", select),
+    E("ws2_32.dll", send), E("ws2_32.dll", sendto), E("ws2_32.dll", setsockopt), E("ws2_32.dll", shutdown),
     E("ws2_32.dll", socket), E("ws2_32.dll", closesocket), E("ws2_32.dll", htons), E("ws2_32.dll", ntohs),
     E("ws2_32.dll", htonl), E("ws2_32.dll", ntohl), E("ws2_32.dll", getaddrinfo), E("ws2_32.dll", freeaddrinfo),
     E("ws2_32.dll", WSAAsyncGetHostByName), E("ws2_32.dll", WSACancelAsyncRequest),
-    // The engine imports WS2_32 by ordinal.
-    O(3, closesocket), O(8, htonl), O(9, htons), O(14, ntohl), O(15, ntohs), O(23, socket), O(103, WSAAsyncGetHostByName),
-    O(108, WSACancelAsyncRequest), O(111, WSAGetLastError), O(115, WSAStartup), O(116, WSACleanup),
+    {"ws2_32.dll", "__WSAFDIsSet", x_WSAFDIsSet},
+    // Keep every Winsock ordinal imported by the engine on the same implementation as its verified named export.
+    O(1, accept), O(2, bind), O(3, closesocket), O(4, connect), O(5, getpeername), O(6, getsockname),
+    O(7, getsockopt), O(8, htonl), O(9, htons), O(10, ioctlsocket), O(13, listen), O(14, ntohl), O(15, ntohs),
+    O(16, recv), O(17, recvfrom), O(18, select), O(19, send), O(20, sendto), O(21, setsockopt),
+    O(22, shutdown), O(23, socket), O(103, WSAAsyncGetHostByName), O(108, WSACancelAsyncRequest),
+    O(111, WSAGetLastError), O(115, WSAStartup), O(116, WSACleanup), O(151, WSAFDIsSet),
 };
 #undef E
 #undef O
 #undef OLE
+#undef DS
 ImportRegistrar g_misc(kMisc);
 
 }  // namespace

@@ -112,6 +112,22 @@ void CheckMiscReturn(const Ctx& ctx, uint32_t expected, int args, const char* me
     Check(ctx.esp == 0x8004u + uint32_t(4 * args), "misc import stdcall cleanup changed");
 }
 
+void CheckMiscRoute(const char* dll, const char* name, const char* ordinal, uint32_t expected, int args,
+                    uint32_t arg0 = 0, uint32_t arg1 = 0) {
+    const char* routes[] = {name, ordinal};
+    for (const char* route : routes) {
+        Ctx ctx;
+        memset(&ctx, 0, sizeof(ctx));
+        ctx.esp = 0x8000;
+        W32(ctx.esp, 0x7777u);
+        for (int i = 0; i < args; ++i) W32(ctx.esp + 4 + 4 * i, 0);
+        if (args > 0) W32(ctx.esp + 4, arg0);
+        if (args > 1) W32(ctx.esp + 8, arg1);
+        Check(native::DispatchImport(&ctx, native::ImportThunk(dll, route)), "misc route was not an import thunk");
+        CheckMiscReturn(ctx, expected, args, "misc named/ordinal behavior differs");
+    }
+}
+
 void CheckSetjmpRoundTrip() {
     // longjmp must never make the fixture's automatic local state indeterminate. Static storage also keeps this
     // test warning-clean under newer GCC versions' -Wclobbered analysis.
@@ -264,6 +280,42 @@ int main() {
     CheckOleAut32Route("SetErrorInfo", "#201", 0, 2);
     CheckOleAut32Route("CreateErrorInfo", "#202", 0x80004001u, 1);
 
+    // Online services remain deliberately unavailable. Every remaining socket ordinal must report the same failure as
+    // its named export with the exact Win32 stdcall arity; none may fall into the fatal missing-handler path.
+    struct SocketFailureRoute {
+        const char* name;
+        const char* ordinal;
+        int args;
+    };
+    const SocketFailureRoute socket_routes[] = {
+        {"accept", "#1", 3},          {"bind", "#2", 3},       {"connect", "#4", 3},
+        {"getpeername", "#5", 3},     {"getsockname", "#6", 3}, {"getsockopt", "#7", 5},
+        {"ioctlsocket", "#10", 3},    {"listen", "#13", 2},     {"recv", "#16", 4},
+        {"recvfrom", "#17", 6},       {"select", "#18", 5},     {"send", "#19", 4},
+        {"sendto", "#20", 6},         {"setsockopt", "#21", 5}, {"shutdown", "#22", 2},
+    };
+    for (const auto& route : socket_routes)
+        CheckMiscRoute("ws2_32.dll", route.name, route.ordinal, 0xffffffffu, route.args);
+
+    // __WSAFDIsSet is a real bounded fd_set predicate, not another connection failure. Exercise both export routes,
+    // null/matching/missing sets, and the Win32 FD_SETSIZE boundary.
+    CheckMiscRoute("ws2_32.dll", "__WSAFDIsSet", "#151", 0, 2, 0x222u, 0);
+    W32(0x6000, 3);
+    W32(0x6004, 0x111u);
+    W32(0x6008, 0x222u);
+    W32(0x600c, 0x333u);
+    CheckMiscRoute("ws2_32.dll", "__WSAFDIsSet", "#151", 1, 2, 0x222u, 0x6000u);
+    CheckMiscRoute("ws2_32.dll", "__WSAFDIsSet", "#151", 0, 2, 0x444u, 0x6000u);
+    for (uint32_t i = 0; i < 64; ++i) W32(0x6004 + 4 * i, 0x1000u + i);
+    W32(0x6000, 65);
+    W32(0x6004 + 64 * 4, 0x222u);
+    CheckMiscRoute("ws2_32.dll", "__WSAFDIsSet", "#151", 0, 2, 0x222u, 0x6000u);
+
+    // No DirectSound device is exposed on Android. A valid enumeration succeeds without invoking its callback; a null
+    // callback remains invalid. This does not claim a DirectSound renderer or alter the native XAudio2 path.
+    CheckMiscRoute("dsound.dll", "DirectSoundEnumerateA", "#2", 0x80070057u, 2);
+    CheckMiscRoute("dsound.dll", "DirectSoundEnumerateA", "#2", 0, 2, 0x10abf690u);
+
     // Invalid output pointers must produce API errors rather than native null writes. These cases return before raw
     // pointer access, so they are valid in this synthetic non-flat guest-memory fixture as well as on Android.
     PrepareMiscCall(&ctx, 0, 0);
@@ -278,6 +330,6 @@ int main() {
     CheckSetjmpRoundTrip();
     CheckUnknownSetjmpResumeFailsCleanly();
 
-    puts("Runtime bridge imports, boundaries, jump state, dispatch, and guest-context checks passed");
+    puts("Runtime bridge imports, socket/DSOUND boundaries, jump state, dispatch, and guest-context checks passed");
     return 0;
 }
