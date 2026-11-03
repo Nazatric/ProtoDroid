@@ -5,8 +5,8 @@ Status: **active; substantive audit checkpoint saved, not a phase-completion rep
 ## 1. Actual time and work
 
 - Started: `2026-11-03T15:58:37+00:00`.
-- Checkpoint clock reading: `2026-11-03T16:18:57+00:00`.
-- Active elapsed time at that reading: **20 minutes 20 seconds**, with no idle-time or elapsed-time padding.
+- Checkpoint clock reading: `2026-11-03T16:19:50+00:00`.
+- Active elapsed time at that reading: **21 minutes 13 seconds**, with no idle-time or elapsed-time padding.
 - Cloned and pinned all five required repositories read-only; inspected implementation and evidence documents, compared shared renderer lineage, checked license/provenance, and compared attractive techniques with existing ProtoDroid code.
 - Directly inspected the pinned DXVK 2.5.3 dependency to verify its existing compiler workers, warm-cache compilation, cache writer, frame-latency control, CS batching/dirty-state paths, staging allocation/throttling, and resource-wait sync counters instead of inferring them from patch comments.
 - Ran focused host correctness tests for GoW III, ISS, and Bloodborne at their exact pins, including async queues, warm-up/cache helpers, AOT dispatch/strict misses, and UMA promotion/demotion stress; preserved commands, raw logs, binaries, environment, and hashes outside Git.
@@ -47,6 +47,7 @@ Focused external host tests are correctness evidence, not FPS results. All corre
 - Existing local dispatch/compiler/cache implementations were read directly before classifying external techniques as duplicates.
 - Focused executed host tests passed at the pinned GoW III/ISS/Bloodborne revisions; these establish selected synthetic/host correctness only, not full-suite or Android correctness. The first GoW III Python invocation's three sparse-checkout/import harness errors are preserved in `run-initial-harness-errors.log`; materializing 16 files from the same commit and using direct-script invocation produced the documented passing rerun without source edits. ISS's initial readback include-root failure and corrected passing rerun are both preserved.
 - GoW III page-state compilation stopped on unavailable Boost.ICL, and the compiler output is retained; page-state and pipeline-binary results are not claimed. No external test was run on Android, and no Vulkan/phone GPU test was inferred from host success. All visual, gameplay, mod, FIFO/Reset, audio, cache-corruption, and physical-device correctness gates remain open for any future ProtoDroid experiment.
+- Audit integrity verification passed at `2026-11-03T16:19:31Z`: all five exact pins and clean worktrees, all relative checkout manifests checked from their own clone roots, and all key-file/test-artifact hashes. The initial wrong-working-directory manifest invocation is preserved in `integrity-verification-initial-cwd-error.log`; the corrected passing result is `/tmp/protodroid-016/audit/integrity-verification.log`.
 
 ## 6. Limitations
 
