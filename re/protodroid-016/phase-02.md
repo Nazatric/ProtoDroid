@@ -5,10 +5,10 @@ Status: **active; substantive audit checkpoint saved, not a phase-completion rep
 ## 1. Actual time and work
 
 - Started: `2026-11-03T15:58:37+00:00`.
-- Checkpoint clock reading: `2026-11-03T16:17:24+00:00`.
-- Active elapsed time at that reading: **18 minutes 47 seconds**, with no idle-time or elapsed-time padding.
+- Checkpoint clock reading: `2026-11-03T16:18:57+00:00`.
+- Active elapsed time at that reading: **20 minutes 20 seconds**, with no idle-time or elapsed-time padding.
 - Cloned and pinned all five required repositories read-only; inspected implementation and evidence documents, compared shared renderer lineage, checked license/provenance, and compared attractive techniques with existing ProtoDroid code.
-- Directly inspected the pinned DXVK 2.5.3 dependency to verify its existing compiler workers, warm-cache compilation, cache writer, frame-latency control, CS batching/dirty-state paths, and staging allocation/throttling instead of inferring them from patch comments.
+- Directly inspected the pinned DXVK 2.5.3 dependency to verify its existing compiler workers, warm-cache compilation, cache writer, frame-latency control, CS batching/dirty-state paths, staging allocation/throttling, and resource-wait sync counters instead of inferring them from patch comments.
 - Ran focused host correctness tests for GoW III, ISS, and Bloodborne at their exact pins, including async queues, warm-up/cache helpers, AOT dispatch/strict misses, and UMA promotion/demotion stress; preserved commands, raw logs, binaries, environment, and hashes outside Git.
 - Populated `repository-ledger.md` and `technique-matrix.md`; recorded explicit audit-level non-actions in `rejected-changes.md`.
 
