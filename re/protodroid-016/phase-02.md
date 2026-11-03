@@ -5,10 +5,11 @@ Status: **active; substantive audit checkpoint saved, not a phase-completion rep
 ## 1. Actual time and work
 
 - Started: `2026-11-03T15:58:37+00:00`.
-- Checkpoint clock reading: `2026-11-03T16:09:18+00:00`.
-- Active elapsed time at that reading: **10 minutes 41 seconds**, with no idle-time or elapsed-time padding.
+- Checkpoint clock reading: `2026-11-03T16:15:10+00:00`.
+- Active elapsed time at that reading: **16 minutes 33 seconds**, with no idle-time or elapsed-time padding.
 - Cloned and pinned all five required repositories read-only; inspected implementation and evidence documents, compared shared renderer lineage, checked license/provenance, and compared attractive techniques with existing ProtoDroid code.
 - Directly inspected the pinned DXVK 2.5.3 dependency to verify its existing compiler workers, warm-cache compilation, cache writer, frame-latency control, CS batching/dirty-state paths, and staging allocation/throttling instead of inferring them from patch comments.
+- Ran focused host correctness tests for GoW III, ISS, and Bloodborne at their exact pins, including async queues, warm-up/cache helpers, AOT dispatch/strict misses, and UMA promotion/demotion stress; preserved commands, raw logs, binaries, environment, and hashes outside Git.
 - Populated `repository-ledger.md` and `technique-matrix.md`; recorded explicit audit-level non-actions in `rejected-changes.md`.
 
 ## 2. Files and inspected revisions
@@ -18,6 +19,7 @@ Status: **active; substantive audit checkpoint saved, not a phase-completion rep
 - GoW III fork `b3a7c3d5e916cf8f4622192c0faa9383ebd77c00`: async compiler, pipeline cache/serialization, draw preparation, scheduler, staging, shader HLE, PC and Android evidence documents.
 - ISS Android `43c833deb37bc504bf099bbf707a5440103a8cae`: preparation-only Android documents plus real inherited renderer implementations and upstream identity.
 - Bloodborne Android `f241353e36f46bf183806acd7b79222afff2fd2f`: strict AOT dispatch, unified-memory paths, blocking waits, staging, Adreno device/session results, and failure records.
+- Executed the focused test files listed in `repository-ledger.md` at those same GoW III/ISS/Bloodborne commits. Black-mobiu has no relevant renderer test at the pin and PrototypeRecomp has no test directory; unrelated launcher tests were not substituted.
 - Compared local `src/native/runtime.cpp`, `src/recomp/bridge_x86.cpp`, DXVK state-cache/compiler/serialization patches, RCF/Bink paths, and scheduling code.
 - Baseline dependency DXVK `v2.5.3` / `c707d9026f33b6ab89639f154b6ac5f6326fa037`: `dxvk_pipemanager.cpp`, `dxvk_state_cache.cpp`, and D3D9 frame-latency implementation read directly.
 - Exact file lists, source hashes, licenses, commit provenance, DXVK key-file hashes, and lineage results: `/tmp/protodroid-016/audit`.
@@ -36,13 +38,15 @@ No new ProtoDroid performance run was performed in this source-audit checkpoint,
 
 External numbers were copied only with their context into `repository-ledger.md`: GoW III PC test-scene results, Bloodborne Thor AOT/FEX and memory/FPS results. They are not ProtoDroid or generic Android evidence. The ISS/GoW III file-similarity calculation is source-provenance evidence, not a performance measurement; raw output is `/tmp/protodroid-016/audit/shared-lineage.txt`.
 
+Focused external host tests are correctness evidence, not FPS results. All corrected GoW III (3 native plus 12 Python/helper), ISS (3 native), and Bloodborne (3 AOT plus 2 UMA configuration) runs passed. Bloodborne's synthetic UMA stress printed zero lost writes; longest compaction/demotion-hammer freezes were 11.931/0.61 ms at 256 KiB and 21.700/13.54 ms at 2048 KiB on this x86_64 host. These are not phone frame times. Exact commands, environment, raw logs, binaries, and hashes are under `/tmp/protodroid-016/audit/tests` and `/tmp/protodroid-016/audit/test-artifact-hashes.txt`.
+
 ## 5. Correctness
 
 - No production behavior, setting, renderer, cache format, or ABI changed.
 - Source claims were traced to concrete functions rather than accepted from README summaries.
 - Existing local dispatch/compiler/cache implementations were read directly before classifying external techniques as duplicates.
-- No external project's test suite was run and no external binary was executed; this checkpoint establishes source understanding, not external correctness on Android.
-- All visual, gameplay, mod, FIFO/Reset, audio, cache-corruption, and physical-device correctness gates remain open for any future experiment.
+- Focused host tests passed at the pinned GoW III/ISS/Bloodborne revisions; these establish selected synthetic/host correctness only, not full-suite or Android correctness. The first GoW III Python invocation's three sparse-checkout/import harness errors are preserved in `run-initial-harness-errors.log`; materializing 16 files from the same commit and using direct-script invocation produced the documented passing rerun without source edits.
+- No external test was run on Android, and no Vulkan/phone GPU test was inferred from host success. All visual, gameplay, mod, FIFO/Reset, audio, cache-corruption, and physical-device correctness gates remain open for any future ProtoDroid experiment.
 
 ## 6. Limitations
 

@@ -95,6 +95,19 @@ The inherited code can clarify implementation differences, but it supplies no se
 
 ProtoDroid already has the same open-addressed multiplicative-hash dispatch structure in `src/native/runtime.cpp` and `src/recomp/bridge_x86.cpp`; replacing it with the Bloodborne table is not a new optimization. Strict-AOT results caution against assuming a CPU architecture rewrite raises GPU-bound FPS. Unified-memory code is PS4/Adreno-specific and carries serious coherence/driver risk; it is not a DXVK patch. Short-spin-then-block is a possible later scheduling experiment only where ProtoDroid profiles show spinning/wake latency. **Disposition: useful measurement lessons and negative evidence; no AOT/FEX/UMA/affinity/frame-generation import.**
 
+## Focused host correctness tests at the same pins
+
+These are source/synthetic checks, not ProtoDroid experiments and not phone performance results. Host: x86_64 Linux, Debian GCC 12.2.0, Python 3.11.2, isolated Unicorn 2.1.4. No game files, Android device, phone GPU, or performance scene was used. Exact commands and environment are `/tmp/protodroid-016/audit/tests/commands.txt` and `environment.txt`; logs/binaries are hashed by `/tmp/protodroid-016/audit/test-artifact-hashes.txt`.
+
+| Source | Tests actually run | Result and interpretation |
+| --- | --- | --- |
+| GoW III `b3a7c3d…` | `test_async_compiler.cpp`, `test_warmup_inbox.cpp`, `test_wait_diagnostics.cpp`; `test_android_perf_budget.py` (3), `test_android_first_run_and_perf.py` (4), `test_android_bachata_optimizations.py` (5) | All passed in the corrected run. This exercises queue drain/capacity/priority, warm-up batching/publication, wait accounting, Android worker/queue policy, cache identity/corruption/atomic replacement, copy ranges, and ARM64 SRT/fallback helpers. It does not measure FPS or validate the Android renderer on a phone. |
+| ISS `43c833d…` | Corresponding async-compiler, warm-up-inbox, and wait-diagnostics native tests | All passed. This validates the pinned inherited implementations, not the preparation-only Android port and not independent performance evidence. |
+| Bloodborne `f241353…` | `test_aot_native.cpp`, `test_aot_strict.cpp`, `test_aot_variants.cpp`; `test_uma_granules.c` with production `src/runtime_memory.c` at 256 and 2048 KiB | All AOT tests passed. Both UMA stress configurations passed with zero lost writes. At 256 KiB the log's longest compaction freeze was 11.931 ms and demotion-hammer maximum 0.61 ms; at 2048 KiB they were 21.700 ms and 13.54 ms. These host stress timings are not frame times, but reinforce that UMA operations have nontrivial cost/risk. |
+| Black-mobiu / PrototypeRecomp | Inventory only | Black-mobiu's checked-out tests concern launcher/touch behavior, not its Vulkan renderer/cache. PrototypeRecomp has no test directory at the pin. No unrelated UI test was used as performance evidence. |
+
+The first GoW III Python invocation had three harness errors: two files were absent from the sparse checkout and one module required direct-script import semantics. The original log is retained as `tests/gow3/run-initial-harness-errors.log`. Sixteen files from the same pinned commit were materialized under `/scripts/` and `/tools/android/config/`; direct-script reruns then passed. No external source was edited and the checkout remained at the same clean commit. The successful native and Python logs are `run-native-rerun.log` and `run-python-rerun.log`.
+
 ## Baseline equivalence check — DXVK 2.5.3 source
 
 This is a dependency check, not a sixth mandatory repository or a replacement proposal. The exact tag used by `android/build-deps.sh` was cloned separately at `v2.5.3`, commit `c707d9026f33b6ab89639f154b6ac5f6326fa037`; its `LICENSE` is zlib/libpng, SHA-256 `a5cb1a6ded7d2d7e92d550ba28edd21be2d1d4044662b399887351023e30ce64`. Key-file hashes and provenance are `/tmp/protodroid-016/audit/dxvk-key-file-hashes.txt` and `dxvk-provenance.txt`.
