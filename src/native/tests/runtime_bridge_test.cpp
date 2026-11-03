@@ -113,41 +113,43 @@ void CheckMiscReturn(const Ctx& ctx, uint32_t expected, int args, const char* me
 }
 
 void CheckSetjmpRoundTrip() {
+    // longjmp must never make the fixture's automatic local state indeterminate. Static storage also keeps this
+    // test warning-clean under newer GCC versions' -Wclobbered analysis.
+    static Ctx ctx;
+    static jmp_buf* host;
     constexpr uint32_t guest_buf = 0x12340;
-    Ctx* ctx = new Ctx;
-    memset(ctx, 0, sizeof(*ctx));
-    ctx->esp = 0x9000;
-    ctx->ebp = 0x11111111;
-    ctx->ebx = 0x22222222;
-    ctx->esi = 0x33333333;
-    ctx->edi = 0x44444444;
-    ctx->st_top = 3;
-    ctx->fpu_cw = 0x027f;
-    ctx->eax = 0xaaaaaaaa;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.esp = 0x9000;
+    ctx.ebp = 0x11111111;
+    ctx.ebx = 0x22222222;
+    ctx.esi = 0x33333333;
+    ctx.edi = 0x44444444;
+    ctx.st_top = 3;
+    ctx.fpu_cw = 0x027f;
+    ctx.eax = 0xaaaaaaaa;
 
-    jmp_buf* host = RecompSetjmpPrepare(ctx, guest_buf);
+    host = RecompSetjmpPrepare(&ctx, guest_buf);
     Check(host != nullptr, "setjmp preparation returned no host jump buffer");
     if (setjmp(*host) == 0) {
-        RecompSetjmpResume(ctx, guest_buf);
-        Check(ctx->eax == 0, "initial setjmp resume did not return zero");
-        ctx->esp = 0xdead0000;
-        ctx->ebp = 0xdead0001;
-        ctx->ebx = 0xdead0002;
-        ctx->esi = 0xdead0003;
-        ctx->edi = 0xdead0004;
-        ctx->st_top = 7;
-        ctx->fpu_cw = 0xffff;
-        RecompLongjmp(ctx, guest_buf, 7);
+        RecompSetjmpResume(&ctx, guest_buf);
+        Check(ctx.eax == 0, "initial setjmp resume did not return zero");
+        ctx.esp = 0xdead0000;
+        ctx.ebp = 0xdead0001;
+        ctx.ebx = 0xdead0002;
+        ctx.esi = 0xdead0003;
+        ctx.edi = 0xdead0004;
+        ctx.st_top = 7;
+        ctx.fpu_cw = 0xffff;
+        RecompLongjmp(&ctx, guest_buf, 7);
     }
 
-    RecompSetjmpResume(ctx, guest_buf);
-    Check(ctx->esp == 0x9000 && ctx->ebp == 0x11111111 && ctx->ebx == 0x22222222,
+    RecompSetjmpResume(&ctx, guest_buf);
+    Check(ctx.esp == 0x9000 && ctx.ebp == 0x11111111 && ctx.ebx == 0x22222222,
           "longjmp did not restore the stack/frame registers");
-    Check(ctx->esi == 0x33333333 && ctx->edi == 0x44444444,
+    Check(ctx.esi == 0x33333333 && ctx.edi == 0x44444444,
           "longjmp did not restore the callee-saved registers");
-    Check(ctx->st_top == 3 && ctx->fpu_cw == 0x027f, "longjmp did not restore floating-point state");
-    Check(ctx->eax == 7, "longjmp return value was not preserved");
-    delete ctx;
+    Check(ctx.st_top == 3 && ctx.fpu_cw == 0x027f, "longjmp did not restore floating-point state");
+    Check(ctx.eax == 7, "longjmp return value was not preserved");
 }
 
 void CheckUnknownSetjmpResumeFailsCleanly() {
