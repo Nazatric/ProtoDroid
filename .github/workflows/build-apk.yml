@@ -335,6 +335,9 @@ jobs:
       - name: Test ordinary-play hot-path and failed-driver recovery policies
         run: python3 tools/test_runtime_performance.py
 
+      - name: Test performance-evidence comparability guards
+        run: python3 tools/test_perf_evidence.py
+
       - name: Test compatibility controls and graphics policies
         run: python3 tools/test_compatibility_batch.py
 
