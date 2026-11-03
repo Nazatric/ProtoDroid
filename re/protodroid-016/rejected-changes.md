@@ -34,6 +34,14 @@ These are source/applicability decisions, not controlled performance experiments
 - **Generated/upscaled frames as performance evidence:** rejected. Bloodborne's 29.2 game-FPS result is not 60 real FPS, and GoW III PC/upscaler scenes are not ProtoDroid phone results.
 - **ISS as independent confirmation:** rejected. Its Android port is preparation-only, and its async/draw/staging implementations share substantial lineage with the GoW III fork.
 
+## Phase 3 rejected evidence uses
+
+- **Optimized RCF gprof call graphs:** rejected for attribution because impossible/unreachable arcs persisted in PIE and non-PIE diagnostics. Limited reachable flat PC samples remain only with startup/teardown/harness exclusions.
+- **Historical heavy pipeline trace as clean timing:** rejected because shader dumps and `fsync` ran inside the compile lock for all 171 graphics calls. Future timing must separate `pipeline_trace=0` from structural tracing.
+- **Original Bink decode cohort:** rejected after proving the evidence-only guest stack overlapped input at offset 3,145,712. Its old digest/timings and resulting frame-73 failure are not production evidence; corrected dedicated-stack cohorts are retained separately.
+- **Cross-harness or instruction-count rankings:** rejected. DXT, mixer, RCF, Bink, and historical windows have no common frame denominator, and AArch64 instruction counts are not cycle/device shares.
+- **Ascending-only destination-slot interpretation:** rejected as confounded by order/frequency. The retained result uses three ascending plus three descending repetitions and paired ratios, still without claiming cache causation or ARM64 transfer.
+
 ## Experimentally rejected candidates
 
 None yet; no optimization experiment has been run in 0.16.
