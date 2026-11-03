@@ -31,10 +31,11 @@ final class GameSettings {
     static final int CATEGORY_COUNT = 5;
 
     private static final String PRESET_KEY = "graphics_preset";
+    private static final String AA_PRESET_CLEANUP_KEY = "aa_preset_independence_cleanup_v1";
     private static final Object INI_LOCK = new Object();
     private static final String[] PRESET_KEYS = {
             "render_height", "texture_skip_mips", "max_anisotropy",
-            "game_aa_level", "game_shadow_detail", "game_graphic_quality", "decode_16bit",
+            "game_shadow_detail", "game_graphic_quality", "decode_16bit",
     };
 
     static final class Setting {
@@ -206,11 +207,11 @@ final class GameSettings {
                     new int[] {0, 1}, true),
     };
 
-    // Presets cover both port and game video options. FPS, battery and every control preference stay untouched.
+    // Presets cover port graphics plus shadow/quality options. AA, FPS, battery and controls stay independent.
     private static final int[][] PRESET_VALUES = {
-            {0, 2, 0, 1, 1, 1, 1},  // Low: 540p, quarter, 1x; reduced DXT1 color, AA off, low shadows/quality
-            {1, 1, 0, 4, 2, 2, 1},  // Medium: 720p, half, 1x; reduced DXT1 color, FXAA, medium shadows/quality
-            {3, 0, 3, 4, 3, 3, 0},  // High: 1080p, full, 8x; full DXT1 color, FXAA, high shadows/quality
+            {0, 2, 0, 1, 1, 1},  // Low: 540p, quarter textures, 1x, reduced DXT1 color, low shadows/quality
+            {1, 1, 0, 2, 2, 1},  // Medium: 720p, half textures, 1x, reduced DXT1 color, medium shadows/quality
+            {3, 0, 3, 3, 3, 0},  // High: 1080p, full textures, 8x, full DXT1 color, high shadows/quality
     };
 
     private final Context context;
@@ -234,15 +235,20 @@ final class GameSettings {
         graphicsPreset = prefs.getInt(PRESET_KEY, detectPreset());
         if (graphicsPreset < PRESET_LOW || graphicsPreset > PRESET_CUSTOM) graphicsPreset = PRESET_CUSTOM;
 
-        // Updating the preset definitions alone would leave existing users on the exact MSAA values that caused the
-        // corruption. Migrate only those old preset-owned AA indices. setIndex() marks manual changes Custom, so a
-        // custom configuration or a deliberate return to MSAA is never rewritten here.
+        // Older presets owned AA and could leave broken MSAA or automatic FXAA behind. Clean up only exact values
+        // written by those presets, once. Afterwards AA is independent, so even the same value may be an explicit choice.
+        boolean aaCleanupDone = prefs.getBoolean(AA_PRESET_CLEANUP_KEY, false);
         Setting aa = settings[settingIndex("game_aa_level")];
-        int migratedAa = AaPolicy.migratePresetAaIndex(graphicsPreset, aa.index);
-        if (migratedAa != aa.index) {
-            aa.index = migratedAa;
-            prefs.edit().putInt(aa.key, migratedAa).apply();
-            writeEngineSettings(new String[] {aa.key});
+        int migratedAa = AaPolicy.migratePresetOwnedAaIndex(aaCleanupDone, graphicsPreset, aa.index);
+        if (!aaCleanupDone) {
+            boolean cleanupAa = migratedAa != aa.index;
+            SharedPreferences.Editor cleanup = prefs.edit().putBoolean(AA_PRESET_CLEANUP_KEY, true);
+            if (cleanupAa) {
+                aa.index = migratedAa;
+                cleanup.putInt(aa.key, migratedAa);
+            }
+            cleanup.apply();
+            if (cleanupAa) writeEngineSettings(new String[] {aa.key});
         }
     }
 
@@ -290,8 +296,8 @@ final class GameSettings {
         }
         graphicsPreset = preset;
         editor.putInt(PRESET_KEY, preset).apply();
-        // A preset owns only its seven graphics keys. In particular, do not rewrite an explicitly configured
-        // fps_limit/battery_saver/unlock_menu_fps value from an unrelated preference default.
+        // A preset owns only these six graphics keys. AA and explicitly configured FPS/battery/menu/control values
+        // must not be rewritten from preset defaults or removed from the user's engine configuration.
         writeEngineSettings(PRESET_KEYS);
     }
 

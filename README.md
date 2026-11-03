@@ -80,7 +80,7 @@ The original native Android launcher’s **Settings** page keeps graphics, drive
 - **Interface:** Screen orientation, Opacity, and Show FPS. Fixed Landscape/Reverse is an optional recovery for devices that choose the wrong direction; Auto remains the default.
 - **Engine fixes:** Optional FOV, shadow-map, tick/QTE, loose-file, developer-menu, VRAM-report, and texture-dump policies. Safe defaults remain unchanged until you opt in.
 
-**Low, Medium, and High presets** update only the graphics and game-video options. Medium/High use FXAA; High keeps full 32-bit decoded DXT1 color, while Low/Medium retain the lower-bandwidth 16-bit path. Exact old Medium/High AA preset values migrate to FXAA once; Custom and explicit MSAA choices are preserved. Your FPS and control preferences stay as they are. Choose **Custom** after changing an individual graphics row. Use **Settings → Controls → Touch layout** or the in-game **LAYOUT** editor to arrange controls or reset the layout.
+**Low, Medium, and High presets** update resolution, textures, anisotropy, DXT1 color, shadows, and graphic quality without changing **Anti-Alias Level**. Old preset-owned Medium/High MSAA or FXAA values return to **Game default** once; Low’s existing Off value and all Custom/explicit AA choices are preserved. High keeps full 32-bit decoded DXT1 color, while Low/Medium retain the lower-bandwidth 16-bit path. FPS and control preferences stay as they are. Choose **Custom** after changing a preset-owned graphics row; AA remains independent. Use **Settings → Controls → Touch layout** or the in-game **LAYOUT** editor to arrange controls or reset the layout.
 
 ### Mods and engine fixes
 

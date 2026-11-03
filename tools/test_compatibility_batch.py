@@ -31,15 +31,23 @@ assert "keyboard.show();" in press, "ABC must open ProtoDroid's in-game PC keybo
 assert "SDLActivity.showTextInput" not in touch, "the old Android IME action returned"
 assert press.index("if (b.keyboard)") < press.index("key(b.keycode, true)"), "keyboard action must not become a keycode"
 
-assert '"game_aa_level", "game_shadow_detail", "game_graphic_quality", "decode_16bit"' in settings
-assert "{0, 2, 0, 1, 1, 1, 1}" in settings
-assert "{1, 1, 0, 4, 2, 2, 1}" in settings, "Medium must avoid built-in MSAA and select FXAA"
-assert "{3, 0, 3, 4, 3, 3, 0}" in settings, "High must select FXAA and full 32-bit DXT1 color"
+preset_keys = settings.split("private static final String[] PRESET_KEYS", 1)[1].split("};", 1)[0]
+for key in ("render_height", "texture_skip_mips", "max_anisotropy", "game_shadow_detail", "game_graphic_quality", "decode_16bit"):
+    assert f'"{key}"' in preset_keys, f"preset lost {key}"
+assert '"game_aa_level"' not in preset_keys, "graphics presets still own the broken AA setting"
+assert "{0, 2, 0, 1, 1, 1}" in settings
+assert "{1, 1, 0, 2, 2, 1}" in settings
+assert "{3, 0, 3, 3, 3, 0}" in settings, "High must retain full 32-bit DXT1 color without selecting AA"
 assert 'new String[] {"Game default", "Off", "2x MSAA", "4x MSAA", "FXAA"}' in settings
 assert 'new int[] {-1, 0, 1, 2, AaPolicy.FXAA_VALUE}' in settings, "AA preference indices were not append-only"
-assert "AaPolicy.migratePresetAaIndex(graphicsPreset, aa.index)" in settings
-assert "preset == MEDIUM_PRESET && currentIndex == OLD_MEDIUM_AA_INDEX" in aa_policy
-assert "preset == HIGH_PRESET && currentIndex == OLD_HIGH_AA_INDEX" in aa_policy
+assert "AaPolicy.migratePresetOwnedAaIndex(aaCleanupDone, graphicsPreset, aa.index)" in settings
+assert 'prefs.getBoolean(AA_PRESET_CLEANUP_KEY, false)' in settings, "preset-owned AA cleanup is not one-time"
+assert "boolean cleanupAa = migratedAa != aa.index;" in settings
+assert "if (cleanupAa) writeEngineSettings(new String[] {aa.key});" in settings
+assert "if (cleanupDone) return currentIndex;" in aa_policy, "explicit AA can be migrated again after cleanup"
+assert "currentIndex == OLD_MEDIUM_AA_INDEX || currentIndex == FXAA_INDEX" in aa_policy
+assert "currentIndex == OLD_HIGH_AA_INDEX || currentIndex == FXAA_INDEX" in aa_policy
+assert "return GAME_DEFAULT_INDEX;" in aa_policy
 assert 'setenv("PROTODROID_FXAA", fxaa ? "1" : "0", 1)' in main
 assert "AaDxvkConfig(SettingInt(\"game_aa_level\", kAaGameDefault), dxvk_config)" in main
 assert "AaPresentSampleType(aa, uint32_t(p.MultiSampleType))" in d3d9

@@ -1,9 +1,10 @@
 package com.protodroid;
 
-/** Pure policy for the one-time 0.15 preset migration; kept independent of Android for host tests. */
+/** Pure policy for the one-time cleanup of AA values written by older presets. */
 final class AaPolicy {
     static final int FXAA_VALUE = 3;
     static final int FXAA_INDEX = 4;
+    static final int GAME_DEFAULT_INDEX = 0;
 
     private static final int MEDIUM_PRESET = 1;
     private static final int HIGH_PRESET = 2;
@@ -12,10 +13,18 @@ final class AaPolicy {
 
     private AaPolicy() {}
 
-    static int migratePresetAaIndex(int preset, int currentIndex) {
-        // Only exact values written by the old presets are migrated. Custom and explicit MSAA choices remain intact.
-        if (preset == MEDIUM_PRESET && currentIndex == OLD_MEDIUM_AA_INDEX) return FXAA_INDEX;
-        if (preset == HIGH_PRESET && currentIndex == OLD_HIGH_AA_INDEX) return FXAA_INDEX;
+    static int migratePresetOwnedAaIndex(boolean cleanupDone, int preset, int currentIndex) {
+        // Low's old Off value is already safe. Medium/High return only their exact old preset-owned MSAA/FXAA
+        // values to Game default. After the one-time cleanup, every value may be an explicit independent choice.
+        if (cleanupDone) return currentIndex;
+        if (preset == MEDIUM_PRESET
+                && (currentIndex == OLD_MEDIUM_AA_INDEX || currentIndex == FXAA_INDEX)) {
+            return GAME_DEFAULT_INDEX;
+        }
+        if (preset == HIGH_PRESET
+                && (currentIndex == OLD_HIGH_AA_INDEX || currentIndex == FXAA_INDEX)) {
+            return GAME_DEFAULT_INDEX;
+        }
         return currentIndex;
     }
 }

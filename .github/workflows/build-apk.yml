@@ -343,7 +343,7 @@ jobs:
           python3 tools/test_touch_controls.py
           python3 tools/test_sdl_controls_patch.py
 
-      - name: Compile and run AA preset migration tests
+      - name: Compile and run AA preset independence tests
         run: |
           set -euo pipefail
           rm -rf /tmp/protodroid-aa-policy-test
