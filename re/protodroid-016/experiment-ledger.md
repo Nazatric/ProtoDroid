@@ -144,3 +144,78 @@ Every experiment records hypothesis, exact baseline/candidate revisions, changed
 - Raw result: Present baseline/ADPF count/FPS/percentile/detailed-total tests pass; diagnostics opt-in/window/CPU/worst-event/`/proc` tests pass; performance-hint tests pass; parser fixtures, real-log coverage, mixed-revision rejection, and A/B comparability guards pass. Historical summary has 61 Present-wall records and 20 tested phases; labeled self-compare is `comparable=false` with `no common tested phases with performance metrics`.
 - Correctness: all executables/tests exited zero. The final summary initially asserted 60 Present-wall records and failed; actual output is 61, preserved in `summary-initial-failure.log`. Parser `present_windows` means Present API wall duration, not Presented-frame intervals; current per-phase frame metrics are separate.
 - Decision: **instrumentation logic validated for covered cases; no optimization decision**. No hardware timing accuracy, visual correctness, device FPS, or historical A/B claim.
+
+## P4-DISPATCH — Production-scale split lookup storage
+
+- Hypothesis: parallel 32-bit key and function-pointer arrays reduce probe/allocation footprint without changing dispatch semantics; an indexed-slot variant may reduce memory further but can alter hot lookup costs.
+- Baseline/candidate: `f1737b23a6c4fcaf9255b0f4f4cd765ea2f5a704`; original/split/indexed evidence sources and diffs under `phase-04/dispatch/`. Split was then applied to uncommitted `src/native/runtime.cpp` (checkpoint SHA-256 `e4c117dc40c369e05b99071a85cdbd7a37b438303b59ad23cfe008e5dc540299`); indexed slots were not applied.
+- Exact files/environment/settings: actual `runtime.cpp`/`imports.cpp`, all 126,974 real table associations, generated checked stubs, x86-64 GCC 12.2.0; normal `-O2`, UBSan, TSan, and eight-thread first-use. No game scene or graphics cache. Cold fresh processes and warm full-table verification are separate; direct-shell cold RSS, order-balanced 2,000,000-call A/B, and independent 5,000,000-call confirmation, seven batches each.
+- Raw result: original/split cold medians 2.315824/1.778324 ms and maxRSS 11,668/10,472 KiB. Confirmation original/split ns/call: lookup 14.193864/12.466144, repeat 2.665343/2.459777, miss 25.560324/15.328398, dispatch 22.684933/21.398173; paired ratios 0.875280/0.919683/0.601714/0.937314, dispatch paired p95 1.002434. Initial indexed repeat regressed (candidate/original paired ratio 1.052112), with variable other gains. Full raw tables and failures are in `dispatch/ab-summary.*`, `confirm-summary.*`, and per-process logs.
+- Correctness: all final layouts pass 126,974 lookups/dispatches, misses, UBSan/TSan, and concurrent first-use. Original/split pass runtime bridge; actual post-patch split also passes guest memory, detour, plugin v1/v2, feature-policy, and production assembly-equivalence checks. Permanent five-entry same-hash fixture passes on original and split. Initial index target-zero and production conversion/fixture-path failures are preserved and excluded.
+- Initial decision: **provisionally adopt split arrays for integration; reject parallel indexed slots**. This was superseded by P4-LOCALITY: split was later rejected for production and reverted. The standard-cohort chronology and synthetic host/memory evidence remain valid, but are not Android timing, FPS, frame pacing, or an actual target trace.
+
+## P4-DIRECT — Flat address-indexed dispatch table
+
+- Hypothesis: direct indexing could remove hash probes if the real entry addresses have a sufficiently dense aligned span.
+- Baseline/candidate: exact address list from `f1737b23`; evidence-only distribution analysis, no runtime candidate built.
+- Environment/settings/scene/cache: corrected first-column parser over 126,974 addresses; analytical memory/alignment model only, no scene/cache/timing.
+- Raw result: addresses span `0x7c001005`–`0x7cd8ba20`, lack uniform alignment above one byte, and would need 113,594,592 pointer bytes at byte granularity versus 3,145,728 split-hash bytes. Invalid initial two-column token parse is preserved.
+- Correctness/decision: count/uniqueness/range assertions pass after correction; **reject flat direct table** on memory/alignment grounds. No performance or device claim.
+
+## P4-HASH-SIZE — 17/18/19-bit split-table sizing
+
+- Hypothesis: a smaller table could save memory, or a larger table could reduce probes enough to justify its storage/cold cost.
+- Baseline/candidate: current split 18-bit source versus evidence-only 17/19-bit one-line size variants under `dispatch/hash-size/`; no production size change.
+- Environment/settings/scene/cache: exact addresses and checked stubs; normal+UBSan full verification and eight-thread UBSan first-use for all sizes. Seventeen-bit received only a separate 10,000-call smoke after analytical rejection. Eighteen/nineteen received 24 direct-shell cold pairs and 12 alternating warm pairs/mode at 2,000,000 calls × seven batches. Python-launcher cold/RSS results are excluded; replacement cold data is `cold-shell.log`.
+- Raw result: 17-bit mean success/miss probes 12.873683/446.796510 (maxima 3,601/3,648). Nineteen-bit versus 18-bit cold medians 3.212444/2.139620 ms, paired ratio 1.525857; maxRSS 13,672/10,476 KiB. Nineteen/eighteen warm paired ratios: lookup 0.931419, repeat 1.010304, miss 0.753250, dispatch 0.966940, with retained ranges.
+- Correctness/decision: all built variants pass the stated checks and warm digests match. **Reject 17-bit; do not adopt 19-bit** because the memory/cold/repeat tradeoff lacks a real target-mix or device justification. No FPS inference.
+
+## P4-STATIC — Static-BSS versus heap split storage
+
+- Hypothesis: same-size static storage could remove allocation/pointer overhead without changing probes.
+- Baseline/candidate: current heap split `runtime.cpp` versus evidence-only `runtime_static18.cpp`; no production static-BSS change.
+- Environment/settings/scene/cache: exact-address normal/UBSan/TSan verification and eight-thread first-use; 24 direct-shell cold pairs and 12 alternating warm pairs/mode at 2,000,000 calls × seven batches; x86-64 ELF section inspection. No Android loader or scene run.
+- Raw result: static/heap cold paired median ratio 0.982646 (p95 1.058392), maxRSS medians 10,468/10,476 KiB. Warm static/heap ratios: lookup 0.980445, repeat 1.017245, miss 0.970544, dispatch 0.976700, with variability. Static adds 3,145,760 NOBITS bytes to the host benchmark ELF.
+- Correctness/decision: all stated checks and digests pass. **Inconclusive/not adopted**: small variable gains, repeated-target regression, and unknown Android loader behavior do not justify replacing heap allocation.
+
+## P4-HASH-CONST — Multiplicative hash-constant screen
+
+- Hypothesis: a same-cost constant might improve exact-table probe distributions without extra instructions or memory.
+- Baseline/candidate: current `0x9e3779b1` versus seven established odd multipliers; analytical evidence only in `dispatch/hash-function-model.json`, no production change or timing candidate.
+- Environment/settings/scene/cache: exact insertion order, successful probes, and four guaranteed-outside miss sequences; 18-bit/262,144-slot model. No scene/cache/timing.
+- Raw result: current mean success 1.343645 and mean across four miss models 2.251567. Alternatives trade small successful/miss changes in different directions; none gives a robust meaningful win. For example `0x165667b1` has success 1.344716 and miss mean 2.172965, while `0x7feb352d` has success 1.326177 but worse xor-high-bit misses than current.
+- Correctness/decision: all modeled sequences are verified outside the entry range; **inconclusive/no candidate adopted**, avoiding overfitting a synthetic sequence. No runtime or FPS claim.
+
+## P4-LOCALITY — Split-layout localized target sensitivity and reversal
+
+- Hypothesis: standard sequential/repeated/miss cohorts may not represent localized indirect targets; independent hot-set sampling should confirm or reverse provisional split adoption.
+- Baseline/candidate: original `runtime.cpp` versus the temporarily integrated split variant; exact evidence sources/binaries under `dispatch/locality/` and `locality-confirm/`. Production was restored to original SHA-256 `f19dce078f4ee54f2c1cb831df47335474e64c44933edf6b51d53ebef2faadf1` after this experiment.
+- Environment/settings/scene/cache: same x86-64 host, actual 126,974 addresses and checked stubs. Initial evenly spaced unique sets and independent uniform partial-Fisher-Yates shuffled sets; 16/256/4,096/16,384 targets, mixed one-miss-per-16 and localized dispatch. Twelve alternating pairs/case; initial 2,000,000 and confirmation 5,000,000 calls × seven batches. No actual scene/target trace.
+- Raw result: initial/confirmation split-original paired medians: lookup16 1.048833/1.035959, lookup256 1.036827/1.034367, lookup4096 0.931069/0.959913, lookup16384 1.120699/1.157686; mixed16 1.022126/1.017227; mixed4096 0.982776/1.010203; dispatch16 0.992150/1.011768; dispatch4096 0.976991/0.936729. Later three/four-layout screenings reproduce directional localized costs with variability.
+- Correctness: both layouts pass UBSan full verification and all initial locality smoke cases; every timed pair has matching digest. Independent verifier recomputes all medians/ratios from raw logs.
+- Decision: **reject split for production and revert the provisional patch**. Full-dispatch gains in some modes do not resolve raw localized lookup regressions or unknown real target mix. No FPS/device inference.
+
+## P4-LAYOUTS — Interleaved index8, packed12, and aligned buckets
+
+- Hypothesis: keeping key/function information closer could remove split's localized cost while retaining a smaller table.
+- Baseline/candidate: original and split versus evidence-only 8-byte interleaved key/index, packed 12-byte key/function, and aligned two/four-entry buckets under `dispatch/index8/`, `packed12/`, and `buckets/`; none was applied to production.
+- Environment/settings/scene/cache: same exact-address standard plus shuffled-locality harness; 12 rotated/reversed processes per layout/case, 2,000,000 calls × seven batches. Normal full verification for all, UBSan/TSan/concurrency as recorded per candidate. No scene/device cache.
+- Raw result: index8 ratios reach 1.808098 lookup16384 and 1.169088 dispatch4096. Packed12 ratios include 1.004018 sequential lookup, 1.027609 lookup16, 1.031651 lookup16384, and 1.031758 dispatch4096. Bucket2/bucket4 repeat ratios are 1.0676/1.0996 and lookup16384 ratios 1.0705/1.0521; neither improves standard misses.
+- Correctness: every timed trio/quartet has matching digest; stated normal/UBSan/TSan/concurrent checks pass. Initial bucket cast failure is preserved before valid measurement.
+- Decision: **reject all three alternatives and stop the layout search**. No robust workload-independent win or Android unaligned/indexing tradeoff is established.
+
+## P4-GENERATED — Generated dispatch/TSO source and assembly audit
+
+- Hypothesis: static generated-code analysis can determine whether flat-direct guards or obvious residual ordering work remains before considering a semantics-sensitive candidate.
+- Baseline/candidate: unchanged generated source at `f1737b23`; no optimization candidate. Evidence under `phase-04/generated/`.
+- Exact files/environment: all 192 `part_*.c` files/126,974 functions; aggregate path/content hash and per-file census. `part_0005.c` compiled with isolated Zig/LLVM 22.1.8 for AArch64-musl, production-like flat memory/TSO flags. No execution or scene.
+- Raw result: 280,274 direct guards have fallback dispatch eliminated under flat memory, leaving 23,575 residual sites (1,671 constant/21,904 computed). Source has 579,100 shared scalar and 301,179 plain-stack scalar access sites. Partition assembly has five residual dispatch call/branches matching source, no `RecompDirect`, and static 159 acquire/142 release/272 DMB instructions.
+- Correctness/decision: source/census/assembly hashes and structural assertions pass. **No TSO/alignment relaxation adopted**: static slow-path instructions are not dynamic costs, and no target trace/Android timing supports a semantics change. Full native linking is unavailable because DXVK/FAudio/FFmpeg dependencies are absent.
+
+## P4-VERIFY — Independent raw-cohort integrity check
+
+- Hypothesis: an independent parser can validate process counts, work/digests, and all locality/alternative summary statistics before final disposition.
+- Baseline/candidate: no runtime candidate; current production must equal original `f19dce078f4ee54f2c1cb831df47335474e64c44933edf6b51d53ebef2faadf1`.
+- Exact files/environment: `phase-04/verify_phase04.py`, raw logs and summaries across all dispatch cohorts; no new timing or scene.
+- Raw result: 2,778 timed processes verified: 90 initial cold, 288 initial warm, 288 confirmation warm, 1,824 locality/alternative, and 288 size/static cold/warm. All entry/iteration/batch/count/digest checks and independent locality/alternative median/ratio recomputations pass.
+- Correctness/decision: **evidence integrity pass**; original runtime hash confirmed. This adds no performance or device claim.

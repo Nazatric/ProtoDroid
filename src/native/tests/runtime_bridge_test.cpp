@@ -45,6 +45,11 @@ void RecompiledProbe(Ctx* c) {
     native::Return(c, 0x11223344u);
 }
 
+void CollisionProbe1(Ctx* c) { native::Return(c, 0xc011de01u); }
+void CollisionProbe2(Ctx* c) { native::Return(c, 0xc011de02u); }
+void CollisionProbe3(Ctx* c) { native::Return(c, 0xc011de03u); }
+void CollisionProbe4(Ctx* c) { native::Return(c, 0xc011de04u); }
+
 void PrepareImportCall(Ctx* c) {
     memset(c, 0, sizeof(*c));
     c->esp = 0x8000;
@@ -75,6 +80,15 @@ void CheckRecompiledCall(Ctx* c, uint32_t target, Ctx* outer) {
     Check(native::tl_ctx == outer, "recompiled dispatch changed the outer guest context");
     Check(c->eax == 0x11223344u, "recompiled target did not run");
     Check(c->ret_target == 0x5555u && c->esp == 0x8004, "recompiled return changed");
+}
+
+void CheckCollisionCall(Ctx* c, uint32_t target, uint32_t expected) {
+    memset(c, 0, sizeof(*c));
+    c->esp = 0x8000;
+    W32(c->esp, 0x5555u);
+    RecompDispatch(c, target);
+    Check(c->eax == expected, "collision chain returned the wrong function association");
+    Check(c->ret_target == 0x5555u && c->esp == 0x8004, "collision-chain return changed");
 }
 
 void CheckOleAut32Route(const char* name, const char* ordinal, uint32_t expected, int args) {
@@ -225,8 +239,13 @@ struct RecompTableEntry {
     uint32_t va;
     RecompFn fn;
 };
-extern const RecompTableEntry g_recomp_table[] = {{0x110100u, RecompiledProbe}};
-extern const uint32_t g_recomp_count = 1;
+// All five entries have hash 0x130ea under the production 18-bit multiplier. Distinct results verify that probing
+// keeps every key associated with its own function, rather than merely returning a non-null slot.
+extern const RecompTableEntry g_recomp_table[] = {
+    {0x110100u, RecompiledProbe}, {0x11c675u, CollisionProbe1}, {0x1691f5u, CollisionProbe2},
+    {0x17576au, CollisionProbe3}, {0x1c22eau, CollisionProbe4},
+};
+extern const uint32_t g_recomp_count = 5;
 volatile uint32_t RecompDiagnosticTour = 0;
 }
 
@@ -288,6 +307,13 @@ int main() {
     // A normal computed guest call still reaches the recompiled-function table.
     CheckRecompiledCall(&ctx, 0x110100u, &outer);
     Check(g_recompiled_calls == 1, "direct recompiled target was not dispatched exactly once");
+
+    CheckCollisionCall(&ctx, 0x11c675u, 0xc011de01u);
+    CheckCollisionCall(&ctx, 0x1691f5u, 0xc011de02u);
+    CheckCollisionCall(&ctx, 0x17576au, 0xc011de03u);
+    CheckCollisionCall(&ctx, 0x1c22eau, 0xc011de04u);
+    Check(RecompLookup(0x1ce85fu) == nullptr, "same-hash unknown target became a false positive");
+    Check(RecompLookup(0) == nullptr, "empty zero key became a false positive");
 
     // An unresolved engine near-jump thunk still resolves to a recompiled target.
     W8(0x110000, 0xe9);
