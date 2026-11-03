@@ -45,7 +45,12 @@ F(waveOutReset) { Return(c, 0, 1); }
 // SHELL32 / SHLWAPI
 F(SHGetFolderPathA) {
     // Documents / AppData: saves and settings go to C:\Users\Player\... (native_c on the host).
-    strcpy(Str(Arg(c, 4)), "C:\\Users\\Player\\Documents");
+    char* output = Str(Arg(c, 4));
+    if (!output) {
+        Return(c, 0x80070057u, 5);  // E_INVALIDARG, not a native null-pointer write
+        return;
+    }
+    strcpy(output, "C:\\Users\\Player\\Documents");
     std::string host = HostPath("C:\\Users\\Player\\Documents");
     std::string cmd = host;
     for (size_t i = 1; i < cmd.size(); ++i) {
@@ -110,10 +115,15 @@ F(RpcStringFreeA) { Return(c, 0, 1); }
 
 // WS2_32: the network subsystem starts but every connection attempt fails.
 F(WSAStartup) {
-    uint32_t data = Arg(c, 1);
-    memset(Ptr<void>(data), 0, 400);
-    W16(data, 0x0202);
-    W16(data + 2, 0x0202);
+    const uint32_t address = Arg(c, 1);
+    void* data = Ptr<void>(address);
+    if (!data) {
+        Return(c, 10014, 2);  // WSAEFAULT, not a native null-pointer write
+        return;
+    }
+    memset(data, 0, 400);
+    W16(address, 0x0202);
+    W16(address + 2, 0x0202);
     Return(c, 0, 2);
 }
 F(WSACleanup) { Return(c, 0); }
@@ -133,6 +143,7 @@ F(WSACancelAsyncRequest) { Return(c, 0, 1); }
 
 #define E(dll, name) {dll, #name, x_##name}
 #define O(ord, name) {"ws2_32.dll", "#" #ord, x_##name}
+#define OLE(ord, name) {"oleaut32.dll", "#" #ord, x_##name}
 const ImportDef kMisc[] = {
     E("winmm.dll", timeGetTime), E("winmm.dll", timeSetEvent), E("winmm.dll", timeKillEvent),
     E("winmm.dll", waveOutGetNumDevs), E("winmm.dll", waveOutGetDevCapsA), E("winmm.dll", waveOutOpen),
@@ -144,6 +155,11 @@ const ImportDef kMisc[] = {
     E("oleaut32.dll", SysAllocString), E("oleaut32.dll", SysAllocStringLen), E("oleaut32.dll", SysFreeString),
     E("oleaut32.dll", VariantInit), E("oleaut32.dll", VariantClear), E("oleaut32.dll", VariantChangeType),
     E("oleaut32.dll", CreateErrorInfo), E("oleaut32.dll", SetErrorInfo), E("oleaut32.dll", GetErrorInfo),
+    // The engine imports these same nine exports by ordinal. Keep the exact slots on their real named handlers;
+    // mappings follow Wine's oleaut32.spec rather than treating an ordinal as a new or successfully stubbed API.
+    OLE(2, SysAllocString), OLE(4, SysAllocStringLen), OLE(6, SysFreeString), OLE(8, VariantInit),
+    OLE(9, VariantClear), OLE(12, VariantChangeType), OLE(200, GetErrorInfo), OLE(201, SetErrorInfo),
+    OLE(202, CreateErrorInfo),
     E("setupapi.dll", SetupDiGetClassDevsA), E("setupapi.dll", SetupDiEnumDeviceInterfaces),
     E("setupapi.dll", SetupDiGetDeviceInterfaceDetailA), E("setupapi.dll", SetupDiGetDeviceRegistryPropertyA),
     E("setupapi.dll", SetupDiGetDeviceInterfaceAlias), E("setupapi.dll", SetupDiDestroyDeviceInfoList),
@@ -159,6 +175,7 @@ const ImportDef kMisc[] = {
 };
 #undef E
 #undef O
+#undef OLE
 ImportRegistrar g_misc(kMisc);
 
 }  // namespace

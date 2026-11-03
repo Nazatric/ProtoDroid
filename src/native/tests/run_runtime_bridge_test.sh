@@ -9,7 +9,7 @@ CXX=${CXX:-g++}
 "$CXX" -std=c++17 -O1 -g -Wall -Wextra -Werror -Wno-unused-parameter \
   -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_TSO -DRECOMP_GUEST_BASE=0ull \
   -I"$ROOT/src/native" \
-  "$ROOT/src/native/runtime.cpp" "$ROOT/src/native/imports.cpp" \
+  "$ROOT/src/native/runtime.cpp" "$ROOT/src/native/imports.cpp" "$ROOT/src/native/misc.cpp" \
   "$ROOT/src/native/tests/runtime_bridge_test.cpp" -pthread -o "$OUT"
 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 "$OUT"
 

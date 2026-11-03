@@ -73,6 +73,41 @@ void CheckRecompiledCall(Ctx* c, uint32_t target, Ctx* outer) {
     Check(c->ret_target == 0x5555u && c->esp == 0x8004, "recompiled return changed");
 }
 
+void CheckOleAut32Route(const char* name, const char* ordinal, uint32_t expected, int args) {
+    using namespace native;
+    const char* routes[] = {name, ordinal};
+    for (const char* route : routes) {
+        const uint32_t target = ImportThunk("oleaut32.dll", route);
+        Ctx ctx;
+        memset(&ctx, 0, sizeof(ctx));
+        ctx.esp = 0x8000;
+        W32(ctx.esp, 0x6666u);
+        W32(ctx.esp + 4, 0x6000u);
+        W32(ctx.esp + 8, 0x7000u);
+        W32(0x7000u, 0xdeadbeefu);
+        Check(DispatchImport(&ctx, target), "OLEAUT32 route was not an import thunk");
+        Check(ctx.eax == expected, "OLEAUT32 named/ordinal behavior differs");
+        Check(ctx.ret_target == 0x6666u, "OLEAUT32 return target changed");
+        Check(ctx.esp == 0x8004u + uint32_t(4 * args), "OLEAUT32 stdcall cleanup changed");
+        if (strcmp(name, "GetErrorInfo") == 0)
+            Check(R32(0x7000u) == 0, "OLEAUT32 GetErrorInfo did not clear the output object");
+    }
+}
+
+void PrepareMiscCall(Ctx* ctx, uint32_t arg0, uint32_t arg1) {
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->esp = 0x8000;
+    W32(ctx->esp, 0x7777u);
+    W32(ctx->esp + 4, arg0);
+    W32(ctx->esp + 8, arg1);
+}
+
+void CheckMiscReturn(const Ctx& ctx, uint32_t expected, int args, const char* message) {
+    Check(ctx.eax == expected, message);
+    Check(ctx.ret_target == 0x7777u, "misc import return target changed");
+    Check(ctx.esp == 0x8004u + uint32_t(4 * args), "misc import stdcall cleanup changed");
+}
+
 }  // namespace
 
 extern "C" {
@@ -114,6 +149,12 @@ GuestThread* CurrentThread() {
 int SettingInt(const char*, int fallback) { return fallback; }
 void DiagnosticTourGameplayObserved(uint32_t) {}
 
+// misc.cpp's production import table references these factory hooks and path helper. The selected OLEAUT32 and
+// null-boundary routes return without creating an audio, input, or host filesystem service.
+bool CreateXAudio2(uint32_t, uint32_t, uint32_t*) { return false; }
+bool CreateDirectInput8(uint32_t, uint32_t, uint32_t*) { return false; }
+std::string HostPath(const char*) { return {}; }
+
 }  // namespace native
 
 int main() {
@@ -152,6 +193,29 @@ int main() {
     CheckImportCall(&ctx, 0x110020u, &outer);
     Check(g_import_calls == 2, "followed import target was not dispatched exactly once");
 
-    puts("Runtime bridge argument, direct/followed dispatch, and guest-context checks passed");
+    // These ordinal keys occur in the shipped engine. Each must reach the existing named implementation rather than
+    // the fatal null-handler path, with the same return value and stdcall stack contract.
+    CheckOleAut32Route("SysAllocString", "#2", 0, 1);
+    CheckOleAut32Route("SysAllocStringLen", "#4", 0, 2);
+    CheckOleAut32Route("SysFreeString", "#6", 0, 1);
+    CheckOleAut32Route("VariantInit", "#8", 0, 1);
+    CheckOleAut32Route("VariantClear", "#9", 0, 1);
+    CheckOleAut32Route("VariantChangeType", "#12", 0x80004001u, 4);
+    CheckOleAut32Route("GetErrorInfo", "#200", 1, 2);
+    CheckOleAut32Route("SetErrorInfo", "#201", 0, 2);
+    CheckOleAut32Route("CreateErrorInfo", "#202", 0x80004001u, 1);
+
+    // Invalid output pointers must produce API errors rather than native null writes. These cases return before raw
+    // pointer access, so they are valid in this synthetic non-flat guest-memory fixture as well as on Android.
+    PrepareMiscCall(&ctx, 0, 0);
+    W32(ctx.esp + 20, 0);  // Arg(4): output path
+    Check(DispatchImport(&ctx, ImportThunk("shell32.dll", "SHGetFolderPathA")), "SHGetFolderPathA missing");
+    CheckMiscReturn(ctx, 0x80070057u, 5, "SHGetFolderPathA accepted a null output pointer");
+
+    PrepareMiscCall(&ctx, 0x0202, 0);
+    Check(DispatchImport(&ctx, ImportThunk("ws2_32.dll", "WSAStartup")), "WSAStartup missing");
+    CheckMiscReturn(ctx, 10014, 2, "WSAStartup accepted a null WSADATA pointer");
+
+    puts("Runtime bridge arguments, OLEAUT32 ordinals, import boundaries, dispatch, and guest-context checks passed");
     return 0;
 }
