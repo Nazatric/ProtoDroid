@@ -1,6 +1,6 @@
 # Technique matrix
 
-**Phase 4 available source/host recompiler/dispatch research is complete after 1h00m01s. The provisional split and every alternative were rejected; the original runtime is restored. No runtime optimization is adopted.** **Phase 5 integration update:** direct DXT2–5 BGRA decoding plus invariant palette-alpha removal is adopted after controlled host and regression checks; direct packed16 integration forms are rejected. The phase remains active pending final verification/time gate. No physical-device improvement is claimed. `Useful candidate` means worth a controlled ProtoDroid experiment after profiling, not an expected FPS promise. `Already present` is not a 0.16 improvement. `Rejected at audit` means the proposed import is incompatible, unsafe, misleading, or duplicates existing behavior; it is not a claim that a controlled experiment was run.
+**Phase 4 available source/host recompiler/dispatch research is complete after 1h00m01s. The provisional split and every alternative were rejected; the original runtime is restored. No runtime optimization is adopted.** **Phase 5 is complete after 1h00m37.516840:** direct DXT2–5 BGRA decoding plus invariant palette-alpha removal is adopted after controlled host, regression, and exact-code CI checks; direct packed16 integration forms are rejected. No physical-device improvement is claimed. `Useful candidate` means worth a controlled ProtoDroid experiment after profiling, not an expected FPS promise. `Already present` is not a 0.16 improvement. `Rejected at audit` means the proposed import is incompatible, unsafe, misleading, or duplicates existing behavior; it is not a claim that a controlled experiment was run.
 
 | Priority | Technique/source | Concrete implementation | Expected benefit and evidence confidence | Correctness/device risk and cost | Required validation | Decision |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -33,9 +33,9 @@
 
 ## Ranking for the next phase
 
-1. **Phase 5 native hot paths:** test the Phase 3 DXT3/DXT5 destination/store-path sensitivity first with exact output and AArch64 NEON checks; use the real-DLL mixer differential as a separate lower-priority candidate. Do not revive rejected dispatch layouts or convert host nanoseconds into device FPS.
-2. Keep native DXT/mixer work for Phase 5, scheduling for Phase 6, RCF/I/O for Phase 7, and renderer/shader work for Phases 8–10; use the Phase 3 records rather than cross-ranking incompatible host workloads.
-3. Retain Bink/texture/audio candidates for Phase 11 and require decoded-output, pitch, synchronization, and both-audio-rate correctness.
+1. **Phase 6 scheduling and waits:** audit actual ProtoDroid thread/wait/affinity behavior with the existing CPU-affinity, performance-hint, present-statistics, and diagnostics fixtures. Measure before changing priorities, worker counts, spin/yield policy, or affinity; do not import fixed affinity from another project.
+2. Preserve the Phase 5 direct32 + palette-alpha candidate unchanged while scheduling is evaluated. Do not revive direct16, rowtile, noinline, lazy-alpha, or rejected dispatch layouts without new target evidence.
+3. Keep RCF/I/O for Phase 7 and renderer/shader work for Phases 8–10; use each phase's records rather than cross-ranking incompatible host workloads. Retain Bink/texture/audio candidates for Phase 11 with decoded-output, pitch, synchronization, and both-audio-rate correctness.
 4. Physical-device total-frame impact remains unranked. Future lightweight device timing must use `pipeline_trace=0`, with heavy structural tracing separate. No renderer, FEX, strict-AOT, unified-memory, or upscaling migration is justified.
 
 All physical-device FPS, visual correctness, shader latency, pacing, and thermal outcomes remain open. The numbers quoted in `repository-ledger.md` belong to their source projects and contexts; none is a ProtoDroid measurement.

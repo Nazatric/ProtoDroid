@@ -1,10 +1,11 @@
-# Phase 5 active checkpoint — native CPU hot paths and vectorization
+# Phase 5 completion report — native CPU hot paths and vectorization
 
-Status: **active; direct32 + palette-alpha is integrated and host-validated, but completion is pending final CI and the one-hour gate**. No device-performance or release claim exists.
+Status: **complete for available host/native hot-path research after 3,637.516840 seconds (1h00m37.516840)**. Direct32 + palette-alpha is adopted and exact-code CI tests are green. No physical-device FPS, frame-pacing, sustained-performance, packaging-completion, or release claim exists.
 
 ## 1. Actual time and work
 
 - Started: `2026-11-03T21:29:04Z`, from Phase 4 completion commit `a5d4d2436bbf77f23a333abe9992ae3934464200`.
+- Completion clock reading: `2026-11-03T22:29:41.516840Z`; cumulative active phase time **3,637.516840 seconds (1h00m37.516840)**. No idle-time or elapsed-time padding.
 - Initial work: preserved exact source hashes/copies and inspected the production DXT and native audio paths plus their differential/benchmark fixtures.
 - Phase 4 is complete after 1h00m01s. Its rejected dispatch layouts are not carried forward.
 
@@ -167,3 +168,15 @@ A further incremental palette/direct32 sweep ran **42 processes / 3,528 output-e
 Packed16 gains persist at every configuration. BGRA remains close to direct32; the 32-slot DXT3 ratio is a small regression rather than a uniform win. DXT1-32 remains about 1–1.6% slower at larger sizes. These are host decode ratios only.
 
 Final production source: `src/native/d3d9_dxt.cpp`, SHA-256 **`40c092c82ad0da0d606ea1da8c8a4bfbe041526b7b5e3b2bb16f2b1b0f038b1f`**. **Direct32 + palette-alpha is the final Phase 5 candidate.** It retains the large DXT3/DXT5 BGRA host gain, improves generic packed16 decoding, and preserves all tested output. No Android execution, FPS, frame-pacing, or sustained-device claim is made. Remaining work is final diff/manifest/CI and the one-hour phase gate.
+
+## 13. Exact-code CI and evidence limits
+
+Code commit **`77d0c7c2bb8485335ba843960b4742bef745b8ef`** was pushed to draft PR #38. On PR run `41729459844`, `bink-tests` (52 steps), `arm64-graphics-tests` (25 steps), driver-package tests, dependencies, and Turnip all report success. ARM64 graphics UBSan and native hot-replacement differential steps passed explicitly. The downstream `build-apk` job was still in progress when test validation was recorded; it was not cancelled, but packaging completion is not claimed or required for this native-hot-path phase.
+
+The ARM64 BC1 benchmark artifact uploaded successfully, but ZIP retrieval failed at GitHub's `productionresultsa2.blob.core.windows.net` redirect with EOF because that host is not reachable from the sandbox. The zero-byte failed download is preserved; **no ARM timing or artifact digest is available**. The workflow reference `29654c7d…` also differs from the Phase 5 baseline because it predates existing DXT1 direct paths, so even a retrieved DXT1 comparison would not have been an exact Phase 5 A/B. No benchmark result is inferred from upload success.
+
+The actual Makefile object rule also compiled the final source successfully with shared `-O2` followed by the required `-O3` and source revision `77d0c7c…`; no full link was attempted because its dependencies remain absent. The final real-DLL hot differential also passed: mixer 0/260, biquad 0/300, ADPCM 0/200, and skin 0/2000 differing trials with engine SHA `d331be205bdde99897952ee88261ab7e63c5c65e36a4660e2a367886a3537071`. The initial isolated-Python/Capstone and default-DLL-path failures ran no differential and are preserved; the successful run used the evidence-only script copy, explicit package path, and explicit original engine. Its informational mixer timing is not an adopted result.
+
+Remote scope checks also pass: PR #38 remains draft/open at the exact code commit, remote `main` remains `18ba66bd0945e405aaded0de5ff8848a8cd07932`, and the 0.15 release still exposes its 59,023,246-byte `prototype.apk` asset. No merge, tag, release, or replacement download was created.
+
+The guarded local preflight passed 14 source/evidence checks and then correctly refused completion at **2,980.545414 seconds**. A later full dry run passed 20 local/CI checks and also correctly refused at **3,368.791262 seconds**. The real finalizer then passed **24 checks** at **3,637.516840 seconds**, including exact source/scope, released-main/PR/release preservation, all differential/cohort integrity, final regression, Makefile object, real-DLL hot differential, and CI/artifact-limit checks. `phase5-final-verification.json` records the passing gate; Phase 5 is complete and Phase 6 scheduling work is next.
