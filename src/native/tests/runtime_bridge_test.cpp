@@ -1,5 +1,9 @@
 // Production runtime/import-dispatch tests with a small synthetic guest address space. No game files are required.
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <cstdarg>
+#include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -106,6 +110,59 @@ void CheckMiscReturn(const Ctx& ctx, uint32_t expected, int args, const char* me
     Check(ctx.eax == expected, message);
     Check(ctx.ret_target == 0x7777u, "misc import return target changed");
     Check(ctx.esp == 0x8004u + uint32_t(4 * args), "misc import stdcall cleanup changed");
+}
+
+void CheckSetjmpRoundTrip() {
+    constexpr uint32_t guest_buf = 0x12340;
+    Ctx* ctx = new Ctx;
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->esp = 0x9000;
+    ctx->ebp = 0x11111111;
+    ctx->ebx = 0x22222222;
+    ctx->esi = 0x33333333;
+    ctx->edi = 0x44444444;
+    ctx->st_top = 3;
+    ctx->fpu_cw = 0x027f;
+    ctx->eax = 0xaaaaaaaa;
+
+    jmp_buf* host = RecompSetjmpPrepare(ctx, guest_buf);
+    Check(host != nullptr, "setjmp preparation returned no host jump buffer");
+    if (setjmp(*host) == 0) {
+        RecompSetjmpResume(ctx, guest_buf);
+        Check(ctx->eax == 0, "initial setjmp resume did not return zero");
+        ctx->esp = 0xdead0000;
+        ctx->ebp = 0xdead0001;
+        ctx->ebx = 0xdead0002;
+        ctx->esi = 0xdead0003;
+        ctx->edi = 0xdead0004;
+        ctx->st_top = 7;
+        ctx->fpu_cw = 0xffff;
+        RecompLongjmp(ctx, guest_buf, 7);
+    }
+
+    RecompSetjmpResume(ctx, guest_buf);
+    Check(ctx->esp == 0x9000 && ctx->ebp == 0x11111111 && ctx->ebx == 0x22222222,
+          "longjmp did not restore the stack/frame registers");
+    Check(ctx->esi == 0x33333333 && ctx->edi == 0x44444444,
+          "longjmp did not restore the callee-saved registers");
+    Check(ctx->st_top == 3 && ctx->fpu_cw == 0x027f, "longjmp did not restore floating-point state");
+    Check(ctx->eax == 7, "longjmp return value was not preserved");
+    delete ctx;
+}
+
+void CheckUnknownSetjmpResumeFailsCleanly() {
+    const pid_t child = fork();
+    Check(child >= 0, "could not create unknown-jmp-buffer death-test process");
+    if (child == 0) {
+        freopen("/dev/null", "w", stderr);
+        Ctx ctx = {};
+        RecompSetjmpResume(&ctx, 0x12345000);
+        _exit(0);
+    }
+    int status = 0;
+    Check(waitpid(child, &status, 0) == child, "could not reap unknown-jmp-buffer death-test process");
+    Check(WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT,
+          "unknown jump buffer did not follow the controlled fatal diagnostic path");
 }
 
 }  // namespace
@@ -216,6 +273,9 @@ int main() {
     Check(DispatchImport(&ctx, ImportThunk("ws2_32.dll", "WSAStartup")), "WSAStartup missing");
     CheckMiscReturn(ctx, 10014, 2, "WSAStartup accepted a null WSADATA pointer");
 
-    puts("Runtime bridge arguments, OLEAUT32 ordinals, import boundaries, dispatch, and guest-context checks passed");
+    CheckSetjmpRoundTrip();
+    CheckUnknownSetjmpResumeFailsCleanly();
+
+    puts("Runtime bridge imports, boundaries, jump state, dispatch, and guest-context checks passed");
     return 0;
 }

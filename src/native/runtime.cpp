@@ -38,6 +38,7 @@ uint32_t HashOf(uint32_t va) { return (va * 2654435761u) >> (32 - kHashBits); }
 
 void BuildHash() {
     g_hash = static_cast<HashSlot*>(calloc(size_t(1) << kHashBits, sizeof(HashSlot)));
+    if (!g_hash) Fatal("cannot allocate the recompiled-function dispatch hash");
     for (uint32_t i = 0; i < g_recomp_count; ++i) {
         uint32_t h = HashOf(g_recomp_table[i].va);
         while (g_hash[h].va) h = (h + 1) & ((1u << kHashBits) - 1);
@@ -156,7 +157,10 @@ struct JmpSlots {
 thread_local JmpSlots* tl_jmp = nullptr;
 
 RecompJmpSlot* FindSlot(uint32_t guest_buf, bool create) {
-    if (!tl_jmp) tl_jmp = static_cast<JmpSlots*>(calloc(1, sizeof(JmpSlots)));
+    if (!tl_jmp) {
+        tl_jmp = static_cast<JmpSlots*>(calloc(1, sizeof(JmpSlots)));
+        if (!tl_jmp) return nullptr;
+    }
     for (auto& s : tl_jmp->slots) {
         if (s.guest_buf == guest_buf) return &s;
     }
@@ -171,6 +175,7 @@ RecompJmpSlot* FindSlot(uint32_t guest_buf, bool create) {
 
 extern "C" jmp_buf* RecompSetjmpPrepare(Ctx* ctx, uint32_t guest_buf) {
     RecompJmpSlot* s = FindSlot(guest_buf, true);
+    if (!s) Fatal("cannot allocate setjmp state for %08x", guest_buf);
     s->esp = ctx->esp;
     s->ebp = ctx->ebp;
     s->ebx = ctx->ebx;
@@ -184,6 +189,7 @@ extern "C" jmp_buf* RecompSetjmpPrepare(Ctx* ctx, uint32_t guest_buf) {
 
 extern "C" void RecompSetjmpResume(Ctx* ctx, uint32_t guest_buf) {
     RecompJmpSlot* s = FindSlot(guest_buf, false);
+    if (!s) RecompUnimplemented(ctx, guest_buf, "setjmp resume from an unknown jmp_buf");
     ctx->esp = s->esp;
     ctx->ebp = s->ebp;
     ctx->ebx = s->ebx;
