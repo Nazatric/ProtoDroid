@@ -31,7 +31,7 @@ Large traces, external clones, benchmark binaries, and raw generated results sta
 | Phase | State | Evidence |
 | --- | --- | --- |
 | 1. Baseline laboratory | Available-environment checkpoint recorded; physical-device gate open | Exact 0.15 host/Bink references, ARM64 CI references, protocol, comparability tests; no runtime optimization delta |
-| 2. Five-repository audit | **Active; below the one-hour completion gate** | All five pins and implementations inspected; focused GoW III/ISS/Bloodborne host correctness tests passed; ledger/matrix populated; no production patch or new ProtoDroid performance run |
+| 2. Five-repository audit | **Active; below the one-hour completion gate** | All five pins and implementations inspected; executed focused GoW III/ISS/Bloodborne host tests passed and unavailable-dependency limits are logged; ledger/matrix populated; no production patch or new ProtoDroid performance run |
 | 3–14 | Not started | Sequential execution and evidence gates required |
 
 Current source-audit conclusion: several attractive external techniques are already present, belong to incompatible architectures, or have neutral/negative evidence in their own documents. The next useful work is profiling existing ProtoDroid bottlenecks, not forcing a patch from every repository.
