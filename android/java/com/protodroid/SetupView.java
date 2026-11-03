@@ -115,6 +115,7 @@ final class SetupView extends View {
             GameFiles.DLL, GameFiles.UV, ".rcf", ".p3d", "art", "audio", "scripts"
     };
     private static final String[] CATEGORY_NAMES = {"GRAPHICS", "GAME VIDEO", "CONTROLS", "INTERFACE", "ENGINE FIXES"};
+    private static final String[] PRESET_NAMES = {"LOW", "MEDIUM", "HIGH", "CUSTOM"};
 
     private final Listener listener;
     private final GameSettings gameSettings;
@@ -127,6 +128,7 @@ final class SetupView extends View {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
     private final TextPaint text = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+    private final Paint.FontMetrics fontMetrics = new Paint.FontMetrics();
     private final Path path = new Path();
     private final RectF allowBounds = new RectF();
     private final RectF checkBounds = new RectF();
@@ -145,10 +147,26 @@ final class SetupView extends View {
     private final RectF diagnosticsBounds = new RectF();
     private final RectF updateWarningConfirmBounds = new RectF();
     private final RectF updateWarningCancelBounds = new RectF();
+    // Frame-local drawing objects are reused. None of these rectangles escapes the method that fills it.
+    private final RectF slideBounds = new RectF();
+    private final RectF[] tileBounds = {new RectF(), new RectF()};
+    private final RectF updatePanelBounds = new RectF();
+    private final RectF warningPanelBounds = new RectF();
+    private final RectF pathPanelBounds = new RectF();
+    private final RectF chipBounds = new RectF();
+    private final RectF settingValueBounds = new RectF();
+    private final RectF bracketBounds = new RectF();
     private final RectF[] settingLeftBounds;
     private final RectF[] settingRightBounds;
     private final RectF[] settingRowBounds;
     private final float[] buttonFill = new float[24];
+    private final LinearGradient[] buttonGradients = new LinearGradient[buttonFill.length];
+    private final float[] buttonGradientLeft = new float[buttonFill.length];
+    private final float[] buttonGradientRight = new float[buttonFill.length];
+    private RadialGradient iconGradient;
+    private float iconGradientX;
+    private float iconGradientY;
+    private float iconGradientRadius;
     private final long startedAt = SystemClock.uptimeMillis();
     private final float density;
     private final float fontScale;
@@ -156,6 +174,7 @@ final class SetupView extends View {
     private final boolean motionEnabled;
 
     private State state = new State(false, false, false, "INITIALIZING...", "", "", "");
+    private String statusMessage = "INITIALIZING...";
     private UpdateManager.State updateState = UpdateManager.State.hidden();
     private boolean updateWarningVisible;
     private String updateWarningVersion = "";
@@ -252,6 +271,7 @@ final class SetupView extends View {
 
     void setState(State next) {
         state = next;
+        statusMessage = next.status == null ? "" : next.status.toUpperCase(Locale.ROOT);
         layoutDirty = true;
         if (focusedAction == ACTION_ALLOW && (next.fileAccess || next.gameFound)) focusedAction = ACTION_NONE;
         if (focusedAction == ACTION_CHECK && next.checking) focusedAction = ACTION_NONE;
@@ -501,13 +521,14 @@ final class SetupView extends View {
         float left = (getWidth() - width) / 2f;
         float top = (getHeight() - height) / 2f;
         bitmapPaint.setAlpha(Math.round(clamp01(alpha) * 255f));
-        canvas.drawBitmap(bitmap, null, new RectF(left, top, left + width, top + height), bitmapPaint);
+        slideBounds.set(left, top, left + width, top + height);
+        canvas.drawBitmap(bitmap, null, slideBounds, bitmapPaint);
         bitmapPaint.setAlpha(255);
     }
 
     private float baseline(float top, float lineHeight, TextPaint paint) {
-        Paint.FontMetrics fm = paint.getFontMetrics();
-        return top + (lineHeight - (fm.descent - fm.ascent)) / 2f - fm.ascent;
+        paint.getFontMetrics(fontMetrics);
+        return top + (lineHeight - (fontMetrics.descent - fontMetrics.ascent)) / 2f - fontMetrics.ascent;
     }
 
     private void drawText(Canvas canvas, String value, float x, float y, float size, int weight, int color,
@@ -567,17 +588,25 @@ final class SetupView extends View {
 
     private void drawHeader(Canvas canvas, float left, float right, float top, float u, long now) {
         float iconSize = 46f * u;
-        RectF iconBounds = new RectF(left, top, left + iconSize, top + iconSize);
-        logoBounds.set(iconBounds);
+        logoBounds.set(left, top, left + iconSize, top + iconSize);
         if (icon != null) {
-            paint.setShader(new RadialGradient(iconBounds.centerX(), iconBounds.centerY(), iconSize * 0.58f,
-                    new int[]{withAlpha(Color.BLACK, 0.80f), withAlpha(Color.BLACK, 0.45f), Color.TRANSPARENT},
-                    new float[]{0f, 0.66f, 1f}, Shader.TileMode.CLAMP));
-            canvas.drawCircle(iconBounds.centerX(), iconBounds.centerY(), iconSize * 0.58f, paint);
+            float centerX = logoBounds.centerX(), centerY = logoBounds.centerY();
+            float radius = iconSize * 0.58f;
+            if (iconGradient == null || iconGradientX != centerX || iconGradientY != centerY
+                    || iconGradientRadius != radius) {
+                iconGradient = new RadialGradient(centerX, centerY, radius,
+                        new int[]{withAlpha(Color.BLACK, 0.80f), withAlpha(Color.BLACK, 0.45f), Color.TRANSPARENT},
+                        new float[]{0f, 0.66f, 1f}, Shader.TileMode.CLAMP);
+                iconGradientX = centerX;
+                iconGradientY = centerY;
+                iconGradientRadius = radius;
+            }
+            paint.setShader(iconGradient);
+            canvas.drawCircle(centerX, centerY, radius, paint);
             paint.setShader(null);
-            canvas.drawBitmap(icon, null, iconBounds, bitmapPaint);
+            canvas.drawBitmap(icon, null, logoBounds, bitmapPaint);
         }
-        float brandX = iconBounds.right + 12f * u;
+        float brandX = logoBounds.right + 12f * u;
         drawLine(canvas, "[", brandX, top, iconSize, 26f, 500, RED_HOT, 0f, u, -1f);
         configure(text, 26f, 500, RED_HOT, 0f, u);
         brandX += text.measureText("[");
@@ -665,7 +694,7 @@ final class SetupView extends View {
         drawLine(canvas, ">", x, top, 18f * u, 12f, 600, RED_HOT, 0f, u, -1f);
         configure(text, 12f, 600, RED_HOT, 0f, u);
         float messageX = x + text.measureText(">") + 6f * u;
-        String message = state.status == null ? "" : state.status.toUpperCase(Locale.ROOT);
+        String message = statusMessage;
         configure(text, 12f, 500, BONE, 1.4f, u);
         float caretWidth = 6f * u;
         drawLine(canvas, message, messageX, top, 18f * u, 12f, 500, BONE, 1.4f, u,
@@ -691,7 +720,8 @@ final class SetupView extends View {
         }
         float height = updateBannerHeight(u);
         float right = left + width;
-        RectF bounds = new RectF(left, top, right, top + height);
+        RectF bounds = updatePanelBounds;
+        bounds.set(left, top, right, top + height);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(0xd0080808);
         canvas.drawPath(cutPath(bounds, 9f * u), paint);
@@ -818,7 +848,8 @@ final class SetupView extends View {
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(withAlpha(Color.BLACK, 0.82f));
         canvas.drawRect(0f, 0f, getWidth(), getHeight(), paint);
-        RectF panel = new RectF(left, top, right, top + height);
+        RectF panel = warningPanelBounds;
+        panel.set(left, top, right, top + height);
         paint.setColor(0xf0080808);
         canvas.drawPath(cutPath(panel, 12f * u), paint);
         paint.setStyle(Paint.Style.STROKE);
@@ -896,8 +927,14 @@ final class SetupView extends View {
             path.lineTo(edge, bounds.bottom);
             path.lineTo(bounds.left, bounds.bottom);
             path.close();
-            paint.setShader(new LinearGradient(bounds.left, 0f, bounds.right, 0f,
-                    new int[]{RED_DARK, RED, RED_HOT}, null, Shader.TileMode.CLAMP));
+            if (buttonGradients[action] == null || buttonGradientLeft[action] != bounds.left
+                    || buttonGradientRight[action] != bounds.right) {
+                buttonGradients[action] = new LinearGradient(bounds.left, 0f, bounds.right, 0f,
+                        new int[]{RED_DARK, RED, RED_HOT}, null, Shader.TileMode.CLAMP);
+                buttonGradientLeft[action] = bounds.left;
+                buttonGradientRight[action] = bounds.right;
+            }
+            paint.setShader(buttonGradients[action]);
             canvas.drawPath(path, paint);
             paint.setShader(null);
             if (variant == BUTTON_PRIMARY) {
@@ -943,11 +980,13 @@ final class SetupView extends View {
         int textColor = variant == BUTTON_DONE ? OK : (!enabled ? DIM : BONE);
         int bracketColor = variant == BUTTON_DONE ? OK : (live ? BONE : withAlpha(RED_HOT, 0.5f));
         float bracketInset = (live ? 15f : 9f) * u;
-        drawCentered(canvas, "[", new RectF(bounds.left + bracketInset - 8f * u, bounds.top,
-                bounds.left + bracketInset + 8f * u, bounds.bottom), 22f, 400, bracketColor, 0f, u, 0f);
+        bracketBounds.set(bounds.left + bracketInset - 8f * u, bounds.top,
+                bounds.left + bracketInset + 8f * u, bounds.bottom);
+        drawCentered(canvas, "[", bracketBounds, 22f, 400, bracketColor, 0f, u, 0f);
         drawButtonLabel(canvas, bounds, label, textColor, u);
-        drawCentered(canvas, "]", new RectF(bounds.right - bracketInset - 8f * u, bounds.top,
-                bounds.right - bracketInset + 8f * u, bounds.bottom), 22f, 400, bracketColor, 0f, u, 0f);
+        bracketBounds.set(bounds.right - bracketInset - 8f * u, bounds.top,
+                bounds.right - bracketInset + 8f * u, bounds.bottom);
+        drawCentered(canvas, "]", bracketBounds, 22f, 400, bracketColor, 0f, u, 0f);
         canvas.restoreToCount(outer);
     }
 
@@ -1010,7 +1049,8 @@ final class SetupView extends View {
     private float drawPathPanel(Canvas canvas, float left, float bottom, float width, float u, long now) {
         ensurePanelLayouts(width, u);
         float height = panelHeight(u);
-        RectF bounds = new RectF(left, bottom - height, left + width, bottom);
+        RectF bounds = pathPanelBounds;
+        bounds.set(left, bottom - height, left + width, bottom);
         Path shape = cutPath(bounds, 12f * u);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(0xc0050505);
@@ -1063,7 +1103,8 @@ final class SetupView extends View {
                 x = left;
                 y += 23f * u;
             }
-            RectF bounds = new RectF(x, y, x + itemWidth, y + 18f * u);
+            RectF bounds = chipBounds;
+            bounds.set(x, y, x + itemWidth, y + 18f * u);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(0x66000000);
             canvas.drawRect(bounds, paint);
@@ -1107,9 +1148,11 @@ final class SetupView extends View {
                 + 10f * u + 42f * u;
         float groupTop = contentTop + Math.max(0f, (contentBottom - contentTop - groupHeight) / 2f);
         float tileWidth = (leftWidth - 8f * u) / 2f;
-        drawTile(canvas, new RectF(left, groupTop, left + tileWidth, groupTop + 46f * u),
+        tileBounds[0].set(left, groupTop, left + tileWidth, groupTop + 46f * u);
+        tileBounds[1].set(left + tileWidth + 8f * u, groupTop, left + leftWidth, groupTop + 46f * u);
+        drawTile(canvas, tileBounds[0],
                 "STORAGE ACCESS", state.fileAccess ? "GRANTED" : "REQUIRED", state.fileAccess, u, now);
-        drawTile(canvas, new RectF(left + tileWidth + 8f * u, groupTop, left + leftWidth, groupTop + 46f * u),
+        drawTile(canvas, tileBounds[1],
                 "GAME DATA", state.gameFound ? "DETECTED" : "NOT FOUND", state.gameFound, u, now);
 
         float headlineTop = groupTop + 56f * u;
@@ -1180,9 +1223,11 @@ final class SetupView extends View {
             updateReleasesBounds.setEmpty();
         }
         float tileWidth = (width - 8f * u) / 2f;
-        drawTile(canvas, new RectF(left, y, left + tileWidth, y + 46f * u),
+        tileBounds[0].set(left, y, left + tileWidth, y + 46f * u);
+        tileBounds[1].set(left + tileWidth + 8f * u, y, right, y + 46f * u);
+        drawTile(canvas, tileBounds[0],
                 "STORAGE ACCESS", state.fileAccess ? "GRANTED" : "REQUIRED", state.fileAccess, u, now);
-        drawTile(canvas, new RectF(left + tileWidth + 8f * u, y, right, y + 46f * u),
+        drawTile(canvas, tileBounds[1],
                 "GAME DATA", state.gameFound ? "DETECTED" : "NOT FOUND", state.gameFound, u, now);
         y += 60f * u;
         drawGlitch(canvas, state.gameFound ? "GAME DATA" : "GAME FILES", left, y,
@@ -1244,8 +1289,8 @@ final class SetupView extends View {
                 canvas.drawRect(bounds, paint);
             }
             float valueWidth = Math.min(104f * u, bounds.width() * 0.34f);
-            RectF value = new RectF(bounds.right - valueWidth - 8f * u, bounds.top,
-                    bounds.right - 8f * u, bounds.bottom);
+            RectF value = settingValueBounds;
+            value.set(bounds.right - valueWidth - 8f * u, bounds.top, bounds.right - 8f * u, bounds.bottom);
             drawLine(canvas, setting.label, bounds.left + 12f * u, bounds.top, bounds.height(),
                     12.5f, 600, BONE, 0.4f, u, Math.max(1f, value.left - bounds.left - 20f * u));
             drawCentered(canvas, "EDIT  \u203a", value, 12.5f, 700, RED_HOT, 0.25f, u, 3f * u);
@@ -1272,7 +1317,8 @@ final class SetupView extends View {
         float labelWidth = Math.max(1f, groupLeft - labelX - 8f * u);
         drawLine(canvas, setting.label, labelX, bounds.top, bounds.height(), 12.5f, 500,
                 BONE, 0.4f, u, labelWidth);
-        RectF valueBounds = new RectF(settingLeftBounds[index].right + 2f * u, bounds.top,
+        RectF valueBounds = settingValueBounds;
+        valueBounds.set(settingLeftBounds[index].right + 2f * u, bounds.top,
                 settingRightBounds[index].left - 2f * u, bounds.bottom);
         drawCentered(canvas, setting.names[setting.index], valueBounds, 12.5f, 600,
                 0xfff3eee7, 0.3f, u, 3f * u);
@@ -1302,7 +1348,6 @@ final class SetupView extends View {
         float presetHeight = 36f * u;
         float presetTop = contentTop + 20f * u;
         float presetWidth = (width - (presetColumns - 1) * presetGap) / presetColumns;
-        String[] presetNames = {"LOW", "MEDIUM", "HIGH", "CUSTOM"};
         int selectedPreset = gameSettings.graphicsPreset();
         for (int i = 0; i < 4; i++) {
             int row = i / presetColumns;
@@ -1310,7 +1355,7 @@ final class SetupView extends View {
             float x = left + column * (presetWidth + presetGap);
             float y = presetTop + row * (presetHeight + presetGap);
             presetBounds[i].set(x, y, x + presetWidth, y + presetHeight);
-            drawButton(canvas, ACTION_PRESET_LOW + i, presetBounds[i], presetNames[i],
+            drawButton(canvas, ACTION_PRESET_LOW + i, presetBounds[i], PRESET_NAMES[i],
                     selectedPreset == i ? BUTTON_PRIMARY : BUTTON_NORMAL, true, false, u, now, dt);
         }
 
@@ -1336,7 +1381,8 @@ final class SetupView extends View {
                 || now < helpUntil);
         float listBottom = bottom - (helpVisible ? 94f : 48f) * u;
         if (helpVisible) {
-            RectF helpBounds = new RectF(left, bottom - 88f * u, right, bottom - 44f * u);
+            RectF helpBounds = updatePanelBounds;
+            helpBounds.set(left, bottom - 88f * u, right, bottom - 44f * u);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(0xe6121014);
             canvas.drawPath(cutPath(helpBounds, 6f * u), paint);
@@ -1407,8 +1453,8 @@ final class SetupView extends View {
                 for (int i = 0; i < gameSettings.settings.length; i++) {
                     GameSettings.Setting setting = gameSettings.settings[i];
                     if (GameSettings.categoryOf(setting) != category) continue;
-                    RectF rowBounds = new RectF(x, y + 2f * u, x + columnWidth, y + rowHeight - 2f * u);
-                    settingRowBounds[i].set(rowBounds);
+                    RectF rowBounds = settingRowBounds[i];
+                    rowBounds.set(x, y + 2f * u, x + columnWidth, y + rowHeight - 2f * u);
                     if (rowBounds.bottom < settingsListBounds.top || rowBounds.top > settingsListBounds.bottom) {
                         settingLeftBounds[i].setEmpty();
                         settingRightBounds[i].setEmpty();

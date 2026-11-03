@@ -260,6 +260,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         prefs = context.getSharedPreferences("controls", Context.MODE_PRIVATE);
         settingsStore = new GameSettings(context);
         settings = settingsStore.gameplaySettings;
+        for (int i = 0; i < settings.length; ++i) {
+            leftArrows.add(new RectF());
+            rightArrows.add(new RectF());
+        }
         keyState = new TouchKeyState((keycode, down) -> {
             if (down) SDLActivity.onNativeKeyDown(keycode);
             else SDLActivity.onNativeKeyUp(keycode);
@@ -300,14 +304,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             inputManager.registerInputDeviceListener(this, null);
             padConnected = findGamepad(inputManager);
         }
-        // Refresh the performance overlay twice a second.
-        postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (showFps) invalidate();
-                postDelayed(this, 500);
-            }
-        }, 500);
     }
 
     // Glowing shapes are rendered once into bitmaps (blur needs the software pipeline) and then only blitted.
@@ -1378,8 +1374,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         float rowH = (panel.height() - 128 * density) / rows;
         float colW = (panel.width() - pad * 3) / 2;
         float top = panel.top + 54 * density;
-        leftArrows.clear();
-        rightArrows.clear();
         text.setTextSize(Math.min(15 * density, rowH * 0.42f));
         for (int i = 0; i < settings.length; i++) {
             GameSettings.Setting s = settings[i];
@@ -1389,10 +1383,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             text.setColor(0xffe8d6d4);
             c.drawText(s.label, colLeft, y + 5 * density, text);
             float vx = colRight - 62 * density;
-            RectF l = new RectF(vx - 64 * density, y - rowH / 2, vx - 32 * density, y + rowH / 2);
-            RectF r = new RectF(vx + 32 * density, y - rowH / 2, vx + 64 * density, y + rowH / 2);
-            leftArrows.add(l);
-            rightArrows.add(r);
+            RectF l = leftArrows.get(i), r = rightArrows.get(i);
+            l.set(vx - 64 * density, y - rowH / 2, vx - 32 * density, y + rowH / 2);
+            r.set(vx + 32 * density, y - rowH / 2, vx + 64 * density, y + rowH / 2);
             text.setTextAlign(Paint.Align.CENTER);
             text.setColor(RED);
             c.drawText("‹", l.centerX(), y + 6 * density, text);
@@ -1561,6 +1554,15 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         }
     }
 
+    // Refresh the performance overlay twice a second. Attachment owns this callback so finishing an Activity cannot
+    // leave a Handler retaining the view, and standalone layout editing never starts a gameplay statistics loop.
+    private final Runnable fpsRefresh = new Runnable() {
+        @Override public void run() {
+            if (showFps) invalidate();
+            postDelayed(this, 500);
+        }
+    };
+
     // Screenshot of this layer for testing (the game's own shot_now trigger only has the game frame): a file named
     // ui_shot_now in the app's files folder makes the controls draw themselves into ui_shot.png there.
     private final Runnable uiShotPoll = new Runnable() {
@@ -1591,7 +1593,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                 padConnected = findGamepad(inputManager);
             }
         }
-        postDelayed(uiShotPoll, 1000);
+        if (!layoutOnly) {
+            removeCallbacks(fpsRefresh);
+            removeCallbacks(uiShotPoll);
+            postDelayed(fpsRefresh, 500);
+            postDelayed(uiShotPoll, 1000);
+        }
     }
 
     @Override
@@ -1603,6 +1610,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         releaseAll();
         clearSnap();
         keyboard.hide();
+        removeCallbacks(fpsRefresh);
         removeCallbacks(uiShotPoll);
         super.onDetachedFromWindow();
     }

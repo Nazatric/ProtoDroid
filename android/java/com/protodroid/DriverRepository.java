@@ -45,6 +45,12 @@ final class DriverRepository {
         return new File(filesDir, "driver");
     }
 
+    /** Ordinary Auto/System/Turnip launches must not inspect or copy a legacy Custom package on the UI thread. */
+    static boolean shouldMigrateLegacy(int driverMode, boolean hasDriverModePreference) {
+        // Builds before mode selection had no preference: their one legacy package retained its old Custom behavior.
+        return driverMode == 3 || !hasDriverModePreference;
+    }
+
     /** Invalid or half-installed slots are ignored, never substituted for a valid package. */
     static List<Entry> list(File filesDir) {
         ArrayList<Entry> result = new ArrayList<>();

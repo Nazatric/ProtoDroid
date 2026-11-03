@@ -437,6 +437,9 @@ This record keeps the native game/runtime architecture and the original native l
 | DXVK feature failure diagnostics | **Corrected after device evidence:** the first common preflight wrongly rejected a Mali-G720 before creation. The original Vulkan 1.2 check is restored; Vulkan 1.3 again reaches `vkCreateDevice`, and exact requested-feature names are audited only after an actual `VK_ERROR_FEATURE_NOT_PRESENT`. | Supplied 0.15 normal/tour logs confirmed the regression and exact commit. The correction is source-tested; physical Mali retesting and #31/#32 outcomes remain pending. |
 | UI and controls | **Corrected:** the original pre-WebView/pre-Compose native host and canvas launcher are restored, with additive native Diagnostics. Rejected WebView and Compose presentations, Gradle presentation dependencies, preview hosts, and Smart Controls remain removed. Existing driver/mod/layout tools, Classic controls, and Settings → Controls → Layout are retained. | Corrected commit `29654c7d0f904c158f424c9ea4ff13a4022d4da7` passed signed ARM64 CI. Gameplay was subsequently observed on device, but no controlled FPS comparison or broad UI/device validation was supplied. |
 | BC1 texture decode | **Measured candidate:** direct DXT1 output rows avoid a temporary full-colour tile. The 16-bit path also packs endpoints exactly and skips redundant alpha/interpolation work while preserving the established 8-bit mixed-colour rounding. DXT2–5 behavior is unchanged. | Two repeated host A/B runs measured about 36% less DXT1→BGRA decode time and 15% less DXT1→A1R5G5B5 time. Randomized/exhaustive exact-output UBSan tests pass. These are decoder measurements, not device FPS results. |
+| DirectInput keyboard polling | **Measured candidate:** the fixed 104-key SDL map now has compile-time scancode indices and duplicate-DIK chains. A keyboard poll fetches SDL state once instead of once per key; NumLock/Pause, injected state, extended keys and object formats retain their behavior. | Two host mapping-only runs measured 95.90% and 96.49% less time than the old linear scan. The complete production map passed pinned-SDL differential checks. This is not a whole-frame or device FPS measurement. |
+| Animated Canvas and controls work | **Implemented:** steady launcher/driver/mod drawing reuses geometry, font metrics and unchanged shaders; action lists use primitives. The keyboard and settings arrows reuse their draw objects. Layout-only editing no longer starts gameplay polling, and detachment cancels both repeating callbacks. | The selected steady-draw source methods have zero temporary rectangle/font-metric sites after the audit. These are allocation-site counts, not runtime allocation rates or measured FPS. Android compilation and visual/input checks remain CI/device work. |
+| Legacy driver migration | **Implemented:** initialized Auto/System/Turnip launches do not inspect or copy legacy Custom packages on the UI thread. Custom and genuinely pre-preference installations retain the migration. | Host policy cases and launch-wiring checks cover the decision. No claim is made about driver runtime performance or compatibility. |
 
 ### BC1 evidence and reproducible host measurement
 
@@ -459,6 +462,24 @@ On 2026-11-03, two before/after repetitions ran on the same 2-vCPU Intel Xeon 2.
 
 DXT3/DXT5 remain regression controls, not claimed optimizations. Their small timing movement between shared-host runs is not presented as a gain. Existing graphics UBSan tests compare every DXT1/2/3/4/5 output against the scalar oracle over randomized dimensions, pitches, strides, edge blocks, and guard bytes; all 65,536 endpoint values also run in both DXT1 palette modes and both output widths. Those tests pass. No ARM64 timing, visual comparison, sustained FPS, frame-latency, or thermal conclusion is inferred from this x86-64 microbenchmark.
 
+### DirectInput and Canvas follow-up evidence
+
+DirectInput's keyboard `GetDeviceState` previously called `SDL_GetKeyboardState` and linearly scanned all 104 mappings for each object. With almost every key up, that was the maximum scan for nearly every key on every poll. `src/native/input_lookup.h` now builds a 512-entry scancode index and 256 DIK heads at compile time. Duplicate DIKs use one-based chains, so the established NumLock/Pause entry still reports down when either physical key is down. `FindKey` uses the same immutable map. No dynamic initialization, allocation, SDL call or guest-object change was added to the lookup.
+
+The reproducible mapping-only benchmark is:
+
+```sh
+g++ -std=c++17 -O3 -DNDEBUG -Isrc/native \
+  src/native/tests/input_lookup_benchmark.cpp -o /tmp/input-lookup-bench
+/tmp/input-lookup-bench 10000
+```
+
+It checks every real and injected key against the linear implementation, then alternates seven-batch medians for three repetitions. Two x86-64 host runs reported **5.890 → 0.242 µs/poll (95.90% less)** and **5.715 → 0.201 µs/poll (96.49% less)**, with matching checksums. The workload has 104 keys, one duplicate-DIK pair and almost all keys up. It isolates mapping work, excluding the guest call, output writes, lock and the rest of a frame. The separate pinned-SDL production-map differential exercised all 256 DIK values after each of the 104 physical keys was pressed and injected. CI also runs the generic UBSan test and an informational ARM64 benchmark; neither is physical-device input-latency evidence.
+
+The Canvas audit counted source allocation sites in selected steady-draw methods, not live Java allocations. Temporary `RectF` sites went from 23 to zero in Drivers, 14 to zero in Mods, two to zero in the in-game settings panel, and 16 to zero in the previously audited Setup methods. No-argument font-metric sites went from one to zero in each animated driver/mod view and two to zero in the touch keyboard. The mod cover source rectangle and keyboard page-name array are retained, and action IDs no longer require per-frame `Integer` boxing. Pools reset before the first background draw, while persistent hitboxes still receive copies. Paragraph layouts and existing dynamic effects remain intact.
+
+Two scratch Present-statistics variants were rejected and are not part of this batch: consumer-active synthetic runs showed overhead, and the no-consumer saving lacked evidence of a device bottleneck. Repeating FPS/screenshot callbacks were instead made attachment-owned and gameplay-only; the existing twice-per-second FPS redraw remains. These changes deliberately avoid an unsupported whole-launcher or gameplay-FPS claim.
+
 ### Open-issue disposition
 
 | Issue(s) | 0.15 disposition |
@@ -474,11 +495,11 @@ Issue #21's UV/null-dereference constraints remain unchanged: no fabricated UV d
 
 ### Validation completed before the exact-commit CI request
 
-- Strict `-Wall -Wextra -Werror` UBSan host tests passed for guest clocks, Present statistics, the 41-phase plan, ADPF sessions, GPU profiles and diagnostics.
-- Native syntax checks passed for the changed kernel/misc/Present/ADPF/tour paths. The tour check used a temporary SDL declaration shim and compiler format checking; it was not an Android runtime test.
-- Source-policy tests passed for ordinary-play I/O gating, no-session ADPF, Auto/wrapper recovery, compatibility controls, the tour clock/isolation/watchdog, and the actual patched DXVK feature-diagnostic source. Existing DXVK unified-memory, depth-resolve and FXAA source tests also passed. The later Mali log regression produced an additional no-pre-create-rejection test.
-- Workflow YAML parsed successfully, Android build scripts passed `bash -n`, and `git diff --check` passed.
-- Local FFmpeg development headers, Android SDK/NDK, JDK compiler and adb were unavailable. Bink/Android/DXVK compilation and APK packaging therefore remain CI-pending; no local APK or physical-device result is claimed.
+- All 21 Python/source wrappers passed against the fully patched DXVK fixture, including Vulkan 1.2/1.3 creation policy, signed-SDL provenance, launcher allocations, mod policies, controls and update/release guards.
+- All 28 local native groups passed: UBSan/ASan runtime, memory, mods, saves, diagnostics, GPU/driver policy, state cache, input lookup, real-engine hot replacement, and production Bink at 48 kHz and 44.1 kHz. Hot replacement reported zero differences in 200 mixer, 300 biquad, 200 ADPCM and 2,000 skin trials.
+- The actual production `input.cpp` and `dinput.cpp` passed strict syntax compilation with SDL 2.30.9 headers. The complete 104-key production map also passed the linear differential under UBSan.
+- All 44 Android Java source/test files passed a Java syntax parser. Workflow YAML parsed, Python compilation and shell syntax passed, generated bytecode was removed, and `git diff --check` passed.
+- A local JDK/Android SDK/NDK, glslangValidator and adb remain unavailable. Java host harnesses, Android compilation, DXVK shader validation, exact signed-APK verification and ARM64 CI therefore remain required; no local APK or physical-device result is claimed.
 
 The device acceptance run must distinguish normal Play from the isolated tour and retain `result.txt`, `journal.log`, native/D3D9 logs and any crash marker. In particular, it must not describe a completed input script as proof of climbing, visual correctness, stable FPS, audio/video sync or issue resolution.
 

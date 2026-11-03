@@ -62,7 +62,7 @@ assert "KEY_0 = 7" in catalog and "NUM_LOCK = 143" in catalog and "NUMPAD_ENTER 
 # Compact coverage and familiar labels replace the rejected 80/95%-height red grid and glyph/N-prefixed keycaps.
 assert 'page == PAGE_MAIN ? 0.58f : 0.64f' in keyboard and 'picker ? 0.66f' in keyboard
 assert 'page == PAGE_NUMPAD ? 0.62f : 0.90f' in keyboard
-assert 'String[] pageNames = {"MAIN", "MORE", "NUMPAD", "MOUSE"}' in keyboard
+assert 'String[] PAGE_NAMES = {"MAIN", "MORE", "NUMPAD", "MOUSE"}' in keyboard
 assert "String label = capLabel(cap.code);" in keyboard and "shortNameOf(cap.code)" not in keyboard
 assert 'return ControlKeys.keycap(code);' in keyboard and 'return "LEFT CLICK";' in keyboard
 assert "picker ? 4 : 3" in keyboard and "MOUSE_ROWS" in keyboard
@@ -136,10 +136,28 @@ cancel = keyboard.split("case MotionEvent.ACTION_CANCEL:", 1)[1].split("default:
 assert "releaseAll();" in cancel
 
 on_size = touch.split("protected void onSizeChanged", 1)[1].split("private void layoutButtons", 1)[0]
+on_attach = touch.split("protected void onAttachedToWindow", 1)[1].split("protected void onDetachedFromWindow", 1)[0]
 on_detach = touch.split("protected void onDetachedFromWindow", 1)[1].split("protected void onDraw", 1)[0]
 assert "releaseAll();" in on_size and "releaseAll();" in on_detach
+assert "if (!layoutOnly) {" in on_attach, "gameplay polling must not run in the standalone layout editor"
+assert on_attach.index("if (!layoutOnly) {") < on_attach.index("postDelayed(fpsRefresh, 500)")
+assert on_attach.index("if (!layoutOnly) {") < on_attach.index("postDelayed(uiShotPoll, 1000)")
+assert "removeCallbacks(fpsRefresh);" in on_detach and "removeCallbacks(uiShotPoll);" in on_detach, (
+    "detachment must cancel every repeating callback that retains the view"
+)
+constructor = touch.split("public TouchControls(Context context, boolean layoutOnly)", 1)[1].split(
+    "// Glowing shapes are rendered once", 1)[0]
+assert "postDelayed" not in constructor, "repeating callbacks must be owned by attachment, not construction"
 assert "if (keyboard.isVisible())" in touch and "keyboard.onTouch(e, action, id, x, y);" in touch
 assert "if (editing)" in touch and "keyboard.draw(canvas);" in touch, "picker is not drawn above the editor"
+
+assert 'private static final String[] PAGE_NAMES = {"MAIN", "MORE", "NUMPAD", "MOUSE"};' in keyboard
+assert "getFontMetrics()" not in keyboard and keyboard.count("paint.getFontMetrics(fontMetrics);") == 2, (
+    "keyboard drawing must not allocate page names or font metrics for every key"
+)
+draw_panel = touch.split("private void drawPanel(Canvas c)", 1)[1].split("private void drawEditor", 1)[0]
+assert "new RectF" not in draw_panel and "leftArrows.clear" not in draw_panel and "rightArrows.clear" not in draw_panel
+assert "RectF l = leftArrows.get(i), r = rightArrows.get(i);" in draw_panel
 
 # Launcher editing reuses saved controls without loading or configuring SDL.
 layout_activity = (JAVA / "TouchLayoutActivity.java").read_text(encoding="utf-8")
@@ -162,9 +180,18 @@ assert 'android:name="com.protodroid.TouchLayoutActivity"' in manifest
 
 assert "104-key catalog" in model_test and "global release is not balanced reverse cleanup" in model_test
 native_input = (ROOT / "src/native/input.cpp").read_text(encoding="utf-8")
-native_map = native_input.split("const KeyMap kKeys[] = {", 1)[1].split("};", 1)[0]
+native_map = native_input.split("constexpr KeyMap kKeys[] = {", 1)[1].split("};", 1)[0]
 native_keys = re.findall(r"\{SDL_SCANCODE_([A-Z0-9_]+),", native_map)
 assert len(native_keys) == len(set(native_keys)) == 104, "native Windows/DirectInput map no longer covers 104 keys"
+assert "MakeInputLookup<kKeyCount, SDL_NUM_SCANCODES>(kKeys)" in native_input
+dinput = (ROOT / "src/native/dinput.cpp").read_text(encoding="utf-8")
+get_device_state = dinput.split("M(GetDeviceState)", 1)[1].split("M(GetDeviceData)", 1)[0]
+assert get_device_state.count("SDL_GetKeyboardState(nullptr)") == 1, "keyboard state must be fetched once per poll"
+assert get_device_state.index("SDL_GetKeyboardState(nullptr)") < get_device_state.index("for (size_t i = 0;")
+assert "DikDown(keyboard_state, o.dik)" in get_device_state
+assert "kLookup.by_scancode[scancode]" in native_input and "kLookup.dik_head[dik]" in native_input
+assert "for (const KeyMap& k : kKeys)" not in native_input.split("const KeyMap* FindKey", 1)[1].split(
+    "uint32_t g_keyboard_service", 1)[0]
 for mapping in (
     "{SDL_SCANCODE_PRINTSCREEN, 0x2c, 0x37, true}",
     "{SDL_SCANCODE_LGUI, 0x5b, 0x5b, true}",
@@ -177,4 +204,4 @@ patch = (ROOT / "android/patches/sdl2-zzzzzzzzzzzz-num-lock.patch").read_text(en
 assert "-    SDL_SCANCODE_UNKNOWN,          /* AKEYCODE_NUM_LOCK */" in patch
 assert "+    SDL_SCANCODE_NUMLOCKCLEAR,     /* AKEYCODE_NUM_LOCK */" in patch
 
-print("Paged 104-key keyboard, editor visibility, launcher layout, chords, and cleanup checks passed")
+print("Paged 104-key keyboard, editor lifecycle/visibility, launcher layout, chords, and cleanup checks passed")

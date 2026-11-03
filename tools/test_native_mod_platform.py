@@ -146,6 +146,17 @@ require("contentShiftX" in mods_view and "actionBounds[action].offset(contentShi
         "animated mod content and its touch bounds can diverge")
 require("pluginArmedId" in mods_view and "removeArmedId" in mods_view,
         "native-plugin/removal confirmation was lost")
+require(mods_view.count("new RectF(") == 2 and "rectPool.get(rectPoolUsed++)" in mods_view,
+        "animated mod drawing must pool temporary rectangles")
+mods_draw = mods_view.split("protected void onDraw(Canvas canvas)", 1)[1]
+require(mods_draw.index("rectPoolUsed = 0;") < mods_draw.index("drawBackground(canvas,"),
+        "mod rectangle pool must reset before the background draws")
+require("getFontMetrics()" not in mods_view and "paint.getFontMetrics(fontMetrics);" in mods_view,
+        "animated mod text must reuse font metrics")
+require("ArrayList<Integer> usedActions" not in mods_view and "usedActions[usedActionCount++] = action;" in mods_view,
+        "animated mod actions must not box every action on every frame")
+require("coverSource.set(0, 0" in mods_view and "new Rect(0, 0" not in mods_view,
+        "mod cover drawing must reuse its source rectangle")
 require("runBackground" in mods_activity and mods_activity.count("runBackground(") >= 4,
         "mod import/lifecycle operations are not serialized off the UI thread")
 driver_view = text("android/java/com/protodroid/DriverView.java")

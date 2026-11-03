@@ -65,4 +65,39 @@ assert "sdl_version.py\" verify-class" in packager and "signed SDL" in packager
 assert "compose-launcher" not in workflow and "test_compose_launcher.py" not in workflow
 assert "python3 tools/test_native_launcher.py" in workflow
 
-print("Original native launcher, real Android routes, offline assets, and Web/Compose-free packaging checks passed")
+# Steady Canvas rendering must not allocate short-lived geometry or font metrics on every frame. Dynamic transition
+# shaders remain intact; unchanged button/icon shaders are cached by their actual geometry instead.
+import re
+
+def method(name):
+    match = re.search(r"\bprivate\s+(?:static\s+)?[\w<>\[\]]+\s+" + re.escape(name) + r"\s*\(", view)
+    assert match, f"missing SetupView method {name}"
+    start = view.index("{", match.end())
+    depth = 0
+    for index in range(start, len(view)):
+        if view[index] == "{":
+            depth += 1
+        elif view[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return view[start:index + 1]
+    raise AssertionError(f"unterminated SetupView method {name}")
+
+for name in (
+    "drawBackdrop", "drawSlide", "drawHeader", "drawStatusLine", "drawUpdateBanner", "drawUpdateWarning",
+    "drawButton", "drawPathPanel", "drawChips", "drawLandscape", "drawPortrait", "drawSettingRow",
+    "drawSettings", "drawBootCurtain",
+):
+    assert "new RectF" not in method(name), f"{name} allocates frame-local rectangles"
+assert not re.search(r"getFontMetrics\s*\(\s*\)", view), "font metrics must use the retained destination object"
+assert "statusMessage = next.status == null" in view
+assert "String message = statusMessage;" in method("drawStatusLine")
+assert "state.status.toUpperCase" not in method("drawStatusLine")
+for marker in (
+    "buttonGradients[action] == null", "buttonGradientLeft[action] != bounds.left",
+    "buttonGradientRight[action] != bounds.right", "iconGradient == null", "iconGradientRadius != radius",
+):
+    assert marker in view, f"unchanged shader cache is missing {marker}"
+assert "private static final String[] PRESET_NAMES" in view
+
+print("Original native launcher, real Android routes, offline assets, allocation, and Web/Compose-free checks passed")

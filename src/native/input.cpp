@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "guest.h"
+#include "input_lookup.h"
 
 namespace native {
 
@@ -28,7 +29,7 @@ struct KeyMap {
 };
 
 // Scancodes, not keycodes: the game binds physical keys, so a Russian layout still gives WASD.
-const KeyMap kKeys[] = {
+constexpr KeyMap kKeys[] = {
     {SDL_SCANCODE_ESCAPE, 0x1b, 0x01, false}, {SDL_SCANCODE_1, '1', 0x02, false}, {SDL_SCANCODE_2, '2', 0x03, false},
     {SDL_SCANCODE_3, '3', 0x04, false}, {SDL_SCANCODE_4, '4', 0x05, false}, {SDL_SCANCODE_5, '5', 0x06, false},
     {SDL_SCANCODE_6, '6', 0x07, false}, {SDL_SCANCODE_7, '7', 0x08, false}, {SDL_SCANCODE_8, '8', 0x09, false},
@@ -76,11 +77,15 @@ const KeyMap kKeys[] = {
     {SDL_SCANCODE_RGUI, 0x5c, 0x5c, true}, {SDL_SCANCODE_MENU, 0x5d, 0x5d, true},
 };
 
+constexpr size_t kKeyCount = sizeof(kKeys) / sizeof(kKeys[0]);
+constexpr InputLookup<kKeyCount, SDL_NUM_SCANCODES> kLookup =
+    MakeInputLookup<kKeyCount, SDL_NUM_SCANCODES>(kKeys);
+
 const KeyMap* FindKey(SDL_Scancode s) {
-    for (const KeyMap& k : kKeys) {
-        if (k.sdl == s) return &k;
-    }
-    return nullptr;
+    const int scancode = int(s);
+    if (scancode < 0 || scancode >= SDL_NUM_SCANCODES) return nullptr;
+    const uint8_t index = kLookup.by_scancode[scancode];
+    return index ? &kKeys[index - 1] : nullptr;
 }
 
 uint32_t g_keyboard_service = 0, g_mouse_service = 0;
@@ -131,10 +136,11 @@ std::vector<uint8_t> KeyboardDiks() {
     return out;
 }
 
-bool DikDown(uint8_t dik) {
-    const Uint8* state = SDL_GetKeyboardState(nullptr);
-    for (const KeyMap& k : kKeys) {
-        if (uint8_t(k.scan | (k.extended ? 0x80 : 0)) == dik && (state[k.sdl] || g_injected[k.sdl])) return true;
+bool DikDown(const Uint8* state, uint8_t dik) {
+    if (!state) return false;
+    for (uint8_t index = kLookup.dik_head[dik]; index; index = kLookup.dik_next[index - 1]) {
+        const SDL_Scancode scancode = kKeys[index - 1].sdl;
+        if (state[scancode] || g_injected[scancode]) return true;
     }
     return false;
 }

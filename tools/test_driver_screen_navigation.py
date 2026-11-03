@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 setup = (ROOT / "android/java/com/protodroid/SetupView.java").read_text(encoding="utf-8")
 driver = (ROOT / "android/java/com/protodroid/DriverView.java").read_text(encoding="utf-8")
 activity = (ROOT / "android/java/com/protodroid/SetupActivity.java").read_text(encoding="utf-8")
+manager = (ROOT / "android/java/com/protodroid/DriverManager.java").read_text(encoding="utf-8")
 
 show_drivers = activity.split("private void showDrivers()", 1)[1].split("private void closeDrivers()", 1)[0]
 assert "setContentView(driverView);" in show_drivers, "The Drivers action no longer replaces the content view"
@@ -81,4 +82,22 @@ assert "Tap the card to use this driver" in driver and "CONFIRM REMOVE" in drive
 )
 assert "SAFE RECOVERY" in driver and "never replace the phone's global driver" in driver
 
-print("Drivers navigation, guided-layout, touch-target, and touch-detach checks passed")
+# Animated drawing reuses geometry, font metrics, and primitive action lists after the first frame. Hit-testing still
+# uses persistent actionBounds copies, so pooled draw temporaries cannot alter touch or keyboard focus behavior.
+assert driver.count("new RectF(") == 2, "draw-temporary RectF allocations returned to DriverView"
+assert "getFontMetrics()" not in driver and "paint.getFontMetrics(fontMetrics);" in driver
+assert "ArrayList<Integer> usedActions" not in driver and "usedActions[usedActionCount++] = action;" in driver
+assert "rectPoolUsed = 0;" in driver and "rectPool.get(rectPoolUsed++)" in driver
+driver_draw = driver.split("protected void onDraw(Canvas canvas)", 1)[1]
+assert driver_draw.index("rectPoolUsed = 0;") < driver_draw.index("drawBackground(canvas,"), (
+    "the rectangle pool must reset before the first draw call, not only before later cards"
+)
+assert "actionBounds[action].set(bounds);" in driver
+
+migration = manager.split("private void migrateLegacyIfNeeded()", 1)[1].split("private void migrateLegacy(", 1)[0]
+assert "DriverRepository.shouldMigrateLegacy" in migration, (
+    "Launch must use the host-tested policy that keeps legacy Custom file migration off Auto/System/Turnip"
+)
+assert migration.index("DriverRepository.shouldMigrateLegacy") < migration.index("if (selected() != null) return;")
+
+print("Drivers navigation, launch-migration, guided-layout, touch-target, and touch-detach checks passed")

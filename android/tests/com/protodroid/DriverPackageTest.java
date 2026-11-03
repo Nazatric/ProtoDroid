@@ -104,6 +104,12 @@ public final class DriverPackageTest {
     }
 
     public static void main(String[] args) throws Exception {
+        check(!DriverRepository.shouldMigrateLegacy(0, true), "Auto launch inspected legacy Custom files");
+        check(!DriverRepository.shouldMigrateLegacy(1, true), "System launch inspected legacy Custom files");
+        check(!DriverRepository.shouldMigrateLegacy(2, true), "Turnip launch inspected legacy Custom files");
+        check(DriverRepository.shouldMigrateLegacy(3, true), "Custom launch skipped its legacy migration");
+        check(DriverRepository.shouldMigrateLegacy(0, false),
+                "A pre-preference installation did not retain its legacy Custom migration");
         Path temporary = Files.createTempDirectory("protodroid-driver-test");
         try {
             Path rootPath = temporary.resolve("driver");

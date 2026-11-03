@@ -48,6 +48,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends zlib1g-dev python3-yaml glslang-tools
 
+      - name: Compile and run native input-lookup tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/input_lookup_test.cpp -o /tmp/input_lookup_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/input_lookup_test
+
       - name: Compile and run graphics UBSAN tests
         run: |
           set -euo pipefail
@@ -449,6 +457,26 @@ jobs:
         with:
           name: arm64-dxt-benchmark
           path: /tmp/arm64-dxt-benchmark.txt
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Test and measure ARM64 DirectInput keyboard lookup
+        run: |
+          set -euo pipefail
+          FLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $FLAGS src/native/tests/input_lookup_test.cpp -o /tmp/input_lookup_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/input_lookup_test_arm64
+          FLAGS="-std=c++17 -O3 -DNDEBUG -fsigned-char -march=armv8.2-a+rcpc -mtune=cortex-a76 -Isrc/native"
+          g++ $FLAGS src/native/tests/input_lookup_benchmark.cpp -o /tmp/input_lookup_benchmark_arm64
+          /tmp/input_lookup_benchmark_arm64 20000 | tee /tmp/arm64-input-lookup-benchmark.txt
+
+      - name: Upload ARM64 input-lookup benchmark
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-input-lookup-benchmark
+          path: /tmp/arm64-input-lookup-benchmark.txt
           retention-days: 30
           if-no-files-found: error
 

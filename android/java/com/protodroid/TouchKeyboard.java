@@ -42,6 +42,7 @@ final class TouchKeyboard {
     private static final int PAGE_NUMPAD = 2;
     private static final int PAGE_MOUSE = 3;
     private static final int ACTION_PAGE_MOUSE = ACTION_PAGE_MAIN + PAGE_MOUSE;
+    private static final String[] PAGE_NAMES = {"MAIN", "MORE", "NUMPAD", "MOUSE"};
 
     private static final List<int[]> MAIN_ROWS = rows(
             keys(ESCAPE, TAB, Q, W, E, R, T, Y, U, I, O, P, BACKSPACE),
@@ -84,6 +85,7 @@ final class TouchKeyboard {
     private final Callback callback;
     private final float density;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint.FontMetrics fontMetrics = new Paint.FontMetrics();
     private final Typeface keyType = Typeface.create("sans-serif", Typeface.NORMAL);
     private final Typeface boldType = Typeface.create("sans-serif", Typeface.BOLD);
     private final List<Cap> caps = new ArrayList<>();
@@ -423,13 +425,12 @@ final class TouchKeyboard {
             text(canvas, "KEYS", panel.left + 12f * density, panel.top + 4f * density,
                     54f * density, 36f * density, 13f, 0xffe8dfd8, false);
         }
-        String[] pageNames = {"MAIN", "MORE", "NUMPAD", "MOUSE"};
         for (int i = 0; i < pageCount(); i++) {
             boolean chosen = page == i;
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(chosen ? 0xb33b1115 : 0x00111111);
             canvas.drawRoundRect(pageRects[i], 3f * density, 3f * density, paint);
-            textCentered(canvas, pageNames[i], pageRects[i], 10.5f,
+            textCentered(canvas, PAGE_NAMES[i], pageRects[i], 10.5f,
                     chosen ? 0xfff4e8e2 : 0xffa99e99, chosen);
         }
         drawAction(canvas, closeRect, "×", false);
@@ -471,8 +472,8 @@ final class TouchKeyboard {
         float available = Math.max(1f, rect.width() - 7f * density);
         fitText(value, maxSp * density, available);
         paint.setColor(color);
-        Paint.FontMetrics metrics = paint.getFontMetrics();
-        float baseline = rect.centerY() - (metrics.ascent + metrics.descent) / 2f;
+        paint.getFontMetrics(fontMetrics);
+        float baseline = rect.centerY() - (fontMetrics.ascent + fontMetrics.descent) / 2f;
         canvas.drawText(value, rect.centerX(), baseline, paint);
         paint.setTextAlign(Paint.Align.LEFT);
     }
@@ -483,8 +484,8 @@ final class TouchKeyboard {
         paint.setTextAlign(Paint.Align.LEFT);
         fitText(value, maxSp * density, Math.max(1f, width));
         paint.setColor(color);
-        Paint.FontMetrics metrics = paint.getFontMetrics();
-        float baseline = y + height / 2f - (metrics.ascent + metrics.descent) / 2f;
+        paint.getFontMetrics(fontMetrics);
+        float baseline = y + height / 2f - (fontMetrics.ascent + fontMetrics.descent) / 2f;
         canvas.drawText(value, x, baseline, paint);
     }
 

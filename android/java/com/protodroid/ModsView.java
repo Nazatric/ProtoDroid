@@ -32,6 +32,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
@@ -90,7 +91,12 @@ final class ModsView extends View {
     private final int touchSlop;
     private final OverScroller scroller;
     private final RectF[] actionBounds = new RectF[MAX_ACTION];
-    private final ArrayList<Integer> usedActions = new ArrayList<>();
+    private int[] usedActions = new int[64];
+    private int usedActionCount;
+    private final ArrayList<RectF> rectPool = new ArrayList<>();
+    private int rectPoolUsed;
+    private final Paint.FontMetrics fontMetrics = new Paint.FontMetrics();
+    private final Rect coverSource = new Rect();
     private final ArrayList<ModManifest> mods = new ArrayList<>();
     private final Map<String, StaticLayout> paragraphCache = new HashMap<>();
     private final Set<String> loadingCovers = new HashSet<>();
@@ -306,8 +312,8 @@ final class ModsView extends View {
     }
 
     private float baseline(float top, float lineHeight, TextPaint paint) {
-        Paint.FontMetrics metrics = paint.getFontMetrics();
-        return top + (lineHeight - (metrics.descent - metrics.ascent)) / 2f - metrics.ascent;
+        paint.getFontMetrics(fontMetrics);
+        return top + (lineHeight - (fontMetrics.descent - fontMetrics.ascent)) / 2f - fontMetrics.ascent;
     }
 
     private String ellipsized(String value, float maxWidth) {
@@ -388,17 +394,25 @@ final class ModsView extends View {
         paint.setStyle(Paint.Style.FILL);
     }
 
+    private RectF rect(float left, float top, float right, float bottom) {
+        if (rectPoolUsed == rectPool.size()) rectPool.add(new RectF());
+        RectF result = rectPool.get(rectPoolUsed++);
+        result.set(left, top, right, bottom);
+        return result;
+    }
+
     private void bind(int action, RectF bounds) {
         if (action <= ACTION_NONE || action >= MAX_ACTION || bounds.isEmpty()) return;
         if (actionBounds[action] == null) actionBounds[action] = new RectF();
         actionBounds[action].set(bounds);
         if (contentShiftX != 0f) actionBounds[action].offset(contentShiftX, 0f);
-        usedActions.add(action);
+        if (usedActionCount == usedActions.length) usedActions = Arrays.copyOf(usedActions, usedActions.length * 2);
+        usedActions[usedActionCount++] = action;
     }
 
     private int actionAt(float x, float y) {
-        for (int i = usedActions.size() - 1; i >= 0; --i) {
-            int action = usedActions.get(i);
+        for (int i = usedActionCount - 1; i >= 0; --i) {
+            int action = usedActions[i];
             RectF bounds = actionBounds[action];
             if (bounds != null && bounds.contains(x, y)) return action;
         }
@@ -442,7 +456,7 @@ final class ModsView extends View {
             float drift = motion ? 0.015f * (float) Math.sin((now - startedAt) / 9000.0) : 0f;
             float scale = Math.max(width / (float) backdrop.getWidth(), height / (float) backdrop.getHeight())
                     * (1.035f + drift);
-            RectF destination = new RectF(0, 0, backdrop.getWidth() * scale, backdrop.getHeight() * scale);
+            RectF destination = rect(0, 0, backdrop.getWidth() * scale, backdrop.getHeight() * scale);
             destination.offset((width - destination.width()) / 2f, (height - destination.height()) / 2f);
             bitmapPaint.setAlpha(190);
             canvas.drawBitmap(backdrop, null, destination, bitmapPaint);
@@ -468,12 +482,12 @@ final class ModsView extends View {
 
     private void drawHeader(Canvas canvas, float left, float right, float top, float u) {
         float iconSize = 38f * u;
-        if (icon != null) canvas.drawBitmap(icon, null, new RectF(left, top, left + iconSize, top + iconSize), bitmapPaint);
+        if (icon != null) canvas.drawBitmap(icon, null, rect(left, top, left + iconSize, top + iconSize), bitmapPaint);
         float brandLeft = left + iconSize + 8f * u;
         drawLine(canvas, "[", brandLeft, top, 38f * u, 25f, 500, RED_HOT, u, -1);
         drawLine(canvas, "PROTOTYPE", brandLeft + 13f * u, top, 38f * u, 23f, 700, BONE, u, -1);
-        RectF back = new RectF(right - 94f * u, top, right, top + touch(u));
-        RectF importButton = new RectF(back.left - 156f * u, top, back.left - 8f * u, top + touch(u));
+        RectF back = rect(right - 94f * u, top, right, top + touch(u));
+        RectF importButton = rect(back.left - 156f * u, top, back.left - 8f * u, top + touch(u));
         button(canvas, ACTION_IMPORT, importButton, busy ? "IMPORTING…" : "+ IMPORT", BUTTON_PRIMARY, !busy, u);
         button(canvas, ACTION_BACK, back, "BACK", BUTTON_GHOST, true, u);
         drawLine(canvas, "MOD LIBRARY", left, top + 52f * u, 32f * u, 26f, 700, BONE, u, right - left);
@@ -485,7 +499,7 @@ final class ModsView extends View {
         if (status.isEmpty()) return 0f;
         StaticLayout message = paragraph(status, width - 28f * u, 12f, 500, BONE, u, 4);
         float height = 31f * u + message.getHeight() + 12f * u + (busy ? 8f * u : 0f);
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, PANEL_ALT, busy ? RED : 0xff51313a, u);
         drawLine(canvas, busy ? "MOD OPERATION IN PROGRESS" : "LIBRARY STATUS", left + 14f * u, top + 7f * u,
                 19f * u, 11.5f, 700, busy ? RED_HOT : DIM, u, width - 28f * u);
@@ -513,7 +527,7 @@ final class ModsView extends View {
                 + "New mods start disabled; original game files and saves stay untouched.";
         StaticLayout bodyLayout = paragraph(body, width - 28f * u, 13f, 500, DIM, u, 5);
         float height = 43f * u + bodyLayout.getHeight() + 17f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, PANEL, 0xff45363f, u);
         drawLine(canvas, "NO MODS INSTALLED", left + 14f * u, top + 9f * u, 25f * u,
                 15f, 700, BONE, u, width - 28f * u);
@@ -528,12 +542,12 @@ final class ModsView extends View {
         if (bitmap != null && !bitmap.isRecycled()) {
             float scale = Math.max(bounds.width() / bitmap.getWidth(), bounds.height() / bitmap.getHeight());
             float width = bitmap.getWidth() * scale, height = bitmap.getHeight() * scale;
-            Rect source = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
-            RectF destination = new RectF(bounds.centerX() - width / 2f, bounds.centerY() - height / 2f,
+            coverSource.set(0, 0, bitmap.getWidth(), bitmap.getHeight());
+            RectF destination = rect(bounds.centerX() - width / 2f, bounds.centerY() - height / 2f,
                     bounds.centerX() + width / 2f, bounds.centerY() + height / 2f);
             canvas.save();
             canvas.clipRect(bounds);
-            canvas.drawBitmap(bitmap, source, destination, bitmapPaint);
+            canvas.drawBitmap(bitmap, coverSource, destination, bitmapPaint);
             canvas.restore();
         } else {
             drawCentered(canvas, !mod.plugin.isEmpty() ? "[ ARM64 ]" : !mod.script.isEmpty() ? "[ LUA ]" : "[ P3D ]",
@@ -590,10 +604,10 @@ final class ModsView extends View {
         float contentBottom = top + 10f * u + Math.max(coverHeight, contentHeight);
         float buttonTop = contentBottom + 9f * u;
         float height = buttonTop - top + touch(u) + 10f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         int edge = !mod.error.isEmpty() ? 0xff81505a : mod.enabled ? RED_HOT : 0xff45363f;
         panel(canvas, card, mod.enabled ? 0xf02b1b23 : PANEL, edge, u);
-        drawCover(canvas, mod, new RectF(left + 12f * u, top + 12f * u,
+        drawCover(canvas, mod, rect(left + 12f * u, top + 12f * u,
                 left + 12f * u + coverWidth, top + 12f * u + coverHeight), u);
         drawLine(canvas, mod.name, textLeft, top + 9f * u, 25f * u, 17f, 700, BONE, u, inner);
         float y = top + 36f * u;
@@ -609,19 +623,19 @@ final class ModsView extends View {
         boolean configurable = mod.error.isEmpty() && !mod.options.isEmpty();
         int buttonCount = configurable ? 4 : 3;
         float buttonWidth = (width - 24f * u - gap * (buttonCount - 1)) / buttonCount;
-        RectF details = new RectF(left + 12f * u, buttonTop,
+        RectF details = rect(left + 12f * u, buttonTop,
                 left + 12f * u + buttonWidth, buttonTop + touch(u));
         button(canvas, ACTION_DETAILS + index, details, expanded ? "LESS" : "DETAILS", BUTTON_GHOST, !busy, u);
         RectF previous = details;
         if (configurable) {
-            RectF configure = new RectF(previous.right + gap, buttonTop, previous.right + gap + buttonWidth,
+            RectF configure = rect(previous.right + gap, buttonTop, previous.right + gap + buttonWidth,
                     buttonTop + touch(u));
             button(canvas, ACTION_CONFIGURE + index, configure, "CONFIGURE", BUTTON_GHOST, !busy, u);
             previous = configure;
         }
-        RectF toggle = new RectF(previous.right + gap, buttonTop, previous.right + gap + buttonWidth,
+        RectF toggle = rect(previous.right + gap, buttonTop, previous.right + gap + buttonWidth,
                 buttonTop + touch(u));
-        RectF remove = new RectF(toggle.right + gap, buttonTop, left + width - 12f * u, buttonTop + touch(u));
+        RectF remove = rect(toggle.right + gap, buttonTop, left + width - 12f * u, buttonTop + touch(u));
         String toggleLabel = pluginArmedId.equals(mod.id)
                 ? (mod.script.isEmpty() ? "CONFIRM ARM64" : "CONFIRM CODE") : mod.enabled ? "DISABLE" : "ENABLE";
         button(canvas, ACTION_TOGGLE + index, toggle, toggleLabel,
@@ -636,7 +650,7 @@ final class ModsView extends View {
         String body = "Lua packages use sandboxed text source. Windows plugins need an Android ARM64 port. DDS replacements keep the original format and dimensions.";
         StaticLayout bodyLayout = paragraph(body, width - 28f * u, 11.5f, 500, DIM, u, 2);
         float height = 36f * u + bodyLayout.getHeight() + 13f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, 0xb011141b, 0xff3f3b43, u);
         drawLine(canvas, "ORIGINAL GAME FILES STAY UNTOUCHED", left + 14f * u, top + 8f * u,
                 21f * u, 11.5f, 700, OK, u, width - 28f * u);
@@ -647,6 +661,7 @@ final class ModsView extends View {
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        rectPoolUsed = 0;
         if (scroller.computeScrollOffset()) {
             scrollY = scroller.getCurrY();
             invalidate();
@@ -664,10 +679,11 @@ final class ModsView extends View {
         float width = Math.min(980f * u, fullWidth);
         float left = availableLeft + (fullWidth - width) / 2f;
         float right = left + width;
-        for (Integer action : usedActions) {
+        for (int i = 0; i < usedActionCount; ++i) {
+            int action = usedActions[i];
             if (actionBounds[action] != null) actionBounds[action].setEmpty();
         }
-        usedActions.clear();
+        usedActionCount = 0;
         drawHeader(canvas, left, right, insetTop + 12f * u, u);
 
         contentTop = insetTop + 121f * u;
@@ -862,17 +878,17 @@ final class ModsView extends View {
     }
 
     private void focusNext(int direction) {
-        if (usedActions.isEmpty()) return;
+        if (usedActionCount == 0) return;
         int position = -1;
-        for (int i = 0; i < usedActions.size(); ++i) {
-            if (usedActions.get(i) == focusedAction) {
+        for (int i = 0; i < usedActionCount; ++i) {
+            if (usedActions[i] == focusedAction) {
                 position = i;
                 break;
             }
         }
-        position = position < 0 ? (direction > 0 ? 0 : usedActions.size() - 1)
-                : (position + direction + usedActions.size()) % usedActions.size();
-        focusedAction = usedActions.get(position);
+        position = position < 0 ? (direction > 0 ? 0 : usedActionCount - 1)
+                : (position + direction + usedActionCount) % usedActionCount;
+        focusedAction = usedActions[position];
         RectF bounds = actionBounds[focusedAction];
         if (bounds != null && !bounds.isEmpty()) {
             if (bounds.top < contentTop) scrollY = Math.max(0f, scrollY - (contentTop - bounds.top) - 12f * lastUnit);

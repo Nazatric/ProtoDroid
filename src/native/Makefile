@@ -121,7 +121,8 @@ $(OUT)/main.o $(OUT)/kernel32.o $(OUT)/misc.o $(OUT)/bink.o: guest_time.h
 $(OUT)/kernel32.o: diagnostics.h
 $(OUT)/watchdog.o: diagnostic_tour.h
 $(OUT)/diagnostic_tour.o: diagnostic_tour_plan.h input.h guest_time.h
-$(OUT)/input.o: input.h
+$(OUT)/input.o: input.h input_lookup.h
+$(OUT)/dinput.o: input_lookup.h
 $(OUT)/diagnostics.o: proc_stats.h
 $(OUT)/vulkan_driver.o: gpu_profile.h
 $(OUT)/video_settings.o: video_settings.h
