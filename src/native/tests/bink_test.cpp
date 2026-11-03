@@ -47,6 +47,7 @@ std::unordered_map<uint32_t, int> g_test_handles;
 using TestGuestFunction = std::function<uint32_t(const std::vector<uint32_t>&)>;
 std::unordered_map<uint32_t, TestGuestFunction> g_test_guest_functions;
 uint32_t g_next_heap = 0x100000;
+std::string g_test_logs;
 constexpr uint32_t kHeapBytes = 512u << 20;
 
 void CheckHost(bool ok, const char* what) {
@@ -59,8 +60,10 @@ std::string Lower(std::string s) {
 }
 
 void Log(const char* fmt, ...) {
-    if (!getenv("PROTODROID_BINK_TEST_VERBOSE")) return;
-    va_list ap; va_start(ap, fmt); vfprintf(stderr, fmt, ap); va_end(ap);
+    char text[4096];
+    va_list ap; va_start(ap, fmt); vsnprintf(text, sizeof(text), fmt, ap); va_end(ap);
+    g_test_logs += text;
+    if (getenv("PROTODROID_BINK_TEST_VERBOSE")) fputs(text, stderr);
 }
 [[noreturn]] void Fatal(const char* fmt, ...) {
     va_list ap; va_start(ap, fmt); vfprintf(stderr, fmt, ap); va_end(ap); abort();
@@ -650,6 +653,11 @@ int main(int argc, char** argv) {
         std::filesystem::copy_file(sample, root / "Movies" / "Intro.BIK");
         auto bytes = ReadBytes(sample);
         Check(bytes.size() > 1000000, "sample is unexpectedly small");
+        const size_t truncated_size = std::min<size_t>(bytes.size(), 1024 * 1024);
+        std::ofstream truncated_file(root / "Movies" / "Truncated.bik", std::ios::binary);
+        truncated_file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(truncated_size));
+        truncated_file.close();
+        Check(truncated_file.good(), "could not create truncated decode fixture");
         std::vector<uint8_t> compressed(16 + compressBound(bytes.size()));
         memcpy(compressed.data(), "RZ\0\0", 4);
         Set32(compressed, 8, static_cast<uint32_t>(bytes.size()));
@@ -692,6 +700,34 @@ int main(int argc, char** argv) {
         CheckPlaneCopyVariants();
         CheckContiguousPlaneCopy();
         CheckRegisteredAndCopies();
+
+        uint32_t truncated = OpenName("movies\\truncated.bik");
+        Check(truncated != 0, "valid-header truncated movie should open");
+        RegisterTestFrameBuffers(truncated);
+        g_test_logs.clear();
+        uint32_t failed_at = 0;
+        auto* truncated_public = Ptr<Public>(truncated);
+        for (uint32_t frame = 1; frame <= truncated_public->frames; ++frame) {
+            if (Call("BinkDoFrame", 1, {truncated}) != 0) {
+                failed_at = frame;
+                break;
+            }
+            Check(truncated_public->last_frame_num == frame && !truncated_public->read_error,
+                  "truncated movie failed before the media boundary");
+            if (frame < truncated_public->frames) Next(truncated);
+        }
+        Check(failed_at > 1 && failed_at < truncated_public->frames,
+              "truncated movie did not fail at its media boundary");
+        Check(truncated_public->read_error == 1 && truncated_public->last_frame_num == failed_at - 1,
+              "truncated decode failure was not published through the Bink ABI");
+        Check(g_test_logs.find("first frame ready") != std::string::npos &&
+              g_test_logs.find("video decode failed") != std::string::npos,
+              "decode diagnostics omitted first-frame readiness or the terminal failure");
+        std::string failure_logs = g_test_logs;
+        Check(Call("BinkDoFrame", 1, {truncated}) != 0, "terminal truncated decode unexpectedly succeeded");
+        Check(g_test_logs == failure_logs, "terminal decode failure logging was not bounded");
+        Close(truncated);
+
         CheckMonotonicWaitPacing();
         uint32_t selection = HeapAlloc(300 * 4);
         for (uint32_t i = 0; i < 300; ++i) W32(selection + i * 4, 0x1000 + i);
