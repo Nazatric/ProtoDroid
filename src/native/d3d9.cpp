@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "win.h"
+#include "aa_policy.h"
 #include "d3d9_dxt.h"
 #include "d3d9_state.h"
 #include "diagnostics.h"
@@ -299,6 +300,12 @@ D3DPRESENT_PARAMETERS ToHost(uint32_t g) {
     p.Flags = R32(g + 44);
     p.FullScreen_RefreshRateInHz = R32(g + 48);
     p.PresentationInterval = R32(g + 52);
+    // FXAA replaces, rather than stacks on top of, Prototype's built-in MSAA. GameDB enforcement covers the
+    // engine's offscreen effects path; this boundary also keeps every present/reset swapchain single-sampled if a
+    // stale profile or an unhooked engine path still requests MSAA. Original MSAA modes are not modified.
+    const int aa = SettingInt("game_aa_level", kAaGameDefault);
+    p.MultiSampleType = D3DMULTISAMPLE_TYPE(AaPresentSampleType(aa, uint32_t(p.MultiSampleType)));
+    p.MultiSampleQuality = AaPresentSampleQuality(aa, p.MultiSampleQuality);
     // Android: the SDL window already covers the screen and exclusive fullscreen has no meaning there.
 #ifdef __ANDROID__
     const bool windowed = true;
@@ -313,6 +320,12 @@ D3DPRESENT_PARAMETERS ToHost(uint32_t g) {
     p.PresentationInterval = D3D9PresentationInterval(p.PresentationInterval, true);
 #endif
     return p;
+}
+
+void LogFxaaPresentPolicy(const char* operation, uint32_t g, const D3DPRESENT_PARAMETERS& p) {
+    if (!AaUsesFxaa(SettingInt("game_aa_level", kAaGameDefault))) return;
+    Log("AA policy: %s FXAA present msaa %u/%u -> %u/%u", operation, R32(g + 16), R32(g + 20),
+        uint32_t(p.MultiSampleType), p.MultiSampleQuality);
 }
 
 void ToGuest(const D3DPRESENT_PARAMETERS& p, uint32_t g) {
@@ -362,7 +375,8 @@ uint32_t ShadowLock(void* object, uint32_t sub, void* host, uint32_t size, DWORD
     return s.guest;
 }
 
-void ShadowUnlock(void* object, uint32_t sub, const D3DSURFACE_DESC* texture_desc = nullptr) {
+void ShadowUnlock(void* object, uint32_t sub, const D3DSURFACE_DESC* texture_desc = nullptr,
+                  bool release_scratch = false) {
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
     auto it = g_shadows.find({object, sub});
     if (it == g_shadows.end() || !it->second.host) return;
@@ -377,6 +391,13 @@ void ShadowUnlock(void* object, uint32_t sub, const D3DSURFACE_DESC* texture_des
         }
     }
     D3D9ShadowCopyBack(s.host, Ptr<void>(s.guest), s.size, s.write_back);
+    if (release_scratch) {
+        // Adapted static textures do not need their upload buffer after the last consumer has run. Large entries
+        // are page-backed, so HeapFree also unmaps them; dynamic/ordinary locks retain their reusable shadows.
+        HeapFree(s.guest);
+        g_shadows.erase(it);
+        return;
+    }
     s.host = nullptr;
 }
 
@@ -582,6 +603,11 @@ bool AdaptedUnlock(void* tex, uint32_t sub, bool* host_locked, bool texture_2d =
         }
         l.host = nullptr;
     }
+    // The D3D lock pointer is invalid after UnlockRect. Release the compressed guest copy only after mod
+    // replacement and decoding have consumed it; this bounds static-texture upload memory instead of retaining one
+    // scratch allocation per subresource for the texture's entire lifetime.
+    HeapFree(l.guest);
+    g_adapted_locks.erase(it);
     return true;
 }
 
@@ -765,6 +791,7 @@ bool WaitForWindow(int seconds);  // below, with the surface state
 M(IDirect3D9, CreateDevice) {
     const int64_t create_device_start_ns = MonotonicNanos();
     D3DPRESENT_PARAMETERS pp = ToHost(Arg(c, 5));
+    LogFxaaPresentPolicy("CreateDevice", Arg(c, 5), pp);
     IDirect3DDevice9* dev = nullptr;
     // The Vulkan surface needs the window on screen: if the player switched to another app during startup, the
     // device would fail with a lost surface. Wait for the window, and retry a failure that happened while it was gone.
@@ -799,7 +826,7 @@ M(IDirect3D9, CreateDevice) {
                   "See app_process64_d3d9.log for the reason."
                 : "DXVK found no compatible Vulkan GPU with the selected driver. "
                   "See app_process64_d3d9.log for the missing driver or features.";
-        if (autoRecovery) message += " Auto will try System on the next launch.";
+        if (autoRecovery) message += " Auto will re-check System and its compatibility fallback on the next launch.";
         StartupFailure(message.c_str());
     }
     if (OverrideModes()) SetClientSize(int(pp.BackBufferWidth), int(pp.BackBufferHeight));
@@ -824,6 +851,7 @@ M(IDirect3DDevice9, SetCursorProperties) {
 }
 M(IDirect3DDevice9, CreateAdditionalSwapChain) {
     D3DPRESENT_PARAMETERS pp = ToHost(Arg(c, 1));
+    LogFxaaPresentPolicy("CreateAdditionalSwapChain", Arg(c, 1), pp);
     IDirect3DSwapChain9* sc = nullptr;
     HRESULT hr = Host<IDirect3DDevice9>(Arg(c, 0))->CreateAdditionalSwapChain(&pp, &sc);
     ToGuest(pp, Arg(c, 1));
@@ -833,6 +861,7 @@ M(IDirect3DDevice9, CreateAdditionalSwapChain) {
 M(IDirect3DDevice9, Reset) {
     const int64_t reset_start_ns = MonotonicNanos();
     D3DPRESENT_PARAMETERS pp = ToHost(Arg(c, 1));
+    LogFxaaPresentPolicy("Reset", Arg(c, 1), pp);
     // Matching width/height/format alone is not enough to skip Reset: D3D9 also resets device state and default-pool
     // resources. ToHost keeps the Android interval stable, avoiding the observed cutscene presentation-mode change.
     DrainGraves(true);
@@ -1184,9 +1213,11 @@ M(IDirect3DTexture9, UnlockRect) {
         } else {
             t->GetLevelDesc(level, &guest_desc);
         }
-        ShadowUnlock(t, level, &guest_desc);
+        ShadowUnlock(t, level, &guest_desc, a != nullptr);
     } else {
-        ShadowUnlock(t, level);  // ordinary Play keeps the original unlock route and avoids a DXVK description query
+        // Ordinary Play keeps the original unlock route and avoids a DXVK description query. Adapted static
+        // textures still release their completed upload scratch; all other shadows remain reusable.
+        ShadowUnlock(t, level, nullptr, a != nullptr);
     }
     Return(c, uint32_t(TimedTextureUpload([&] { return t->UnlockRect(a ? level - a->skip : level); })), 2);
 }
@@ -1223,7 +1254,7 @@ M(IDirect3DCubeTexture9, UnlockRect) {
                3);
         return;
     }
-    ShadowUnlock(t, face * 64 + level);
+    ShadowUnlock(t, face * 64 + level, nullptr, a != nullptr);
     Return(c,
            uint32_t(TimedTextureUpload(
                [&] { return t->UnlockRect(D3DCUBEMAP_FACES(face), a ? level - a->skip : level); })),

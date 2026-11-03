@@ -108,6 +108,8 @@ final class DriverManager {
     }
 
     private void migrateLegacyIfNeeded() {
+        int mode = preferences.getInt("vulkan_driver", 0);
+        if (!DriverRepository.shouldMigrateLegacy(mode, preferences.contains("vulkan_driver"))) return;
         if (selected() != null) return;
         File oldPrivate = new File(DriverRepository.legacyRoot(files()), "libvulkan_custom.so");
         if (oldPrivate.isFile()) {

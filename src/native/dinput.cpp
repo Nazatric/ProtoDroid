@@ -7,6 +7,8 @@
 //
 // Guest objects are 16-byte blocks: [0] guest vtable (import thunks), [4] index into g_devices (0 = the
 // IDirectInput8A object itself).
+#include <SDL2/SDL.h>
+
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -17,7 +19,7 @@
 namespace native {
 
 std::vector<uint8_t> KeyboardDiks();  // input.cpp
-bool DikDown(uint8_t dik);
+bool DikDown(const Uint8* state, uint8_t dik);
 void TakeMouseMotion(int32_t* dx, int32_t* dy, int32_t* dz);
 uint32_t MouseButtonMask();
 
@@ -291,6 +293,7 @@ M(GetDeviceState) {
         TakeMouseMotion(&dx, &dy, &dz);
         buttons = MouseButtonMask();
     }
+    const Uint8* keyboard_state = d->kind == Kind::Keyboard ? SDL_GetKeyboardState(nullptr) : nullptr;
     for (size_t i = 0; i < d->objects.size(); ++i) {
         int32_t ofs = i < d->format_ofs.size() ? d->format_ofs[i] : int32_t(d->objects[i].ofs);
         if (ofs < 0) continue;
@@ -301,7 +304,7 @@ M(GetDeviceState) {
             W32(out + uint32_t(ofs), uint32_t(v));
         } else {
             if (uint32_t(ofs) >= size) continue;
-            bool down = d->kind == Kind::Keyboard ? DikDown(o.dik) : (buttons >> (o.ofs - 12)) & 1;
+            bool down = d->kind == Kind::Keyboard ? DikDown(keyboard_state, o.dik) : (buttons >> (o.ofs - 12)) & 1;
             W8(out + uint32_t(ofs), down ? 0x80 : 0);
         }
     }

@@ -23,6 +23,7 @@
 
 #include "bink_abi.h"
 #include "bink_blit.h"
+#include "bink_media.h"
 #include "bink_pacing.h"
 #include "guest.h"
 #include "sdl_stub.h"
@@ -47,6 +48,7 @@ std::unordered_map<uint32_t, int> g_test_handles;
 using TestGuestFunction = std::function<uint32_t(const std::vector<uint32_t>&)>;
 std::unordered_map<uint32_t, TestGuestFunction> g_test_guest_functions;
 uint32_t g_next_heap = 0x100000;
+std::string g_test_logs;
 constexpr uint32_t kHeapBytes = 512u << 20;
 
 void CheckHost(bool ok, const char* what) {
@@ -59,8 +61,10 @@ std::string Lower(std::string s) {
 }
 
 void Log(const char* fmt, ...) {
-    if (!getenv("PROTODROID_BINK_TEST_VERBOSE")) return;
-    va_list ap; va_start(ap, fmt); vfprintf(stderr, fmt, ap); va_end(ap);
+    char text[4096];
+    va_list ap; va_start(ap, fmt); vsnprintf(text, sizeof(text), fmt, ap); va_end(ap);
+    g_test_logs += text;
+    if (getenv("PROTODROID_BINK_TEST_VERBOSE")) fputs(text, stderr);
 }
 [[noreturn]] void Fatal(const char* fmt, ...) {
     va_list ap; va_start(ap, fmt); vfprintf(stderr, fmt, ap); va_end(ap); abort();
@@ -127,6 +131,7 @@ int DuplicateFileHandle(uint32_t h) {
 }
 std::string Setting(const char*, const char* def) { return def ? def : ""; }
 int SettingInt(const char*, int def) { return def; }
+bool MenuFpsUnlocked() { return true; }  // production default; live JNI state is supplied by main.cpp
 // This standalone Bink harness intentionally has no mod catalog; production overlay policy is tested separately.
 bool ModFilesHaveOverlays() { return false; }
 std::string ModFilesResolveReadPath(const char*, const std::string& original_host) { return original_host; }
@@ -219,6 +224,43 @@ void WriteRCF(const std::filesystem::path& path, const std::string& name, const 
     Set32(out, 0x30, static_cast<uint32_t>(out.size() - names_offset)); Set32(out, 0x38, 1);
     std::ofstream f(path, std::ios::binary); f.write(reinterpret_cast<const char*>(out.data()), out.size());
     Check(f.good(), "could not write RCF fixture");
+}
+
+void WriteBenchmarkRCF(const std::filesystem::path& path, uint32_t count) {
+    // All entries can share one tiny payload: this exercises directory/name indexing without duplicating movie data.
+    std::vector<uint8_t> data(48, 0);
+    memcpy(data.data(), "BIK", 3);
+    std::vector<std::string> names;
+    names.reserve(count);
+    std::unordered_map<uint32_t, std::string> hashes;
+    hashes.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        char name[80];
+        snprintf(name, sizeof(name), "video\\benchmark\\asset%05u.bik", i);
+        if (i == 0) names.emplace_back("\\Video\\Benchmark\\Discarded\\..\\Asset00000.BIK");
+        else names.emplace_back(name);
+        Check(hashes.emplace(HashName(names.back()), names.back()).second, "benchmark RCF hash collision");
+    }
+
+    std::vector<uint8_t> out(0x3c, 0);
+    memcpy(out.data(), "ATG CORE CEMENT LIBRARY", 24);
+    out[0x20] = 2; out[0x21] = 1; out[0x22] = 0; out[0x23] = 1;
+    uint32_t data_offset = static_cast<uint32_t>(out.size());
+    out.insert(out.end(), data.begin(), data.end());
+    uint32_t dir_offset = static_cast<uint32_t>(out.size());
+    for (const auto& name : names) {
+        Put32(out, HashName(name)); Put32(out, data_offset); Put32(out, static_cast<uint32_t>(data.size()));
+    }
+    uint32_t names_offset = static_cast<uint32_t>(out.size());
+    Put32(out, 0); Put32(out, 0);
+    for (const auto& name : names) {
+        Put32(out, 0); Put32(out, 0); Put32(out, 0); Put32(out, static_cast<uint32_t>(name.size() + 1));
+        out.insert(out.end(), name.begin(), name.end()); out.push_back(0); out.insert(out.end(), 3, 0);
+    }
+    Set32(out, 0x24, dir_offset); Set32(out, 0x28, count * 12); Set32(out, 0x2c, names_offset);
+    Set32(out, 0x30, static_cast<uint32_t>(out.size() - names_offset)); Set32(out, 0x38, count);
+    std::ofstream f(path, std::ios::binary); f.write(reinterpret_cast<const char*>(out.data()), out.size());
+    Check(f.good(), "could not write benchmark RCF fixture");
 }
 
 void CheckPublic(uint32_t h) {
@@ -649,6 +691,11 @@ int main(int argc, char** argv) {
         std::filesystem::copy_file(sample, root / "Movies" / "Intro.BIK");
         auto bytes = ReadBytes(sample);
         Check(bytes.size() > 1000000, "sample is unexpectedly small");
+        const size_t truncated_size = std::min<size_t>(bytes.size(), 1024 * 1024);
+        std::ofstream truncated_file(root / "Movies" / "Truncated.bik", std::ios::binary);
+        truncated_file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(truncated_size));
+        truncated_file.close();
+        Check(truncated_file.good(), "could not create truncated decode fixture");
         std::vector<uint8_t> compressed(16 + compressBound(bytes.size()));
         memcpy(compressed.data(), "RZ\0\0", 4);
         Set32(compressed, 8, static_cast<uint32_t>(bytes.size()));
@@ -660,6 +707,8 @@ int main(int argc, char** argv) {
         WriteRCF(root / "WOI.RCF", "Video\\Compressed.bik.rz", compressed, false);
         WriteRCF(root / "Wide.RCF", "Video\\Wide.bik", bytes, true, true);
         std::ofstream(root / "Other.RCF", std::ios::binary).write("not an archive", 14);
+        constexpr uint32_t kBenchmarkEntries = 18044;  // observed Xclipse installation's real RCF path count
+        WriteBenchmarkRCF(root / "Benchmark.RCF", kBenchmarkEntries);
 
         void* base = mmap(reinterpret_cast<void*>(kGuestBase), 0x100000000ull, PROT_NONE,
                           MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
@@ -675,6 +724,24 @@ int main(int argc, char** argv) {
         uint32_t ids = HeapAlloc(4); W32(ids, 0); Call("BinkSetSoundTrack", 2, {1, ids});
 
         CheckOpenDecodeClose(OpenName("c:\\GaMe\\movies\\intro.bik"));
+        g_test_logs.clear();
+        auto index_start = std::chrono::steady_clock::now();
+        std::string index_error;
+        auto indexed_source = native::bink::OpenFileSource("video\\benchmark\\asset18043.bik", 0, &index_error);
+        double index_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - index_start).count();
+        Check(indexed_source && indexed_source->Size() == 48, "benchmark RCF lookup failed: " + index_error);
+        Check(g_test_logs.find("indexed 18047 RCF paths from 5 archives") != std::string::npos,
+              "benchmark RCF did not exercise the observed 18044-path scale");
+        std::cout << "RCF cold index: " << index_ms << " ms for 18047 paths\n";
+        indexed_source.reset();
+        for (const char* name : {"C:\\GaMe\\video\\benchmark\\asset18043.bik",
+                                  "video\\benchmark\\discard\\..\\asset18043.bik",
+                                  "/video//benchmark/./asset18043.bik", "video\\benchmark\\asset00000.bik"}) {
+            std::string normalized_error;
+            auto normalized_source = native::bink::OpenFileSource(name, 0, &normalized_error);
+            Check(normalized_source && normalized_source->Size() == 48,
+                  std::string("normalized RCF lookup failed for ") + name + ": " + normalized_error);
+        }
         CheckOpenDecodeClose(OpenName("video\\intro.bik"));
         CheckOpenDecodeClose(OpenName("video/compressed.BIK"));
         CheckOpenDecodeClose(OpenName("video\\wide.bik"));
@@ -691,6 +758,34 @@ int main(int argc, char** argv) {
         CheckPlaneCopyVariants();
         CheckContiguousPlaneCopy();
         CheckRegisteredAndCopies();
+
+        uint32_t truncated = OpenName("movies\\truncated.bik");
+        Check(truncated != 0, "valid-header truncated movie should open");
+        RegisterTestFrameBuffers(truncated);
+        g_test_logs.clear();
+        uint32_t failed_at = 0;
+        auto* truncated_public = Ptr<Public>(truncated);
+        for (uint32_t frame = 1; frame <= truncated_public->frames; ++frame) {
+            if (Call("BinkDoFrame", 1, {truncated}) != 0) {
+                failed_at = frame;
+                break;
+            }
+            Check(truncated_public->last_frame_num == frame && !truncated_public->read_error,
+                  "truncated movie failed before the media boundary");
+            if (frame < truncated_public->frames) Next(truncated);
+        }
+        Check(failed_at > 1 && failed_at < truncated_public->frames,
+              "truncated movie did not fail at its media boundary");
+        Check(truncated_public->read_error == 1 && truncated_public->last_frame_num == failed_at - 1,
+              "truncated decode failure was not published through the Bink ABI");
+        Check(g_test_logs.find("first frame ready") != std::string::npos &&
+              g_test_logs.find("video decode failed") != std::string::npos,
+              "decode diagnostics omitted first-frame readiness or the terminal failure");
+        std::string failure_logs = g_test_logs;
+        Check(Call("BinkDoFrame", 1, {truncated}) != 0, "terminal truncated decode unexpectedly succeeded");
+        Check(g_test_logs == failure_logs, "terminal decode failure logging was not bounded");
+        Close(truncated);
+
         CheckMonotonicWaitPacing();
         uint32_t selection = HeapAlloc(300 * 4);
         for (uint32_t i = 0; i < 300; ++i) W32(selection + i * 4, 0x1000 + i);

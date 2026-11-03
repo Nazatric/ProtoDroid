@@ -1,7 +1,7 @@
 #!/bin/bash
-# Packages the APK without Gradle: SDL's Java activity + ours -> classes.dex, the manifest -> aapt2, native
-# libraries for the requested ABIs, then zipalign and apksigner. KEYSTORE and its password/alias environment
-# variables select the signing identity; the default remains the local Android debug key.
+# Packages the original native Android launcher without Gradle: SDL's matched Java activity plus ProtoDroid's Java
+# views become classes.dex, platform assets/manifest become the base APK, and verified native libraries are staged,
+# zipaligned and signed. KEYSTORE and its password/alias environment variables select the signing identity.
 #
 # Usage: android/build-apk.sh [abi ...]          (default: arm64-v8a)
 # Needs: build/android/<abi>/libmain.so (make -C src/native PLATFORM=android ABI=<abi>) and the libraries from
@@ -27,24 +27,32 @@ case "$SIGNING_IDENTITY" in
 esac
 ABIS=("${@:-arm64-v8a}")
 
+if [ ! -s "$ROOT/android/java/com/protodroid/SetupView.java" ]; then
+    echo "ERROR: original native Android launcher source is missing"
+    exit 1
+fi
+
 OUT=$ROOT/build/apk
 rm -rf "$OUT"
 mkdir -p "$OUT/classes" "$OUT/dex" "$OUT/pkg"
 VERSION_INFO=$(python3 "$ROOT/tools/bump_version.py" --show "$ROOT/android/AndroidManifest.xml")
 read -r VERSION_NAME VERSION_CODE <<< "$VERSION_INFO"
-echo "=== Package version: $VERSION_NAME (versionCode $VERSION_CODE) ==="
+SDL2_VERSION=$(python3 "$ROOT/tools/sdl_version.py" pin "$ROOT/android/build-deps.sh")
+echo "=== Package version: $VERSION_NAME (versionCode $VERSION_CODE); SDL $SDL2_VERSION ==="
 
-# Java: SDL's activity classes plus ProtoActivity.
+# Compile the exact pinned SDL Java source and the original native Android views. Verify both the source constants and
+# the resulting SDLActivity class so a second SDL version cannot enter the DEX through a reused checkout or cache.
+python3 "$ROOT/tools/sdl_version.py" source "$SDL_SRC" "$SDL2_VERSION"
 javac --release 11 -nowarn -cp "$PLATFORM_JAR" -d "$OUT/classes" \
     "$SDL_SRC"/android-project/app/src/main/java/org/libsdl/app/*.java "$ROOT"/android/java/com/protodroid/*.java
+javap -classpath "$OUT/classes" -private -verbose org.libsdl.app.SDLActivity > "$OUT/sdl-activity.javap"
+python3 "$ROOT/tools/sdl_version.py" verify-class "$OUT/sdl-activity.javap" "$SDL2_VERSION"
 "$BUILD_TOOLS/d8" --release --min-api 26 --lib "$PLATFORM_JAR" --output "$OUT/dex" \
     $(find "$OUT/classes" -name '*.class')
 
-# Resources (launcher icon; tools/make_icon.py draws it) and the self-contained setup artwork/fonts.
 "$BUILD_TOOLS/aapt2" compile --dir "$ROOT/android/res" -o "$OUT/res.zip"
 "$BUILD_TOOLS/aapt2" link -o "$OUT/base.apk" -I "$PLATFORM_JAR" --manifest "$ROOT/android/AndroidManifest.xml" \
     -A "$ROOT/android/assets" -R "$OUT/res.zip" --auto-add-overlay --min-sdk-version 26 --target-sdk-version 35
-
 cp "$OUT/dex/classes.dex" "$OUT/pkg/"
 echo "=== classes.dex size ==="
 ls -lh "$OUT/dex/classes.dex" "$OUT/pkg/classes.dex"
@@ -59,6 +67,10 @@ for abi in "${ABIS[@]}"; do
         SRC=""
         if [ "$lib" = "libmain.so" ]; then SRC="$ROOT/build/android/$abi/libmain.so"; else SRC="$DEPS_ROOT/$abi/lib/$lib"; fi
         if [ ! -f "$SRC" ]; then echo "ERROR: missing $SRC"; ls -l "$SRC" 2>&1; echo "DEPS lib dir:"; ls -lh "$DEPS_ROOT/$abi/lib/" 2>&1 | head -n 20; exit 1; fi
+        if [ "$lib" = libSDL2.so ]; then
+            python3 "$ROOT/tools/sdl_version.py" verify-manifest \
+                "$DEPS_ROOT/$abi/lib/protodroid-sdl2-version.txt" "$SRC" "$SDL2_VERSION"
+        fi
         echo "Copying $SRC -> $OUT/pkg/lib/$abi/"
         cp -v "$SRC" "$OUT/pkg/lib/$abi/"
         ls -lh "$OUT/pkg/lib/$abi/$lib"
@@ -103,7 +115,9 @@ for abi in "${ABIS[@]}"; do
 done
 echo "=== Packaging base.apk ==="
 du -sh "$OUT/pkg"/lib/*/* 2>&1 | head -n 20
-(cd "$OUT/pkg" && zip -q -r "$OUT/base.apk" classes.dex lib && echo "zip done" && ls -lh "$OUT/base.apk" && unzip -l "$OUT/base.apk" | head -n 100)
+# Native code dominates this package. Maximum DEFLATE costs build time only; every signed-entry verification below
+# still compares the extracted bytes with the exact compiled/staged inputs.
+(cd "$OUT/pkg" && zip -9 -q -r "$OUT/base.apk" classes.dex lib && echo "zip done (DEFLATE level 9)" && ls -lh "$OUT/base.apk" && unzip -l "$OUT/base.apk" | head -n 100)
 
 "$BUILD_TOOLS/zipalign" -P 16 -f 4 "$OUT/base.apk" "$OUT/aligned.apk"
 "$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-key-alias "$KEY_ALIAS" \
@@ -136,6 +150,36 @@ with zipfile.ZipFile(apk) as archive:
         if archive.read(name) != source.read_bytes():
             raise SystemExit(f"ERROR: signed APK asset differs from source: {name}")
         print(f"Verified {name} ({source.stat().st_size} bytes)")
+PY
+# The signed package must contain the original native Android launcher and the exact SDL-verified DEX/native bytes.
+python3 - "$OUT/prototype.apk" "$OUT/dex/classes.dex" "$OUT/pkg" "$SDL2_VERSION" "${ABIS[@]}" <<'PY'
+from pathlib import Path
+import sys
+import zipfile
+
+apk_path, dex_path, pkg_root, sdl_version, *abis = sys.argv[1:]
+with zipfile.ZipFile(apk_path) as apk:
+    names = set(apk.namelist())
+    if any(name.startswith("assets/launcher/") for name in names):
+        raise SystemExit("ERROR: signed APK contains the retired Web launcher")
+    dex_names = sorted(name for name in names if name.startswith("classes") and name.endswith(".dex"))
+    if not dex_names:
+        raise SystemExit("ERROR: signed APK has no DEX bytecode")
+    if apk.read("classes.dex") != Path(dex_path).read_bytes():
+        raise SystemExit("ERROR: signed DEX differs from the SDL-verified compiled classes")
+    dex = b"".join(apk.read(name) for name in dex_names)
+    for marker in (b"SetupView", b"SetupActivity", b"ProtoActivity"):
+        if marker not in dex:
+            raise SystemExit("ERROR: signed APK lacks original native launcher marker " + marker.decode())
+    for forbidden in (b"LauncherAppKt", b"ProtoDroidLauncherHost", b"PreviewLauncherHost", b"addJavascriptInterface"):
+        if forbidden in dex:
+            raise SystemExit("ERROR: signed APK contains rejected Compose/Web marker " + forbidden.decode())
+    for abi in abis:
+        name = f"lib/{abi}/libSDL2.so"
+        staged = Path(pkg_root) / "lib" / abi / "libSDL2.so"
+        if name not in names or apk.read(name) != staged.read_bytes():
+            raise SystemExit(f"ERROR: signed {name} differs from the provenance-verified staged library")
+    print(f"Verified original native launcher and signed SDL {sdl_version} Java/native package chain for {', '.join(abis)}")
 PY
 # The A825 fix is part of the native package, not an optional download. Verify it in the signed APK itself.
 if [[ " ${ABIS[*]} " == *" arm64-v8a "* ]]; then
@@ -229,4 +273,6 @@ if [ "$APK_SIZE" -lt 20000000 ]; then
     exit 1
 fi
 echo "APK OK: $APK_SIZE bytes"
+APK_SHA256=$(sha256sum "$OUT/prototype.apk" | awk '{print $1}')
+printf 'apkBytes=%s\napkSha256=%s\n' "$APK_SIZE" "$APK_SHA256" > "$OUT/package.txt"
 unzip -l "$OUT/prototype.apk" | grep -E "libSDL2|libFAudio|libdxvk|libmain|classes.dex"

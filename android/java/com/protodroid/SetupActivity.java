@@ -38,6 +38,7 @@ public class SetupActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ImmersiveMode.apply(this);
         updateManager = new UpdateManager(this, new UpdateManager.Callback() {
             @Override
             public void onStateChanged(UpdateManager.State state) {
@@ -79,6 +80,18 @@ public class SetupActivity extends Activity {
                 @Override
                 public void onMods() {
                     startActivity(new Intent(SetupActivity.this, ModsActivity.class));
+                    LauncherMotion.transition(SetupActivity.this);
+                }
+
+                @Override
+                public void onTouchLayout() {
+                    startActivity(new Intent(SetupActivity.this, TouchLayoutActivity.class));
+                    LauncherMotion.transition(SetupActivity.this);
+                }
+
+                @Override
+                public void onDiagnostics() {
+                    startActivity(new Intent(SetupActivity.this, DiagnosticsActivity.class));
                     LauncherMotion.transition(SetupActivity.this);
                 }
 
@@ -180,8 +193,15 @@ public class SetupActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        ImmersiveMode.apply(this);
         check();  // also after coming back from the permission screen
         updateManager.onResume();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) ImmersiveMode.apply(this);
     }
 
     @Override

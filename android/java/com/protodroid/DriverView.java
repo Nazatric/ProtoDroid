@@ -30,6 +30,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
@@ -96,7 +97,11 @@ final class DriverView extends View implements DriverManager.Observer {
     private final int touchSlop;
     private final OverScroller scroller;
     private final RectF[] actionBounds = new RectF[MAX_ACTION];
-    private final ArrayList<Integer> usedActions = new ArrayList<>();
+    private int[] usedActions = new int[64];
+    private int usedActionCount;
+    private final ArrayList<RectF> rectPool = new ArrayList<>();
+    private int rectPoolUsed;
+    private final Paint.FontMetrics fontMetrics = new Paint.FontMetrics();
     private final Map<String, StaticLayout> paragraphCache = new HashMap<>();
     private final Set<String> catalogInstalledIds = new HashSet<>();
     private final ArrayList<DriverRepository.Entry> installed = new ArrayList<>();
@@ -269,8 +274,8 @@ final class DriverView extends View implements DriverManager.Observer {
     }
 
     private float baseline(float top, float lineHeight, TextPaint paint) {
-        Paint.FontMetrics metrics = paint.getFontMetrics();
-        return top + (lineHeight - (metrics.descent - metrics.ascent)) / 2f - metrics.ascent;
+        paint.getFontMetrics(fontMetrics);
+        return top + (lineHeight - (fontMetrics.descent - fontMetrics.ascent)) / 2f - fontMetrics.ascent;
     }
 
     private String ellipsized(String value, float maxWidth) {
@@ -341,20 +346,28 @@ final class DriverView extends View implements DriverManager.Observer {
         paint.setStyle(Paint.Style.FILL);
     }
 
+    private RectF rect(float left, float top, float right, float bottom) {
+        if (rectPoolUsed == rectPool.size()) rectPool.add(new RectF());
+        RectF result = rectPool.get(rectPoolUsed++);
+        result.set(left, top, right, bottom);
+        return result;
+    }
+
     private void bind(int action, RectF bounds) {
         if (action <= ACTION_NONE || action >= MAX_ACTION || bounds.isEmpty()) return;
         if (actionBounds[action] == null) actionBounds[action] = new RectF();
         actionBounds[action].set(bounds);
-        usedActions.add(action);
+        if (usedActionCount == usedActions.length) usedActions = Arrays.copyOf(usedActions, usedActions.length * 2);
+        usedActions[usedActionCount++] = action;
     }
 
     private void bind(int action, float left, float top, float right, float bottom) {
-        bind(action, new RectF(left, top, right, bottom));
+        bind(action, rect(left, top, right, bottom));
     }
 
     private int actionAt(float x, float y) {
-        for (int i = usedActions.size() - 1; i >= 0; --i) {
-            int action = usedActions.get(i);
+        for (int i = usedActionCount - 1; i >= 0; --i) {
+            int action = usedActions[i];
             RectF bounds = actionBounds[action];
             if (bounds != null && bounds.contains(x, y)) return action;
         }
@@ -407,7 +420,7 @@ final class DriverView extends View implements DriverManager.Observer {
             float drift = motion ? 0.012f * (float) Math.sin((now - startedAt) / 10000.0) : 0f;
             float scale = Math.max(width / (float) backdrop.getWidth(), height / (float) backdrop.getHeight())
                     * (1.035f + drift);
-            RectF destination = new RectF(0, 0, backdrop.getWidth() * scale, backdrop.getHeight() * scale);
+            RectF destination = rect(0, 0, backdrop.getWidth() * scale, backdrop.getHeight() * scale);
             destination.offset((width - destination.width()) / 2f, (height - destination.height()) / 2f);
             bitmapPaint.setAlpha(175);
             canvas.drawBitmap(backdrop, null, destination, bitmapPaint);
@@ -433,14 +446,14 @@ final class DriverView extends View implements DriverManager.Observer {
 
     private void drawHeader(Canvas canvas, float left, float right, float top, float u) {
         float iconSize = 38f * u;
-        if (icon != null) canvas.drawBitmap(icon, null, new RectF(left, top, left + iconSize, top + iconSize), bitmapPaint);
+        if (icon != null) canvas.drawBitmap(icon, null, rect(left, top, left + iconSize, top + iconSize), bitmapPaint);
         float brandLeft = left + iconSize + 8f * u;
         drawLine(canvas, "[", brandLeft, top, 38f * u, 25f, 500, RED_HOT, u, -1);
         drawLine(canvas, "PROTOTYPE", brandLeft + 14f * u, top, 38f * u, 23f, 700, BONE, u, -1);
         configure(text, 23f, 700, BONE, u);
         float brandEnd = brandLeft + 14f * u + text.measureText("PROTOTYPE") + 4f * u;
         drawLine(canvas, "]", brandEnd, top, 38f * u, 25f, 500, RED_HOT, u, -1);
-        RectF back = new RectF(right - 104f * u, top, right, top + touch(u));
+        RectF back = rect(right - 104f * u, top, right, top + touch(u));
         button(canvas, ACTION_BACK, back, "BACK", BUTTON_GHOST, true, u);
         drawLine(canvas, "GRAPHICS DRIVERS", left, top + 52f * u, 32f * u, 26f, 700, BONE, u, right - left);
         drawLine(canvas, "Choose once. Your choice applies the next time you play.",
@@ -493,7 +506,7 @@ final class DriverView extends View implements DriverManager.Observer {
         StaticLayout noteLayout = paragraph(note, inner, 11.5f, 600, noteColor, u);
         float height = 42f * u + bodyLayout.getHeight() + 6f * u + noteLayout.getHeight() + 13f * u;
         height = Math.max(height, 88f * u);
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, selected ? 0xf02c1b23 : PANEL, selected ? RED_HOT : 0xff45363f, u);
         bind(ACTION_MODE + mode, card);
         radio(canvas, left + 24f * u, top + 23f * u, selected, u);
@@ -515,7 +528,7 @@ final class DriverView extends View implements DriverManager.Observer {
                 : "This affects ProtoDroid only. Your phone's global Vulkan driver and your saves are not changed.";
         StaticLayout bodyLayout = paragraph(body, width - 28f * u, 12f, 500, DIM, u);
         float height = 34f * u + bodyLayout.getHeight() + 13f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, PANEL_ALT, mode == 3 && selected == null ? AMBER : 0xff51313a, u);
         drawLine(canvas, "CURRENT CHOICE  /  " + current, left + 14f * u, top + 8f * u,
                 20f * u, 12.5f, 700, mode == 3 && selected == null ? AMBER : OK, u, width - 28f * u);
@@ -533,7 +546,7 @@ final class DriverView extends View implements DriverManager.Observer {
         boolean progress = manager.progressTotal() > 0;
         float height = 35f * u + messageLayout.getHeight() + (progress ? 38f * u : 0f)
                 + touch(u) + 22f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         boolean good = title.contains("installed") || title.contains("selected") || title.contains("removed");
         panel(canvas, card, PANEL_ALT, good ? 0xff5d8154 : (busy ? RED : 0xff81505a), u);
         drawLine(canvas, title.toUpperCase(Locale.ROOT), left + 14f * u, top + 8f * u, 21f * u,
@@ -555,7 +568,7 @@ final class DriverView extends View implements DriverManager.Observer {
             y += 38f * u;
         }
         if (hasButton) {
-            RectF action = new RectF(left + width - 150f * u, y,
+            RectF action = rect(left + width - 150f * u, y,
                     left + width - 14f * u, y + touch(u));
             button(canvas, busy ? ACTION_CANCEL : ACTION_CLEAR_STATUS, action,
                     busy ? "CANCEL DOWNLOAD" : "DISMISS", BUTTON_GHOST, true, u);
@@ -573,14 +586,14 @@ final class DriverView extends View implements DriverManager.Observer {
                 : "Only needed for a specific custom build. Automatic does not need a download.";
         StaticLayout bodyLayout = paragraph(body, width - 102f * u, 12f, 500, DIM, u);
         float height = Math.max(76f * u, 38f * u + bodyLayout.getHeight() + 12f * u);
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, showPackages ? 0xf0251921 : PANEL, showPackages ? RED : 0xff45363f, u);
         bind(ACTION_PACKAGES, card);
         drawLine(canvas, "DRIVER PACKAGES", left + 14f * u, top + 9f * u, 23f * u,
                 14f, 700, BONE, u, width - 102f * u);
         drawParagraph(canvas, body, left + 14f * u, top + 35f * u, width - 102f * u, 12f, 500, DIM, u);
         drawCentered(canvas, showPackages ? "−" : "+",
-                new RectF(left + width - 72f * u, top, left + width - 14f * u, top + height),
+                rect(left + width - 72f * u, top, left + width - 14f * u, top + height),
                 26f, 500, RED_HOT, u);
         return height;
     }
@@ -608,7 +621,7 @@ final class DriverView extends View implements DriverManager.Observer {
         StaticLayout extraLayout = expanded ? paragraph(extra, width - 28f * u, 11.5f, 500, DIM, u) : null;
         float mainHeight = 43f * u + detailLayout.getHeight() + 5f * u + selectionLayout.getHeight() + 12f * u;
         float height = mainHeight + (expanded ? extraLayout.getHeight() + 10f * u : 0f) + touch(u) + 14f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, selected ? 0xf02b1b23 : PANEL, selected ? RED_HOT : 0xff45363f, u);
         if (!selected && !manager.isBusy()) bind(ACTION_SELECT + index, left, top, left + width, top + mainHeight);
         radio(canvas, left + 25f * u, top + 23f * u, selected, u);
@@ -625,9 +638,9 @@ final class DriverView extends View implements DriverManager.Observer {
         float buttonTop = top + height - touch(u) - 8f * u;
         float gap = 8f * u;
         float buttonWidth = (width - 36f * u) / 2f;
-        RectF details = new RectF(left + 14f * u, buttonTop,
+        RectF details = rect(left + 14f * u, buttonTop,
                 left + 14f * u + buttonWidth, buttonTop + touch(u));
-        RectF remove = new RectF(details.right + gap, buttonTop, left + width - 14f * u, buttonTop + touch(u));
+        RectF remove = rect(details.right + gap, buttonTop, left + width - 14f * u, buttonTop + touch(u));
         button(canvas, ACTION_DETAILS + index, details, expanded ? "HIDE DETAILS" : "DETAILS",
                 BUTTON_GHOST, !manager.isBusy(), u);
         boolean armed = removeArmedId.equals(entry.id) && SystemClock.uptimeMillis() - removeArmedAt < 6000;
@@ -651,7 +664,7 @@ final class DriverView extends View implements DriverManager.Observer {
         float contentHeight = 41f * u + description.getHeight() + 6f * u + detailLayout.getHeight()
                 + (experimental ? note.getHeight() + 5f * u : 0f) + 13f * u;
         float height = Math.max(104f * u, contentHeight) + (narrow ? touch(u) + 10f * u : 0f);
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, PANEL, experimental ? 0xff6b5037 : 0xff45363f, u);
         drawLine(canvas, entry.title, left + 14f * u, top + 10f * u, 25f * u,
                 15.5f, 700, BONE, u, inner);
@@ -665,7 +678,7 @@ final class DriverView extends View implements DriverManager.Observer {
         float buttonWidth = narrow ? width - 28f * u : 158f * u;
         float buttonLeft = narrow ? left + 14f * u : left + width - buttonWidth - 14f * u;
         float buttonTop = narrow ? top + height - touch(u) - 8f * u : top + 16f * u;
-        RectF get = new RectF(buttonLeft, buttonTop, buttonLeft + buttonWidth, buttonTop + touch(u));
+        RectF get = rect(buttonLeft, buttonTop, buttonLeft + buttonWidth, buttonTop + touch(u));
         button(canvas, ACTION_DOWNLOAD + index, get, catalogInstalled(entry) ? "REINSTALL" : "DOWNLOAD",
                 BUTTON_PRIMARY, !manager.isBusy(), u);
         return height;
@@ -680,12 +693,12 @@ final class DriverView extends View implements DriverManager.Observer {
                 + "It is checked before installation and never selected automatically.";
         StaticLayout bodyLayout = paragraph(body, width - 28f * u, 12f, 500, DIM, u);
         float height = 40f * u + bodyLayout.getHeight() + touch(u) + 18f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, PANEL_ALT, 0xff45363f, u);
         drawLine(canvas, "IMPORT YOUR OWN", left + 14f * u, top + 9f * u, 22f * u,
                 12.5f, 700, RED_HOT, u, width - 28f * u);
         drawParagraph(canvas, body, left + 14f * u, top + 34f * u, width - 28f * u, 12f, 500, DIM, u);
-        RectF importButton = new RectF(left + 14f * u, top + height - touch(u) - 10f * u,
+        RectF importButton = rect(left + 14f * u, top + height - touch(u) - 10f * u,
                 left + width - 14f * u, top + height - 10f * u);
         button(canvas, ACTION_IMPORT, importButton, "IMPORT ZIP OR .SO", BUTTON_NORMAL, !manager.isBusy(), u);
         return height;
@@ -704,13 +717,13 @@ final class DriverView extends View implements DriverManager.Observer {
         StaticLayout bodyLayout = paragraph(body, width - 28f * u, 12f, 500, DIM, u);
         boolean canToggle = maliDevice || adrenoDevice;
         float height = 35f * u + bodyLayout.getHeight() + (canToggle ? touch(u) + 10f * u : 12f * u) + 12f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, PANEL_ALT, 0xff45363f, u);
         drawLine(canvas, "COMPATIBILITY", left + 14f * u, top + 8f * u, 21f * u,
                 12f, 700, DIM, u, width - 28f * u);
         drawParagraph(canvas, body, left + 14f * u, top + 32f * u, width - 28f * u, 12f, 500, DIM, u);
         if (canToggle) {
-            RectF toggle = new RectF(left + 14f * u, top + height - touch(u) - 10f * u,
+            RectF toggle = rect(left + 14f * u, top + height - touch(u) - 10f * u,
                     left + width - 14f * u, top + height - 10f * u);
             button(canvas, ACTION_SHOW_ALL, toggle, showAllPackages ? "SHOW COMPATIBLE ONLY" : "SHOW ALL PACKAGES",
                     BUTTON_GHOST, !manager.isBusy(), u);
@@ -722,12 +735,12 @@ final class DriverView extends View implements DriverManager.Observer {
         String body = "No custom packages are installed. You do not need one for Automatic or Phone driver.";
         StaticLayout bodyLayout = paragraph(body, width - 28f * u, 12.5f, 500, DIM, u);
         float height = 39f * u + bodyLayout.getHeight() + touch(u) + 20f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, PANEL, 0xff45363f, u);
         drawLine(canvas, "NOTHING TO MANAGE YET", left + 14f * u, top + 9f * u, 22f * u,
                 12.5f, 700, DIM, u, width - 28f * u);
         drawParagraph(canvas, body, left + 14f * u, top + 34f * u, width - 28f * u, 12.5f, 500, DIM, u);
-        RectF browse = new RectF(left + 14f * u, top + height - touch(u) - 10f * u,
+        RectF browse = rect(left + 14f * u, top + height - touch(u) - 10f * u,
                 left + width - 14f * u, top + height - 10f * u);
         button(canvas, ACTION_BROWSE_DOWNLOADS, browse, "BROWSE DOWNLOADS", BUTTON_NORMAL, true, u);
         return height;
@@ -738,7 +751,7 @@ final class DriverView extends View implements DriverManager.Observer {
                 + "System and records the reason. Packages are private to ProtoDroid and never replace the phone's global driver.";
         StaticLayout recoveryLayout = paragraph(recovery, width - 28f * u, 12f, 500, DIM, u);
         float height = recoveryLayout.getHeight() + 43f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, 0xb011141b, 0xff3f3b43, u);
         drawLine(canvas, "SAFE RECOVERY", left + 14f * u, top + 8f * u, 22f * u,
                 12f, 700, OK, u, width - 28f * u);
@@ -748,6 +761,7 @@ final class DriverView extends View implements DriverManager.Observer {
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        rectPoolUsed = 0;
         if (scroller.computeScrollOffset()) {
             scrollY = scroller.getCurrY();
             invalidate();
@@ -763,10 +777,11 @@ final class DriverView extends View implements DriverManager.Observer {
         float width = Math.min(920f * u, fullWidth);
         float left = availableLeft + (fullWidth - width) / 2f;
         float right = left + width;
-        for (Integer action : usedActions) {
+        for (int i = 0; i < usedActionCount; ++i) {
+            int action = usedActions[i];
             if (actionBounds[action] != null) actionBounds[action].setEmpty();
         }
-        usedActions.clear();
+        usedActionCount = 0;
         drawHeader(canvas, left, right, insetTop + 12f * u, u);
 
         contentTop = insetTop + 124f * u;
@@ -803,8 +818,8 @@ final class DriverView extends View implements DriverManager.Observer {
         y += drawPackageToggle(canvas, left, y, width, u) + 12f * u;
         if (showPackages) {
             float tabWidth = (width - gap) / 2f;
-            RectF installedTab = new RectF(left, y, left + tabWidth, y + touch(u));
-            RectF downloadTab = new RectF(left + tabWidth + gap, y, right, y + touch(u));
+            RectF installedTab = rect(left, y, left + tabWidth, y + touch(u));
+            RectF downloadTab = rect(left + tabWidth + gap, y, right, y + touch(u));
             button(canvas, ACTION_TAB, installedTab, "INSTALLED (" + installed.size() + ")",
                     packageTab == 0 ? BUTTON_PRIMARY : BUTTON_GHOST, !manager.isBusy(), u);
             button(canvas, ACTION_TAB + 1, downloadTab, "DOWNLOADS",
@@ -1040,10 +1055,16 @@ final class DriverView extends View implements DriverManager.Observer {
     }
 
     private void focusNext(int direction) {
-        if (usedActions.isEmpty()) return;
-        int index = usedActions.indexOf(focusedAction);
+        if (usedActionCount == 0) return;
+        int index = -1;
+        for (int i = 0; i < usedActionCount; ++i) {
+            if (usedActions[i] == focusedAction) {
+                index = i;
+                break;
+            }
+        }
         if (index < 0) index = direction >= 0 ? -1 : 0;
-        focusedAction = usedActions.get(Math.floorMod(index + direction, usedActions.size()));
+        focusedAction = usedActions[Math.floorMod(index + direction, usedActionCount)];
         ensureFocusedVisible();
         invalidate();
     }

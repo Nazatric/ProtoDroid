@@ -80,10 +80,12 @@ uint32_t ImportThunk(const char* dll, const char* name);
 bool DispatchImport(Ctx* ctx, uint32_t target);
 void RegisterImports(const ImportDef* defs, size_t count);
 
-// Argument i (0-based) of an import call: [esp + 4 + 4*i].
-inline uint32_t Arg(Ctx* c, int i) { return R32(c->esp + 4 + 4 * i); }
-inline float ArgF(Ctx* c, int i) { return RF32(c->esp + 4 + 4 * i); }
-inline double ArgD(Ctx* c, int i) { return RF64(c->esp + 4 + 4 * i); }
+// Argument i (0-based) of an import call: [esp + 4 + 4*i]. Each thread/fiber has a private guest stack, just like
+// the generated code's esp-relative locals, so these reads need no cross-thread acquire operation. Memory referenced
+// by an argument can still be shared and must continue to use R*/W* with the normal guest-ordering semantics.
+inline uint32_t Arg(Ctx* c, int i) { return SR32(c->esp + 4 + 4 * i); }
+inline float ArgF(Ctx* c, int i) { return SRF32(c->esp + 4 + 4 * i); }
+inline double ArgD(Ctx* c, int i) { return SRF64(c->esp + 4 + 4 * i); }
 // Return from a stdcall import (callee pops `args` dwords) or a cdecl one (args = 0).
 inline void Return(Ctx* c, uint32_t eax, int args = 0) {
     c->eax = eax;
@@ -131,6 +133,7 @@ std::string Setting(const char* key, const char* def);
 int SettingInt(const char* key, int def);
 
 // Android performance hints (perf_hint.cpp): frame budget and per-frame work for the system's CPU clocking.
+bool MenuFpsUnlocked();
 void PerfHintStart(int fps_target);
 void PerfHintAddThread(int tid);
 void PerfHintTarget(int fps_target);

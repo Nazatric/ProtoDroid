@@ -65,30 +65,30 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 | --- | --- |
 | **Graphics** | The original renderer through D3D9 and DXVK, with resolution, texture, anisotropy, AA, shadow, and game-quality settings. Mali and Adreno receive device-specific compatibility handling without a shared visual downgrade. |
 | **Movies and audio** | Full-screen Bink videos, ambient menu movies, RCF-resident files, and XAudio2 through FAudio. **Unlock menu FPS** is on by default. |
-| **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. |
-| **Performance** | ARM64 hot-path replacements, optimized DXT decoding, stable FIFO presentation, ADPF hints, unrestricted CPU scheduling, and persistent DXVK state caching. |
+| **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, helicopter descend, a numbered 1–4 pad, a paged PC keyboard, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. The editor supports custom keyboard chords or left/right/middle mouse bindings, editable labels, and polygon snapping. |
+| **Performance** | ARM64 hot-path replacements, optimized DXT decoding, FIFO presentation at interval 1, ADPF hints, Android-controlled CPU scheduling, and persistent DXVK state caching. |
 | **Saves** | Shared profiles and saves that you can back up, replace, or delete with a file manager. Existing saves migrate without being overwritten. |
-| **Mods** | An optional local library for loose-file overlays, same-format texture packs, and independently rebuilt ARM64 plugins, with covers, details, and next-Play activation. |
+| **Mods** | An optional local library for overlays, large keyed texture packs, sandboxed Lua engine scripts, and independently rebuilt ARM64 plugins, with dependencies, author options, and next-Play activation. |
 
 ## Settings and drivers
 
-The launcher’s **Settings** page and the in-game gear menu share the same preferences. Changes made in the launcher are saved automatically; engine options are applied when you press **Play**. In-game rows marked with `*` take effect after a restart, while the FPS limit changes immediately.
+The original native Android launcher’s **Settings** page keeps graphics, drivers, and engine policies. Its rows show short explanations on touch or keyboard focus; changes save automatically and engine options apply on **Play**. The in-game gear is a smaller live panel: FPS/battery/menu pacing, touch controls, FPS overlay, and **Layout**. Restart-only graphics and engine/mod experiments stay out of that panel.
 
-- **Graphics:** Resolution, Textures, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
-- **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **Game default** leaves the engine’s own device-dependent choice intact.
-- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, and Extra buttons.
-- **Interface:** Opacity and Show FPS.
+- **Graphics:** Resolution, Textures, DXT1 color, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
+- **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **FXAA** filters the completed frame with built-in MSAA disabled to avoid Prototype’s missing-texture AA path; **2x/4x MSAA** retain the original behavior. **Game default** leaves the engine’s own device-dependent choice intact.
+- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, Extra buttons, and **Touch layout → EDIT**. **ABC** opens a smaller paged PC keyboard: **MAIN**, **MORE**, and **NUMPAD** retain all 104 keys with conventional labels. Edit layouts here without starting the game, or use the in-game gear: drag, resize, hide/show any control, edit button text or restore its default, and see each button’s binding in the editor. Add custom one- or two-key buttons or left/right/middle mouse buttons with rebind and confirmed delete actions. Center and hexagon-edge guides help align polygons; **ADD STICK** restores a hidden stick. Built-in special bindings stay fixed; custom buttons are rebindable. **123** toggles number keys and **DESCEND** sends `V`.
+- **Interface:** Screen orientation, Opacity, and Show FPS. Fixed Landscape/Reverse is an optional recovery for devices that choose the wrong direction; Auto remains the default.
 - **Engine fixes:** Optional FOV, shadow-map, tick/QTE, loose-file, developer-menu, VRAM-report, and texture-dump policies. Safe defaults remain unchanged until you opt in.
 
-**Low, Medium, and High presets** update only the graphics and game-video options. Your FPS and control preferences stay as they are. Choose **Custom** after changing an individual graphics row. Use **LAYOUT** to drag controls into place, resize them, or reset the layout.
+**Low, Medium, and High presets** update resolution, textures, anisotropy, DXT1 color, shadows, and graphic quality without changing **Anti-Alias Level**. Old preset-owned Medium/High MSAA or FXAA values return to **Game default** once; Low’s existing Off value and all Custom/explicit AA choices are preserved. High keeps full 32-bit decoded DXT1 color, while Low/Medium retain the lower-bandwidth 16-bit path. FPS and control preferences stay as they are. Choose **Custom** after changing a preset-owned graphics row; AA remains independent. Use **Settings → Controls → Touch layout** or the in-game **LAYOUT** editor to arrange controls or reset the layout.
 
 ### Mods and engine fixes
 
-Open **Mods** beside **Drivers** to import a local ZIP, a loose file, or an ARM64 `.so`. The library shows installed/active counts, cover art, descriptions, content types, compatibility errors, and load state. Imports start **disabled**; review the details, then enable them for the next **Play**. Enable/disable, two-step removal, and the additional native-plugin confirmation never patch original game files or shared saves.
+Open **Mods** beside **Drivers** to import a local ZIP, a loose file, a Lua package, or an ARM64 `.so`. The library shows installed/active counts, cover art, descriptions, content types, dependency/compatibility errors, and load state. Imports start **disabled**; review the details, then enable them for the next **Play**. Mods with author-defined options have **Configure** for toggles, stepped sliders, choices, and text, with reset/discard handling. Enable/disable, two-step removal, and executable-code confirmation never patch original game files or shared saves. Engine fixes remain in Settings, not Mods.
 
-Packages live under `/storage/emulated/0/Prototype/mods/` when shared access is available, or ProtoDroid’s app-specific `mods/` folder otherwise. A ZIP can use the documented manifest or a legacy layout, including one top-level wrapper folder. Unsafe paths, duplicate IDs, oversized archives, and incompatible native binaries are rejected. **Windows x86 ASI/DLL plugins do not load on Android**; native plugins must be independently translated and rebuilt for AArch64 using ABI v1.
+Packages live under `/storage/emulated/0/Prototype/mods/` when shared access is available, or ProtoDroid’s app-specific `mods/` folder otherwise. A ZIP can use the documented manifest or a legacy layout, including one top-level wrapper folder. API-2 packages add dependency-ordered Lua scripting and native ABI-v3 symbols/events; existing ABI-v1/v2 plugins retain their contracts. Lua states have restricted libraries and memory/instruction limits, but engine calls and memory writes still require trusted code. **Windows x86 ASI/DLL plugins do not load on Android**; native plugins must be independently translated and rebuilt for AArch64.
 
-Texture packs map ProtoDroid’s versioned texture hashes in `textures.ini` to same-size, same-format DDS replacements. Enable **Dump original textures** to create original-format DDS files and a starter mapping. This is useful for compatible top-level static 2D textures, not arbitrary high-resolution texture resizing. See the [mod package and plugin guide](re/native-mod-platform.md) for authoring details.
+Texture packs map ProtoDroid’s versioned texture hashes in `textures.ini` to same-size, same-format DDS replacements. Large projects use bounded imports and lazy per-mip reads rather than retaining every payload in memory. Enable **Dump original textures** to create original-format DDS files and a starter mapping. This supports compatible static 2D replacements, including character textures when they use the supported path—not arbitrary high-resolution resizing or new engine effects. See the [authoring guide](modding/README.md) and [platform contract](re/native-mod-platform.md).
 
 The **Engine fixes** tab exposes fractional FOV offsets through INI, 512–8192 shadow-map limits, the evidenced tick/QTE policies, loose files, the guarded developer-menu option, DXVK VRAM reporting, and texture dumping. Higher limits can cost memory and performance; support and appearance remain device-dependent. These options are independent of imported mods.
 
@@ -101,7 +101,7 @@ The **Engine fixes** tab exposes fractional FOV offsets through INI, 512–8192 
 | **Turnip** | Adreno-only. Falls back to System on Mali rather than pretending to be a Mali driver. |
 | **Custom** | Uses the explicitly selected, validated package from the Drivers library. |
 
-If the direct system path cannot run DXVK, Auto can try a bundled Vulkan 1.1 compatibility wrapper after an isolated feature probe. Working direct Vulkan 1.2/1.3 paths and explicit driver choices are not replaced. Physical Mali compatibility remains unverified.
+If the direct system path cannot run DXVK, Auto can try a bundled Vulkan 1.1 compatibility wrapper after an isolated feature probe. The wrapper advertises its lowered DXVK-facing 1.3 interface only after requesting Mesa’s real compatibility path; missing features or extensions still reject it. Working direct Vulkan 1.2/1.3 paths and explicit driver choices are not replaced. Physical Mali and PowerVR compatibility remains unverified.
 
 Open **Drivers** on the launcher or beside **Done** in Settings for the guided driver screen. Your current choice appears first, followed by large plain-language mode cards. **Driver packages** is a separate optional section with **Installed** and **Downloads** tabs, so ordinary Auto/System use is not buried in advanced controls. Downloads start with packages for the detected GPU family and offer **Show all**; this is only a compatibility filter, not a device guarantee. Tap an installed card to use it, open **Details** for technical information, or use two-tap **Remove**.
 
@@ -140,7 +140,9 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `render_height` | Internal render height. Android defaults to 720; width follows the display aspect ratio. |
 | `texture_skip_mips` | `0` full textures, `1` half resolution, `2` quarter resolution. |
 | `texture_skip_min_size` | Minimum texture size eligible for mip reduction. |
+| `decode_16bit` | On decoded DXT1 textures, `0` keeps full 32-bit color and `1` uses the lower-bandwidth 16-bit path. |
 | `max_anisotropy` | Texture anisotropy: 1, 2, 4, 8, or another supported value. |
+| `game_aa_level` | `-1` Game default, `0` Off, `1` 2x MSAA, `2` 4x MSAA, `3` FXAA. FXAA keeps GameDB/present MSAA at zero and applies on the next Play. |
 | `fps_limit` | Host frame limit: `0` disables it; positive values use the existing limiter. The UI offers 30–1000, without promising the resulting frame rate. |
 | `battery_saver` | Enables the battery-saving frame policy. |
 | `unlock_menu_fps` | `1` keeps menu movies responsive without blocking waits. Default: `1`. |
@@ -163,6 +165,8 @@ Android presentation is fixed to **FIFO, interval 1** for both device creation a
 
 ## Logs and diagnostics
 
+Open **Diagnostics** on the launcher for **About / Device** information and bounded, read-only log tails. **Refresh** rereads the selected file; **Copy log tail** copies only the displayed text and never changes the original log.
+
 Depending on storage access, logs are available in:
 
 - `/storage/emulated/0/Android/data/com.protodroid/files/`
@@ -178,9 +182,9 @@ Depending on storage access, logs are available in:
 
 ### Diagnostic tour
 
-Type **MERCER** on the launcher or tap its Prototype logo seven times quickly, then choose **START TOUR**. Repeat the code/gesture to disarm it. The 22-phase plan requests a direct test level, then rapidly exercises movement, camera, jumping/sprinting, targeting, combat, grab follow-ups, quick powers, power/disguise wheels, disguise-form inputs, shadows, effects, streaming, audio, and recovery without further interaction.
+Type **MERCER** on the launcher or tap its Prototype logo seven times quickly, then choose **Play**. Repeat the code/gesture to disarm it. The 41-phase plan requests a direct test level and runs 10,440 logical action frames without further interaction: movement, charged jumps, glide/dash chains, building-climb and wall-grab attempts, combat, powers, disguises, shadows, streaming, audio, sustained stress, and recovery. The isolated tour scales its guest timers to 4×; host timing, action scheduling, and normal Play stay at real time.
 
-Tour saves, logs, and shader cache are isolated from normal Play. Shared results are under `/storage/emulated/0/Prototype/diagnostic-tour/logs/`, including `journal.log`, `phase.txt`, `result.txt`, and `crash.log`. Every non-skipped phase requires rendered dwell and continuing `InGameState` task activity; presents alone are not enough. Coalesced Presents do not compress several logical action frames into one game update, and each phase records its actual `presented_frames` separately from `action_frames`. “Tested” means those inputs and activity completed—not that the ability’s result, visuals, or audio were verified. Bink movie and physical Android-touch phases are explicitly skipped. The launcher warns that the isolated game process closes when the tour completes or fails; `result.txt` also records this expected exit behavior.
+Tour saves, logs, and shader cache are isolated from normal Play. Shared results are under `/storage/emulated/0/Prototype/diagnostic-tour/logs/`, including `journal.log`, `phase.txt`, `result.txt`, and `crash.log`. Every non-skipped phase requires rendered dwell and continuing `InGameState` task activity; presents alone are not enough. Coalesced Presents do not compress logical action frames. Phases record exact actions, wall/process-CPU time, gameplay dispatches, Presented frames, exact phase average/max timing, and rolling FPS/P99 snapshots; guest/import profiling is enabled automatically. “Tested” means those inputs and activity completed—not visual, rooftop, ability-result, or audio verification. Bink and physical-touch phases remain explicit skips. The isolated process closes intentionally at completion or failure.
 
 ### Detailed profiling
 
@@ -208,13 +212,13 @@ Use the [guided issue forms](https://github.com/Nazatric/ProtoDroid/issues/new/c
 
 ## Updates
 
-The launcher checks the latest published GitHub release in the background and compares its integer `versionCode`, not just the visible version string. An update card appears only for a newer release with the official `prototype.apk`, release APK SHA-256, and signing-certificate metadata. Downloads use Android’s system DownloadManager, show progress, and are checked against the release hash and APK package/version before installation is offered.
+The launcher checks the latest published GitHub release and compares its integer `versionCode`. An available update offers **DOWNLOAD**, then **INSTALL** after verification. **VERSIONS** always opens the [official release archive](https://github.com/Nazatric/ProtoDroid/releases) for older APKs; no third-party mirror is used. Recovery for an existing in-app download still verifies its APK hash, package/version, and signing certificate before offering installation.
 
-- **Same signing certificate:** Android opens the normal in-place installer.
-- **Different signing certificate:** the launcher explains why Android requires uninstalling the old copy first, then chains the system uninstall and install prompts where the device permits it. Shared game saves and files under `/storage/emulated/0/Prototype` are not deleted. App-private settings and data may be removed, so back up anything important outside that shared folder.
-- **If Android closes ProtoDroid during uninstall:** open the completed ProtoDroid download notification or the APK in the public **Downloads** folder to continue. This fallback is intentional: an ordinary app cannot silently uninstall itself and guarantee that it can launch another activity afterward.
+- **Same certificate:** Android can update in place.
+- **Different certificate:** Android requires a one-time uninstall first. Shared saves and files under `/storage/emulated/0/Prototype` are separate; back up important app-private data.
+- **If Android closes ProtoDroid during an existing verified-download uninstall:** open its completed download notification or the APK in Downloads.
 
-The updater never downloads game content, changes graphics or controls, or installs an unverified APK. Automatic checks use a 15-minute backoff and failures do not block Play. Transient download queries are rechecked before failure; the error card offers **Retry** and **GO TO RELEASES** for manual browser recovery.
+Automatic checks use a 15-minute backoff and do not block Play. Update errors offer Retry and **ALL VERSIONS**. Older APKs use the signing rules above; back up important data before reinstalling a different certificate.
 
 ## Under the hood
 
@@ -223,7 +227,7 @@ The updater never downloads game content, changes graphics or controls, or insta
 - **D3D9 on Vulkan:** a generated bridge forwards drawing to DXVK 2.5.3. Android patches cover Mali and Adreno behavior, descriptor compatibility, pipeline compilation, presentation, and persistent caching.
 - **Bink through FFmpeg:** a minimal FFmpeg build decodes loose and RCF-resident movies. Decoded YUV planes are copied directly into the textures supplied by the game.
 - **XAudio2 through FAudio:** FAudio handles voice processing and mixing, with SDL audio output and Android-friendly pacing.
-- **SDL2 and Android UI:** SDL owns the window and platform events. A native Android layer provides the launcher, touch controls, gamepad support, layout editor, and settings.
+- **SDL2 and Android UI:** SDL owns the game window and platform events. The original native Android launcher connects to the existing settings, driver, update, mod, diagnostics, touch-control, and layout services without a WebView or Compose runtime.
 
 ## Developer guide
 
@@ -262,7 +266,7 @@ tools/cool_make.sh -C src/native PLATFORM=android ABI=arm64-v8a \
 android/build-apk.sh arm64-v8a
 ```
 
-`tools/cool_make.sh` runs a parallel build and pauses when the host reaches its configured temperature limit. Ordinary `make` with the same variables works too. Local native builds record the checked-out Git commit when available; CI embeds the exact workflow commit and verifies it before a release.
+`tools/cool_make.sh` runs a parallel build and pauses when the host reaches its configured temperature limit. Ordinary `make` with the same variables works too. `android/build-apk.sh` compiles the native Android launcher with `javac`/`d8`, packages resources with `aapt2`, and retains native-library and signing checks. SDL source, compiled Java constants, native-library provenance, and signed-package bytes are checked against one pinned version. Local native builds record the checked-out Git commit when available; CI embeds the exact workflow commit and verifies it before a release.
 
 </details>
 
@@ -310,7 +314,9 @@ Protected releases use these repository Actions secrets:
 
 Encode the keystore with `base64 -w 0` on Linux or `base64` without line wrapping on macOS. Keep an offline backup of the original keystore and passwords, and never commit them. Once protected signing is configured, later releases keep the same identity and can update in place.
 
-Branch and PR artifacts use disposable CI identities and are not release-eligible. Ephemeral releases are rejected unless explicitly approved. Some existing builds, including 0.8 and older CI artifacts, use certificates whose private keys are unavailable. Android cannot install a differently signed build over them; a one-time uninstall is required. Shared saves under `/storage/emulated/0/Prototype` remain separate from the app, but back up any important app-specific data first.
+Branch and PR artifacts use disposable CI identities and are not release-eligible. Disposable releases and certificate changes require separate explicit approvals; both approved dispatch types can use the same protected identity. The protected secrets and offline keystore backup must be maintained by a repository administrator.
+
+**0.14’s disposable private key cannot be recovered.** A persistent 0.15 identity cannot match its certificate, so installation over 0.14 requires one uninstall even after persistent signing is configured. Later releases can update in place only while that identity is retained. Shared saves under `/storage/emulated/0/Prototype` remain separate, but back up important app-private data first.
 
 </details>
 

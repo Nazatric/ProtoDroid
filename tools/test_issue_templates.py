@@ -97,6 +97,10 @@ def main():
     names = [validate_form(path) for path in form_paths]
     require(len(names) == len(set(names)), "issue form names must be unique")
     link_count = validate_config(TEMPLATE_DIR / "config.yml")
+    for path in [*form_paths, TEMPLATE_DIR / "config.yml"]:
+        text = path.read_text(encoding="utf-8")
+        require(not re.search(r"[\U0001F300-\U0001FAFF\u2600-\u26FF\u2700-\u27BF]", text),
+                f"{path}: decorative emoji are not allowed")
     for path, name in zip(form_paths, names):
         print(f"Validated {path.name}: {name}")
     print(f"Validated issue chooser configuration ({link_count} links)")

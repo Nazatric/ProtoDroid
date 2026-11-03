@@ -31,10 +31,12 @@
 #include <thread>
 #include <vector>
 
+#include "aa_policy.h"
 #include "diagnostic_tour.h"
 #include "diagnostics.h"
 #include "dxvk_config.h"
 #include "guest.h"
+#include "guest_time.h"
 #include "input.h"
 #include "mod_platform.h"
 #include "present_stats.h"
@@ -365,6 +367,9 @@ extern SDL_Window* g_sdl_window;
 // ---- frame limiter and presented-frame counters (read by the on-screen overlay through JNI) ----
 namespace native {
 std::atomic<int> g_fps_limit{0};  // 0 = no limit (the swap interval still applies)
+std::atomic<bool> g_unlock_menu_fps{true};
+
+bool MenuFpsUnlocked() { return g_unlock_menu_fps.load(std::memory_order_relaxed); }
 
 static long ResidentMiB() {
     long pages = 0, resident = 0;
@@ -392,6 +397,10 @@ extern "C" JNIEXPORT jint JNICALL Java_com_protodroid_TouchControls_nativeMemory
 extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetFpsLimit(JNIEnv*, jclass, jint fps) {
     native::g_fps_limit.store(fps);
     native::PerfHintTarget(fps);
+}
+extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetMenuFpsUnlocked(
+    JNIEnv*, jclass, jboolean unlocked) {
+    native::g_unlock_menu_fps.store(unlocked != JNI_FALSE, std::memory_order_relaxed);
 }
 #endif
 
@@ -455,11 +464,13 @@ int main(int argc, char** argv) {
         unsetenv("PROTODROID_PIPELINE_TRACE");
         unsetenv("PROTODROID_PIPELINE_TRACE_DIR");
         unsetenv("PROTODROID_PIPELINE_TIMING");
+        unsetenv("PROTODROID_IMPORT_PROFILE");
         unsetenv("DXVK_LOG_TIMESTAMPS");
     }
 #else
     const bool diagnostic_tour = false;
 #endif
+    native::SetGuestClockDiagnosticTour(diagnostic_tour);
 #ifdef __ANDROID__
     RedirectStderrToLogcat();
     setenv("DXVK_LOG_LEVEL", "info", 0);
@@ -479,6 +490,8 @@ int main(int argc, char** argv) {
     g_data_dir = base;
     if (diagnostic_tour) {
         diagnostic_cache_dir = std::string(base) + "/diagnostic-tour-cache";
+        // Set this before the journal records its profiling policy, and before any engine import can be dispatched.
+        setenv("PROTODROID_IMPORT_PROFILE", "1", 1);
         if (!native::DiagnosticTourStart(diagnostic_cache_dir.c_str())) {
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Prototype",
                                      "The diagnostic tour could not create its isolated log/cache directories.",
@@ -605,6 +618,11 @@ int main(int argc, char** argv) {
     const bool detailed_diagnostics = diagnostic_tour ||
                                       SettingInt("detailed_diagnostics", kDetailedDiagnosticsDefault) != 0;
     if (detailed_diagnostics) setenv("DXVK_LOG_TIMESTAMPS", "1", diagnostic_tour ? 1 : 0);
+    if (diagnostic_tour) {
+        // Import profiling remains opt-in for ordinary Play. The longer tour needs guest/import attribution to
+        // correlate accelerated movement, streaming, combat, and any device-specific stall.
+        Log("diagnostic tour: guest/import profiling enabled; 4x guest elapsed clocks, real-time host metrics");
+    }
     setenv("PROTODROID_PIPELINE_TIMING",
            (diagnostic_tour || SettingInt("pipeline_timing", detailed_diagnostics ? 1 : 0)) ? "1" : "0",
            diagnostic_tour ? 1 : 0);
@@ -613,6 +631,11 @@ int main(int argc, char** argv) {
         setenv("PROTODROID_PIPELINE_TRACE", "1", diagnostic_tour ? 1 : 0);
         Log("DXVK pipeline trace enabled (%s)", diagnostic_tour ? "diagnostic tour" : "pipeline_trace = 1");
     }
+    // DXVK reads this once when its swapchain blitter is created. Overwrite stale process state in both directions:
+    // ordinary Off/MSAA must never inherit a post-process filter from an earlier launch or external environment.
+    const bool fxaa = AaUsesFxaa(SettingInt("game_aa_level", kAaGameDefault));
+    setenv("PROTODROID_FXAA", fxaa ? "1" : "0", 1);
+    if (fxaa) Log("AA policy: FXAA present filter requested; Prototype built-in MSAA disabled");
     InitGuestMemory();
     AttachThread(8u << 20);
     InitD3D9Bridge();
@@ -719,8 +742,10 @@ int main(int argc, char** argv) {
 
     // Apply last so stale user configuration cannot undo the official Prototype workaround. DXVK keys its own
     // profile to prototypef.exe, which never matches this native host process (app_process64 on Android).
-    setenv("DXVK_CONFIG", PrototypeDxvkConfig(
-        getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "").c_str(), 1);
+    std::string dxvk_config = PrototypeDxvkConfig(getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "");
+    dxvk_config = AaDxvkConfig(SettingInt("game_aa_level", kAaGameDefault), dxvk_config);
+    setenv("DXVK_CONFIG", dxvk_config.c_str(), 1);
+    if (fxaa) Log("AA policy: DXVK forced swapchain MSAA override pinned to 0");
     Log("game profile: Prototype DF formats disabled for dynamic shadows and effects");
 
     // The game window: DXVK's native WSI takes the SDL window as HWND.
@@ -756,6 +781,7 @@ int main(int argc, char** argv) {
     if (!loaded) StartupFailure("Cannot load prototypeenginef.dll.");
     g_engine_lo = g_engine.base;
     g_engine_hi = g_engine.base + g_engine.size;
+    g_unlock_menu_fps.store(SettingInt("unlock_menu_fps", 1) != 0, std::memory_order_relaxed);
     ModPlatformInitialize();  // optional packages, detours and plugins: before DllMain/EngineInitialize
 
     uint32_t init = FindExport(g_engine, "EngineInitialize");

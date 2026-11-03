@@ -28,6 +28,7 @@ extern "C" {
 #include <libavutil/mathematics.h>
 #include <libavutil/mem.h>
 #include <libavutil/opt.h>
+#include <libavutil/pixdesc.h>
 #include <libavutil/samplefmt.h>
 #include <libswresample/swresample.h>
 }
@@ -43,6 +44,7 @@ extern "C" {
 #include "bink_media.h"
 #include "bink_pacing.h"
 #include "guest.h"
+#include "guest_time.h"
 
 namespace native {
 namespace {
@@ -128,6 +130,9 @@ struct Track {
     size_t legacy_bytes = 0;
     uint32_t max_size = 0;
     uint64_t decoded_packets = 0;
+    bool first_audio_logged = false;
+    bool decode_error_logged = false;
+    bool conversion_error_logged = false;
 
     ~Track() {
         if (legacy_swr) swr_free(&legacy_swr);
@@ -208,6 +213,8 @@ struct Movie {
     uint64_t total_decodes = 0, skipped_frames = 0;
     uint64_t deferred_calls = 0;
     uint64_t decode_us = 0, audio_decode_us = 0;
+    int demux_error = 0, decode_error = 0;
+    bool demux_error_logged = false, decode_error_logged = false;
     Clock::time_point start = Clock::now();
     Clock::time_point anchor_mono = start;
     double paused_seconds = 0.0;
@@ -470,7 +477,6 @@ void QueueLegacyPcm(Track& track, const uint8_t* data, size_t bytes) {
 }
 
 void DecodeAudioFrame(Movie& movie, Track& track) {
-    (void)movie;
     if (!track.frame || !track.frame->nb_samples) return;
     int rate = track.frame->sample_rate ? track.frame->sample_rate : track.codec->sample_rate;
     if (rate <= 0) return;
@@ -482,8 +488,20 @@ void DecodeAudioFrame(Movie& movie, Track& track) {
             track.converted.resize(static_cast<size_t>(out_samples) * 2);
             uint8_t* out[] = {reinterpret_cast<uint8_t*>(track.converted.data())};
             int got = swr_convert(track.swr, out, out_samples, in, track.frame->nb_samples);
-            if (got > 0 && track.enabled && g_audio.device) track.ring.Push(track.converted.data(), got);
+            if (got > 0) {
+                if (track.enabled && g_audio.device) track.ring.Push(track.converted.data(), got);
+                if (track.enabled && !track.first_audio_logged) {
+                    Log("[bink] first audio %s track=%u stream=%d: %d Hz -> %u Hz, %d samples, output=%s ring=%zu\n",
+                        movie.description.c_str(), track.id, track.stream_index, rate, output_rate, got,
+                        g_audio.device ? "yes" : "no", track.ring.frames);
+                    track.first_audio_logged = true;
+                }
+            }
         }
+    } else if ((track.enabled || track.legacy_open) && !track.conversion_error_logged) {
+        Log("[bink] audio resampler setup failed for %s track=%u stream=%d (%d Hz, %d channels)\n",
+            movie.description.c_str(), track.id, track.stream_index, rate, track.codec->ch_layout.nb_channels);
+        track.conversion_error_logged = true;
     }
     if (track.legacy_open && EnsureLegacyResampler(track)) {
         int channels = std::max(1, track.codec->ch_layout.nb_channels);
@@ -501,10 +519,24 @@ void DecodeAudioPacket(Movie& movie, Track& track, AVPacket* packet) {
     if (!track.codec || (!track.enabled && !track.legacy_open)) return;
     auto t0 = Clock::now();
     int r = avcodec_send_packet(track.codec, packet);
+    const char* stage = "send";
+    bool send_stage = true;
     if (r >= 0) {
+        stage = "receive";
+        send_stage = false;
         while ((r = avcodec_receive_frame(track.codec, track.frame)) >= 0) {
             DecodeAudioFrame(movie, track);
             av_frame_unref(track.frame);
+        }
+    }
+    // EAGAIN/EOF are normal receive-loop terminators. A send error is never normal here because the previous packet
+    // was drained before this call; report it once instead of silently dropping audio for the rest of the movie.
+    if (r < 0 && (send_stage || (r != AVERROR(EAGAIN) && r != AVERROR_EOF))) {
+        if (!track.decode_error_logged) {
+            Log("[bink] audio decode %s failed for %s track=%u stream=%d after %llu packet(s): %s\n",
+                stage, movie.description.c_str(), track.id, track.stream_index,
+                static_cast<unsigned long long>(track.decoded_packets), AVError(r).c_str());
+            track.decode_error_logged = true;
         }
     }
     movie.audio_decode_us += static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - t0).count());
@@ -517,7 +549,15 @@ bool PumpOnePacket(Movie& movie) {
     if (r < 0) {
         // A temporarily unavailable source is not EOF: retain the demux/decoder state and let the caller's deadline
         // turn repeated EAGAIN results into a deferred frame instead of spinning forever.
-        if (r != AVERROR(EAGAIN)) movie.read_eof = true;
+        if (r != AVERROR(EAGAIN)) {
+            movie.read_eof = true;
+            movie.demux_error = r;
+            if (r != AVERROR_EOF && !movie.demux_error_logged) {
+                Log("[bink] demux failed for %s after %u decoded frame(s): %s\n",
+                    movie.description.c_str(), movie.decoded_position, AVError(r).c_str());
+                movie.demux_error_logged = true;
+            }
+        }
         return false;
     }
     if (movie.read_packet->stream_index == movie.video_index) {
@@ -525,6 +565,7 @@ bool PumpOnePacket(Movie& movie) {
         if (!p) {
             av_packet_unref(movie.read_packet);
             movie.read_eof = true;
+            movie.decode_error = AVERROR(ENOMEM);
             return false;
         }
         av_packet_move_ref(p, movie.read_packet);
@@ -553,14 +594,26 @@ int DecodeOneVideo(Movie& movie, Clock::time_point deadline) {
         if (Clock::now() >= deadline) return -1;
         int r = avcodec_receive_frame(movie.video_codec, movie.video_frame);
         if (r == 0) return 1;
-        if (r != AVERROR(EAGAIN) && r != AVERROR_EOF) return 0;
-        if (r == AVERROR_EOF) return 0;
+        if (r != AVERROR(EAGAIN) && r != AVERROR_EOF) {
+            movie.decode_error = r;
+            return 0;
+        }
+        if (r == AVERROR_EOF) {
+            movie.decode_error = r;
+            return 0;
+        }
         if (movie.video_packets.empty()) {
             if (movie.read_eof) {
-                if (movie.drain_sent) return 0;
+                if (movie.drain_sent) {
+                    if (!movie.decode_error) movie.decode_error = AVERROR_EOF;
+                    return 0;
+                }
                 movie.drain_sent = true;
                 r = avcodec_send_packet(movie.video_codec, nullptr);
-                if (r < 0 && r != AVERROR_EOF) return 0;
+                if (r < 0 && r != AVERROR_EOF) {
+                    movie.decode_error = r;
+                    return 0;
+                }
                 continue;
             }
             if (!PumpOnePacket(movie) && !movie.read_eof) std::this_thread::yield();
@@ -571,8 +624,12 @@ int DecodeOneVideo(Movie& movie, Clock::time_point deadline) {
         movie.current_packet_size = static_cast<uint32_t>(p->size);
         r = avcodec_send_packet(movie.video_codec, p);
         av_packet_free(&p);
-        if (r < 0) return 0;
+        if (r < 0) {
+            movie.decode_error = r;
+            return 0;
+        }
     }
+    movie.decode_error = AVERROR(EIO);
     return 0;
 }
 
@@ -589,6 +646,8 @@ bool RewindLocked(Movie& movie, uint32_t target_frame) {
         track->legacy_bytes = 0;
     }
     movie.read_eof = movie.drain_sent = false;
+    movie.demux_error = movie.decode_error = 0;
+    movie.demux_error_logged = movie.decode_error_logged = false;
     movie.decoded_position = 0;
     movie.pending_snd_size = 0;
     movie.ClearAudioClock();
@@ -799,7 +858,7 @@ uint32_t OpenMovie(const char* name, uint32_t flags) {
             track->ring.Reset(OutputRate());
             movie->tracks.push_back(std::move(track));
         }
-        movie->nonblocking_menu_wait = BinkMenuWaitUnlocked(SettingInt("unlock_menu_fps", 1), audio_streams);
+        movie->nonblocking_menu_wait = BinkMenuWaitUnlocked(MenuFpsUnlocked() ? 1 : 0, audio_streams);
         FillPublic(*movie);
         movie->paused = false;
         movie->start = Clock::now();
@@ -899,6 +958,15 @@ int DecodeCurrentFrame(Movie& movie, Clock::time_point deadline) {
         int decoded = DecodeOneVideo(movie, deadline);
         if (decoded < 0) return -1;
         if (!decoded) {
+            if (!movie.decode_error_logged) {
+                int error = movie.decode_error;
+                if (movie.demux_error && movie.demux_error != AVERROR_EOF) error = movie.demux_error;
+                if (!error) error = AVERROR_EOF;
+                Log("[bink] video decode failed for %s at requested frame %u (decoded %u/%u, queued=%zu): %s\n",
+                    movie.description.c_str(), p->frame_num, movie.decoded_position, movie.frames,
+                    movie.video_packets.size(), AVError(error).c_str());
+                movie.decode_error_logged = true;
+            }
             p->read_error = 1;
             return 0;
         }
@@ -925,6 +993,13 @@ int DecodeCurrentFrame(Movie& movie, Clock::time_point deadline) {
     p->frame_change_percent = 100;
     p->num_rects = 1;
     p->frame_rects[0] = {0, 0, static_cast<int32_t>(movie.width), static_cast<int32_t>(movie.height)};
+    if (!movie.total_decodes) {
+        const char* format = av_get_pix_fmt_name(static_cast<AVPixelFormat>(movie.video_frame->format));
+        Log("[bink] first frame ready %s: frame=%u, %dx%d, format=%s, packet=%u, planes=%s\n",
+            movie.description.c_str(), p->last_frame_num, movie.video_frame->width, movie.video_frame->height,
+            format ? format : "unknown", movie.current_packet_size,
+            movie.registered_buffers ? "uploaded" : "unregistered");
+    }
     movie.total_decodes++;
     movie.decode_us += static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - t0).count());
     return 1;
@@ -1472,8 +1547,8 @@ B(BinkLogoAddress) { Return(c, 0, 0); }
 B(BinkRestoreCursor) { Return(c, 0, 1); }
 B(RADTimerRead) {
     static const auto start = Clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
-    Return(c, static_cast<uint32_t>(ms), 0);
+    const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
+    Return(c, static_cast<uint32_t>(GuestElapsedNanos(ns) / 1000000ull), 0);
 }
 
 #undef B

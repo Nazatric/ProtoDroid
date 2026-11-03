@@ -4,6 +4,8 @@
 // Build/run: src/native/tests/run_hot_test.sh (generates the reference with recomp.py --no-native).
 #include <sys/mman.h>
 
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -81,6 +83,66 @@ void MapAt(uint32_t addr, uint32_t size) {
     }
 }
 
+void BenchmarkMixer() {
+    // One fully active three-channel/three-output voice: deterministic data, every bin enabled, and a complete
+    // 256-sample mix per bin. The digest makes cross-binary timing runs prove that they performed identical work.
+    g_next = 0x20000000u;
+    constexpr uint32_t channels = 3, outputs = 3, ring_size = 256;
+    uint32_t p1 = Alloc(0x40), p2 = Alloc(0x600), p3 = Alloc(24 * channels), p4 = Alloc(4 * 8 * outputs);
+    memset(native::Ptr<void>(p2), 0, 0x600);
+    for (uint32_t off = 0x44; off < 0x500; off += 4) WF32(p2 + off, 0.75f);
+    W32(p1 + 0xc, outputs);
+    W32(p1 + 0x10, 1);
+    W8(p2 + 0x42, 1);
+    WF32(p2 + 0x48, 1.0f);
+    W32(p2 + 0x94, channels);
+    W32(p2 + 0x98, ring_size);
+    W64(p2 + 0xa8, 0);
+    W32(p2 + 0x4f8, 0);
+    std::mt19937 rng(0x4d495845);
+    std::uniform_real_distribution<float> uf(-1.0f, 1.0f);
+    for (uint32_t ch = 0; ch < channels; ++ch) {
+        W32(p2 + 0x4b0 + 4 * ch - 0x110, 0xff);
+        W32(p2 + 0x4b0 + 4 * ch - 0x158, 0xffffffffu);
+        uint32_t ring = Alloc(4 * ring_size);
+        for (uint32_t i = 0; i < ring_size; ++i) WF32(ring + 4 * i, uf(rng));
+        W32(p3 + 4 + 24 * ch, ring);
+    }
+    std::vector<uint32_t> bins;
+    for (uint32_t b = 0; b < 8 * outputs; ++b) {
+        uint32_t buf = Alloc(4 * 272);
+        for (uint32_t i = 0; i < 272; ++i) WF32(buf + 4 * i, uf(rng));
+        W32(p4 + 4 * b, buf);
+        bins.push_back(buf);
+    }
+    uint32_t stack = Alloc(0x4000) + 0x3000;
+    Ctx c;
+    memset(&c, 0, sizeof(c));
+    c.fpu_cw = 0x007f;
+    c.esp = stack;
+    Push32(&c, p4); Push32(&c, p3); Push32(&c, p2); Push32(&c, p1); Push32(&c, 0x12345678u);
+    const uint32_t entry_stack = c.esp;
+    auto call = [&] {
+        c.esp = entry_stack;
+        Native_105e8860(&c);
+    };
+    for (unsigned i = 0; i < 128; ++i) call();
+    constexpr unsigned batches = 7, calls = 2000;
+    std::vector<double> times;
+    for (unsigned batch = 0; batch < batches; ++batch) {
+        auto start = std::chrono::steady_clock::now();
+        for (unsigned i = 0; i < calls; ++i) call();
+        double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count() / calls;
+        times.push_back(us);
+    }
+    std::sort(times.begin(), times.end());
+    uint64_t digest = 1469598103934665603ull;
+    for (uint32_t buf : bins)
+        for (uint32_t i = 0; i < 256; ++i) digest = (digest ^ R32(buf + 4 * i)) * 1099511628211ull;
+    printf("mixer benchmark: median=%.3f us/call min=%.3f max=%.3f digest=%016llx\n",
+           times[batches / 2], times.front(), times.back(), static_cast<unsigned long long>(digest));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -108,7 +170,7 @@ int main(int argc, char** argv) {
     std::mt19937 rng(1234);
     std::uniform_real_distribution<float> uf(-1.0f, 1.0f);
     int failures = 0;
-    for (int trial = 0; trial < 200; ++trial) {
+    for (int trial = 0; trial < 260; ++trial) {
         g_next = 0x20000000u;
         const uint32_t ring_size = 1u << (8 + trial % 4);
         const uint32_t channels = 1 + trial % 3, outputs = 1 + (trial / 3) % 3;
@@ -122,7 +184,7 @@ int main(int argc, char** argv) {
         W32(p2 + 0x94, channels);
         W32(p2 + 0x98, ring_size);
         W64(p2 + 0xa8, uint64_t(rng()) * 4096u + rng() % 4096);
-        W32(p2 + 0x4f8, trial % 7 == 0 ? 0x100 : rng() % 256);
+        W32(p2 + 0x4f8, trial < 256 ? trial : 0x100);  // every vector start/tail, then the disabled case
         for (uint32_t ch = 0; ch < channels; ++ch) {
             W32(p2 + 0x4b0 + 4 * ch - 0x110, rng());
             W32(p2 + 0x4b0 + 4 * ch - 0x158, rng());
@@ -182,7 +244,7 @@ int main(int argc, char** argv) {
             ++failures;
         }
     }
-    printf("mixer %s: %d/200 trials differ\n", failures ? "FAIL" : "OK", failures);
+    printf("mixer %s: %d/260 trials differ\n", failures ? "FAIL" : "OK", failures);
     int mixer_failures = failures;
     failures = 0;
 
@@ -329,5 +391,6 @@ int main(int argc, char** argv) {
         }
     }
     printf("skin %s: %d/2000 trials differ\n", failures ? "FAIL" : "OK", failures);
+    if (getenv("HOT_BENCH")) BenchmarkMixer();
     return failures || mixer_failures || biquad_failures || adpcm_failures ? 1 : 0;
 }

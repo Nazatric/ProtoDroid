@@ -1,6 +1,7 @@
 package com.protodroid;
 
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -85,6 +86,12 @@ public class ProtoActivity extends SDLActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        int orientation = getSharedPreferences("controls", MODE_PRIVATE).getInt("display_orientation", 0);
+        if (orientation == 1) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        } else if (orientation == 2) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE);
+        }
         prepareVulkanDriver();
         ModManager.prepareForLaunch(this);
         // The native side loads the bundled Vulkan driver (Turnip, on Adreno) from the extracted libraries.

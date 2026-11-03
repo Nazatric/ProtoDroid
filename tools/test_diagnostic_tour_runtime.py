@@ -103,5 +103,41 @@ assert "presented_frames=%llu action_frames=%u" in tour_source, (
 assert "exit_behavior=intentional-isolated-process-close" in tour_source, (
     "The durable result must distinguish the expected tour close from a native crash"
 )
+for evidence in (
+    "actions_executed=%llu", "wall_ms=%.3f", "process_cpu_ms=%.3f",
+    "process_cpu_utilization_pct=%.2f", "present_window=last-completed-rolling-window",
+    "present_window_p99_ms=%.3f", "gameplay_dispatches=%u",
+    "guest_clock_scale=%u", "phase_present_intervals=%llu", "phase_present_average_ms=%.3f",
+    "phase_present_max_ms=%.3f", "import_profile=enabled",
+):
+    assert evidence in tour_source, f"Missing durable tour evidence: {evidence}"
+begin_phase = tour_source.split("void BeginPhase(size_t index)", 1)[1].split("void CompletePhase()", 1)[0]
+assert 'status=requested coverage=%s", true' not in begin_phase, "Duplicate durable requested/running records returned"
+assert 'status=running minimum_present_frames=%u' in begin_phase
+assert 'false, phase.name, index, phase.frames' in begin_phase, "Running record must use the completion/failure sync"
+assert 'WriteMarker(g_result_path, marker, false)' in tour_source, "Final same-directory markers should share one directory sync"
+assert 'if (sync_directory) SyncLogDirectory();' in tour_source
+assert 'actions != phase.action_count' in tour_source, "Completed phases must verify exact executed-action counts"
+assert 'phase_metrics=not-started' in tour_source, "Startup failures must not inherit stale phase metrics"
+assert 'ResetDetailedPresentTotals();' in tour_source, "Each phase needs independent exact Present totals"
+assert 'kTourTimeoutNs = 20ll * 60' in tour_source, "The longer tour needs its reviewed failure deadline"
 
-print("Diagnostic-tour binary probe, thunk classification, action timing, isolated-exit, and watchdog checks passed")
+clock_header = (ROOT / "src/native/guest_time.h").read_text(encoding="utf-8")
+assert 'kDiagnosticTourGuestClockScale = 4' in clock_header
+assert 'if (!diagnostic_tour) return elapsed_ns;' in clock_header, "Normal Play must retain real guest clocks"
+assert 'SetGuestClockDiagnosticTour(diagnostic_tour);' in main, "Each native entry must reset the guest-clock mode"
+assert 'static const bool diagnostic_tour = DiagnosticTourEnabled();' not in clock_header, (
+    "A one-time clock-mode cache can leak 4x time into a later ordinary activity"
+)
+for source_name in ("kernel32.cpp", "misc.cpp", "bink.cpp"):
+    source = (ROOT / "src/native" / source_name).read_text(encoding="utf-8")
+    assert 'GuestElapsedNanos(ns)' in source, f"{source_name} is outside the reviewed tour clock policy"
+assert 'GetSystemTimeAsFileTime' not in clock_header, "Wall-clock APIs must not be accelerated"
+assert 'setenv("PROTODROID_IMPORT_PROFILE", "1", 1);' in main, "The tour must collect guest/import attribution"
+assert main.index('setenv("PROTODROID_IMPORT_PROFILE", "1", 1);') < main.index('native::DiagnosticTourStart('), (
+    "The journal must not claim import profiling before its override is active"
+)
+assert 'unsetenv("PROTODROID_IMPORT_PROFILE");' in main, "Normal Play must not inherit the tour profiling override"
+assert 'diagnostic_tour ? kDiagnosticTourCommandLine : ""' in main, "Normal Play lost its original command line"
+
+print("Diagnostic-tour binary probe, 4x guest-clock, long-plan, isolated-exit, and watchdog checks passed")

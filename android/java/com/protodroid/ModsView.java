@@ -32,6 +32,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
@@ -40,12 +41,13 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Prototype-style local mod library and optional engine fixes. No AndroidX/UI runtime is required. */
+/** Prototype-style local mod library. Engine and graphics options stay in the launcher. */
 final class ModsView extends View {
     interface Listener {
         void onClose();
         void onImport();
         void onSetEnabled(ModManifest mod, boolean enabled);
+        void onConfigure(ModManifest mod);
         void onRemove(ModManifest mod);
     }
 
@@ -64,13 +66,10 @@ final class ModsView extends View {
     private static final int ACTION_NONE = 0;
     private static final int ACTION_BACK = 1;
     private static final int ACTION_IMPORT = 2;
-    private static final int ACTION_MODS = 3;
-    private static final int ACTION_FIXES = 4;
-    private static final int ACTION_RESET = 5;
     private static final int ACTION_TOGGLE = 1000;
     private static final int ACTION_REMOVE = 2000;
     private static final int ACTION_DETAILS = 3000;
-    private static final int ACTION_SETTING = 4000; // + setting index * 2 + right(0/1)
+    private static final int ACTION_CONFIGURE = 4000;
     private static final int MAX_ACTION = 8192;
 
     private static final int BUTTON_NORMAL = 0;
@@ -78,7 +77,6 @@ final class ModsView extends View {
     private static final int BUTTON_GHOST = 2;
 
     private final Listener listener;
-    private final GameSettings settings;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final TextPaint text = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
@@ -93,7 +91,12 @@ final class ModsView extends View {
     private final int touchSlop;
     private final OverScroller scroller;
     private final RectF[] actionBounds = new RectF[MAX_ACTION];
-    private final ArrayList<Integer> usedActions = new ArrayList<>();
+    private int[] usedActions = new int[64];
+    private int usedActionCount;
+    private final ArrayList<RectF> rectPool = new ArrayList<>();
+    private int rectPoolUsed;
+    private final Paint.FontMetrics fontMetrics = new Paint.FontMetrics();
+    private final Rect coverSource = new Rect();
     private final ArrayList<ModManifest> mods = new ArrayList<>();
     private final Map<String, StaticLayout> paragraphCache = new HashMap<>();
     private final Set<String> loadingCovers = new HashSet<>();
@@ -123,7 +126,6 @@ final class ModsView extends View {
     private boolean scrolling;
     private boolean busy;
     private boolean closed;
-    private int tab;
     private long tabChangedAt;
     private String status = "Imports start disabled. Review a mod, enable it, then press Play.";
     private String modsPath = "";
@@ -137,9 +139,8 @@ final class ModsView extends View {
     private int backgroundWidth = -1;
     private int backgroundHeight = -1;
 
-    ModsView(Context context, GameSettings settings, Listener listener) {
+    ModsView(Context context, Listener listener) {
         super(context);
-        this.settings = settings;
         this.listener = listener;
         density = getResources().getDisplayMetrics().density;
         fontScale = getResources().getConfiguration().fontScale;
@@ -225,7 +226,7 @@ final class ModsView extends View {
         int active = ModManager.activeCount(mods);
         StringBuilder description = new StringBuilder("Prototype mod library. ")
                 .append(mods.size()).append(" installed, ").append(active).append(" active next Play. ")
-                .append(tab == 0 ? "Mods view. " : "Engine fixes view. ")
+                .append("Mods view. ")
                 .append(status);
         if (busy) description.append(" Mod operation in progress.");
         setContentDescription(description.toString());
@@ -311,8 +312,8 @@ final class ModsView extends View {
     }
 
     private float baseline(float top, float lineHeight, TextPaint paint) {
-        Paint.FontMetrics metrics = paint.getFontMetrics();
-        return top + (lineHeight - (metrics.descent - metrics.ascent)) / 2f - metrics.ascent;
+        paint.getFontMetrics(fontMetrics);
+        return top + (lineHeight - (fontMetrics.descent - fontMetrics.ascent)) / 2f - fontMetrics.ascent;
     }
 
     private String ellipsized(String value, float maxWidth) {
@@ -393,17 +394,25 @@ final class ModsView extends View {
         paint.setStyle(Paint.Style.FILL);
     }
 
+    private RectF rect(float left, float top, float right, float bottom) {
+        if (rectPoolUsed == rectPool.size()) rectPool.add(new RectF());
+        RectF result = rectPool.get(rectPoolUsed++);
+        result.set(left, top, right, bottom);
+        return result;
+    }
+
     private void bind(int action, RectF bounds) {
         if (action <= ACTION_NONE || action >= MAX_ACTION || bounds.isEmpty()) return;
         if (actionBounds[action] == null) actionBounds[action] = new RectF();
         actionBounds[action].set(bounds);
         if (contentShiftX != 0f) actionBounds[action].offset(contentShiftX, 0f);
-        usedActions.add(action);
+        if (usedActionCount == usedActions.length) usedActions = Arrays.copyOf(usedActions, usedActions.length * 2);
+        usedActions[usedActionCount++] = action;
     }
 
     private int actionAt(float x, float y) {
-        for (int i = usedActions.size() - 1; i >= 0; --i) {
-            int action = usedActions.get(i);
+        for (int i = usedActionCount - 1; i >= 0; --i) {
+            int action = usedActions[i];
             RectF bounds = actionBounds[action];
             if (bounds != null && bounds.contains(x, y)) return action;
         }
@@ -447,7 +456,7 @@ final class ModsView extends View {
             float drift = motion ? 0.015f * (float) Math.sin((now - startedAt) / 9000.0) : 0f;
             float scale = Math.max(width / (float) backdrop.getWidth(), height / (float) backdrop.getHeight())
                     * (1.035f + drift);
-            RectF destination = new RectF(0, 0, backdrop.getWidth() * scale, backdrop.getHeight() * scale);
+            RectF destination = rect(0, 0, backdrop.getWidth() * scale, backdrop.getHeight() * scale);
             destination.offset((width - destination.width()) / 2f, (height - destination.height()) / 2f);
             bitmapPaint.setAlpha(190);
             canvas.drawBitmap(backdrop, null, destination, bitmapPaint);
@@ -473,18 +482,16 @@ final class ModsView extends View {
 
     private void drawHeader(Canvas canvas, float left, float right, float top, float u) {
         float iconSize = 38f * u;
-        if (icon != null) canvas.drawBitmap(icon, null, new RectF(left, top, left + iconSize, top + iconSize), bitmapPaint);
+        if (icon != null) canvas.drawBitmap(icon, null, rect(left, top, left + iconSize, top + iconSize), bitmapPaint);
         float brandLeft = left + iconSize + 8f * u;
         drawLine(canvas, "[", brandLeft, top, 38f * u, 25f, 500, RED_HOT, u, -1);
         drawLine(canvas, "PROTOTYPE", brandLeft + 13f * u, top, 38f * u, 23f, 700, BONE, u, -1);
-        RectF back = new RectF(right - 94f * u, top, right, top + touch(u));
-        RectF importButton = new RectF(back.left - 156f * u, top, back.left - 8f * u, top + touch(u));
+        RectF back = rect(right - 94f * u, top, right, top + touch(u));
+        RectF importButton = rect(back.left - 156f * u, top, back.left - 8f * u, top + touch(u));
         button(canvas, ACTION_IMPORT, importButton, busy ? "IMPORTING…" : "+ IMPORT", BUTTON_PRIMARY, !busy, u);
         button(canvas, ACTION_BACK, back, "BACK", BUTTON_GHOST, true, u);
         drawLine(canvas, "MOD LIBRARY", left, top + 52f * u, 32f * u, 26f, 700, BONE, u, right - left);
-        String subtitle = tab == 0
-                ? mods.size() + " installed  /  " + ModManager.activeCount(mods) + " active next Play  /  " + modsPath
-                : "Independent Android equivalents of Prototype Fix options  /  apply on next Play";
+        String subtitle = mods.size() + " installed  /  " + ModManager.activeCount(mods) + " active next Play";
         drawLine(canvas, subtitle, left, top + 86f * u, 20f * u, 12f, 500, DIM, u, right - left);
     }
 
@@ -492,7 +499,7 @@ final class ModsView extends View {
         if (status.isEmpty()) return 0f;
         StaticLayout message = paragraph(status, width - 28f * u, 12f, 500, BONE, u, 4);
         float height = 31f * u + message.getHeight() + 12f * u + (busy ? 8f * u : 0f);
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, PANEL_ALT, busy ? RED : 0xff51313a, u);
         drawLine(canvas, busy ? "MOD OPERATION IN PROGRESS" : "LIBRARY STATUS", left + 14f * u, top + 7f * u,
                 19f * u, 11.5f, 700, busy ? RED_HOT : DIM, u, width - 28f * u);
@@ -516,13 +523,13 @@ final class ModsView extends View {
     }
 
     private float drawEmpty(Canvas canvas, float left, float top, float width, float u) {
-        String body = "Import a ProtoDroid ZIP, a texture pack with textures.ini, a loose game-data file, or a "
-                + "translated ARM64 plugin. Packages install disabled and never alter original game files or shared saves.";
+        String body = "Import a ZIP, texture pack, loose game-data file, Lua package, or Android ARM64 plugin. "
+                + "New mods start disabled; original game files and saves stay untouched.";
         StaticLayout bodyLayout = paragraph(body, width - 28f * u, 13f, 500, DIM, u, 5);
         float height = 43f * u + bodyLayout.getHeight() + 17f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, PANEL, 0xff45363f, u);
-        drawLine(canvas, "YOUR LIBRARY IS CLEAR", left + 14f * u, top + 9f * u, 25f * u,
+        drawLine(canvas, "NO MODS INSTALLED", left + 14f * u, top + 9f * u, 25f * u,
                 15f, 700, BONE, u, width - 28f * u);
         drawParagraph(canvas, body, left + 14f * u, top + 38f * u, width - 28f * u, 13f, 500, DIM, u, 5);
         return height;
@@ -535,16 +542,16 @@ final class ModsView extends View {
         if (bitmap != null && !bitmap.isRecycled()) {
             float scale = Math.max(bounds.width() / bitmap.getWidth(), bounds.height() / bitmap.getHeight());
             float width = bitmap.getWidth() * scale, height = bitmap.getHeight() * scale;
-            Rect source = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
-            RectF destination = new RectF(bounds.centerX() - width / 2f, bounds.centerY() - height / 2f,
+            coverSource.set(0, 0, bitmap.getWidth(), bitmap.getHeight());
+            RectF destination = rect(bounds.centerX() - width / 2f, bounds.centerY() - height / 2f,
                     bounds.centerX() + width / 2f, bounds.centerY() + height / 2f);
             canvas.save();
             canvas.clipRect(bounds);
-            canvas.drawBitmap(bitmap, source, destination, bitmapPaint);
+            canvas.drawBitmap(bitmap, coverSource, destination, bitmapPaint);
             canvas.restore();
         } else {
-            drawCentered(canvas, mod.plugin.isEmpty() ? "[ P3D ]" : "[ ARM64 ]", bounds,
-                    17f, 700, RED_HOT, u);
+            drawCentered(canvas, !mod.plugin.isEmpty() ? "[ ARM64 ]" : !mod.script.isEmpty() ? "[ LUA ]" : "[ P3D ]",
+                    bounds, 17f, 700, RED_HOT, u);
         }
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(Math.max(1f, u));
@@ -571,15 +578,22 @@ final class ModsView extends View {
         meta.append(mod.contentLabel().isEmpty() ? "Incompatible package" : mod.contentLabel());
         meta.append("  •  Priority ").append(mod.priority);
         StaticLayout metaLayout = paragraph(meta.toString(), inner, 11.5f, 500, DIM, u, 3);
-        StaticLayout description = mod.description.isEmpty() ? null
-                : paragraph(mod.description, inner, 12.5f, 500, BONE, u, expanded ? 8 : 2);
+        String descriptionText = mod.description;
+        if (expanded && !mod.dependencies.isEmpty()) {
+            if (!descriptionText.isEmpty()) descriptionText += "\n";
+            descriptionText += "Requires: " + String.join(", ", mod.dependencies);
+        }
+        StaticLayout description = descriptionText.isEmpty() ? null
+                : paragraph(descriptionText, inner, 12.5f, 500, BONE, u, expanded ? 8 : 2);
         String diagnostic = !mod.error.isEmpty() ? mod.error : mod.launchError;
         String state = !mod.error.isEmpty() ? "INCOMPATIBLE PACKAGE"
                 : !mod.launchError.isEmpty() ? (mod.enabled ? "LAST LOAD FAILED / RETRY ON PLAY" : "LAST LOAD FAILED")
                 : mod.enabled ? "ACTIVE ON NEXT PLAY" : "INSTALLED / DISABLED";
         if (!diagnostic.isEmpty()) state += "\n" + diagnostic;
         if (pluginArmedId.equals(mod.id)) {
-            state += "\nNative ARM64 code is trusted optional code and can crash the game. Confirm to enable it.";
+            state += mod.script.isEmpty()
+                    ? "\nNative ARM64 code is trusted optional code and can crash the game. Confirm to enable it."
+                    : "\nScripts can call the engine and change guest memory. Enable only code you trust; sandbox limits do not make engine calls safe.";
         }
         if (removeArmedId.equals(mod.id)) state += "\nConfirm removal of this mod folder only; saves stay untouched.";
         StaticLayout stateLayout = paragraph(state, inner, 11.5f, 600,
@@ -590,30 +604,40 @@ final class ModsView extends View {
         float contentBottom = top + 10f * u + Math.max(coverHeight, contentHeight);
         float buttonTop = contentBottom + 9f * u;
         float height = buttonTop - top + touch(u) + 10f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         int edge = !mod.error.isEmpty() ? 0xff81505a : mod.enabled ? RED_HOT : 0xff45363f;
         panel(canvas, card, mod.enabled ? 0xf02b1b23 : PANEL, edge, u);
-        drawCover(canvas, mod, new RectF(left + 12f * u, top + 12f * u,
+        drawCover(canvas, mod, rect(left + 12f * u, top + 12f * u,
                 left + 12f * u + coverWidth, top + 12f * u + coverHeight), u);
         drawLine(canvas, mod.name, textLeft, top + 9f * u, 25f * u, 17f, 700, BONE, u, inner);
         float y = top + 36f * u;
         drawParagraph(canvas, meta.toString(), textLeft, y, inner, 11.5f, 500, DIM, u, 3);
         y += metaLayout.getHeight() + 5f * u;
         if (description != null) {
-            drawParagraph(canvas, mod.description, textLeft, y, inner, 12.5f, 500, BONE, u, expanded ? 8 : 2);
+            drawParagraph(canvas, descriptionText, textLeft, y, inner, 12.5f, 500, BONE, u, expanded ? 8 : 2);
             y += description.getHeight() + 5f * u;
         }
         drawParagraph(canvas, state, textLeft, y, inner, 11.5f, 600,
                 !diagnostic.isEmpty() ? 0xffff8c83 : mod.enabled ? OK : DIM, u, 6);
         float gap = 7f * u;
-        float buttonWidth = (width - 24f * u - gap * 2f) / 3f;
-        RectF details = new RectF(left + 12f * u, buttonTop,
+        boolean configurable = mod.error.isEmpty() && !mod.options.isEmpty();
+        int buttonCount = configurable ? 4 : 3;
+        float buttonWidth = (width - 24f * u - gap * (buttonCount - 1)) / buttonCount;
+        RectF details = rect(left + 12f * u, buttonTop,
                 left + 12f * u + buttonWidth, buttonTop + touch(u));
-        RectF toggle = new RectF(details.right + gap, buttonTop, details.right + gap + buttonWidth,
-                buttonTop + touch(u));
-        RectF remove = new RectF(toggle.right + gap, buttonTop, left + width - 12f * u, buttonTop + touch(u));
         button(canvas, ACTION_DETAILS + index, details, expanded ? "LESS" : "DETAILS", BUTTON_GHOST, !busy, u);
-        String toggleLabel = pluginArmedId.equals(mod.id) ? "CONFIRM ARM64" : mod.enabled ? "DISABLE" : "ENABLE";
+        RectF previous = details;
+        if (configurable) {
+            RectF configure = rect(previous.right + gap, buttonTop, previous.right + gap + buttonWidth,
+                    buttonTop + touch(u));
+            button(canvas, ACTION_CONFIGURE + index, configure, "CONFIGURE", BUTTON_GHOST, !busy, u);
+            previous = configure;
+        }
+        RectF toggle = rect(previous.right + gap, buttonTop, previous.right + gap + buttonWidth,
+                buttonTop + touch(u));
+        RectF remove = rect(toggle.right + gap, buttonTop, left + width - 12f * u, buttonTop + touch(u));
+        String toggleLabel = pluginArmedId.equals(mod.id)
+                ? (mod.script.isEmpty() ? "CONFIRM ARM64" : "CONFIRM CODE") : mod.enabled ? "DISABLE" : "ENABLE";
         button(canvas, ACTION_TOGGLE + index, toggle, toggleLabel,
                 !mod.enabled && mod.error.isEmpty() ? BUTTON_PRIMARY : BUTTON_GHOST,
                 !busy && (mod.error.isEmpty() || mod.enabled), u);
@@ -622,96 +646,22 @@ final class ModsView extends View {
         return height;
     }
 
-    private boolean isFixSetting(GameSettings.Setting setting) {
-        return GameSettings.categoryOf(setting) == GameSettings.CATEGORY_FIXES
-                || setting.key.equals("fps_limit") || setting.key.equals("unlock_menu_fps");
-    }
-
-    private String fixDescription(String key) {
-        switch (key) {
-            case "fps_limit":
-                return "Uses the existing host limiter. FIFO still paces presents; a high cap is not an FPS promise.";
-            case "unlock_menu_fps":
-                return "Keeps menu movies responsive. Default On; ordinary Bink audio/video behavior is preserved.";
-            case "fov_offset":
-                return "Signed camera offset in degrees. The INI also accepts finite fractional values.";
-            case "shadow_map_resolution":
-                return "Optional 512–8192 map override with aspect ratio preserved. High values can be expensive.";
-            case "remove_tick_rate_limit":
-                return "Removes the evidenced 15 ms simulation gate. Intended for high-refresh play; default Off.";
-            case "fix_button_tap_tick_rate":
-                return "Monotonic button-tap adjustment, used only when Remove tick limit is On.";
-            case "prefer_loose_files":
-                return "Prefers eligible loose game data without replacing archives. Save and write paths are excluded.";
-            case "unlock_dev_menu":
-                return "Guarded experimental build-type patch. Ambiguity is refused and recorded in the native log.";
-            case "vram_report_mb":
-                return "Changes DXVK's memory report only. It does not add physical VRAM or guarantee MSAA support.";
-            case "dump_textures":
-                return "Writes original-format DDS files and textures.ini to texture-dump. Uses additional storage.";
-            default:
-                return "Applies on the next Play.";
-        }
-    }
-
-    private float drawFixRow(Canvas canvas, int index, GameSettings.Setting setting, float left, float top,
-                             float width, float u) {
-        String description = fixDescription(setting.key);
-        StaticLayout body = paragraph(description, width - 28f * u, 11.5f, 500, DIM, u, 3);
-        float height = 40f * u + body.getHeight() + touch(u) + 15f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
-        panel(canvas, card, PANEL, setting.value() == 0 ? 0xff45363f : 0xff674048, u);
-        drawLine(canvas, setting.label, left + 14f * u, top + 8f * u, 24f * u,
-                15f, 700, BONE, u, width * 0.60f);
-        drawRight(canvas, setting.names[setting.index], left + width - 14f * u, top + 8f * u, 24f * u,
-                14f, 700, setting.value() == 0 ? DIM : RED_HOT, u, width * 0.34f);
-        drawParagraph(canvas, description, left + 14f * u, top + 35f * u, width - 28f * u,
-                11.5f, 500, DIM, u, 3);
-        float buttonY = top + height - touch(u) - 8f * u;
-        float buttonWidth = 104f * u;
-        RectF previous = new RectF(left + width - buttonWidth * 2f - 21f * u, buttonY,
-                left + width - buttonWidth - 14f * u, buttonY + touch(u));
-        RectF next = new RectF(left + width - buttonWidth - 14f * u, buttonY,
-                left + width - 14f * u, buttonY + touch(u));
-        button(canvas, ACTION_SETTING + index * 2, previous, "‹ PREVIOUS", BUTTON_GHOST, !busy, u);
-        button(canvas, ACTION_SETTING + index * 2 + 1, next, "NEXT ›", BUTTON_GHOST, !busy, u);
-        return height;
-    }
-
-    private float drawFixIntro(Canvas canvas, float left, float top, float width, float u) {
-        String body = "Safe defaults leave the ordinary engine paths unchanged. These are native Android equivalents, "
-                + "not the Windows ASI. Restore defaults affects only the options shown in this view.";
-        StaticLayout bodyLayout = paragraph(body, width - 190f * u, 12f, 500, DIM, u, 4);
-        float height = Math.max(86f * u, 39f * u + bodyLayout.getHeight() + 13f * u);
-        RectF card = new RectF(left, top, left + width, top + height);
-        panel(canvas, card, PANEL_ALT, 0xff51313a, u);
-        drawLine(canvas, "CONTROLLED OVERRIDES", left + 14f * u, top + 8f * u, 22f * u,
-                12.5f, 700, RED_HOT, u, width - 28f * u);
-        drawParagraph(canvas, body, left + 14f * u, top + 33f * u, width - 190f * u,
-                12f, 500, DIM, u, 4);
-        RectF reset = new RectF(left + width - 166f * u, top + height - touch(u) - 9f * u,
-                left + width - 14f * u, top + height - 9f * u);
-        button(canvas, ACTION_RESET, reset, "SAFE DEFAULTS", BUTTON_GHOST, !busy, u);
-        return height;
-    }
-
     private float drawCompatibility(Canvas canvas, float left, float top, float width, float u) {
-        String body = "Windows x86 ASI/DLL files cannot run in the ARM64 process. Native plugins must be translated "
-                + "and rebuilt against ProtoDroid plugin ABI v1. Texture replacement uses ProtoDroid SHA-256 keys and "
-                + "same-size A8R8G8B8/X8R8G8B8 or DXT1/3/5 DDS files.";
-        StaticLayout bodyLayout = paragraph(body, width - 28f * u, 11.5f, 500, DIM, u, 5);
+        String body = "Lua packages use sandboxed text source. Windows plugins need an Android ARM64 port. DDS replacements keep the original format and dimensions.";
+        StaticLayout bodyLayout = paragraph(body, width - 28f * u, 11.5f, 500, DIM, u, 2);
         float height = 36f * u + bodyLayout.getHeight() + 13f * u;
-        RectF card = new RectF(left, top, left + width, top + height);
+        RectF card = rect(left, top, left + width, top + height);
         panel(canvas, card, 0xb011141b, 0xff3f3b43, u);
-        drawLine(canvas, "COMPATIBILITY / ORIGINAL FILES STAY READ-ONLY", left + 14f * u, top + 8f * u,
+        drawLine(canvas, "ORIGINAL GAME FILES STAY UNTOUCHED", left + 14f * u, top + 8f * u,
                 21f * u, 11.5f, 700, OK, u, width - 28f * u);
         drawParagraph(canvas, body, left + 14f * u, top + 31f * u, width - 28f * u,
-                11.5f, 500, DIM, u, 5);
+                11.5f, 500, DIM, u, 2);
         return height;
     }
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        rectPoolUsed = 0;
         if (scroller.computeScrollOffset()) {
             scrollY = scroller.getCurrY();
             invalidate();
@@ -729,22 +679,14 @@ final class ModsView extends View {
         float width = Math.min(980f * u, fullWidth);
         float left = availableLeft + (fullWidth - width) / 2f;
         float right = left + width;
-        for (Integer action : usedActions) {
+        for (int i = 0; i < usedActionCount; ++i) {
+            int action = usedActions[i];
             if (actionBounds[action] != null) actionBounds[action].setEmpty();
         }
-        usedActions.clear();
+        usedActionCount = 0;
         drawHeader(canvas, left, right, insetTop + 12f * u, u);
 
-        float tabY = insetTop + 121f * u;
-        float gap = 8f * u;
-        float tabWidth = (width - gap) / 2f;
-        RectF modsTab = new RectF(left, tabY, left + tabWidth, tabY + touch(u));
-        RectF fixesTab = new RectF(left + tabWidth + gap, tabY, right, tabY + touch(u));
-        button(canvas, ACTION_MODS, modsTab, "MODS (" + mods.size() + ")",
-                tab == 0 ? BUTTON_PRIMARY : BUTTON_GHOST, true, u);
-        button(canvas, ACTION_FIXES, fixesTab, "ENGINE FIXES", tab == 1 ? BUTTON_PRIMARY : BUTTON_GHOST, true, u);
-
-        contentTop = tabY + touch(u) + 12f * u;
+        contentTop = insetTop + 121f * u;
         contentBottom = getHeight() - insetBottom - 12f * u;
         float available = Math.max(1f, contentBottom - contentTop);
         float y = contentTop - scrollY;
@@ -757,28 +699,16 @@ final class ModsView extends View {
         }
         float statusHeight = drawStatus(canvas, left, y, width, u);
         if (statusHeight > 0f) y += statusHeight + 12f * u;
-        if (tab == 0) {
-            section(canvas, "01 / INSTALLED PACKAGES", left, right, y, u);
-            y += 39f * u;
-            if (mods.isEmpty()) {
-                y += drawEmpty(canvas, left, y, width, u) + 12f * u;
-            } else {
-                for (int i = 0; i < mods.size(); ++i) {
-                    y += drawModCard(canvas, mods.get(i), i, left, y, width, u) + 10f * u;
-                }
-            }
-            y += drawCompatibility(canvas, left, y, width, u) + 18f * u;
+        section(canvas, "01 / INSTALLED MODS", left, right, y, u);
+        y += 39f * u;
+        if (mods.isEmpty()) {
+            y += drawEmpty(canvas, left, y, width, u) + 12f * u;
         } else {
-            section(canvas, "01 / PROTOTYPE FIX EQUIVALENTS", left, right, y, u);
-            y += 39f * u;
-            y += drawFixIntro(canvas, left, y, width, u) + 12f * u;
-            for (int i = 0; i < settings.settings.length; ++i) {
-                GameSettings.Setting setting = settings.settings[i];
-                if (!isFixSetting(setting)) continue;
-                y += drawFixRow(canvas, i, setting, left, y, width, u) + 9f * u;
+            for (int i = 0; i < mods.size(); ++i) {
+                y += drawModCard(canvas, mods.get(i), i, left, y, width, u) + 10f * u;
             }
-            y += 10f * u;
         }
+        y += drawCompatibility(canvas, left, y, width, u) + 18f * u;
         canvas.restore();
         contentShiftX = 0f;
 
@@ -804,20 +734,6 @@ final class ModsView extends View {
         if (motion && getWindowVisibility() == VISIBLE && isAttachedToWindow()) postInvalidateOnAnimation();
     }
 
-    private void changeTab(int next) {
-        if (tab == next) return;
-        tab = next;
-        tabChangedAt = now();
-        scrollY = 0f;
-        scroller.forceFinished(true);
-        detailsId = "";
-        removeArmedId = "";
-        pluginArmedId = "";
-        focusedAction = ACTION_NONE;
-        updateContentDescription();
-        invalidate();
-    }
-
     private void activate(int action) {
         if (action == ACTION_NONE) return;
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
@@ -829,33 +745,14 @@ final class ModsView extends View {
             if (!busy) listener.onImport();
             return;
         }
-        if (action == ACTION_MODS || action == ACTION_FIXES) {
-            changeTab(action == ACTION_MODS ? 0 : 1);
-            return;
-        }
-        if (action == ACTION_RESET) {
-            if (busy) return;
-            for (int i = 0; i < settings.settings.length; ++i) {
-                GameSettings.Setting setting = settings.settings[i];
-                if (isFixSetting(setting)) settings.setIndex(i, setting.defaultIndex());
-            }
-            setStatus("Safe defaults restored for the Engine fixes view. They apply on the next Play.", true);
-            return;
-        }
         if (busy) return;
-        if (action >= ACTION_SETTING) {
-            int offset = action - ACTION_SETTING;
-            int index = offset / 2;
-            if (index >= 0 && index < settings.settings.length) {
-                GameSettings.Setting setting = settings.settings[index];
-                if (!isFixSetting(setting)) return;
-                settings.setIndex(index, setting.index + (offset % 2 == 0 ? -1 : 1));
-                setStatus(setting.label + ": " + setting.names[setting.index] + ". Applies on the next Play.", true);
-            }
+        int index;
+        if (action >= ACTION_CONFIGURE) {
+            index = action - ACTION_CONFIGURE;
+            if (index >= 0 && index < mods.size()) listener.onConfigure(mods.get(index));
             return;
         }
-        int index;
-        if (action >= ACTION_DETAILS && action < ACTION_SETTING) {
+        if (action >= ACTION_DETAILS) {
             index = action - ACTION_DETAILS;
             if (index >= 0 && index < mods.size()) {
                 String id = mods.get(index).id;
@@ -889,13 +786,14 @@ final class ModsView extends View {
             if (!mod.error.isEmpty() && !mod.enabled) return;
             boolean enable = !mod.enabled;
             long current = now();
-            if (enable && !mod.plugin.isEmpty()
+            if (enable && mod.hasExecutableContent()
                     && (!pluginArmedId.equals(mod.id) || current - pluginArmedAt >= 8000)) {
                 pluginArmedId = mod.id;
                 pluginArmedAt = current;
                 removeArmedId = "";
-                setStatus("Only enable native plugins you trust. Windows x86 ASI/DLL files are not compatible. "
-                        + "Tap CONFIRM ARM64 within 8 seconds.", true);
+                setStatus(mod.script.isEmpty()
+                        ? "Only enable native plugins you trust. Windows plugins need an Android ARM64 port. Tap CONFIRM ARM64 within 8 seconds."
+                        : "Scripts can access engine memory and calls despite host sandboxing. Enable only trusted code; tap CONFIRM CODE within 8 seconds.", true);
                 postInvalidateDelayed(8100);
                 return;
             }
@@ -980,17 +878,17 @@ final class ModsView extends View {
     }
 
     private void focusNext(int direction) {
-        if (usedActions.isEmpty()) return;
+        if (usedActionCount == 0) return;
         int position = -1;
-        for (int i = 0; i < usedActions.size(); ++i) {
-            if (usedActions.get(i) == focusedAction) {
+        for (int i = 0; i < usedActionCount; ++i) {
+            if (usedActions[i] == focusedAction) {
                 position = i;
                 break;
             }
         }
-        position = position < 0 ? (direction > 0 ? 0 : usedActions.size() - 1)
-                : (position + direction + usedActions.size()) % usedActions.size();
-        focusedAction = usedActions.get(position);
+        position = position < 0 ? (direction > 0 ? 0 : usedActionCount - 1)
+                : (position + direction + usedActionCount) % usedActionCount;
+        focusedAction = usedActions[position];
         RectF bounds = actionBounds[focusedAction];
         if (bounds != null && !bounds.isEmpty()) {
             if (bounds.top < contentTop) scrollY = Math.max(0f, scrollY - (contentTop - bounds.top) - 12f * lastUnit);

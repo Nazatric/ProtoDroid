@@ -40,32 +40,39 @@ std::string Lower(std::string s) {
 }
 
 std::string Normalize(std::string_view input) {
-    std::string s(input);
-    std::replace(s.begin(), s.end(), '\\', '/');
-    bool drive = s.size() >= 2 && s[1] == ':';
-    if (drive) s.erase(0, 2);
-    while (!s.empty() && s.front() == '/') s.erase(s.begin());
-    if (drive && s.size() >= 5 && Lower(s.substr(0, 5)) == "game/") s.erase(0, 5);
-    std::vector<std::string> parts;
-    size_t at = 0;
-    while (at <= s.size()) {
-        size_t end = s.find('/', at);
-        if (end == std::string::npos) end = s.size();
-        std::string part = Lower(s.substr(at, end - at));
+    auto slash = [](char c) { return c == '/' || c == '\\'; };
+    auto lower = [](char c) { return char(std::tolower(static_cast<unsigned char>(c))); };
+    const bool drive = input.size() >= 2 && input[1] == ':';
+    size_t start = drive ? 2 : 0;
+    while (start < input.size() && slash(input[start])) ++start;
+    if (drive && input.size() - start >= 5 && lower(input[start]) == 'g' && lower(input[start + 1]) == 'a' &&
+        lower(input[start + 2]) == 'm' && lower(input[start + 3]) == 'e' && slash(input[start + 4])) {
+        start += 5;
+    }
+
+    // Normalize directly into the result. The former component vector and substring copies dominated allocation
+    // overhead when indexing large archives; '..' removes the last completed component without allowing a prefix.
+    std::string out;
+    out.reserve(input.size() - start);
+    size_t at = start;
+    while (at <= input.size()) {
+        size_t end = input.find_first_of("/\\", at);
+        if (end == std::string_view::npos) end = input.size();
+        const std::string_view part = input.substr(at, end - at);
         if (!part.empty() && part != ".") {
             if (part == "..") {
-                if (!parts.empty()) parts.pop_back();
+                if (!out.empty()) {
+                    const size_t separator = out.find_last_of('/');
+                    if (separator == std::string::npos) out.clear();
+                    else out.resize(separator);
+                }
             } else {
-                parts.push_back(std::move(part));
+                if (!out.empty()) out.push_back('/');
+                for (char c : part) out.push_back(lower(c));
             }
         }
-        if (end == s.size()) break;
+        if (end == input.size()) break;
         at = end + 1;
-    }
-    std::string out;
-    for (const auto& p : parts) {
-        if (!out.empty()) out.push_back('/');
-        out += p;
     }
     return out;
 }
@@ -358,8 +365,8 @@ struct ArchiveIndex {
 ArchiveIndex g_index;
 std::once_flag g_index_once;
 
-uint32_t HashName(std::string name) {
-    if (!name.empty() && name.front() == '\\') name.erase(name.begin());
+uint32_t HashName(std::string_view name) {
+    if (!name.empty() && name.front() == '\\') name.remove_prefix(1);
     uint32_t hash = 0;
     for (unsigned char byte : name) {
         int c = byte >= 128 ? int(byte) - 256 : int(byte);
@@ -432,6 +439,10 @@ void IndexArchive(const std::string& path, int priority) {
                     std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { return items[a].offset < items[b].offset; });
                     for (size_t i = 0; i < order.size(); ++i) items[order[i]].name = ordered_names[i];
                 }
+                // Real installations index tens of thousands of members on the first archived movie open. Reserve
+                // the upper bound once per archive so bucket growth does not repeatedly rehash every prior entry.
+                g_index.exact.reserve(g_index.exact.size() + items.size());
+                g_index.basename.reserve(g_index.basename.size() + items.size());
                 for (auto& item : items) {
                     if (item.name.empty()) continue;
                     std::string normalized = Normalize(item.name);

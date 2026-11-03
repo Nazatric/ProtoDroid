@@ -7,6 +7,7 @@
 # Needs ANDROID_NDK_HOME (or ANDROID_NDK_LATEST_HOME), cmake, ninja, meson, glslang, git, mako, PyYAML and packaging.
 set -euo pipefail
 
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
 ABI=${1:?abi}
 SRC=$(realpath -m "${2:?source dir}")
 PREFIX=$(realpath -m "${3:?install prefix}")
@@ -91,6 +92,12 @@ install -m 644 "$SRC/Dobby/include/dobby.h" "$PREFIX/include/dobby.h"
 cmake -S "$SRC/SDL2" -B "$SRC/build/SDL2-$ABI" "${CMAKE_ANDROID[@]}" -DSDL_STATIC=OFF -DSDL_TEST=OFF
 cmake --build "$SRC/build/SDL2-$ABI" -j "$JOBS"
 cmake --install "$SRC/build/SDL2-$ABI"
+# Bind the installed native library to the exact C/Java source version. The APK packager verifies this manifest
+# before stripping and then compares the signed library bytes with the staged result.
+SDL2_VERSION=$(python3 "$ROOT/tools/sdl_version.py" pin "$ROOT/android/build-deps.sh")
+python3 "$ROOT/tools/sdl_version.py" write-manifest \
+    "$SRC/SDL2" "$PREFIX/lib/libSDL2.so" "$PREFIX/lib/protodroid-sdl2-version.txt" "$SDL2_VERSION"
+test -s "$PREFIX/lib/protodroid-sdl2-version.txt"
 
 # FAudio on SDL2.
 cmake -S "$SRC/FAudio" -B "$SRC/build/FAudio-$ABI" "${CMAKE_ANDROID[@]}" -DBUILD_SDL3=OFF -DBUILD_SHARED_LIBS=ON \

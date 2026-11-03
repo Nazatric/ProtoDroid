@@ -1,3 +1,17 @@
+diff --git a/src/d3d9/d3d9_adapter.cpp b/src/d3d9/d3d9_adapter.cpp
+index b40ef24..10f430e 100644
+--- a/src/d3d9/d3d9_adapter.cpp
++++ b/src/d3d9/d3d9_adapter.cpp
+@@ -161,2 +161,9 @@ namespace dxvk {
+     auto mapping = m_d3d9Formats.GetFormatMapping(CheckFormat);
++    // Android port: format properties alone do not permit BC sampling when the
++    // physical-device feature is absent. Let the application select its DXT decoder.
++    const bool isBc = IsDXTFormat(CheckFormat)
++      || CheckFormat == D3D9Format::ATI1
++      || CheckFormat == D3D9Format::ATI2;
++    if (isBc && !m_adapter->features().core.features.textureCompressionBC)
++      return D3DERR_NOTAVAILABLE;
+     if (mapping.FormatColor == VK_FORMAT_UNDEFINED)
 diff --git a/src/d3d9/d3d9_device.cpp b/src/d3d9/d3d9_device.cpp
 index 5679c1a..b208612 100644
 --- a/src/d3d9/d3d9_device.cpp

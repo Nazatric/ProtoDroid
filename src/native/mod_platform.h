@@ -14,7 +14,12 @@ struct ModEntry {
     std::string files;
     std::string textures;
     std::string plugin;  // manifest path below lib/arm64-v8a/
+    std::string script;  // validated absolute Lua entrypoint
+    std::vector<std::string> dependencies;
     int priority = 100;
+    int packageApi = 1;
+    int pluginApi = 1;
+    int scriptApi = 1;
 };
 
 // Active, validated packages in priority order (higher first). Populated once before engine startup.
@@ -51,6 +56,12 @@ bool ModHookInstall(uint32_t guest_va, ModHookFn replacement, ModHookFn* origina
 void ModPluginsInitialize(const std::vector<ModEntry>& mods);
 void ModPluginsFrame();
 void ModPluginsShutdown();
+
+// Sandboxed Lua packages. Scripts use the same ordered package/dependency graph as native plugins.
+void ModScriptsInitialize(const std::vector<ModEntry>& mods);
+void ModScriptsFrame();
+void ModScriptsShutdown();
+bool ModScriptsEmit(const std::string& name, const uint32_t* arguments, size_t count);
 
 // Built-in optional fixes. No original function is hooked when its corresponding setting is off.
 void ModFeaturesInitialize();
