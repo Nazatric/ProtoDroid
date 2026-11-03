@@ -10,7 +10,7 @@ Every experiment records hypothesis, exact baseline/candidate revisions, changed
 - Changed runtime files: none
 - Environment: x86_64 Linux, two logical CPUs; no attached Android device
 - Scene/cache: deterministic host fixtures; physical scenes not executed
-- Raw results: retained under `/tmp/protodroid-016/baseline`; summarized in `baseline.md`
+- Raw results: historical `/tmp/protodroid-016/baseline` artifacts were lost during sandbox recreation; summarized historical values remain in `baseline.md` and are not represented as currently available raw logs
 - Correctness: all host differential/UBSan fixtures passed; exact-0.15 ARM64 CI correctness was already green
 - Decision: host/CI reference established; physical-device baseline remains unmeasured. Baseline only, not an optimization adoption
 - Additional evidence decision: mixed-source `TestingFiles` logs were rejected as one run; see `rejected-changes.md`

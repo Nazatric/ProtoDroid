@@ -67,7 +67,7 @@ Five fresh runs used the original engine above and production sources at `18ba66
 
 DXT used 400 iterations and input used 20,000 polls per run. Bink used the external 15,563,652-byte `valve.bik` fixture, SHA-256 `e4cc59c1242615fc33159537e21d019599481676f1de62818a5cc4aa9d2f2dd5`; the fixture is not imported into Git. Host RCF time includes host storage and is not Android startup time.
 
-The graphics, input, Present, diagnostics, guest-time, runtime-bridge, and real-engine UBSan baselines all passed. Raw logs, commands/hashes, and `summary.json` are outside Git in `/tmp/protodroid-016/baseline`; `raw-hashes.txt` hashes the retained evidence.
+The graphics, input, Present, diagnostics, guest-time, runtime-bridge, and real-engine UBSan baselines all passed in the historical Phase 1 runs. Raw logs, commands/hashes, and `summary.json` were outside Git in `/tmp/protodroid-016/baseline`; that original directory was lost during sandbox recreation. These remain recorded historical results, not claims that the original raw files are still available or have been regenerated.
 
 ## Existing exact-0.15 ARM64 CI reference
 

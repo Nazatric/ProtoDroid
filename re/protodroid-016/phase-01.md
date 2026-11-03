@@ -29,7 +29,7 @@ Status: **available-environment baseline established; physical-device baseline s
 - Five-run indexed input reference: 0.238 µs/poll, range 0.236–0.240.
 - Ten-run real Bink/RCF cold-index reference: median 14.8776 ms, range 14.5426–16.4952.
 - Exact-0.15 ARM64 CI values and two-pass DXT references are recorded in `baseline.md`.
-- Raw evidence and hashes: `/tmp/protodroid-016/baseline`. No before/after optimization delta exists yet.
+- Historical raw evidence and hashes were recorded at `/tmp/protodroid-016/baseline`; that directory was lost during sandbox recreation and is not claimed currently available. The measurements above remain historical committed results, not newly reproduced runs. No before/after optimization delta exists yet.
 
 ## 5. Correctness
 

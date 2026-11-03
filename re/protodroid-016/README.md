@@ -24,14 +24,14 @@ Status: **Phase 2 active — five-repository source/provenance audit; substantiv
 | `phase-01.md` | Phase 1 available-environment checkpoint; physical baseline remains open |
 | `phase-02.md` | Active Phase 2 source-audit checkpoint; not a completion report |
 
-Large traces, external clones, benchmark binaries, and raw generated results stay outside Git under `/tmp/protodroid-016`. Their provenance and hashes are referenced from these records. No physical-device performance result is inferred from a host benchmark or another project's device.
+Large traces, external clones, benchmark binaries, and raw generated results stay outside Git under persistent `/home/user/protodroid-016-evidence`; `/tmp/protodroid-016` is only a compatibility symlink. The original `/tmp` artifacts were lost during sandbox recreation. Current provenance/manifests/logs are explicitly regenerated and hash-verified, not represented as recovered originals. No physical-device performance result is inferred from a host benchmark or another project's device.
 
 ## Phase status
 
 | Phase | State | Evidence |
 | --- | --- | --- |
 | 1. Baseline laboratory | Available-environment checkpoint recorded; physical-device gate open | Exact 0.15 host/Bink references, ARM64 CI references, protocol, comparability tests; no runtime optimization delta |
-| 2. Five-repository audit | **Active; below the one-hour completion gate** | All five pins and implementations inspected; executed focused GoW III/ISS/Bloodborne host tests passed and unavailable-dependency limits are logged; ledger/matrix populated; no production patch or new ProtoDroid performance run |
+| 2. Five-repository audit | **Active; below the one-hour completion gate** | All five pins restored/inspected; fresh focused tests now cover all five, including Black cache behavior and PrototypeRecomp GDFX production reads; corrected host/sanitizer results, preserved setup failures, fresh hashes, ledger/matrix populated; no production patch or new ProtoDroid performance run |
 | 3–14 | Not started | Sequential execution and evidence gates required |
 
 Current source-audit conclusion: several attractive external techniques are already present, belong to incompatible architectures, or have neutral/negative evidence in their own documents. The next useful work is profiling existing ProtoDroid bottlenecks, not forcing a patch from every repository.
