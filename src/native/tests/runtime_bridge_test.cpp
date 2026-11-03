@@ -2,12 +2,15 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <cstdarg>
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
+#include <thread>
 #include <vector>
 
 #include "../guest.h"
@@ -49,6 +52,32 @@ void CollisionProbe1(Ctx* c) { native::Return(c, 0xc011de01u); }
 void CollisionProbe2(Ctx* c) { native::Return(c, 0xc011de02u); }
 void CollisionProbe3(Ctx* c) { native::Return(c, 0xc011de03u); }
 void CollisionProbe4(Ctx* c) { native::Return(c, 0xc011de04u); }
+
+void CheckConcurrentFirstUse() {
+    constexpr uint32_t targets[] = {0x110100u, 0x11c675u, 0x1691f5u, 0x17576au, 0x1c22eau};
+    const RecompFn expected[] = {RecompiledProbe, CollisionProbe1, CollisionProbe2, CollisionProbe3, CollisionProbe4};
+    constexpr int kThreads = 8;
+    std::atomic<int> ready = 0;
+    std::atomic<bool> go = false;
+    std::atomic<int> failures = 0;
+    std::vector<std::thread> threads;
+    for (int t = 0; t < kThreads; ++t) {
+        threads.emplace_back([&] {
+            ++ready;
+            while (!go.load(std::memory_order_acquire)) std::this_thread::yield();
+            for (int round = 0; round < 64; ++round) {
+                for (size_t i = 0; i < std::size(targets); ++i) {
+                    if (RecompLookup(targets[i]) != expected[i]) ++failures;
+                }
+                if (RecompLookup(0x1ce85fu) != nullptr || RecompLookup(0) != nullptr) ++failures;
+            }
+        });
+    }
+    while (ready.load(std::memory_order_acquire) != kThreads) std::this_thread::yield();
+    go.store(true, std::memory_order_release);
+    for (auto& thread : threads) thread.join();
+    Check(failures.load() == 0, "concurrent first-use lookup returned a wrong association");
+}
 
 void PrepareImportCall(Ctx* c) {
     memset(c, 0, sizeof(*c));
@@ -303,6 +332,9 @@ int main() {
     memset(&outer, 0, sizeof(outer));
     CheckImportCall(&ctx, import, &outer);
     Check(g_import_calls == 1, "direct import was not dispatched exactly once");
+
+    // The direct import returned before hash lookup, so this still races lazy first-use construction.
+    CheckConcurrentFirstUse();
 
     // A normal computed guest call still reaches the recompiled-function table.
     CheckRecompiledCall(&ctx, 0x110100u, &outer);
