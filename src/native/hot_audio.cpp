@@ -15,6 +15,19 @@
 #pragma clang fp contract(off)
 
 namespace native {
+namespace {
+
+// Independent output samples can use four-lane arithmetic without changing the original per-lane multiply/add
+// association. memcpy keeps the engine's arbitrary output alignment and the padded block's three-sample tail safe.
+typedef float V4 __attribute__((vector_size(16)));
+inline V4 Load4(const float* p) {
+    V4 v;
+    memcpy(&v, p, sizeof(v));
+    return v;
+}
+inline void Store4(float* p, V4 v) { memcpy(p, &v, sizeof(v)); }
+
+}  // namespace
 
 // FUN_105e8860 (cdecl, 4 args): resamples each channel of a voice into a 256-sample block (linear interpolation,
 // 20.12 fixed-point phase over a power-of-two ring buffer), optionally meters it, and mixes it into the output
@@ -72,7 +85,11 @@ extern "C" void Native_105e8860(Ctx* c) {
                 if (first >= 0x100) continue;
                 float* dst = Ptr<float>(R32(p4 + (bin + o * 8) * 4));
                 const uint32_t groups = ((0xff - first) >> 2) + 1;
-                for (uint32_t k = first; k < first + groups * 4; ++k) dst[k] = block[k] * v + dst[k];
+                const V4 gain4{v, v, v, v};
+                for (uint32_t k = first; k < first + groups * 4; k += 4) {
+                    const V4 mixed = Load4(block + k) * gain4 + Load4(dst + k);
+                    Store4(dst + k, mixed);
+                }
             }
         }
     }

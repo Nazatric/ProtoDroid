@@ -22,4 +22,5 @@ gcc -std=c11 $FLAGS -w -include math.h -c "$OUT/ref.c" -o "$OUT/ref.o"
 g++ -std=c++17 $FLAGS -c "$ROOT/src/native/hot_audio.cpp" -o "$OUT/hot_audio.o"
 g++ -std=c++17 $FLAGS -c "$ROOT/src/native/hot_skin.cpp" -o "$OUT/hot_skin.o"
 g++ -std=c++17 $FLAGS "$ROOT/src/native/tests/hot_audio_test.cpp" "$OUT/ref.o" "$OUT/hot_audio.o" "$OUT/hot_skin.o" -o "$OUT/hot_audio_test"
-"$OUT/hot_audio_test" "$OUT/pages.bin"
+# Informational timing only: correctness is asserted above by the differential trials, never by a shared-runner threshold.
+HOT_BENCH=1 "$OUT/hot_audio_test" "$OUT/pages.bin"
