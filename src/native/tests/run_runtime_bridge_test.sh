@@ -27,6 +27,21 @@ assert dispatch.index("if (DispatchImport(ctx, target)) return;") < dispatch.ind
 print("Runtime bridge dispatch-order check passed")
 PY
 
+# The engine resolves this export dynamically rather than through its static import table. Keep both halves of that
+# route covered by the same production test even though the synthetic fixture does not link the full kernel32 module.
+python3 - "$ROOT/src/native/kernel32.cpp" "$ROOT/src/native/misc.cpp" <<'PY'
+from pathlib import Path
+import sys
+
+kernel = Path(sys.argv[1]).read_text(encoding="utf-8")
+misc = Path(sys.argv[2]).read_text(encoding="utf-8")
+known = kernel.split("bool KnownLibrary(const std::string& name)", 1)[1].split("\n}", 1)[0]
+assert '"rpcrt4.dll"' in known, "LoadLibraryA(RPCRT4) would still take the missing-module path"
+registrations = misc.split("const ImportDef kMisc[]", 1)[1]
+assert 'E("rpcrt4.dll", UuidCreateSequential)' in registrations, "dynamic RPCRT4 UUID export is not registered"
+print("Dynamic RPCRT4 loader/export checks passed")
+PY
+
 # On a real ARM64 runner, inspect the exact header used by Android. Import stack arguments must compile to plain
 # loads, while the shared-memory control must retain an acquire instruction under the established TSO policy.
 if [[ $(uname -m) == aarch64 ]]; then

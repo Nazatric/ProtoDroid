@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <string>
 
 #include "guest_time.h"
@@ -119,6 +120,52 @@ F(GetAdaptersInfo) { Return(c, 232, 2); }  // ERROR_NO_DATA
 F(GetIpAddrTable) { Return(c, 232, 3); }
 F(GetIfEntry) { Return(c, 232, 1); }
 F(GetPerAdapterInfo) { Return(c, 232, 3); }
+F(UuidCreateSequential) {
+    // RPCRT4 UUID version 1: 100 ns ticks since 1582-10-15. Android does not expose a stable MAC address, so use a
+    // process-stable random multicast node and accurately report RPC_S_UUID_LOCAL_ONLY instead of claiming a hardware
+    // address. The engine's dynamic call ignores the return value but consumes all 16 output bytes.
+    struct UuidState {
+        uint64_t last_time = 0;
+        uint16_t sequence = 0;
+        uint8_t node[6] = {};
+        bool initialized = false;
+    };
+    static std::mutex mutex;
+    static UuidState state;
+
+    constexpr uint64_t kUuidUnixEpoch = 0x01b21dd213814000ull;
+    const uint64_t now = kUuidUnixEpoch + uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count() / 100);
+    uint64_t time;
+    uint16_t sequence;
+    uint8_t node[6];
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!state.initialized) {
+            state.sequence = uint16_t((((rand() & 0xff) << 8) | (rand() & 0xff)) & 0x1fff);
+            for (uint8_t& byte : state.node) byte = uint8_t(rand());
+            state.node[0] |= 1;  // Do not collide with a real IEEE 802 hardware address.
+            state.initialized = true;
+        }
+        time = now;
+        if (time <= state.last_time) {
+            if (time < state.last_time) state.sequence = uint16_t((state.sequence + 1) & 0x1fff);
+            time = state.last_time + 1;  // Same-tick calls and wall-clock adjustments still produce distinct UUIDs.
+        }
+        state.last_time = time;
+        sequence = state.sequence;
+        memcpy(node, state.node, sizeof(node));
+    }
+
+    const uint32_t out = Arg(c, 0);
+    W32(out, uint32_t(time));
+    W16(out + 4, uint16_t(time >> 32));
+    W16(out + 6, uint16_t(((time >> 48) & 0x0fff) | 0x1000));
+    W8(out + 8, uint8_t(sequence));
+    W8(out + 9, uint8_t(((sequence >> 8) & 0x3f) | 0x80));
+    for (int i = 0; i < 6; ++i) W8(out + 10 + i, node[i]);
+    Return(c, 1824, 1);  // RPC_S_UUID_LOCAL_ONLY
+}
 F(UuidToStringA) { Return(c, 14, 2); }  // RPC_S_OUT_OF_MEMORY
 F(RpcStringFreeA) { Return(c, 0, 1); }
 
@@ -207,7 +254,8 @@ const ImportDef kMisc[] = {
     E("setupapi.dll", SetupDiGetDeviceInterfaceDetailA), E("setupapi.dll", SetupDiGetDeviceRegistryPropertyA),
     E("setupapi.dll", SetupDiGetDeviceInterfaceAlias), E("setupapi.dll", SetupDiDestroyDeviceInfoList),
     E("iphlpapi.dll", GetAdaptersInfo), E("iphlpapi.dll", GetIpAddrTable), E("iphlpapi.dll", GetIfEntry),
-    E("iphlpapi.dll", GetPerAdapterInfo), E("rpcrt4.dll", UuidToStringA), E("rpcrt4.dll", RpcStringFreeA),
+    E("iphlpapi.dll", GetPerAdapterInfo), E("rpcrt4.dll", UuidCreateSequential), E("rpcrt4.dll", UuidToStringA),
+    E("rpcrt4.dll", RpcStringFreeA),
     E("ws2_32.dll", WSAStartup), E("ws2_32.dll", WSACleanup), E("ws2_32.dll", WSAGetLastError),
     E("ws2_32.dll", accept), E("ws2_32.dll", bind), E("ws2_32.dll", connect), E("ws2_32.dll", getpeername),
     E("ws2_32.dll", getsockname), E("ws2_32.dll", getsockopt), E("ws2_32.dll", ioctlsocket),

@@ -128,6 +128,41 @@ void CheckMiscRoute(const char* dll, const char* name, const char* ordinal, uint
     }
 }
 
+void CheckSequentialUuidRoutes() {
+    using namespace native;
+    // The original engine zeroes a GUID, dynamically resolves RPCRT4!UuidCreateSequential, ignores its status, and
+    // formats Data4[2..7] as a machine/cache identifier. Both output and exact stdcall behavior therefore matter.
+    uint8_t previous[16] = {};
+    uint64_t previous_time = 0;
+    for (uint32_t index = 0; index < 2; ++index) {
+        const uint32_t output = 0x6000u + 0x10u * index;
+        for (uint32_t i = 0; i < 16; ++i) W8(output + i, 0);
+        Ctx ctx;
+        PrepareMiscCall(&ctx, output, 0);
+        Check(DispatchImport(&ctx, ImportThunk("rpcrt4.dll", "UuidCreateSequential")),
+              "RPCRT4 UuidCreateSequential was not an import thunk");
+        CheckMiscReturn(ctx, 1824, 1, "UUID did not report RPC_S_UUID_LOCAL_ONLY");
+
+        uint8_t guid[16];
+        for (uint32_t i = 0; i < 16; ++i) guid[i] = R8(output + i);
+        const uint64_t time = uint64_t(R32(output)) | (uint64_t(R16(output + 4)) << 32) |
+                              (uint64_t(R16(output + 6) & 0x0fffu) << 48);
+        Check(time != 0 && (R16(output + 6) & 0xf000u) == 0x1000u, "UUID timestamp/version 1 layout is invalid");
+        Check((guid[9] & 0xc0u) == 0x80u, "UUID does not use the RFC 4122 variant");
+        Check((guid[10] & 1u) != 0, "random UUID node can collide with a real hardware address");
+        bool nonzero_node = false;
+        for (int i = 10; i < 16; ++i) nonzero_node |= guid[i] != 0;
+        Check(nonzero_node, "UUID retained the engine's all-zero node");
+        if (index != 0) {
+            Check(time > previous_time, "same-tick UUID calls were not monotonic");
+            Check(memcmp(previous, guid, 16) != 0, "sequential UUID calls returned duplicate identifiers");
+            Check(memcmp(previous + 10, guid + 10, 6) == 0, "process-local UUID node changed between calls");
+        }
+        memcpy(previous, guid, 16);
+        previous_time = time;
+    }
+}
+
 void CheckSetjmpRoundTrip() {
     // longjmp must never make the fixture's automatic local state indeterminate. Static storage also keeps this
     // test warning-clean under newer GCC versions' -Wclobbered analysis.
@@ -316,6 +351,8 @@ int main() {
     CheckMiscRoute("dsound.dll", "DirectSoundEnumerateA", "#2", 0x80070057u, 2);
     CheckMiscRoute("dsound.dll", "DirectSoundEnumerateA", "#2", 0, 2, 0x10abf690u);
 
+    CheckSequentialUuidRoutes();
+
     // Invalid output pointers must produce API errors rather than native null writes. These cases return before raw
     // pointer access, so they are valid in this synthetic non-flat guest-memory fixture as well as on Android.
     PrepareMiscCall(&ctx, 0, 0);
@@ -330,6 +367,6 @@ int main() {
     CheckSetjmpRoundTrip();
     CheckUnknownSetjmpResumeFailsCleanly();
 
-    puts("Runtime bridge imports, socket/DSOUND boundaries, jump state, dispatch, and guest-context checks passed");
+    puts("Runtime bridge imports, RPC UUIDs, socket/DSOUND boundaries, jump state, dispatch, and guest-context checks passed");
     return 0;
 }

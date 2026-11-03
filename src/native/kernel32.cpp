@@ -342,7 +342,7 @@ uint32_t ModuleHandle(const std::string& name) {
 bool KnownLibrary(const std::string& name) {
     static const char* known[] = {"kernel32.dll", "user32.dll", "advapi32.dll", "msvcr80.dll", "d3d9.dll",
                                   "dsound.dll", "xinput1_3.dll", "winmm.dll", "ws2_32.dll", "binkw32.dll",
-                                  "shell32.dll", "ole32.dll", "oleaut32.dll", "prototypeenginef.dll"};
+                                  "shell32.dll", "ole32.dll", "oleaut32.dll", "rpcrt4.dll", "prototypeenginef.dll"};
     for (const char* k : known)
         if (name == k) return true;
     return false;
