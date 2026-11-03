@@ -1,6 +1,6 @@
 # ProtoDroid 0.16 performance program
 
-Status: **Phase 2 active — five-repository source/provenance audit; substantive checkpoint saved, phase not complete**.
+Status: **Phase 2 complete — five-repository source/provenance audit; Phase 3 profiling is next**.
 
 - Released baseline: 0.15, tag `protodroid-v0.15`
 - Baseline source: `18ba66bd0945e405aaded0de5ff8848a8cd07932`
@@ -22,7 +22,7 @@ Status: **Phase 2 active — five-repository source/provenance audit; substantiv
 | `rejected-changes.md` | Negative results and unsafe/misleading non-actions |
 | `final-report.md` | Final evidence summary; not a release claim while work is active |
 | `phase-01.md` | Phase 1 available-environment checkpoint; physical baseline remains open |
-| `phase-02.md` | Active Phase 2 source-audit checkpoint; not a completion report |
+| `phase-02.md` | Phase 2 completion report, raw host/source results, and limitations |
 
 Large traces, external clones, benchmark binaries, and raw generated results stay outside Git under persistent `/home/user/protodroid-016-evidence`; `/tmp/protodroid-016` is only a compatibility symlink. The original `/tmp` artifacts were lost during sandbox recreation. Current provenance/manifests/logs are explicitly regenerated and hash-verified, not represented as recovered originals. No physical-device performance result is inferred from a host benchmark or another project's device.
 
@@ -31,7 +31,7 @@ Large traces, external clones, benchmark binaries, and raw generated results sta
 | Phase | State | Evidence |
 | --- | --- | --- |
 | 1. Baseline laboratory | Available-environment checkpoint recorded; physical-device gate open | Exact 0.15 host/Bink references, ARM64 CI references, protocol, comparability tests; no runtime optimization delta |
-| 2. Five-repository audit | **Active; below the one-hour completion gate** | All five pins restored/inspected; fresh focused tests now cover all five, including Black cache behavior and PrototypeRecomp GDFX production reads; corrected host/sanitizer results, preserved setup failures, fresh hashes, ledger/matrix populated; no production patch or new ProtoDroid performance run |
+| 2. Five-repository audit | **Complete: available source/host audit; 1h00m01s active work** | All five pins restored/inspected; fresh focused checks cover all five, with 143 hash-verified artifacts and exact-set integrity checks; local patched-DXVK cache baseline passes; Bloodborne UMA/AOT sanitizer negatives and all setup/fixture failures are preserved rather than hidden; ranked ledger/matrix and experiment records populated; no production patch or new ProtoDroid performance run |
 | 3–14 | Not started | Sequential execution and evidence gates required |
 
 Current source-audit conclusion: several attractive external techniques are already present, belong to incompatible architectures, or have neutral/negative evidence in their own documents. The next useful work is profiling existing ProtoDroid bottlenecks, not forcing a patch from every repository.
