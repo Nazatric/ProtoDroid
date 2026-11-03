@@ -23,10 +23,11 @@ This record includes both standing non-actions and experimentally rejected candi
 These are source/applicability decisions, not controlled performance experiments:
 
 - **Duplicate dispatch rewrite:** rejected. Bloodborne's `0x9E3779B1` open-addressed lookup is already structurally present in both ProtoDroid recompilation dispatch paths.
-- **Extra Mali compiler workers:** rejected without new evidence. ProtoDroid already caps Mali workers at two; affected Mali driver pipeline calls remain serialized for correctness.
+- **Extra Mali compiler workers or a second warm-up architecture:** rejected without new evidence. ProtoDroid already caps Mali workers at two; affected Mali driver pipeline calls remain serialized for correctness. Direct DXVK 2.5.3 inspection also confirms existing lowest-priority pipeline workers, warm-cache compilation, and a separate cache writer.
 - **Black-mobiu “async” shader import:** rejected because the pinned glslang path is synchronous on a cache miss. Its renderer/cache architecture is not a DXVK drop-in.
 - **PrototypeRecomp “async host I/O” import:** rejected because host reads/writes finish synchronously before guest `PENDING`/APC/event completion. GDFX region lookup is not a reason to replace the existing RCF index.
-- **GoW III/ISS large staging defaults:** rejected. A 128 MiB prewarm and 512 MiB retention policy has no ProtoDroid memory/stall justification.
+- **Generic batching/state-tracking/staging-reuse rewrite:** rejected as a duplicate proposal. Direct DXVK inspection confirms recycled CS chunks, a CS thread, change/dirty-state handling, linear staging suballocation, and an in-flight staging threshold. Only a measured residual cost could justify a narrow change.
+- **GoW III/ISS large staging defaults:** rejected. A 128 MiB prewarm and 512 MiB retention policy has no ProtoDroid memory/stall justification and is not equivalent to DXVK's existing staging-in-flight metric.
 - **Speculative draw-pipeline import:** rejected as a direct patch. Its PC evidence is not Android evidence, the GoW III Android configuration disables preparation workers by default, and D3D9/DXVK has a different architecture.
 - **Bloodborne unified-memory/KGSL/AOT/affinity import:** rejected. UMA showed memory savings without automatic FPS improvement and includes serious coherence/reset risks; AOT was approximately tied with FEX at a GPU-bound save; fixed affinity is not justified without ProtoDroid thread evidence.
 - **Generated/upscaled frames as performance evidence:** rejected. Bloodborne's 29.2 game-FPS result is not 60 real FPS, and GoW III PC/upscaler scenes are not ProtoDroid phone results.
