@@ -156,7 +156,7 @@ void CheckUnknownSetjmpResumeFailsCleanly() {
     const pid_t child = fork();
     Check(child >= 0, "could not create unknown-jmp-buffer death-test process");
     if (child == 0) {
-        freopen("/dev/null", "w", stderr);
+        if (!freopen("/dev/null", "w", stderr)) _exit(127);
         Ctx ctx = {};
         RecompSetjmpResume(&ctx, 0x12345000);
         _exit(0);
