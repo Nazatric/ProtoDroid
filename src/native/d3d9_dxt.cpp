@@ -113,19 +113,37 @@ inline void StoreFullTile(const uint8_t px[16][4], uint8_t* dst, int32_t dst_pit
 }
 #endif
 
+// RGB565 expansion followed by A1R5G5B5 truncation is exactly this bit selection for every endpoint: 5-bit red/blue
+// survive unchanged, and 6-bit green loses only its low bit. The exhaustive endpoint test covers both palette modes.
+uint16_t PackDxt1Endpoint(uint16_t c) { return uint16_t(0x8000 | ((c & 0xffc0) >> 1) | (c & 0x1f)); }
+
 // Mali uses A1R5G5B5 for DXT1 to reduce upload bandwidth. Decode directly to that representation instead of
-// materializing 16 BGRA pixels and narrowing every pixel afterwards. The palette still goes through the same
-// 8-bit expansion and interpolation as the generic decoder, so rounding and transparent black remain identical.
+// materializing 16 BGRA pixels and narrowing every pixel afterwards. Mixed colours retain the established 8-bit
+// expansion/interpolation and rounding; alpha is known without calculating four redundant palette alpha values.
 void DecodeDxt1To16(const uint8_t* src, uint32_t pitch, uint32_t w, uint32_t h, uint8_t* dst, int32_t dst_pitch) {
     const uint32_t bw = (w + 3) / 4, bh = (h + 3) / 4;
+    static constexpr int shifts[3] = {0, 5, 10};  // B, G, R in A1R5G5B5
     uint16_t px[16];
     for (uint32_t by = 0; by < bh; ++by) {
         for (uint32_t bx = 0; bx < bw; ++bx) {
             const uint8_t* block = src + by * pitch + bx * 8;
-            uint8_t palette[4][4];
-            DecodeColorPalette(block, true, palette);
-            uint16_t colors[4];
-            for (int i = 0; i < 4; ++i) colors[i] = PackA1R5G5B5(palette[i]);
+            const uint16_t c0 = uint16_t(block[0] | block[1] << 8), c1 = uint16_t(block[2] | block[3] << 8);
+            uint8_t p0[4], p1[4];
+            Rgb565(c0, p0);
+            Rgb565(c1, p1);
+            uint16_t colors[4] = {PackDxt1Endpoint(c0), PackDxt1Endpoint(c1), 0, 0};
+            if (c0 > c1) {
+                colors[2] = colors[3] = 0x8000;
+                for (int k = 0; k < 3; ++k) {
+                    colors[2] |= uint16_t(((2 * p0[k] + p1[k] + 1) / 3) >> 3) << shifts[k];
+                    colors[3] |= uint16_t(((p0[k] + 2 * p1[k] + 1) / 3) >> 3) << shifts[k];
+                }
+            } else {
+                colors[2] = 0x8000;
+                for (int k = 0; k < 3; ++k)
+                    colors[2] |= uint16_t(((p0[k] + p1[k]) / 2) >> 3) << shifts[k];
+                colors[3] = 0;  // transparent black
+            }
             const uint32_t idx = uint32_t(block[4] | block[5] << 8 | block[6] << 16 | uint32_t(block[7]) << 24);
             if (bx * 4 + 4 <= w && by * 4 + 4 <= h) {
                 uint8_t* out = dst + int32_t(by * 4) * dst_pitch + bx * 8;
@@ -149,12 +167,44 @@ void DecodeDxt1To16(const uint8_t* src, uint32_t pitch, uint32_t w, uint32_t h, 
     }
 }
 
+// The full-colour path can select palette pixels straight into each destination row. Besides avoiding a temporary
+// 64-byte tile per block, this gives the compiler one bounded four-pixel store on both ARM64 and the host tests.
+void DecodeDxt1To32(const uint8_t* src, uint32_t pitch, uint32_t w, uint32_t h, uint8_t* dst, int32_t dst_pitch) {
+    const uint32_t bw = (w + 3) / 4, bh = (h + 3) / 4;
+    for (uint32_t by = 0; by < bh; ++by) {
+        for (uint32_t bx = 0; bx < bw; ++bx) {
+            const uint8_t* block = src + by * pitch + bx * 8;
+            uint8_t palette[4][4];
+            DecodeColorPalette(block, true, palette);
+            uint32_t colors[4];
+            for (int i = 0; i < 4; ++i) memcpy(&colors[i], palette[i], 4);
+            const uint32_t idx = uint32_t(block[4] | block[5] << 8 | block[6] << 16 | uint32_t(block[7]) << 24);
+            if (bx * 4 + 4 <= w && by * 4 + 4 <= h) {
+                uint8_t* out = dst + int32_t(by * 4) * dst_pitch + bx * 16;
+                for (uint32_t y = 0; y < 4; ++y) {
+                    uint32_t row[4];
+                    for (uint32_t x = 0; x < 4; ++x) row[x] = colors[(idx >> (2 * (y * 4 + x))) & 3];
+                    memcpy(out + int32_t(y) * dst_pitch, row, sizeof(row));
+                }
+                continue;
+            }
+            for (uint32_t y = 0; y < 4 && by * 4 + y < h; ++y) {
+                for (uint32_t x = 0; x < 4 && bx * 4 + x < w; ++x) {
+                    const uint32_t pixel = colors[(idx >> (2 * (y * 4 + x))) & 3];
+                    memcpy(dst + int32_t(by * 4 + y) * dst_pitch + (bx * 4 + x) * 4, &pixel, 4);
+                }
+            }
+        }
+    }
+}
+
 }  // namespace
 
 void DecodeDxt(uint32_t f, const uint8_t* src, uint32_t pitch, uint32_t w, uint32_t h, uint8_t* dst,
                int32_t dst_pitch, uint32_t dst_format) {
-    if (f == kDxt1 && dst_format == kA1R5G5B5) {
-        DecodeDxt1To16(src, pitch, w, h, dst, dst_pitch);
+    if (f == kDxt1) {
+        if (dst_format == kA1R5G5B5) DecodeDxt1To16(src, pitch, w, h, dst, dst_pitch);
+        else DecodeDxt1To32(src, pitch, w, h, dst, dst_pitch);
         return;
     }
     const bool packed16 = dst_format == kA1R5G5B5;

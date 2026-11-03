@@ -1,6 +1,6 @@
 # ProtoDroid native, recompilation, GPU, and modding research
 
-Status: research and 0.15 implementation record, 2026-11-03. Original game files remain read-only. The native Compose launcher is integrated in source, with Android compilation/APK and physical-device validation tracked separately. Version 0.15 remains unmerged, untagged, and unreleased.
+Status: research and 0.15 implementation record, 2026-11-03. Original game files remain read-only. The original pre-WebView/pre-Compose native launcher is restored; both rejected replacement presentations are removed. The follow-up BC1 optimization has host A/B measurements, with ARM64 CI and controlled physical-device comparisons tracked separately. Version 0.15 remains unmerged, untagged, and unreleased.
 
 ## 1. Evidence rules and current baseline
 
@@ -423,7 +423,7 @@ These are investigation steps, not approval to make speculative engine changes.
 
 ## 13. 0.15 implementation disposition
 
-This batch keeps the native game/runtime architecture and replaces only the launcher presentation and Android host integration. It is not a claim that the open device issues are fixed.
+This record keeps the native game/runtime architecture and the original native launcher. Later entries add only individually measured runtime or packaging corrections; none is a claim that open device issues are fixed.
 
 | Candidate | Source disposition | Evidence boundary |
 | --- | --- | --- |
@@ -435,7 +435,29 @@ This batch keeps the native game/runtime architecture and replaces only the laun
 | ADPF overhead without a session | **Implemented:** a session-active atomic avoids the per-Present mutex when ADPF is unavailable. The mutex remains for a live session and concurrent worker registration. | This removes a specific host-lock path; it does not establish a measurable device FPS gain. |
 | Auto recovery after failed Turnip | **Implemented:** on a direct <1.2 path, Auto re-runs the established direct/wrapper capability policy rather than retrying the same failed Turnip build. Explicit Turnip/Custom retry behavior is unchanged. | Affected Adreno devices must test the actual fallback. No capability is forced or invented. |
 | DXVK feature failure diagnostics | **Corrected after device evidence:** the first common preflight wrongly rejected a Mali-G720 before creation. The original Vulkan 1.2 check is restored; Vulkan 1.3 again reaches `vkCreateDevice`, and exact requested-feature names are audited only after an actual `VK_ERROR_FEATURE_NOT_PRESENT`. | Supplied 0.15 normal/tour logs confirmed the regression and exact commit. The correction is source-tested; physical Mali retesting and #31/#32 outcomes remain pending. |
-| UI and controls | **Integrated in source:** the user-supplied `prototype-android-launcher-ui` from `TestingFiles` commit `5ad7589f22137ac773dd602e5933fea590965e0d` (ZIP SHA-256 `5cf448fe15a932d849eb49347d66ed08235d3694474def1f6cbb0c720bb514f5`) now uses native Android Compose. A production host connects exact `GameSettings` rows/defaults, launch/permissions, drivers, mods, logs, updates and tour state. The WebView/React UI, preview host, partial INI writer, fake layout editor and Wasm target are excluded; the full native driver/mod/layout tools remain. Classic controls and Settings → Controls → Layout remain; Smart controls were not restored. | Source/asset/host-policy checks pass. Kotlin/APK compilation requires CI in this environment; physical layout, performance and all device interactions remain unverified. |
+| UI and controls | **Corrected:** the original pre-WebView/pre-Compose native host and canvas launcher are restored, with additive native Diagnostics. Rejected WebView and Compose presentations, Gradle presentation dependencies, preview hosts, and Smart Controls remain removed. Existing driver/mod/layout tools, Classic controls, and Settings → Controls → Layout are retained. | Corrected commit `29654c7d0f904c158f424c9ea4ff13a4022d4da7` passed signed ARM64 CI. Gameplay was subsequently observed on device, but no controlled FPS comparison or broad UI/device validation was supplied. |
+| BC1 texture decode | **Measured candidate:** direct DXT1 output rows avoid a temporary full-colour tile. The 16-bit path also packs endpoints exactly and skips redundant alpha/interpolation work while preserving the established 8-bit mixed-colour rounding. DXT2–5 behavior is unchanged. | Two repeated host A/B runs measured about 36% less DXT1→BGRA decode time and 15% less DXT1→A1R5G5B5 time. Randomized/exhaustive exact-output UBSan tests pass. These are decoder measurements, not device FPS results. |
+
+### BC1 evidence and reproducible host measurement
+
+The supplied detailed Mali logs make CPU BC decoding a measured workload rather than a guessed hotspot. `proto-native-2.log` records 53,561 DXT decodes totaling 2,475.01 ms across its diagnostic windows; `proto-native-3.log` independently records 31,444 decodes totaling 1,752.93 ms. Individual windows exceed 200 ms of decoding and include creation/upload spikes. Other steady 30 FPS windows have zero DXT decodes, small Present wall time, and no import-profile breakdown, so they do not justify a BC1, Present, affinity, or engine-tick FPS claim.
+
+The production benchmark is `src/native/tests/dxt_benchmark.cpp`. It uses a deterministic 512×512 corpus, seven batches, and reports median/best time and compressed-input throughput. Compare identical binaries on one host:
+
+```sh
+g++ -std=c++17 -O3 -DNDEBUG -Isrc/native \
+  src/native/d3d9_dxt.cpp src/native/tests/dxt_benchmark.cpp -o /tmp/dxt-bench
+/tmp/dxt-bench 400
+```
+
+On 2026-11-03, two before/after repetitions ran on the same 2-vCPU Intel Xeon 2.60 GHz x86-64 sandbox with GCC 12.2.0. Each table value is the mean of the two runs' seven-batch medians; throughput is compressed input per second, not output bandwidth.
+
+| Decoder | Before | After | Decode-time change | Throughput change |
+| --- | ---: | ---: | ---: | ---: |
+| DXT1 → BGRA | 455.832 µs; 274.2 MiB/s | 291.113 µs; 429.4 MiB/s | −36.14% | +56.62% |
+| DXT1 → A1R5G5B5 | 347.456 µs; 359.8 MiB/s | 295.474 µs; 423.0 MiB/s | −14.96% | +17.60% |
+
+DXT3/DXT5 remain regression controls, not claimed optimizations. Their small timing movement between shared-host runs is not presented as a gain. Existing graphics UBSan tests compare every DXT1/2/3/4/5 output against the scalar oracle over randomized dimensions, pitches, strides, edge blocks, and guard bytes; all 65,536 endpoint values also run in both DXT1 palette modes and both output widths. Those tests pass. No ARM64 timing, visual comparison, sustained FPS, frame-latency, or thermal conclusion is inferred from this x86-64 microbenchmark.
 
 ### Open-issue disposition
 

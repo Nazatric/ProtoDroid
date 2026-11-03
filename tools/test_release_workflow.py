@@ -35,4 +35,11 @@ assert 'python3 tools/release_policy.py "$versionName" "$versionCode" "$certific
 assert 'android/java/com/protodroid/ModConfig.java' in WORKFLOW
 assert 'android/java/com/protodroid/ImmersiveMode.java' in WORKFLOW
 assert 'tools/test_immersive_mode.py' in WORKFLOW
-print("Workflow signing selection, dispatch parity, and separate certificate approval checks passed")
+verified_package = step("Verify APK and embedded Android DXVK")
+assert "source build/apk/package.txt" in verified_package
+assert 'test "$apkBytes" = "$(stat -c%s "$APK")"' in verified_package
+assert 'test "$apkSha256" = "$(sha256sum "$APK" | awk \'{print $1}\')"' in verified_package
+upload = step("Upload APK artifact")
+assert "build/apk/package.txt" in upload
+assert "if-no-files-found: error" in upload
+print("Workflow signing, release policy, and exact APK size/digest metadata checks passed")

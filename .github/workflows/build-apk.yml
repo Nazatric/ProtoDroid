@@ -425,6 +425,33 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test_arm64
 
+      - name: Measure ARM64 BC1 decoder against the corrected baseline
+        run: |
+          set -euo pipefail
+          # Informational target-ISA A/B, not a timing gate or a physical-device FPS result. The fixed reference is
+          # the corrected native-restoration commit that immediately preceded this optimization batch.
+          git fetch -q --depth=1 origin 29654c7d0f904c158f424c9ea4ff13a4022d4da7
+          git show FETCH_HEAD:src/native/d3d9_dxt.cpp > /tmp/protodroid-dxt-before.cpp
+          FLAGS="-std=c++17 -O3 -DNDEBUG -fsigned-char -march=armv8.2-a+rcpc -mtune=cortex-a76 -Isrc/native"
+          g++ $FLAGS /tmp/protodroid-dxt-before.cpp src/native/tests/dxt_benchmark.cpp -o /tmp/dxt-before-arm64
+          g++ $FLAGS src/native/d3d9_dxt.cpp src/native/tests/dxt_benchmark.cpp -o /tmp/dxt-after-arm64
+          : > /tmp/arm64-dxt-benchmark.txt
+          for pass in 1 2; do
+            echo "=== before pass $pass ===" | tee -a /tmp/arm64-dxt-benchmark.txt
+            /tmp/dxt-before-arm64 200 | tee -a /tmp/arm64-dxt-benchmark.txt
+            echo "=== after pass $pass ===" | tee -a /tmp/arm64-dxt-benchmark.txt
+            /tmp/dxt-after-arm64 200 | tee -a /tmp/arm64-dxt-benchmark.txt
+          done
+
+      - name: Upload ARM64 BC1 benchmark
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-dxt-benchmark
+          path: /tmp/arm64-dxt-benchmark.txt
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Compile and run native ARM64 runtime bridge and guest-memory tests
         run: |
           bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test_arm64
@@ -1258,9 +1285,12 @@ jobs:
           $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging "$APK" > /tmp/protodroid-badging.txt
           head -n 20 /tmp/protodroid-badging.txt
           source build/apk/version.txt
+          source build/apk/package.txt
+          test "$apkBytes" = "$(stat -c%s "$APK")"
+          test "$apkSha256" = "$(sha256sum "$APK" | awk '{print $1}')"
           grep -F "package: name='com.protodroid' versionCode='$versionCode' versionName='$versionName'" \
             /tmp/protodroid-badging.txt
-          echo "Verified signed package: com.protodroid $versionName (versionCode $versionCode)"
+          echo "Verified signed package: com.protodroid $versionName (versionCode $versionCode), $apkBytes bytes, SHA-256 $apkSha256"
 
       - name: Upload source-built mod example
         if: success() && env.HAS_DLL == '1'
@@ -1284,8 +1314,9 @@ jobs:
             build/apk/version.txt
             build/apk/signing.txt
             build/apk/native-build.txt
+            build/apk/package.txt
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Upload debug symbols
         if: always()

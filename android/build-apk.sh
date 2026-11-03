@@ -271,4 +271,6 @@ if [ "$APK_SIZE" -lt 20000000 ]; then
     exit 1
 fi
 echo "APK OK: $APK_SIZE bytes"
+APK_SHA256=$(sha256sum "$OUT/prototype.apk" | awk '{print $1}')
+printf 'apkBytes=%s\napkSha256=%s\n' "$APK_SIZE" "$APK_SHA256" > "$OUT/package.txt"
 unzip -l "$OUT/prototype.apk" | grep -E "libSDL2|libFAudio|libdxvk|libmain|classes.dex"
