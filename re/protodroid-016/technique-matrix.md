@@ -39,3 +39,11 @@
 4. Physical-device total-frame impact remains unranked. Future lightweight device timing must use `pipeline_trace=0`, with heavy structural tracing separate. No renderer, FEX, strict-AOT, unified-memory, or upscaling migration is justified.
 
 All physical-device FPS, visual correctness, shader latency, pacing, and thermal outcomes remain open. The numbers quoted in `repository-ledger.md` belong to their source projects and contexts; none is a ProtoDroid measurement.
+
+## Phase 6 synchronization candidates
+
+- **Naive bounded event/semaphore wake:** rejected by a deterministic mixed-waiter progress model, regardless of possible wake-count benefit.
+- **Guard only compound-all waits:** rejected; multi-any completion on another object creates a second lost-progress scenario.
+- **Guard every multi-object waiter and otherwise bound auto-event/semaphore wakes:** controlled candidate, currently inconclusive. It passes the first exact-header semantics model but still requires stress, host A/B timing, production integration checks, and device validation before any pacing claim.
+- **Fixed affinity/priority or ADPF policy changes:** not eligible on this host-only evidence. Existing capability-driven behavior stays unchanged without physical-device measurements.
+- **Final bounded-notification disposition:** rejected, including the multi-object-safe form. Correctness safety did not translate into performance: single-release latency regressed materially and batch results were neutral/noisy. No variant remains a candidate.

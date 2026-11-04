@@ -82,3 +82,9 @@ Optimized RCF gprof call arcs are invalid (including unreachable `CheckPublic`, 
 Corrected memory-backed Bink decode cohorts each contain 20 processes × 291 frames. Medians across per-run summaries are unregistered decode total 545.069728 ms / frame median 1.117999 ms / per-run p95 4.490041 ms / p99 5.052517 ms; two-registered-set total 677.875458 ms / median 1.576090 / p95 4.952626 / p99 5.538735 ms. Both have digest `d68445b7a59b9b4a`, per-frame input integrity, and successful YV12 export; registered planes in both sets match every exported frame. These are separate offline host cohorts, not pooled percentiles, pure upload-cost isolation, playback, or FPS.
 
 An earlier 20-run decode cohort is invalid because its test stack `0x400000` overlapped the large input from `0x100000`; input changed at frame 1, offset 3,145,712. Its old digest/timings and resulting frame-73 registered failure are excluded. Corrected sources allocate a dedicated 64-KiB guest stack and recheck input after every frame. Raw invalid and fixed evidence is retained under `profiling/rcf-bink-gprof/`.
+
+## Phase 6 synchronization and Present bookkeeping checks
+
+A 480-process exact-header wait/notify cohort rejected bounded auto/semaphore notification: the multi-object-safe candidate was slower in all 16 pairs for every four/eight-worker single-release scenario (1.453210–2.231109× baseline median), while batch cases were neutral/noisy. These are two-CPU host model results, not device thread attribution.
+
+Actual `PresentStatsTracker` measurement retained 550,872 per-call samples with detailed collection disabled. Ordinary median cost was 25 ns at nominal 60–10,000 Present/s. Once-per-window p99 work was 127.5 ns median at 60 Hz and 10.604 µs median at 10,000 Hz (21.023 µs maximum across 36 windows). This does not justify a bookkeeping rewrite or establish an Android frame-time share. Raw CSV and summaries are under `phase-06/present-stats-*`.
