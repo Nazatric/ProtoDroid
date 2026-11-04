@@ -1,6 +1,6 @@
 # Physical-device results
 
-No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phases 1–11 are complete only within their recorded source/host/native-CI scopes. Phase 11 adds exact Bink/audio fixtures, sustained host media, broad regression, and issue-log classification; none supplies current physical-device FPS, frame-time, rendering, audio-device, thermal, or sustained-playback evidence.
+No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phases 1–12 are complete only within their recorded source/host/native-CI scopes. Phase 12 adds exact XAudio2/FAudio lifecycle controls, sustained historical-log classification, broad regression, and issue-log classification; none supplies current physical-device FPS, frame-time, rendering, audio-device, thermal, or sustained-playback evidence.
 
 | Device/GPU/driver | Source/APK | Settings/scene/cache | Runs | Result | Limitations |
 | --- | --- | --- | --- | --- | --- |
@@ -19,3 +19,9 @@ The Phase 11 read-only audit leaves **#22, #29, #32, #33, and #35 open**. It ins
 - **#29:** generic launcher/setup text and an image supply no actionable native/D3D9 failure evidence.
 
 CI run `41861964235` verifies the exact-revision source-built APK and skips release, but the signed artifact payload could not be reopened after redirect EOF. That packaging result does not populate the physical-device table or establish installation, rendering, audio, or issue resolution.
+
+## Phase 12 host lifecycle evidence is not a device result
+
+Exact CI run `41900484812` on `c8709cb5a553b470f8724dce15faae0779a85528` succeeds, including the source-built APK and embedded-DXVK verification; release is skipped. The fresh host XAudio2 controls pass 43 checks in each of four modes, and 32-cycle normal lifecycle fixtures pass 502/470 checks in reuse/non-reuse modes with sanitizer-clean logs. These tests use fake or host dummy audio and do not populate the physical-device table.
+
+Artifact `13359379211` (`prototype-apk`) is server-described as 57,955,156 bytes with archive digest `sha256:f3863a3f1a946fc72d0dfeaae128913231d600b537b3d948f02974862255a6bd`; the signed payload returned EOF, so no local APK/library hash or installation claim is made. The XAudio2 lifetime repair is not relabeled as a fix for #22, #29, #32, #33, or #35. No new FPS, frame-time, thermal, audio-device, rendering, or sustained-play measurement exists.

@@ -148,3 +148,11 @@ The five repositories do not justify a forced patch from each. The best-supporte
 
 - `P-404/android_frameworks_native`, commit `c6a090fd350b6a8de7dc3ce51aaa1bc8d5493b9b`, `include/android/performance_hint.h`; AOSP-derived fork located through GitHub code search after the unavailable mirror lookup. The header carries Android Open Source Project copyright and Apache-2.0 notice; pinned `NOTICE` and the empty `MODULE_LICENSE_APACHE2` marker are retained with hashes in Phase 6 evidence. Repository metadata says `NOASSERTION`, so the file-level notice—not metadata—is the recorded basis.
 - Used only to verify ADPF session/group, long-lived-thread, duration-reporting, and API-34 `setThreads` semantics. No implementation code or production header was imported, and no attribution is claimed beyond that source inspection. The resulting Present-thread registration idea remains inconclusive/device-only.
+
+## Supplemental Phase 12 dependency and ABI provenance
+
+- **FAudio:** pinned tag 25.10, commit `ba876ce3be73eabd7094fa276a751ede8328b608`, matching Android `build-deps.sh`. The header, source, and static-library symbol table were checked for `FAudioVoice_DestroyVoiceSafeEXT`; `check_for_sends_to_voice` returns `0x80004005` for dependent source/submix sends. Fresh host static builds are evidence infrastructure only and remain outside Git.
+- **SDL:** release-2.30.9, commit `c98c4fbff6d8f3016a3ce6685bf8f43433c3efcc`, freshly built for the host dummy-audio backend. It supplies no Android or audible-output validation.
+- **Original engine:** read-only `prototypeenginef.dll` disassembly and recovered function ranges were used to bound the direct mixer-thread lifecycle call shape. No original binary was modified. Indirect/unseen callback paths are not claimed covered.
+- **DXVK:** v2.5.3 `c707d9026f33b6ab89639f154b6ac5f6326fa037` with the existing ordered Android patches was freshly checked for regression; no DXVK replacement or patch-series change was made.
+- Raw pins, build logs, disassembly, hashes, and real-backend fixtures are under `/home/user/protodroid-016-evidence/phase-12/regenerated/`; they are not imported into the repository.

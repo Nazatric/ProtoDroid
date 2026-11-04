@@ -1,11 +1,40 @@
 # ProtoDroid 0.16 final performance report
 
-Status: **not final**. Phase 11 is complete after **10,580.303622 seconds** and Phase 12 is next. The released baseline remains 0.15 `18ba66bd0945e405aaded0de5ff8848a8cd07932`; Phase 11 validation head is `b5c9e50043bd114520b9acc9dfee8fe65016aabe`, with exact production/CI validation at `92b85d1b49c9ff8e4c1fca2e91da76d0fe1d5a59`. Phase 11 has **zero net production/runtime/workflow delta** from Phase 10. Earlier adopted work—including quality-preserving DXT direct32/palette decoding, bounded multi-wait storage, anisotropy initialization, and byte-validated unchanged-cache-backup skipping—remains intact.
+Status: **not final**. Phases 1–12 are complete within their recorded source/host/native-CI scopes; Phase 13 integrated correctness/performance validation is next. The released baseline remains 0.15 `18ba66bd0945e405aaded0de5ff8848a8cd07932`. Phase 12 production/CI validation head is `c8709cb5a553b470f8724dce15faae0779a85528`; the completion documentation is layered on that head. No 0.16 merge, tag, release, or final performance claim is authorized.
 
-Phase 11 regenerated a 40-process/11,640-frame Bink baseline, measured 96,000 production plane copies, rejected both audio-ring candidates on x86-64 and native ARM64 absolute materiality, completed 100-loop/29,100-frame sustained host media validation, and reran real-DLL plus 53-command broad regression. The aggregate evidence gate covers **1,088,025 checks**, including the 72-check issue audit. No plane, audio, mixer, DXT/upload, lock-lifetime, media-synchronization, or issue-correlation runtime patch was adopted.
+Earlier adopted work remains intact: quality-preserving DXT direct32/palette decoding, bounded multi-wait storage, anisotropy initialization, byte-validated unchanged-cache-backup skipping, native launcher/controls, mods/metadata, texture modding, ARM64 ABI, safe defaults/drivers, dynamic shadows, Bink/cutscenes, A/V synchronization, both audio-rate behaviors, and the diagnostic tour. Phase 12 adds one source-provable **XAudio2/FAudio master-lifetime correctness fix**, not a measured FPS optimization.
 
-The supplied **#22, #29, #32, #33, and #35 reports remain open and unfixed by this program so far**. In #35, the previous same-revision/settings run reached frame 65,536 and opened mission Bink videos; the failing run stopped before mission Bink and later showed watchdog/`LockRect`/device-loss correlations. This prevents an honest unconditional-Bink diagnosis but does not establish the intermittent cause. #33's latest recurrence lacks current logs, #32 lacks the exact unsupported feature, #22 lacks a visual root cause, and #29 lacks actionable logs. Existing compatibility/diagnostic work is not relabeled as a device fix.
+## Phase 12 result
 
-CI run `41861964235` on `92b85d1b` passed all required host/native-ARM64, dependency, driver, Turnip, source-native build, signed-package, and APK-verification jobs; release was skipped. Artifact `13341818959` has GitHub **ZIP** SHA-256 `41f57621be39aab6ab21df660233bc6567f5773f5792ab688c2d813cf4880fed`. The signed payload redirect returned EOF, so no inner-APK/library digest, local installation, or physical-device validation is claimed.
+The old bridge could lose track of a real FAudio mastering voice when the void XAudio2 2.3 destroy call was refused because another voice still sent to it. The adopted change in `c8709cb` tracks `live_master`, uses `FAudioVoice_DestroyVoiceSafeEXT`, preserves the old real master on refusal, retries replacement only when no logical mastering users remain, and serializes mastering operations in both reuse modes. The permanent four-mode regression and pinned-FAudio CI coverage are included.
 
-The final version of this document must still identify exact baseline/candidate revisions, signed APK provenance, device/driver/settings coverage, median FPS and frame-time p50/p95/p99/long-stall changes, cold/warm shader-loading results, sustained/thermal behavior, correctness validation, rejected ideas, and all unmeasured outcomes. Empty or unavailable evidence remains explicit rather than being replaced by estimates. No 0.16 merge, tag, release, or final performance claim is authorized by Phase 11 completion.
+Fresh raw controls show the before/after correctness difference:
+
+- Unpatched real FAudio/SDL controls compile in all four reuse/quantum modes and each exits 1 at check 23, `dependent-send replacement returns refusal`.
+- Current real backend controls pass **43 checks in each of four modes**, with `old_master_preserved=1`, `detach_retry=1`, and empty sanitizer stderr.
+- Current fake-backend regression passes **47 checks in each of four modes**, with zero master overwrites. Reuse records master create/destroy **2/1** and one refusal; non-reuse records **2/2** and two refusals.
+- Fresh normal-lifecycle fixtures complete **32 source/master recreation cycles plus orphan cleanup** in each reuse mode: **502 checks reuse=1**, **470 checks reuse=0**, both sanitizer-clean.
+
+These are host fake/dummy-audio lifecycle results. They do not establish audible quality, Android callback latency, FPS, frame-time, thermal, or a shared trigger for any supplied phone report.
+
+## Sustained and performance evidence boundary
+
+The fresh available-log audit passes **21 checks** over only two short historical diagnostic tours (61.544/67.945 seconds; 3,131/3,007 Present intervals; worst intervals 1,032.764/3,430.826 ms). The longer historical run raw inputs are unavailable. Their preserved summaries—run A 902.58 seconds/181 windows/53 pipelines/41,954 intervals and run B 521.98 seconds/105/11/37,105—remain summary-only. RSS/virtual growth and interval correlations do not prove leaks, causation, or a safe allocator/presenter/queue change.
+
+No new physical-device FPS, frame-time p50/p95/p99, long-stall, cold/warm shader-loading, GPU-time, thermal, sustained-play, or A/V-quality measurement exists. Earlier host/native measurements retain their original scopes and are not promoted to phone results. No performance before/after number is invented for the lifecycle repair.
+
+## Regression and packaging
+
+The fresh broad regression at `c8709cb` passes **61/61 commands across 11 groups in 123.423438 seconds**. Independent raw-evidence verification passes **605 checks**, and the independent Phase 12 pre-commit finalizer passes **407/407 checks** after correction of its own porcelain-status whitespace parser; the initial verifier failure is preserved. The regression covers launcher/policy, diagnostics/settings, DXVK policy, mods, native core, fake and real XAudio2, Bink at 32/44.1 kHz, real-DLL differential, and reproducibility gates. The real cache remains **1,014/1,014 valid entries**. Historical expanded/graph/detach/threaded Phase 12 controls are retained as labeled summaries, not represented as freshly reopened raw files.
+
+Exact CI run **41900484812** on `c8709cb5a553b470f8724dce15faae0779a85528` is **completed/success**. Required dependency, native, ARM64, driver, Turnip, and APK jobs succeed; optional ARM64 evidence jobs are neutral; `release` is skipped. The new pinned-FAudio checkout and four-mode XAudio2 regression pass in `bink-tests` steps 8–9. `build-apk` source build step 18, APK package/sign step 26, and APK/embedded-DXVK verification step 28 pass; the prebuilt-symbol fallback step 22 is skipped.
+
+Artifact **13359379211** (`prototype-apk`) is server-described as **57,955,156 bytes** with archive digest `sha256:f3863a3f1a946fc72d0dfeaae128913231d600b537b3d948f02974862255a6bd`. This is GitHub artifact metadata, not a locally recomputed inner-APK digest. The signed blob redirect returned EOF, so no local APK/library hash, installation, or device-rendering claim is made.
+
+## Supplied correctness reports
+
+**#22, #29, #32, #33, and #35 remain open and unfixed by this program.** #35 has a working same-revision/settings control alongside a failing watchdog/`LockRect`/device-loss run; #33's latest recurrence lacks current logs; #32 lacks the exact unsupported feature; #22 lacks a visual root cause; #29 lacks actionable logs. The source-provable host XAudio2 defect is not promoted to a diagnosis for Dana's Safe House/cutscenes, Motorola Play-to-home, the Itel setup report, or the Mali visual glitch. No feature spoofing, unconditional cutscene skipping, quality reduction, universal driver workaround, or speculative lock rewrite is selected.
+
+## Final work still required
+
+The final version of this report still requires comparable exact-revision device/APK provenance, device/driver/settings coverage, median FPS and frame-time p50/p95/p99/long-stall changes, cold/warm shader-loading results, sustained/thermal behavior, visual/media/correctness validation, and explicit unmeasured outcomes. Phase 13 should preserve the adopted lifecycle regression while seeking current affected-version reproductions and comparable ordinary-play/sustained evidence. Empty or unavailable evidence remains explicit rather than replaced by estimates. No release-readiness conclusion is made by Phase 12 completion.

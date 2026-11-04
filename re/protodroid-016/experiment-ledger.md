@@ -542,3 +542,33 @@ Phase 10 completed at `2026-11-04T14:17:19.094775Z`, **4,428.332251 seconds** af
 - **#35 control:** failing and previous logs share source `fa8b6e55`, direct PanVK, 540p, two skipped mips, 512 shadows, and texture dumping. The failing run stops before mission Bink open, has a frame-10,634 watchdog/`LockRect` correlation and later device loss; the previous run reaches frame 65,536 and opens mission Bink videos. This disproves treating an unconditional Bink defect as established, but does not identify the intermittent cause.
 - **Other issues:** #33's latest recurrence has no new logs and its old logs are explicit Vulkan 1.1 rejection; #32 has requested feature state but no exact missing feature; #22 has successful logged resets/presents without a visual diagnosis; #29 has no actionable log. None is claimed fixed.
 - **Completion:** Phase 11 completed at `2026-11-04T17:15:07.338209Z`, 10,580.303622 seconds after start, with zero net production/runtime/workflow delta. CI run `41861964235` passes all required jobs on `92b85d1b`; release is skipped. The aggregate gate covers 1,088,025 checks. Artifact ZIP SHA-256 is `41f57621be39aab6ab21df660233bc6567f5773f5792ab688c2d813cf4880fed`; signed-redirect EOF prevents inner-APK/library hashing or installation claims. Phase 12 sustained whole-program research is next, with all five issues carried forward openly.
+
+## Phase 12 sustained whole-program, memory, and XAudio2 lifecycle research
+
+### H1: historical sustained attribution and availability control
+
+- **Hypothesis:** longer historical native runs might isolate memory growth or a frame-stall mechanism strongly enough to justify a narrow whole-program candidate.
+- **Evidence:** the earlier long-run summaries remain run A 902.58 s/181 windows/53 pipelines/41,954 intervals and run B 521.98 s/105/11/37,105. RSS/virtual growth is A +1,225/+5,369 MiB and B +1,045/+5,557 MiB; last-20-window deltas are A +2/+50 and B +72/+27 MiB. Interval/EngineService correlations are 0.961678/0.643686 versus interval/Present-wall 0.002148/-0.204270. These are historical summaries, not newly reopened raw inputs.
+- **Fresh availability audit:** `available-log-audit.json` passes 21 checks over only the two short `51e51ea` diagnostic-tour logs (61.544/67.945 s; 3,131/3,007 intervals; worst 1,032.764/3,430.826 ms) and records `long_run_raw_available=false`.
+- **Disposition:** no allocator, queue, presentation, memory-policy, or quality change. Whole-process growth and correlations do not prove leaks or causation; a current comparable device soak is still required.
+
+### H2: exact FAudio lifetime defect and original-driver boundary
+
+- **Hypothesis:** retained/non-retained mastering replacement could lose a real FAudio master when the void XAudio2 2.3 destroy operation is refused because a source or submix still sends to it.
+- **Source result:** the defect is source-provable. Pinned FAudio 25.10 declares, defines, and exports `FAudioVoice_DestroyVoiceSafeEXT`; dependent sends return `0x80004005`, while the void wrapper discards that result. Android `build-deps.sh` uses the same tag. Original mixer-thread disassembly has source-voice operations but no direct mastering create/destroy calls; indirect/unseen callback reentry remains unproven.
+- **Fresh real-backend negative control:** exact unpatched production bridge with static FAudio `ba876ce3` and SDL `c98c4fb` compiles in all four reuse/quantum modes and each run exits 1 at check 23, `dependent-send replacement returns refusal`. This is an expected negative control, not a test-setup failure.
+
+### H3: smallest preserving lifecycle candidate
+
+- **Implementation:** `c8709cb5a553b470f8724dce15faae0779a85528` tracks `live_master`, uses SafeEXT for real-master destruction, preserves the old pointer on refusal, retries only without logical master users, and serializes mastering operations in both reuse modes. It adds the permanent exact-production four-mode regression and pinned-FAudio CI step. Source SHA-256 is `5b1bc983ef1fa0788af1c2d2e2494acb5383afdc80ec9f2512b69e9451e329ad`; preserved baseline source is `b09dbcdb17b93865778ef3e9179e35d6f1bc021d969c22fc4417a88129359a2d`.
+- **Fresh fake control:** 47 checks pass in each of four modes with zero overwrites. Reuse records master create/destroy 2/1 and one refusal; non-reuse records 2/2 and two refusals.
+- **Fresh real control:** 43 checks pass in each of four host dummy-audio modes, with `old_master_preserved=1`, `detach_retry=1`, and empty sanitizer stderr. Fresh normal lifecycle runs complete 32 source/master cycles plus orphan cleanup: 502 checks reuse=1 and 470 reuse=0, both sanitizer-clean.
+- **Historical controls:** preserved Phase 12 summaries report expanded safe-API 502/486/502/486 checks, graph baseline/candidate 35/one-overwrite versus 37/zero, detach 35/one-overwrite versus 38/zero, threaded baseline non-reuse failure at check 7,689, and candidate zero-overwrite results. These are not represented as freshly regenerated raw files.
+- **Disposition:** adopt the lifecycle correctness fix only. No FPS, audible-quality, callback-latency, or affected-device fix is inferred; no mixer, quantum, callback, or media behavior changes.
+
+### H4: broad regression, packaging, and issue dispositions
+
+- **Fresh broad regression:** 61/61 commands in 11 groups, 123.423438 s at `c8709cb`; independent raw verification passes 605 checks. Bink 32/44.1 kHz, real-DLL differential, patched DXVK, mods, launcher, native core, fake/real XAudio2, and reproducibility gates pass.
+- **CI/package:** run 41900484812 on exact `c8709cb` completes successfully. Required jobs pass, optional ARM64 evidence jobs are neutral, release is skipped, and `bink-tests` steps 8–9 pass the pinned checkout/four-mode regression. Source build, APK signing, and APK/embedded-DXVK verification pass. Artifact 13359379211 is server-described as 57,955,156 bytes with archive digest `sha256:f3863a3f1a946fc72d0dfeaae128913231d600b537b3d948f02974862255a6bd`; signed blob retrieval returned EOF, so this is not a locally recomputed or inner-APK digest.
+- **Issue disposition:** #22, #29, #32, #33, and #35 remain open. The host lifecycle defect is not evidence that any affected phone report shares its trigger; no speculative device patch is selected.
+- **Completion:** Phase 12 completes at `2026-11-04T20:22:14.231054Z`, 11,089.810437 seconds after start. The independent pre-commit finalizer passes 407/407 checks after correction of its own porcelain-whitespace parser; the initial failure is preserved. The documentation-only completion commit and post-commit gate are recorded separately. No merge, tag, release, or physical-device performance claim is authorized.
