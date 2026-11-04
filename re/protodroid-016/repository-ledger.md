@@ -143,3 +143,8 @@ This comparison narrows later work to measured residual costs: driver/lock wait,
 ## Audit-level conclusion
 
 The five repositories do not justify a forced patch from each. The best-supported next step is to profile ProtoDroid's existing pipeline compiler, Present/pacing, guest/render threads, native hot paths, and upload/cache behavior before selecting a technique. Several attractive ideas are already present, belong to incompatible renderers, or have neutral/negative evidence in their own source documents. See `technique-matrix.md` for dispositions and `rejected-changes.md` for explicit non-actions.
+
+## Supplemental Phase 6 API reference (not a mandatory research repository)
+
+- `P-404/android_frameworks_native`, commit `c6a090fd350b6a8de7dc3ce51aaa1bc8d5493b9b`, `include/android/performance_hint.h`; AOSP-derived fork located through GitHub code search after the unavailable mirror lookup. The header carries Android Open Source Project copyright and Apache-2.0 notice; pinned `NOTICE` and the empty `MODULE_LICENSE_APACHE2` marker are retained with hashes in Phase 6 evidence. Repository metadata says `NOASSERTION`, so the file-level notice—not metadata—is the recorded basis.
+- Used only to verify ADPF session/group, long-lived-thread, duration-reporting, and API-34 `setThreads` semantics. No implementation code or production header was imported, and no attribution is claimed beyond that source inspection. The resulting Present-thread registration idea remains inconclusive/device-only.

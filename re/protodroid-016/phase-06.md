@@ -75,8 +75,35 @@ The candidate's off/baseline ratio was 0.989265, but the A/A control/baseline ra
 
 - Mixed-waiter semantics ran under ASan+UBSan for all five policies and under TSan for baseline/multi-guard, with zero expectation failures or sanitizer reports.
 - A further 144-process stress matrix passed: 64 mixed-waiter semantics runs and 80 corrected batch runs across 1–16 workers. Independent verification checked every progress expectation, operation count, timeout count, and final state.
-- Twelve production regression commands passed in 9.185311 seconds: UBSan performance hints, CPU affinity, Present statistics, tour plan/guest time, diagnostics, runtime bridge, guest memory, diagnostic-tour runtime policy, performance policy/evidence, touch controls, and compatibility policy.
-- `src/native/tests/present_stats_test.cpp` now also covers the global adapter's disabled sample/total gate and enabled TID/sample accounting. The enlarged test passes normally, ASan+UBSan, TSan, and against the rejected evidence-only TID candidate. This is regression coverage, not a runtime optimization.
+- Twelve production regression commands initially passed in 9.185311 seconds and, after the adapter-test addition, passed again in 9.297053558 seconds: UBSan performance hints, CPU affinity, Present statistics, tour plan/guest time, diagnostics, runtime bridge, guest memory, diagnostic-tour runtime policy, performance policy/evidence, touch controls, and compatibility policy.
+- `src/native/tests/present_stats_test.cpp` now also covers the global adapter's disabled sample/total gate and enabled TID/sample accounting. The enlarged test passes normally, ASan+UBSan, TSan, and against the rejected evidence-only TID candidate. A further 300 iterations passed (200 normal, 50 ASan+UBSan, 50 TSan). This is regression coverage, not a runtime optimization.
 - Nine supplied binaries/logs/shader fixtures have hash-verified read-only status. No physical Play/tour, audio-device, shutdown-device, or frame-pacing run is available.
 
-The 43-check independent preflight passes every non-time check and refuses completion under 3,600 seconds. The first ratio-tolerance and output-path wrapper failures are preserved and corrected; no result was changed. Phase 6 remains active pending remaining substantive review and the actual-time gate.
+The latest independent preflight passes all 48 non-time checks and refuses completion under 3,600 seconds (only the time gate failed at 2,303.063385 seconds). Ratio-tolerance and output-path wrapper failures are preserved and corrected; no result was changed. Final sustained-stress, CI, and elapsed-time gates remain pending.
+
+## Other scheduling/locking policies audited without a patch
+
+- **ADPF:** the no-session atomic fast path already avoids its per-Present mutex. Active-session reporting remains serialized because the NDK session methods are not thread-safe. Skipping reports or changing target durations would alter clock policy without device evidence; rejected as a speculative optimization.
+- **Affinity/priorities:** existing code reports the available CPU mask, does not force affinity, and maps engine priorities to nice values plus optional ADPF registration. Fixed affinity or new priorities are not justified by two-CPU host models.
+- **Frame limiter/Present anchor:** limiter sleep remains on the engine loop while FPS/ADPF statistics count only successful Presents. Moving that anchor or skipping empty-loop limiter work would change gameplay/menu semantics rather than prove a pacing improvement.
+- **Present/surface mutex:** it protects destroyed-surface and FIFO/Reset lifecycle behavior. No lock removal is justified without an Android surface-stress run.
+- **D3D9 recursive lock:** potentially important translation overhead, but it belongs to Phase 8 and requires draw/state/lifetime profiling. A generic lock rewrite here would be unsafe and untargeted.
+- **Bink timed locks/yields:** media-only polling and audio lead behavior belong to Phase 11. Replacing yields with sleeps or changing budgets could add A/V latency or underruns; no media timing change was made.
+- **XAudio2 locks:** no audio-lock change without physical underrun/continuity evidence.
+- **Handle lifetime:** the model does not exercise close-versus-wait or invalid-handle lifetime races. No new game trace establishes that scenario, and no lifetime semantics were changed. This remains a coverage limitation, not a claimed proof of safety.
+
+The next evidence-based target is Phase 7 allocation/I/O: `WaitForMultipleObjects` allocates its object vector per call, and waiter vectors retain high-water capacity. Any allocation candidate must first measure real call sizes and preserve multi-wait and handle lifetimes.
+
+## ADPF Present-thread attribution: inconclusive, no patch
+
+A read-only historical-log audit found 61 detailed Present-outlier lines with 241 retained TID entries after excluding the diagnostics logger: 240 on TID 5192 and one on 5147. TID 5192 requested priority 0, which is not a priority-based ADPF registration path. This is a useful lead, not proof of a session-registration bug: the log contains no TID roster or thread-lifetime record, and its final ADPF window reports zero errors.
+
+The pinned NDK-derived header (`P-404/android_frameworks_native` `c6a090fd350b6a8de7dc3ce51aaa1bc8d5493b9b`) describes a long-lived inter-related thread group and API-34 `setThreads` replacement semantics. It does not establish that the reporting caller must be a member. Explicit Present-thread registration is therefore **inconclusive/device-only**. No code was changed; a safe decision needs roster/lifetime evidence and sustained physical A/B pacing, not another host microbenchmark.
+
+No wait-operation lines exist in the supplied logs, so the host wait scenarios also cannot be attributed to observed phone hotspots. Full historical-log counts, source lines, API provenance, and hashes are retained under `phase-06/`.
+
+## Fidelity and release-preservation checks
+
+An independent 31-check source-fidelity review passed for the wait model: preserved baseline hashes, fast paths, waiter registration, predicate waits, acquisition order, signal ordering, swap-removal cleanup, and baseline notification branches. Its intentional exclusions are explicit: fixed TID for object types that ignore it, no semaphore maximum field, no guest-handle/vector construction, and no Mutex/Thread/File/close-lifetime or Android scheduling coverage. This supports the notification comparison without overstating its scope.
+
+The 0.15 `protodroid-v0.15` release remains downloadable with `prototype.apk` at 59,023,246 bytes; `main` remains `00976d9`, and no 0.16 release exists. Exact-code CI is required before the final gate; host and CI results remain distinct from physical Android evidence.
