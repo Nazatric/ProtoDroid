@@ -72,3 +72,11 @@ The external v2.5.3 checkout is exactly `c707d9026f33b6ab89639f154b6ac5f6326fa03
 ### HostTable publication proof
 
 For a valid published index, the writer constructs and zero-initializes the chunk and initializes the host object before the non-null entry's release store. The reader's relaxed atomic chunk load only obtains the never-freed array pointer; the following entry acquire reads that non-null entry and synchronizes with its release, making the earlier chunk and host writes visible. A null entry from an invalid/unpublished index remains outside the valid-call contract as in baseline. `Forget` and object lifetime behavior are unchanged. Source checks and the full happens-before chain are in `memory-order-proof.json`.
+
+## Native ARM64 CI measurement tool
+
+The workflow's `arm64-graphics-tests` job uses `ubuntu-24.04-arm` and executes native ARM64 binaries. A new exact-source measurement tool and workflow step are prepared locally but not pushed while `f5be921` CI remains in progress. The step will compare `c033649` versus current HostTable and `ca25c46` versus current anisotropy, with baseline/A-A/candidate, 20 million calls, 24 balanced rounds, raw JSONL, and an uploaded artifact.
+
+The tool's anisotropy path links one identical main object into all variants after an initial different-main harness failed to reproduce the established result. Short/noisy and different-main outputs remain under `ci-tool-*` and are excluded by `ci-tool-development.log`. Final local shared-main results are HostTable candidate/baseline **0.9974109363836161** (16/24, A/A 1.014411; neutral) and anisotropy **0.8155592549654482** (24/24, A/A 1.002361). These are x86-64 tool-validation results, not the pending ARM64 measurements. Workflow YAML parsing passed.
+
+Exact-code CI `41784574180` completed **success** for `f5be92170480d4d9a99924f41502108903e0449a`: driver-package, Bink, Turnip, Android dependencies, native ARM64 graphics, and APK build jobs passed; release remained skipped. Run/job and artifact API records are preserved. The full log redirect failed twice with EOF, explicitly recorded rather than replaced with inferred log text. CI success is build/host-test evidence, not physical-device FPS or pacing proof.

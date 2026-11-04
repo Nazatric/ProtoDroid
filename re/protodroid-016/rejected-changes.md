@@ -77,3 +77,4 @@ These are source/applicability decisions, not controlled performance experiments
 - Do not add bridge-only render/sampler state dedup without Reset, StateBlock Apply, Get/Set, and real call-trace evidence.
 - Do not remove Mali pipeline-compiler serialization or replace DXVK based on these bridge microbenchmarks.
 - The eager screenshot-config move itself is rejected on materiality after the 0.991820 confirmation (22/36 wins), not because of a correctness failure. Its exact 16-case differential passed, but the once-per-Present benefit is too weak to justify extra global lifecycle state.
+- Phase 8 measurement-tool development outputs using short noisy cohorts or different baseline/candidate main objects are not canonical. Only the corrected shared-main, separate-implementation protocol is used for CI; earlier `ci-tool-*` outputs remain preserved.

@@ -437,6 +437,33 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test_arm64
 
+      - name: Measure exact D3D9 bridge candidates on native ARM64
+        run: |
+          set -euo pipefail
+          # Native Linux ARM64 microfixtures, not Android-device FPS or GPU results. Keep an identical A/A control
+          # and the exact source revisions that introduced each candidate.
+          git fetch -q --depth=1 origin c03364950239b1d7d8a34741fe2c73b92df7258b
+          git fetch -q --depth=1 origin ca25c4603ca3969fbaabd5e2dfc1264a50101925
+          git show c03364950239b1d7d8a34741fe2c73b92df7258b:src/native/d3d9.cpp > /tmp/d3d9-before-host-table.cpp
+          git show ca25c4603ca3969fbaabd5e2dfc1264a50101925:src/native/d3d9.cpp > /tmp/d3d9-before-anisotropy.cpp
+          python3 tools/measure_d3d9_bridge.py host-table \
+            --before /tmp/d3d9-before-host-table.cpp --output /tmp/d3d9-host-table-arm64 \
+            --calls 20000000 --rounds 24
+          python3 tools/measure_d3d9_bridge.py anisotropy \
+            --before /tmp/d3d9-before-anisotropy.cpp --output /tmp/d3d9-anisotropy-arm64 \
+            --calls 20000000 --rounds 24
+
+      - name: Upload ARM64 D3D9 bridge measurements
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-d3d9-bridge
+          path: |
+            /tmp/d3d9-host-table-arm64
+            /tmp/d3d9-anisotropy-arm64
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Measure ARM64 BC1 decoder against the corrected baseline
         run: |
           set -euo pipefail
