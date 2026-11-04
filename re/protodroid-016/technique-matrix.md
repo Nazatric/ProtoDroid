@@ -55,5 +55,5 @@ All physical-device FPS, visual correctness, shader latency, pacing, and thermal
 ## Phase 7 memory and I/O candidates
 
 - **RCF exact-hit basename deferral:** rejected after full `OpenFileSource` and direct `OpenArchiveSource` A/A/candidate cohorts. Correctness passed, but 12.96 million opens did not establish an effect beyond identical-control variability. No source change remains.
-- **Bounded small multi-wait storage:** active next candidate. It must preserve arbitrary-count heap fallback and every acquisition/timeout/duplicate-handle rule; a stack-buffer microbenchmark alone is insufficient.
 - **Broader readahead/async streaming or cache policy:** unranked without a real loading/streaming trace. Do not hide I/O latency with changed timing, quality, or content behavior.
+- **Bounded inline multi-wait storage:** adopted in `2e9e31b` after actual-handler A/A/candidate timing, direct allocation counts, exact semantic differentials, sanitizer stress, and broad regression. Eight inline pointers remove small-count allocations; larger vectors size once. Candidate/baseline host medians are 0.361003–0.779293 across 1–64 handles. Exact-code CI and final phase gates remain required; no phone FPS/pacing claim.

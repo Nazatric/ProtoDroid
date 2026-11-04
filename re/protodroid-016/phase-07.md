@@ -34,3 +34,40 @@ The evidence-only candidate moved `base = normalized.substr(...)` inside the exa
 - **Verification:** `verify_rcf_results.py` independently passed 30/30 raw/count/digest/median/paired/semantic/reversion checks. Initial missing-zlib/guest-flag and summary-category mistakes are preserved; neither produced a valid performance result.
 
 Next: bounded small-count `WaitForMultipleObjects` storage, with actual synchronization semantics and large-count fallback checks before any timing disposition.
+
+## P7-WAIT — bounded inline multi-wait storage: adopted host candidate
+
+`WaitForMultipleObjects` now uses eight inline `KObject*` slots and switches to a sized vector for larger counts. Resolution, `WaitKernel`, waiter order, duplicate/null handling, acquisition, timeout cleanup, and return ABI remain the actual production logic. Larger counts also avoid repeated vector growth by sizing once. Commit `2e9e31bb30f1158238865800471c675f57fac5cb` contains only `src/native/kernel32.cpp`; exact-code CI run `41773816427` is in progress at this checkpoint.
+
+### Before/after measurements
+
+Actual `kernel32.cpp` was compiled into focused baseline/A-A/candidate harnesses with only the import registry removed so unused handlers could be section-collected. The real handle table, guest `R32`, `HandleObject`, events, mutex, `WaitKernel`, acquisition, and stdcall cleanup executed. Timed calls use pre-signaled manual events and include the same ABI setup/result digest work in every arm. Sixteen rotated fresh-process rounds ran each of 14 count/mode cases, 200,000 calls per process: **672 processes / 134,400,000 calls**, all return code 0 and identical per-case digests.
+
+| Handles | Mode | Baseline ns/call | A/A / baseline | Candidate ns/call | Candidate / baseline | Candidate faster rounds |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | any | 49.322032 | 1.006873 | 33.133553 | 0.671780 | 16/16 |
+| 1 | all | 49.022065 | 1.006233 | 33.693485 | 0.687313 | 16/16 |
+| 2 | any | 69.802705 | 1.003580 | 34.019755 | 0.487370 | 16/16 |
+| 2 | all | 75.459545 | 1.006420 | 39.250222 | 0.520149 | 16/16 |
+| 4 | any | 90.567267 | 0.996388 | 35.937290 | 0.396802 | 16/16 |
+| 4 | all | 101.809430 | 0.992549 | 48.215047 | 0.473581 | 16/16 |
+| 8 | any | 113.510868 | 1.002308 | 40.977818 | 0.361003 | 16/16 |
+| 8 | all | 137.276320 | 0.992196 | 68.955590 | 0.502312 | 16/16 |
+| 9 | any | 133.424508 | 1.020659 | 54.148895 | 0.405839 | 16/16 |
+| 9 | all | 158.087970 | 1.017945 | 84.215953 | 0.532716 | 16/16 |
+| 16 | any | 141.435978 | 1.007035 | 62.221887 | 0.439930 | 16/16 |
+| 16 | all | 189.869313 | 0.993306 | 113.135935 | 0.595862 | 16/16 |
+| 64 | any | 276.394252 | 1.024925 | 119.948563 | 0.433976 | 16/16 |
+| 64 | all | 454.739440 | 1.015428 | 354.375302 | 0.779293 | 15/16 |
+
+These are host handler timings, not frame times. The candidate/baseline median range is 0.361003–0.779293 (about 22.1–63.9% lower handler time in these fixtures); no real game multi-wait frequency or physical-device FPS/pacing share is known.
+
+### Allocation and correctness evidence
+
+- Counting-only instrumented builds made 20 checked calls. Baseline allocation counts at 0/1/2/3/4/8/9/16/64 handles were 0/1/2/3/3/4/5/5/7; candidate counts were 0/0/0/0/0/0/1/1/1. The four-handle `all` control likewise changed from three to zero. This directly confirms the intended mechanism independently of timing.
+- Baseline, A/A, and candidate each passed the same 98-check normal semantic suite with 64 blocking wakes and digest `1e49cb0cfd31e15d`. It covers zero/small/large counts, any/all, index selection, duplicates, null handles, auto/manual acquisition, timeout cleanup, and 9-entry heap cleanup.
+- The extended actual-code suite adds 9- and 64-handle blocking wakes/cleanup. Thirty-two repetitions of each baseline/candidate normal, ASan+UBSan, and TSan variant passed: **192 processes, 24,960 checks, 18,432 blocking wakes, zero sanitizer stderr**, with identical 130-check digest `40815785c9f6425d` per run. ASan+UBSan uses a high test-only guest base because ASan reserves the production 64-GiB-base shadow gap; the initial failed reservation and layout evidence are preserved. TSan uses the production base.
+- Independent verification passed 257/257 timing/raw/semantic/source checks and separately verified all stress counts, variant sums, digests, and empty logs. The broad repository regression passed **12/12 commands in 8.691055816s**, and `kernel32.cpp` compiled with production warning/flat-memory flags.
+- **Disposition:** adopted as a host-validated runtime candidate. It removes allocations and has consistent actual-handler gains without a measured large-count or semantic tradeoff. Physical Android FPS, pacing, sustained scheduling, and real workload allocation rates remain unmeasured.
+
+Performance timing does not exercise lock-contended wait latency; blocking tests are correctness evidence only. Close-versus-wait lifetime policy, mutex/thread/file-specific acquisition beyond the event cases, Android/Bionic allocator behavior, and engine call distribution remain outside this fixture. No APK or release is produced by this commit.
