@@ -995,19 +995,26 @@ M(IDirect3DDevice9, Present) {
 }
 // Clamp expensive filtering at the bridge as well as in DXVK. At 1x, anisotropic filtering is exactly linear
 // filtering; using LINEAR also avoids DXVK enabling a sampler's anisotropy feature with maxAnisotropy = 1.
-int MaxAnisotropy() {
-    static const int value = [] {
 #ifdef __ANDROID__
-        const int configured = std::clamp(SettingInt("max_anisotropy", 1), 1, 16);
+static int g_max_anisotropy = 1;
 #else
-        const int configured = std::clamp(SettingInt("max_anisotropy", 16), 1, 16);
+static int g_max_anisotropy = 16;
 #endif
-        Log("samplers: effective DXVK forwarding maximum %dx%s", configured,
-            configured == 1 ? "; MIN/MAG anisotropic -> LINEAR" : "");
-        return configured;
-    }();
-    return value;
+
+// Called by InitD3D9Bridge after settings/logging are ready and before any guest D3D9 call. Resolving here avoids
+// a thread-safe local-static guard on every SetSamplerState while preserving the existing defaults and clamp.
+void InitMaxAnisotropy() {
+#ifdef __ANDROID__
+    const int configured = std::clamp(SettingInt("max_anisotropy", 1), 1, 16);
+#else
+    const int configured = std::clamp(SettingInt("max_anisotropy", 16), 1, 16);
+#endif
+    Log("samplers: effective DXVK forwarding maximum %dx%s", configured,
+        configured == 1 ? "; MIN/MAG anisotropic -> LINEAR" : "");
+    g_max_anisotropy = configured;
 }
+
+int MaxAnisotropy() { return g_max_anisotropy; }
 
 M(IDirect3DDevice9, SetSamplerState) {
     const DWORD stage = Arg(c, 1), type = Arg(c, 2), requested = Arg(c, 3);
@@ -1358,6 +1365,7 @@ struct Registrar {
 
 // Called once guest memory exists (the vtables live there).
 void InitD3D9Bridge() {
+    InitMaxAnisotropy();
     for (const InterfaceDef& i : kInterfaces) {
         uint32_t vt = HeapAlloc(uint32_t(4 * i.count));
         for (size_t k = 0; k < i.count; ++k) {
