@@ -11,9 +11,9 @@ import subprocess
 from pathlib import Path
 
 MAIN = r'''
+#include <cstdint>
 #include "sha1_util.h"
 #include <chrono>
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
