@@ -51,3 +51,9 @@ All physical-device FPS, visual correctness, shader latency, pacing, and thermal
 - **Fixed affinity/priority or ADPF policy changes:** not eligible on this host-only evidence. Existing capability-driven behavior stays unchanged without physical-device measurements.
 - **Final bounded-notification disposition:** rejected, including the multi-object-safe form. Correctness safety did not translate into performance: single-release latency regressed materially and batch results were neutral/noisy. No variant remains a candidate.
 - **Explicit Present-thread ADPF registration:** inconclusive/device-only. Historical worst-Present samples are concentrated on a priority-0 TID, but the log has no session roster or thread-lifetime proof. The NDK API requires an inter-related, preferably long-lived thread group; no source change is justified without physical A/B evidence.
+
+## Phase 7 memory and I/O candidates
+
+- **RCF exact-hit basename deferral:** rejected after full `OpenFileSource` and direct `OpenArchiveSource` A/A/candidate cohorts. Correctness passed, but 12.96 million opens did not establish an effect beyond identical-control variability. No source change remains.
+- **Bounded small multi-wait storage:** active next candidate. It must preserve arbitrary-count heap fallback and every acquisition/timeout/duplicate-handle rule; a stack-buffer microbenchmark alone is insufficient.
+- **Broader readahead/async streaming or cache policy:** unranked without a real loading/streaming trace. Do not hide I/O latency with changed timing, quality, or content behavior.

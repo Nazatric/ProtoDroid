@@ -92,3 +92,7 @@ Actual `PresentStatsTracker` measurement retained 550,872 per-call samples with 
 ### Phase 6 historical attribution limits
 
 The supplied `proto-native.log` has no CreateEvent/WaitForSingleObject/WaitForMultipleObjects/ReleaseSemaphore records, so its Android run cannot rank the synthetic host wait scenarios as real device hotspots. Its 61 detailed Present-outlier lines contain 241 retained entries after excluding the diagnostics logger: 240 on TID 5192 and one on 5147. TID 5192 requested priority 0, while the final ADPF line reports 3,130 cumulative reports with zero report/target errors and no TID roster. This motivates future roster/lifetime instrumentation, not a claim that ADPF is broken or that explicit registration improves FPS. The log and its summary are historical diagnostic-tour evidence, not released-0.15 or candidate-0.16 A/B data.
+
+## Phase 7 RCF open profile
+
+Actual `OpenFileSource` + `path.cpp` warm exact opens using the 18,044-entry generated RCF had a 12.008622 µs baseline median in the new 36-process/arm cohort; direct archive-only opens were 2.9875725 µs. The basename-deferral candidate was not separable from A/A in paired rounds, so this is a negative optimization result rather than a new bottleneck claim. Cold full-path indexing/open was about 20 ms in this generated fixture and was unchanged by the candidate. These host figures are not Android startup or streaming timings and have no measured per-frame frequency.
