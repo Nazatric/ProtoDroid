@@ -58,8 +58,9 @@ All physical-device FPS, visual correctness, shader latency, pacing, and thermal
 
 ## Phase 9 shader/loading/cache candidates
 
-- **In test:** caller-owned unchanged-backup tracking for the exact 30-second shared-cache mirror. It must copy on any source/target metadata change or unstable copy and restore external wipes. No result yet.
-- **Rejected without experiment:** removing Android per-entry flush, weakening malformed-cache handling, removing Mali pipeline-call serialization, or replacing DXVK. Existing background writer/warmup and optional pipeline timing remain.
+- **Adopted:** caller-owned unchanged-backup tracking for the exact 30-second shared-cache mirror, but only after complete source/target byte comparison. Metadata-only skipping was rejected after reproduced same-size/timestamp collisions. Native ARM64 unchanged-backup candidate/baseline medians are 0.075922–0.111711 across 4 KiB–4 MiB with 12/12 wins; changed-path timing is inconclusive. This is redundant asynchronous I/O elimination, not phone FPS or shared-FUSE evidence.
+- **Rejected on absolute materiality after correct implementation:** direct DXVK SHA-1 padding. Native ARM64 saves only 28–218 ns/hash despite 12/12 paired wins; independent verification passes 873/873. No real hash-count trace supports meaningful shader/loading impact, so the production patch is removed and raw evidence retained.
+- **Rejected without a production experiment:** removing Android per-entry flush, weakening malformed-cache handling, removing Mali pipeline-call serialization, speculative reserve/parser/worker rewrites, or replacing DXVK. Existing background writer/warmup and optional pipeline timing remain.
 
 ## Phase 8 D3D9/DXVK overhead candidates
 
