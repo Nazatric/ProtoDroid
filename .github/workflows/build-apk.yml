@@ -505,6 +505,98 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      - name: Compile and run native ARM64 state-cache tests
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/protodroid-dxvk-state-cache-arm64
+          for patch in "$PWD"/android/patches/dxvk-*.patch; do
+            git -C /tmp/protodroid-dxvk-state-cache-arm64 apply --check "$patch"
+            git -C /tmp/protodroid-dxvk-state-cache-arm64 apply "$patch"
+          done
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-state-cache-arm64/src/dxvk"
+          g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test_arm64
+          /tmp/state_cache_test_arm64 > /tmp/state-cache-arm64-test.stdout 2> /tmp/state-cache-arm64-test.stderr || {
+            cat /tmp/state-cache-arm64-test.stdout /tmp/state-cache-arm64-test.stderr
+            exit 1
+          }
+          cat /tmp/state-cache-arm64-test.stdout
+          test ! -s /tmp/state-cache-arm64-test.stderr
+
+      - name: Measure exact state-cache backup candidate on native ARM64
+        run: |
+          set -euo pipefail
+          # Native Linux ARM64 file-I/O microfixtures, not Android shared-FUSE latency or physical-device FPS.
+          git fetch -q --depth=1 origin 9a65eb9b59dc1e755d434ae9204affef547ef5d4
+          git show 9a65eb9b59dc1e755d434ae9204affef547ef5d4:src/native/state_cache.cpp > /tmp/state-cache-before.cpp
+          git show 9a65eb9b59dc1e755d434ae9204affef547ef5d4:src/native/state_cache.h > /tmp/state-cache-before.h
+          python3 tools/measure_state_cache_backup.py \
+            --before-cpp /tmp/state-cache-before.cpp --before-header /tmp/state-cache-before.h \
+            --after-cpp src/native/state_cache.cpp --after-header src/native/state_cache.h \
+            --output /tmp/state-cache-backup-arm64-unchanged --rounds 12 --order-offset 0 --mode unchanged
+          python3 tools/measure_state_cache_backup.py \
+            --before-cpp /tmp/state-cache-before.cpp --before-header /tmp/state-cache-before.h \
+            --after-cpp src/native/state_cache.cpp --after-header src/native/state_cache.h \
+            --output /tmp/state-cache-backup-arm64-changed --rounds 12 --order-offset 3 --mode changed
+
+      - name: Publish ARM64 state-cache evidence summary
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/state-cache-arm64-check-summary.json
+          import json
+          from pathlib import Path
+          summary = {
+              'schema': 1,
+              'kind': 'native-linux-arm64-file-io-microfixtures-not-android-device-fps',
+              'physical_android_device': False,
+              'correctness_stdout': Path('/tmp/state-cache-arm64-test.stdout').read_text(),
+              'correctness_stderr': Path('/tmp/state-cache-arm64-test.stderr').read_text(),
+          }
+          for mode in ('unchanged', 'changed'):
+              base = Path(f'/tmp/state-cache-backup-arm64-{mode}')
+              result = json.loads((base / 'result.json').read_text())
+              result.pop('build_commands', None)
+              result['raw_timing'] = {}
+              for path in sorted(base.glob('timing-*.jsonl')):
+                  size = path.stem.split('-')[1]
+                  rows = [json.loads(line) for line in path.read_text().splitlines()]
+                  result['raw_timing'][size] = [
+                      {'round': row['round'], 'variant': row['variant'], 'elapsed_ns': row['elapsed_ns']}
+                      for row in rows
+                  ]
+              summary[mode] = result
+          rendered = '```json\n' + json.dumps(summary, indent=2) + '\n```'
+          if len(rendered) > 60000:
+              raise SystemExit(f'Checks summary too large: {len(rendered)}')
+          print(rendered)
+          PY
+          SUMMARY=$(cat /tmp/state-cache-arm64-check-summary.json)
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name='arm64-state-cache-evidence' \
+            -f head_sha="${GITHUB_SHA}" \
+            -f status='completed' \
+            -f conclusion='neutral' \
+            -f output[title]='Native ARM64 state-cache backup microfixtures' \
+            -f output[summary]="${SUMMARY}" > /tmp/state-cache-check-run.json
+          python3 -c "import json; assert json.load(open('/tmp/state-cache-check-run.json'))['id'] > 0"
+
+      - name: Upload ARM64 state-cache measurements
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-state-cache-backup
+          path: |
+            /tmp/state-cache-backup-arm64-unchanged
+            /tmp/state-cache-backup-arm64-changed
+            /tmp/state-cache-arm64-test.stdout
+            /tmp/state-cache-arm64-test.stderr
+            /tmp/state-cache-arm64-check-summary.json
+            /tmp/state-cache-check-run.json
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Measure ARM64 BC1 decoder against the corrected baseline
         run: |
           set -euo pipefail

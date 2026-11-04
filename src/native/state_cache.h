@@ -1,6 +1,8 @@
 #ifndef PROTODROID_STATE_CACHE_H
 #define PROTODROID_STATE_CACHE_H
 
+#include <array>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -37,9 +39,22 @@ StateCacheMigration PlanStateCacheMigration(const std::string& directory,
                                             const std::vector<std::string>& shared_directories);
 StateCacheMigrationResult MigrateStateCache(const StateCacheMigration& migration);
 
+// Opaque file-version identities recorded after a stable successful backup. Callers must serialize access to a
+// tracker. A tracker is valid only for its recorded source/target paths; untracked calls retain the original copy.
+using StateCacheFileIdentity = std::array<uint64_t, 7>;
+struct StateCacheBackupState {
+    std::string source_path;
+    std::string target_path;
+    StateCacheFileIdentity source_identity{};
+    StateCacheFileIdentity target_identity{};
+    bool valid = false;
+};
+
 // Atomically replace a shared backup from a populated live cache. Missing, empty, or invalid sources return false
-// without touching the target. The live writer remains in app-private storage.
-bool BackupStateCache(const std::string& source, const std::string& target);
+// without touching the target. The live writer remains in app-private storage. A supplied tracker skips only when
+// both identities and all bytes match the last stable successful copy; external wipes and all changes still copy.
+bool BackupStateCache(const std::string& source, const std::string& target,
+                      StateCacheBackupState* state = nullptr);
 
 }  // namespace native
 

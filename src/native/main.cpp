@@ -62,6 +62,7 @@ std::string g_mirror_dir;
 std::string g_mirror_log_path;
 std::string g_mirror_prev_path;
 std::mutex g_mirror_copy_mutex;
+native::StateCacheBackupState g_mirror_cache_backup;
 std::thread g_mirror_thread;
 std::atomic<bool> g_mirror_copy_active{false};
 }  // namespace
@@ -297,7 +298,7 @@ void MirrorCopyDXVKLogs() {
     std::string mirror_cache = g_mirror_dir + "/prototypeenginef.dll.dxvk-cache";
     // Replace the ordinary backup atomically. A process kill or failed write must not truncate the last usable cache,
     // and the live DXVK writer remains in app-private storage instead of doing shader-cache I/O through shared FUSE.
-    native::BackupStateCache(base_cache, mirror_cache);
+    native::BackupStateCache(base_cache, mirror_cache, &g_mirror_cache_backup);
 }
 
 void MirrorCopyDXVKLogsAsync() {
