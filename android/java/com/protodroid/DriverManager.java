@@ -84,7 +84,7 @@ final class DriverManager {
             return;
         }
         preferences.edit().putString(ACTIVE_ID, id).apply();
-        clearFailureMarker();
+        clearFailureMarkers();
         setStatus("Custom driver selected", entry.installed.name
                 + " will be tried in ProtoDroid's isolated probe on the next Play. "
                 + "If it cannot initialize safely, the system driver is used and the reason is logged.");
@@ -238,7 +238,7 @@ final class DriverManager {
 
     private void installSucceeded(DriverRepository.Entry installed) {
         preferences.edit().putBoolean(LEGACY_IGNORED, true).apply();
-        clearFailureMarker();
+        clearFailureMarkers();
         String name = installed.installed.name;
         setStatus("Driver installed", name + " is ready in your library. Auto remains unchanged; "
                 + "choose Custom, then Select on this card when you want to use it. No system driver was modified.");
@@ -280,7 +280,7 @@ final class DriverManager {
                 preferences.edit().remove(ACTIVE_ID).apply();
                 if (selected != null && selected.id.equals(id)) new GameSettings(activity).setCustomDriverSelected(false);
             }
-            clearFailureMarker();
+            clearFailureMarkers();
             setStatus("Driver removed", "Only ProtoDroid's private copy was removed. Auto is available, and your original ZIP/.so, saves, and system driver are unchanged.");
             return true;
         } catch (IOException e) {
@@ -296,8 +296,10 @@ final class DriverManager {
         notifyObserver();
     }
 
-    private void clearFailureMarker() {
+    /** Explicit driver actions may retry a guarded path; ordinary Auto launches must retain its crash-loop guard. */
+    void clearFailureMarkers() {
         new File(files(), "turnip_failed").delete();
+        new File(files(), "vulkan_wrapper_failed").delete();
     }
 
     private String displayName(Uri uri) {

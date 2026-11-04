@@ -100,4 +100,18 @@ assert "DriverRepository.shouldMigrateLegacy" in migration, (
 )
 assert migration.index("DriverRepository.shouldMigrateLegacy") < migration.index("if (selected() != null) return;")
 
-print("Drivers navigation, launch-migration, guided-layout, touch-target, and touch-detach checks passed")
+# A same-build failure marker prevents an automatic crash loop, but an explicit driver choice is the user's recovery
+# action. It must clear both the custom/Turnip and compatibility-wrapper guards; previously the wrapper marker had no
+# launcher recovery path and survived every subsequent Auto launch on that build.
+mode_action = driver.split("if (action >= ACTION_MODE && action < ACTION_MODE + 4)", 1)[1].split(
+    "if (action >= ACTION_TAB && action < ACTION_TAB + 2)", 1
+)[0]
+assert "manager.clearFailureMarkers();" in mode_action, "Explicit driver selection does not retry guarded startup paths"
+assert mode_action.index("manager.clearFailureMarkers();") < mode_action.index("settings.setDriverMode(mode);")
+assert "void clearFailureMarkers()" in manager, "DriverManager has no explicit recovery-marker cleanup"
+cleanup = manager.split("void clearFailureMarkers()", 1)[1].split("\n    }", 1)[0]
+for marker in ("turnip_failed", "vulkan_wrapper_failed"):
+    assert f'new File(files(), "{marker}").delete();' in cleanup, f"Explicit recovery leaves {marker} behind"
+assert "private void clearFailureMarkers()" not in manager, "DriverView cannot invoke private recovery cleanup"
+
+print("Drivers navigation, explicit recovery, launch-migration, guided-layout, and touch checks passed")
