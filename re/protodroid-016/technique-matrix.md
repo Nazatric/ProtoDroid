@@ -54,6 +54,8 @@ All physical-device FPS, visual correctness, shader latency, pacing, and thermal
 
 **Phase 7 is complete after 1h26m26.333805s.** Multi-wait inline/sized-vector storage is adopted at `2e9e31b`; RCF basename deferral is rejected and no speculative index/cache rewrite remains. Fresh raw evidence and exact-code CI pass; older unavailable raw stores are explicitly historical. No phone FPS or pacing claim.
 
+**Phase 8 is complete after 2h25m20.116479s.** Anisotropy is adopted with exact CI and native ARM64 microfixture confirmation; neutral HostTable relaxation is reverted and screenshot eager initialization remains rejected. No device FPS or pacing claim.
+
 ## Phase 8 D3D9/DXVK overhead candidates
 
 - **Rejected after native ARM64 measurement; final source restores acquire at `9a65eb9`:** the correct `ca25c46` HostTable relaxation is neutral across two actual ARM64 cohorts at combined 0.999926 (25/48) with A/A 1.000417. The timed candidate loop still executes its relaxed chunk load, so this is a materiality rejection, not an optimized-out benchmark.
