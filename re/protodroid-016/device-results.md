@@ -1,6 +1,6 @@
 # Physical-device results
 
-No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phase 5 is complete and Phase 6 scheduling research is active with host models, targeted assembly, and CI-runner evidence only; none of it fills the physical table or establishes FPS/frame-pacing improvement.
+No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phase 6 is complete with host models, targeted assembly, sanitizer/stress, and CI-runner evidence only; none of it fills the physical table or establishes FPS/frame-pacing improvement.
 
 | Device/GPU/driver | Source/APK | Settings/scene/cache | Runs | Result | Limitations |
 | --- | --- | --- | --- | --- | --- |
