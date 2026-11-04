@@ -57,7 +57,7 @@ A **551-check** parser pairs all 61 memory records with the exact frame windows.
 
 ### H8 — exact logged Mali memory-type fixture
 
-`tools/test_dxvk_unified_memory.py` now exercises the actual patched selection function with the historical Mali-G720 MC7 49.1.0 types `0x7/0xb/0x11/0x21`, in addition to three Adreno reports and real system-memory preference. Patched UBSan execution passes host-coherent `0x1`, host-visible `0x3`, all-device-local `0xf`, and cached-coherent fallback. The pristine-upstream expected-failure control detects **8 assertions**, including the Mali host-visible mask. **Disposition: adopt compatibility regression coverage only; no production allocator change or device-performance claim.**
+`tools/test_dxvk_unified_memory.py` now exercises the actual patched selection function with the historical Mali-G720 MC7 49.1.0 types `0x7/0xb/0x11/0x21`, in addition to three Adreno reports and real system-memory preference. Patched UBSan execution passes host-coherent `0x1`, host-visible `0x3`, all-device-local `0xf`, and cached-coherent fallback. It then passes **160,000 four-type configurations / 2,560,000 exact masks**; independent Python verification matches digest `b2c31cdd46d09505` and exercises cached-coherent fallback 104,976 times. The pristine-upstream expected-failure control detects **8 assertions**, including the Mali host-visible mask, before the exhaustive block. **Disposition: adopt compatibility regression coverage only; no production allocator change or device-performance claim.**
 
 ## Evidence plan
 

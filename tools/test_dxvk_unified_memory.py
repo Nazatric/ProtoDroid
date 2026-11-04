@@ -63,7 +63,8 @@ struct Allocator {
 int failures = 0;
 void Check(bool condition, const char* message) {
     if (!condition) {
-        std::fprintf(stderr, "FAIL: %s\n", message);
+        if (failures < 32)
+            std::fprintf(stderr, "FAIL: %s\n", message);
         ++failures;
     }
 }
@@ -73,6 +74,21 @@ void SetTypes(Allocator& allocator, std::initializer_list<VkMemoryPropertyFlags>
     for (VkMemoryPropertyFlags value : flags)
         allocator.m_memTypes[allocator.m_memTypeCount++].properties.propertyFlags = value;
     allocator.determineMemoryTypesWithPropertyFlags();
+}
+
+uint32_t ModelMask(const std::array<VkMemoryPropertyFlags, 4>& types, uint32_t request) {
+    uint32_t system = 0;
+    uint32_t device = 0;
+    for (uint32_t index = 0; index < types.size(); ++index) {
+        const uint32_t properties = types[index];
+        if ((properties & request) != request)
+            continue;
+        if (properties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+            device |= 1u << index;
+        else
+            system |= 1u << index;
+    }
+    return system ? system : device;
 }
 
 int main() {
@@ -114,6 +130,42 @@ int main() {
     SetTypes(withSystemMemory, {0x1, 0x1, 0x1, 0xb, 0x7, 0x7, 0xf, 0x21, 0x11, 0x6});
     Check(withSystemMemory.m_memTypesByPropertyFlags[hostCoherent] == (1u << 9),
           "system memory was not preferred for a non-device-local request");
+
+    // Keep the pristine-upstream negative control concise; named fixtures must pass before the exhaustive sweep.
+    if (failures) return 1;
+
+    // Exhaust all four-type combinations over the 16 lookup-table bits plus lazy/protected real-heap variants.
+    // The independent model checks system-memory preference, device-local fallback, and cached/coherent fallback.
+    constexpr std::array<VkMemoryPropertyFlags, 20> propertyValues = {
+        0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9,
+        0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0x10, 0x11, 0x20, 0x21,
+    };
+    uint64_t configurations = 0;
+    uint64_t comparisons = 0;
+    uint64_t maskDigest = 14695981039346656037ull;
+    for (uint32_t a : propertyValues) for (uint32_t b : propertyValues)
+    for (uint32_t c : propertyValues) for (uint32_t d : propertyValues) {
+        const std::array<VkMemoryPropertyFlags, 4> types = {a, b, c, d};
+        Allocator allocator;
+        SetTypes(allocator, {a, b, c, d});
+        ++configurations;
+        for (uint32_t request = 0; request < 16; ++request) {
+            uint32_t expected = ModelMask(types, request);
+            if (request == hostCachedCoherent && !expected)
+                expected = ModelMask(types, hostCoherent);
+            const uint32_t selected = allocator.m_memTypesByPropertyFlags[request];
+            Check(selected == expected, "exhaustive memory-type mask mismatch");
+            for (uint32_t byte = 0; byte < 4; ++byte) {
+                maskDigest ^= (selected >> (8 * byte)) & 0xff;
+                maskDigest *= 1099511628211ull;
+            }
+            ++comparisons;
+        }
+    }
+    std::printf("validated %llu four-type configurations and %llu exact mask lookups\n",
+                static_cast<unsigned long long>(configurations),
+                static_cast<unsigned long long>(comparisons));
+    std::printf("mask_fnv1a64=%016llx\n", static_cast<unsigned long long>(maskDigest));
 
     if (failures) return 1;
     std::puts("DXVK unified-memory selection tests passed (actual patched function)");
