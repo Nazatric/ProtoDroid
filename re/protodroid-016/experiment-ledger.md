@@ -363,4 +363,4 @@ Every experiment records hypothesis, exact baseline/candidate revisions, changed
 
 ### DXVK audit
 
-Existing state-cache and Mali compiler-serialization patches remain unchanged. No draw-state cache, compile-lock removal, dependency replacement, or frame/render reduction is justified by the available evidence. Cross-target assembly uses external `ziglang 0.13.0`/Clang 18.1.6; it is not the production NDK or a device profiler. Exact NDK/ARM64 compilation is covered by CI.
+Existing state-cache and Mali compiler-serialization patches remain unchanged. Pinned source confirms sampler/render-state dedup after device-lock/StateBlock handling, protected-only recursive spinlocks, and bounded dedicated submission threads. Actual creation flags, redundant-call rates, and contention are unknown. No draw-state cache, compile-lock removal, dependency replacement, queue rewrite, or frame/render reduction is justified by the available evidence. Cross-target assembly uses external `ziglang 0.13.0`/Clang 18.1.6; it is not the production NDK or a device profiler. Exact NDK/ARM64 compilation is covered by CI.

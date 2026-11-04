@@ -62,3 +62,7 @@ Independent recomputation of the current candidate evidence passes **52/52 check
 ## DXVK patch audit and non-actions
 
 The existing Android patches already cover incremental state-cache durability/path handling and necessary Mali pipeline-compiler serialization. The patch named `android-performance` is state-cache path/lifetime work, not evidence of a remaining draw-submission optimization. Removing the Mali compile mutex would reintroduce the documented driver race; adding speculative bridge state dedup would risk Reset/StateBlock correctness. No DXVK dependency or patch is changed in Phase 8 at this checkpoint.
+
+### Pinned DXVK source confirmation
+
+The external v2.5.3 checkout is exactly `c707d9026f33b6ab89639f154b6ac5f6326fa037`. `SetStateSamplerState` acquires the device lock, services StateBlock recording, then returns early for an unchanged value; `SetRenderState` likewise has a changed-value check. `D3D9Multithread` uses a recursive spinlock only when the device was created protected, but the game's actual creation flags and redundant-call rates are unknown. The submission queue already has dedicated submit/finish threads, condition variables, and a bounded command-buffer queue. These facts reject a speculative duplicate bridge cache or queue rewrite, not a future measured optimization. Raw audit: `dxvk-source-audit.json`.
