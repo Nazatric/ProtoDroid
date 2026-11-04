@@ -233,6 +233,12 @@ jobs:
           g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/state_cache_test
+          python3 tools/inspect_dxvk_state_cache.py prototypeenginef.dll.dxvk-cache \
+            --output /tmp/protodroid-real-cache-inventory.json \
+            > /tmp/protodroid-real-cache-inventory.stdout \
+            2> /tmp/protodroid-real-cache-inventory.stderr
+          cat /tmp/protodroid-real-cache-inventory.stdout
+          test ! -s /tmp/protodroid-real-cache-inventory.stderr
 
       - name: Compile and run GameDB video-setting tests
         run: |
@@ -521,6 +527,21 @@ jobs:
           }
           cat /tmp/state-cache-arm64-test.stdout
           test ! -s /tmp/state-cache-arm64-test.stderr
+          python3 tools/inspect_dxvk_state_cache.py prototypeenginef.dll.dxvk-cache \
+            --output /tmp/state-cache-arm64-real-inventory.json \
+            > /tmp/state-cache-arm64-real-inventory.stdout \
+            2> /tmp/state-cache-arm64-real-inventory.stderr
+          cat /tmp/state-cache-arm64-real-inventory.stdout
+          test ! -s /tmp/state-cache-arm64-real-inventory.stderr
+          python3 - <<'PY'
+          import json
+          r = json.load(open('/tmp/state-cache-arm64-real-inventory.json'))
+          assert r['all_entries_valid'] and not r['errors']
+          assert r['file_sha256'] == '759f38aaa80f86e4bf283e52a51f4ce3316e6609a57b4cac841c5592518930b1'
+          assert r['file_bytes'] == 179336 and r['version'] == 18
+          assert r['summary']['entry_count'] == 1014
+          assert r['summary']['valid_entries'] == 1014 and r['summary']['invalid_entries'] == 0
+          PY
 
       - name: Measure exact state-cache backup candidate on native ARM64
         run: |
@@ -537,6 +558,16 @@ jobs:
             --before-cpp /tmp/state-cache-before.cpp --before-header /tmp/state-cache-before.h \
             --after-cpp src/native/state_cache.cpp --after-header src/native/state_cache.h \
             --output /tmp/state-cache-backup-arm64-changed --rounds 12 --order-offset 3 --mode changed
+          python3 tools/measure_state_cache_backup.py \
+            --before-cpp /tmp/state-cache-before.cpp --before-header /tmp/state-cache-before.h \
+            --after-cpp src/native/state_cache.cpp --after-header src/native/state_cache.h \
+            --output /tmp/state-cache-backup-arm64-real-unchanged --rounds 12 --order-offset 0 --mode unchanged \
+            --fixture prototypeenginef.dll.dxvk-cache
+          python3 tools/measure_state_cache_backup.py \
+            --before-cpp /tmp/state-cache-before.cpp --before-header /tmp/state-cache-before.h \
+            --after-cpp src/native/state_cache.cpp --after-header src/native/state_cache.h \
+            --output /tmp/state-cache-backup-arm64-real-changed --rounds 12 --order-offset 3 --mode changed \
+            --fixture prototypeenginef.dll.dxvk-cache
 
       - name: Publish ARM64 state-cache evidence summary
         if: success()
@@ -554,6 +585,9 @@ jobs:
               'correctness_stdout': Path('/tmp/state-cache-arm64-test.stdout').read_text(),
               'correctness_stderr': Path('/tmp/state-cache-arm64-test.stderr').read_text(),
           }
+          inventory = json.loads(Path('/tmp/state-cache-arm64-real-inventory.json').read_text())
+          inventory.pop('entries', None)  # Full per-entry hashes are uploaded; keep the Check below 60,000 characters.
+          summary['real_cache_inventory'] = inventory
           for mode in ('unchanged', 'changed'):
               base = Path(f'/tmp/state-cache-backup-arm64-{mode}')
               result = json.loads((base / 'result.json').read_text())
@@ -567,7 +601,21 @@ jobs:
                       for row in rows
                   ]
               summary[mode] = result
-          rendered = '```json\n' + json.dumps(summary, indent=2) + '\n```'
+          for mode in ('unchanged', 'changed'):
+              base = Path(f'/tmp/state-cache-backup-arm64-real-{mode}')
+              result = json.loads((base / 'result.json').read_text())
+              result.pop('build_commands', None)
+              result['raw_timing'] = {}
+              for path in sorted(base.glob('timing-*.jsonl')):
+                  size = path.stem.split('-')[1]
+                  rows = [json.loads(line) for line in path.read_text().splitlines()]
+                  result['raw_timing'][size] = [
+                      {'round': row['round'], 'variant': row['variant'], 'elapsed_ns': row['elapsed_ns']}
+                      for row in rows
+                  ]
+              summary[f'real_cache_{mode}'] = result
+          # Preserve every generic and real-cache raw row within the Check limit; whitespace is not evidence.
+          rendered = '```json\n' + json.dumps(summary, separators=(',', ':')) + '\n```'
           if len(rendered) > 60000:
               raise SystemExit(f'Checks summary too large: {len(rendered)}')
           print(rendered)
@@ -590,6 +638,11 @@ jobs:
           path: |
             /tmp/state-cache-backup-arm64-unchanged
             /tmp/state-cache-backup-arm64-changed
+            /tmp/state-cache-backup-arm64-real-unchanged
+            /tmp/state-cache-backup-arm64-real-changed
+            /tmp/state-cache-arm64-real-inventory.json
+            /tmp/state-cache-arm64-real-inventory.stdout
+            /tmp/state-cache-arm64-real-inventory.stderr
             /tmp/state-cache-arm64-test.stdout
             /tmp/state-cache-arm64-test.stderr
             /tmp/state-cache-arm64-check-summary.json

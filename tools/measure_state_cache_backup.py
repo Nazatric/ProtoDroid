@@ -50,7 +50,7 @@ uint64_t Digest(const fs::path& path) {
     return hash;
 }
 int main(int argc, char** argv) {
-    if (argc != 4) return 2;
+    if (argc != 4 && argc != 5) return 2;
     const bool changed = std::strcmp(argv[3], "changed") == 0;
     if (!changed && std::strcmp(argv[3], "unchanged") != 0) return 2;
     const size_t bytes = std::strtoull(argv[1], nullptr, 0);
@@ -61,7 +61,12 @@ int main(int argc, char** argv) {
     fs::path root = pattern, source = root / "private" / native::kStateCacheFilename;
     fs::path target = root / "shared" / native::kStateCacheFilename;
     fs::create_directories(source.parent_path()); fs::create_directories(target.parent_path());
-    {
+    if (argc == 5) {
+        // The optional fixture is always copied to private temporary storage; the supplied original stays read-only.
+        std::error_code ec;
+        fs::copy_file(argv[4], source, fs::copy_options::overwrite_existing, ec);
+        if (ec || fs::file_size(source, ec) != bytes || ec) return 4;
+    } else {
         std::ofstream file(source, std::ios::binary | std::ios::trunc);
         unsigned char header[12] = {0}; std::memcpy(header, "DXVK", 4); header[4] = 18;
         file.write(reinterpret_cast<const char*>(header), sizeof(header));
@@ -135,9 +140,13 @@ def main():
     parser.add_argument('--rounds', type=int, default=12)
     parser.add_argument('--order-offset', type=int, default=0)
     parser.add_argument('--mode', choices=('unchanged', 'changed'), default='unchanged')
+    parser.add_argument('--fixture', type=Path,
+                        help='optional real cache copied read-only into each temporary source; replaces synthetic sizes')
     args = parser.parse_args()
     if args.rounds < 1:
         parser.error('--rounds must be positive')
+    if args.fixture and (not args.fixture.is_file() or args.fixture.stat().st_size < 1024):
+        parser.error('--fixture must be a readable cache file of at least 1024 bytes')
     args.output.mkdir(parents=True, exist_ok=False)
 
     def copy_source(label, cpp, header):
@@ -150,6 +159,14 @@ def main():
     before = copy_source('before', args.before_cpp, args.before_header)
     after = copy_source('after', args.after_cpp, args.after_header)
     shutil.copy2(__file__, args.output / 'measure_state_cache_backup.py')
+    fixture = None
+    fixture_sha256 = None
+    if args.fixture:
+        fixture_sha256 = hashlib.sha256(args.fixture.read_bytes()).hexdigest()
+        fixture = args.output / 'fixture.dxvk-cache'
+        shutil.copy2(args.fixture, fixture)
+        if hashlib.sha256(fixture.read_bytes()).hexdigest() != fixture_sha256:
+            raise RuntimeError('fixture copy changed bytes')
     source = args.output / 'main.cpp'
     source.write_text(MAIN)
     variants = {}
@@ -169,7 +186,8 @@ def main():
             raise RuntimeError(result.stderr)
         variants[name] = binary
 
-    cases = [(4096, 101), (65536, 51), (1048576, 21), (4194304, 9)]
+    cases = ([(fixture.stat().st_size, 51)] if fixture else
+             [(4096, 101), (65536, 51), (1048576, 21), (4194304, 9)])
     orders = list(itertools.permutations(('baseline', 'a-a', 'candidate')))
     offset = args.order_offset % len(orders)
     orders = orders[offset:] + orders[:offset]
@@ -180,6 +198,8 @@ def main():
             for round_index in range(args.rounds):
                 for variant in orders[round_index % len(orders)]:
                     command = [str(variants[variant]), str(size), str(iterations), args.mode]
+                    if fixture:
+                        command.append(str(fixture))
                     process = run(command)
                     row = {'round': round_index, 'variant': variant, 'returncode': process.returncode,
                            'stdout': process.stdout.strip(), 'stderr': process.stderr}
@@ -203,6 +223,8 @@ def main():
         by = {(row['round'], row['variant']): row['elapsed_ns'] for row in rows}
         summary = {'bytes': size, 'iterations': iterations, 'mode': args.mode,
                    'processes': len(rows), 'variants': {}}
+        if fixture:
+            summary['fixture_sha256'] = fixture_sha256
         for variant in ('baseline', 'a-a', 'candidate'):
             values = [by[r, variant] for r in range(args.rounds)]
             summary['variants'][variant] = {
@@ -232,6 +254,8 @@ def main():
         'source_sha256': {name: hashlib.sha256(path.read_bytes()).hexdigest()
                           for name, path in source_paths.items()},
         'benchmark_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        'fixture': ({'source_path': str(args.fixture), 'copied_path': str(fixture),
+                     'bytes': fixture.stat().st_size, 'sha256': fixture_sha256} if fixture else None),
         'binary_sha256': {name: hashlib.sha256(path.read_bytes()).hexdigest()
                           for name, path in variants.items()},
         'build_commands': build_commands,

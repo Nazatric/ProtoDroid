@@ -225,6 +225,56 @@ void TestAtomicBackupPreservesLastGoodCopy() {
               "successful backup left a temporary file behind");
 }
 
+void TestReadOnlyFailurePreservesCache() {
+    if (geteuid() == 0) {
+        std::puts("state-cache read-only test skipped for root");
+        return;
+    }
+
+    TempDirectory temp;
+    fs::path source = temp.path / "private" / native::kStateCacheFilename;
+    fs::path target = temp.path / "shared" / native::kStateCacheFilename;
+    fs::create_directories(target.parent_path());
+    WriteCache(source, 18, "initial");
+    native::StateCacheBackupState state;
+    Check(native::BackupStateCache(source.string(), target.string(), &state) && state.valid,
+          "initial read-only-fixture backup failed");
+    WriteCache(source, 18, "updated");
+    const std::string previous = ReadFile(target);
+    Check(chmod(target.parent_path().c_str(), 0500) == 0, "could not make backup directory read-only");
+    const bool backup_ok = native::BackupStateCache(source.string(), target.string(), &state);
+    Check(chmod(target.parent_path().c_str(), 0700) == 0, "could not restore backup directory permissions");
+    Check(!backup_ok && !state.valid, "read-only backup unexpectedly succeeded or retained its fast path");
+    Check(ReadFile(target) == previous, "read-only backup damaged the last good target");
+    Check(native::BackupStateCache(source.string(), target.string(), &state) && state.valid,
+          "backup did not recover after permissions were restored");
+    Check(ReadFile(target) == ReadFile(source), "read-only backup retry did not copy exact source bytes");
+
+    fs::path base = temp.path / "migration-base";
+    fs::path shared = temp.path / "migration-source";
+    fs::path migration_target = base / native::kStateCacheFilename;
+    fs::path migration_source = shared / native::kStateCacheFilename;
+    WriteCache(migration_target, 18, "");
+    WriteCache(migration_source, 18, "shared-restore");
+    const std::string shared_bytes = ReadFile(migration_source);
+    native::StateCacheMigration plan = native::PlanStateCacheMigration(base.string(), {shared.string()});
+    Check(plan.source == migration_source.string() && plan.copy, "read-only migration fixture was not selected");
+    Check(chmod(base.c_str(), 0500) == 0, "could not make migration directory read-only");
+    const native::StateCacheMigrationResult migration_result = native::MigrateStateCache(plan);
+    Check(chmod(base.c_str(), 0700) == 0, "could not restore migration directory permissions");
+    Check(migration_result == native::StateCacheMigrationResult::Failed,
+          "read-only migration did not report failure");
+    Check(native::InspectStateCache(migration_target.string()) == native::StateCacheStatus::Empty,
+          "read-only migration replaced the empty target");
+    Check(ReadFile(migration_source) == shared_bytes, "read-only migration consumed or changed its shared source");
+    Check(native::MigrateStateCache(plan) == native::StateCacheMigrationResult::Migrated,
+          "migration did not recover after permissions were restored");
+    Check(ReadFile(migration_target) == shared_bytes, "migration retry did not copy exact shared bytes");
+    for (const fs::directory_entry& entry : fs::directory_iterator(base))
+        Check(entry.path().filename().string().find(".migrate.") == std::string::npos,
+              "read-only migration left a temporary file behind");
+}
+
 ino_t Inode(const fs::path& path) {
     struct stat st;
     Check(stat(path.c_str(), &st) == 0, "could not stat backup inode");
@@ -371,8 +421,9 @@ int main() {
     TestLegacyMigration();
     TestSharedRestoreAndTargetPreservation();
     TestAtomicBackupPreservesLastGoodCopy();
+    TestReadOnlyFailurePreservesCache();
     TestTrackedBackupSkipsOnlyUnchangedFiles();
     TestEmptyAndInvalidCandidatesIgnored();
-    std::puts("state-cache tests passed (resolution, migration, atomic/tracked backup, entry layout, flush, drain)");
+    std::puts("state-cache tests passed (resolution, migration, read-only/atomic/tracked backup, entry layout, flush, drain)");
     return 0;
 }
