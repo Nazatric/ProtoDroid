@@ -166,3 +166,7 @@ The final 12-command focused regression passed in 9.297053558 seconds, followed 
 No physical Android device, ADB, GPU profiler, or Android/Bionic execution is available. Device FPS, p95/p99 frame times, audio continuity, shutdown, thermals, and sustained pacing remain unmeasured. The wait model excludes close-versus-wait lifetime, guest-handle/vector construction, Mutex/Thread/File waits, and real phone scheduling; historical logs are not exact-0.15/0.16 A/B data. No universal improvement or compatibility claim is made.
 
 Proceed sequentially to **Phase 7: memory, allocation, RCF/asset I/O, and streaming**. First test two measured source-led hypotheses with A/A controls: defer basename construction on exact RCF archive hits, and avoid per-call heap storage for common small `WaitForMultipleObjects` counts. Preserve cold/warm separation, mod/loose-file priority, arbitrary handle counts, timeout/all/any semantics, and exact differential correctness; reject either change if gains remain within normal variance.
+
+## Evidence continuity note
+
+At the 2026-11-04T05:40 continuation boundary, the external evidence store was not carried into the fresh environment. Phase 6 raw files and the final manifest cited in this report are historical results from the completed run, not currently available local artifacts. The exact commits and CI run remain pushed/available; this note does not convert the earlier checks into new results or claim that the old raw store can now be independently reopened.

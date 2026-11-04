@@ -83,3 +83,11 @@ Source inspection shows that exact and basename maps each retain an `ArchiveEntr
 - A fresh-process baseline audit used the unchanged resolver, the 18,044-entry / 1,118,858-byte generated RCF, direct `fork/exec/wait4`, and per-child `rusage`. Twenty-four processes all returned the expected digest. Cold median was **18,793,979.5 ns** (min 17,518,852; max 20,657,824); whole-process maxRSS median was **18,620 KiB** (min 18,596; max 18,680).
 - `/usr/bin/time` was unavailable. The first launcher run also used an invalid odd warm-open count and was rejected despite printing an RSS value; both failures are preserved. Valid runs use two warm opens to satisfy the existing integrity guard. No Python `RUSAGE_CHILDREN` high-water data is used.
 - **Disposition:** no memory rewrite. This is whole-process host RSS, not an index-only measurement, Android memory pressure, or evidence that duplication causes a device problem. The existing index remains correct and bounded by archive validation. A future dedup candidate needs duplicate-priority tests, lifetime proof, and an actual memory-pressure reason.
+
+## Continuation recovery and exact-code CI
+
+At **2026-11-04T05:40:16Z**, the continuation environment was a fresh shallow clone at `00976d9` with the later work applied as uncommitted content. The tracked/untracked files matched pushed branch `747db65f753ee01945b6c3d7e4aab51e96b8b23c` blob-for-blob; the same active branch was reattached with no file-content change. Recovery backups are under `/home/user/protodroid-recovery/`.
+
+The previous `/home/user/protodroid-016-evidence` store was absent. Consequently, pre-recreation raw benchmark files, logs, binaries, and manifests cited above are **historical summarized results, not currently available raw files**. Exact source commits and GitHub CI remain independently available. Phase 7 remains active while essential evidence is regenerated in the new store; no old artifact is represented as recovered.
+
+Exact-code CI run **41773816427** at `2e9e31bb30f1158238865800471c675f57fac5cb` is now confirmed **success**. `build-turnip`, `driver-package-tests`, `build-deps (arm64-v8a)`, `bink-tests`, `arm64-graphics-tests`, and `build-apk` succeeded; `release` correctly skipped. Fresh CI JSON and independent verification are in the new Phase 7 store.

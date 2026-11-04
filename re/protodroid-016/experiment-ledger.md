@@ -322,3 +322,10 @@ Every experiment records hypothesis, exact baseline/candidate revisions, changed
 - Baseline/candidate: unchanged baseline RCF resolver; no candidate. Source review found independent exact/basename entries and process-lifetime maps.
 - Environment/raw result: 24 direct-launch fresh processes, 18,044 entries/1,118,858-byte generated archive, valid even warm-open count and expected digest. Cold median 18.7939795 ms; whole-process maxRSS median 18,620 KiB. Raw per-child wait4 data and rejected `/usr/bin/time`/odd-count failures are preserved.
 - Correctness/decision: independent count/digest/stat recomputation passes. **No patch** because this is not index-only or Android pressure evidence, and pointer dedup requires independent duplicate-priority/lifetime handling. No memory-savings or startup claim.
+
+## CONTINUITY-2026-11-04-0540 — Branch and evidence-store recovery
+
+- Observation: a fresh clone initially reported `00976d9` plus uncommitted later content, and the external evidence directory was absent. This was an environment/state issue, not a performance experiment.
+- Recovery: every reported file matched pushed `747db65f753ee01945b6c3d7e4aab51e96b8b23c`; the existing active branch was reattached without changing content or using another branch. Backup patch/document hashes are in `/home/user/protodroid-recovery/`.
+- Evidence disposition: older external raw files/manifests are marked historical/unavailable. No result is fabricated or claimed as reopened. Exact-code Phase 7 CI `41773816427` independently confirms six successful build/test jobs and skipped release at `2e9e31b`.
+- Decision: Phase 7 stays active pending regenerated essential raw evidence and final gates. No new runtime change or performance result is associated with recovery.
