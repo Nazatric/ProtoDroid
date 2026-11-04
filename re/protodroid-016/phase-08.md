@@ -68,3 +68,7 @@ The existing Android patches already cover incremental state-cache durability/pa
 ### Pinned DXVK source confirmation
 
 The external v2.5.3 checkout is exactly `c707d9026f33b6ab89639f154b6ac5f6326fa037`. `SetStateSamplerState` acquires the device lock, services StateBlock recording, then returns early for an unchanged value; `SetRenderState` likewise has a changed-value check. `D3D9Multithread` uses a recursive spinlock only when the device was created protected, but the game's actual creation flags and redundant-call rates are unknown. The submission queue already has dedicated submit/finish threads, condition variables, and a bounded command-buffer queue. These facts reject a speculative duplicate bridge cache or queue rewrite, not a future measured optimization. Raw audit: `dxvk-source-audit.json`.
+
+### HostTable publication proof
+
+For a valid published index, the writer constructs and zero-initializes the chunk and initializes the host object before the non-null entry's release store. The reader's relaxed atomic chunk load only obtains the never-freed array pointer; the following entry acquire reads that non-null entry and synchronizes with its release, making the earlier chunk and host writes visible. A null entry from an invalid/unpublished index remains outside the valid-call contract as in baseline. `Forget` and object lifetime behavior are unchanged. Source checks and the full happens-before chain are in `memory-order-proof.json`.
