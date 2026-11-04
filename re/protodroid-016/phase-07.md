@@ -73,3 +73,11 @@ These are host handler timings, not frame times. The candidate/baseline median r
 - **Disposition:** adopted as a host-validated runtime candidate. It removes allocations and has consistent actual-handler gains without a measured large-count or semantic tradeoff. Physical Android FPS, pacing, sustained scheduling, and real workload allocation rates remain unmeasured.
 
 Performance timing does not exercise lock-contended wait latency; blocking tests are correctness evidence only. Close-versus-wait lifetime policy, mutex/thread/file-specific acquisition beyond the event cases, Android/Bionic allocator behavior, and engine call distribution remain outside this fixture. No APK or release is produced by this commit.
+
+## P7-RCF-MEMORY — cold index footprint audit: no further patch
+
+Source inspection shows that exact and basename maps each retain an `ArchiveEntry`, duplicating its archive/name strings in addition to map keys. A naive pointer/dedup rewrite is not automatically semantics-preserving: exact and basename `emplace` resolve duplicates independently, and any pointer must remain stable for the process-lifetime index.
+
+- A fresh-process baseline audit used the unchanged resolver, the 18,044-entry / 1,118,858-byte generated RCF, direct `fork/exec/wait4`, and per-child `rusage`. Twenty-four processes all returned the expected digest. Cold median was **18,793,979.5 ns** (min 17,518,852; max 20,657,824); whole-process maxRSS median was **18,620 KiB** (min 18,596; max 18,680).
+- `/usr/bin/time` was unavailable. The first launcher run also used an invalid odd warm-open count and was rejected despite printing an RSS value; both failures are preserved. Valid runs use two warm opens to satisfy the existing integrity guard. No Python `RUSAGE_CHILDREN` high-water data is used.
+- **Disposition:** no memory rewrite. This is whole-process host RSS, not an index-only measurement, Android memory pressure, or evidence that duplication causes a device problem. The existing index remains correct and bounded by archive validation. A future dedup candidate needs duplicate-priority tests, lifetime proof, and an actual memory-pressure reason.
