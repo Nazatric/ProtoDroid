@@ -375,3 +375,13 @@ Existing state-cache and Mali compiler-serialization patches remain unchanged. P
 - **Current evidence:** final x86-64 tool validation HostTable 0.997411 neutral; anisotropy 0.815559, 24/24, A/A 1.002361. Earlier short/different-main tool outputs are preserved but excluded.
 - **Current CI:** run `41787828484` passed all six active jobs but exposed no readable bytes. Run `41791343265` / check `126445347530` then supplied the initial ARM64 cohort: HostTable 0.999767 neutral and anisotropy 0.375614 (24/24). Its full run later completed successfully after the 403 cancellation response left it untouched.
 - **Disposition:** initial ARM64 evidence collected; HostTable rejected and anisotropy retained. Raw final-source confirmation passes with 144 recomputed processes; final full CI `41794182100` passed all six active jobs and skipped release. Linux ARM64 is not an Android device or phone FPS/pacing measurement.
+
+## Phase 9 — Shader compilation, loading, and cache behavior
+
+### H1: avoid only unchanged shared state-cache backups
+
+- **Hypothesis:** the exact 30-second ordinary-Play mirror currently recopies a populated cache even without source/target changes; a conservative identity tracker can eliminate only those redundant copies while preserving every changed-cache backup and external-wipe recovery.
+- **Baseline/revisions/files:** production `9a65eb9b59dc1e755d434ae9204affef547ef5d4`, research `a2a4d4843143d6bc77482344f2479b187ac59754`; `src/native/state_cache.{cpp,h}` and `src/native/main.cpp`. Patched DXVK reference `c707d9026f33b6ab89639f154b6ac5f6326fa037` plus the full ordered Android patch series is audited in a separate external copy.
+- **Device/build/settings/scene/cache:** source audit plus host exact-source filesystem fixtures; ordinary mirror period is exactly 30 seconds and normal execution is already asynchronous. No game scene, physical storage, shader compilation, or cold/warm device startup is measured. Cache remains enabled with existing DXVK v18/current-version handling and app-private authoritative file.
+- **Safety/rollback:** preserve atomic replacement, full copies on any identity change or unstable source, last-good backup on invalid/missing source, external target recovery, and original behavior for untracked callers. Revert the tracker if differentials fail or timing is not material.
+- **Disposition:** hypothesis ready for implementation; no performance or correctness result yet.

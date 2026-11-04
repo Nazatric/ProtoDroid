@@ -56,6 +56,11 @@ All physical-device FPS, visual correctness, shader latency, pacing, and thermal
 
 **Phase 8 is complete after 2h25m20.116479s.** Anisotropy is adopted with exact CI and native ARM64 microfixture confirmation; neutral HostTable relaxation is reverted and screenshot eager initialization remains rejected. No device FPS or pacing claim.
 
+## Phase 9 shader/loading/cache candidates
+
+- **In test:** caller-owned unchanged-backup tracking for the exact 30-second shared-cache mirror. It must copy on any source/target metadata change or unstable copy and restore external wipes. No result yet.
+- **Rejected without experiment:** removing Android per-entry flush, weakening malformed-cache handling, removing Mali pipeline-call serialization, or replacing DXVK. Existing background writer/warmup and optional pipeline timing remain.
+
 ## Phase 8 D3D9/DXVK overhead candidates
 
 - **Rejected after native ARM64 measurement; final source restores acquire at `9a65eb9`:** the correct `ca25c46` HostTable relaxation is neutral across two actual ARM64 cohorts at combined 0.999926 (25/48) with A/A 1.000417. The timed candidate loop still executes its relaxed chunk load, so this is a materiality rejection, not an optimized-out benchmark.

@@ -1,6 +1,6 @@
 # ProtoDroid 0.16 performance program
 
-Status: **Phase 8 complete after 2h25m20.116479s; Phase 9 shader/pipeline compilation and cache-loading research is next**. Anisotropy initialization is adopted with exact CI; neutral HostTable relaxation is reverted. No physical-device FPS/pacing improvement is claimed.
+Status: **Phase 9 shader/pipeline compilation and cache-loading research is active**. Phase 8 is complete; the first Phase 9 target is redundant unchanged state-cache backup I/O, with strict external-wipe and changed-cache preservation. No physical-device FPS/pacing or shader-stall improvement is claimed.
 
 - Released baseline: 0.15, tag `protodroid-v0.15`
 - Baseline source: `18ba66bd0945e405aaded0de5ff8848a8cd07932`
@@ -57,6 +57,7 @@ Large traces, external clones, benchmark binaries, and raw generated results sta
 | 6. Scheduling and overlap | **Complete: available host/source research; 1h00m16.064254** | Bounded notification and lazy TID rejected; no runtime optimization adopted. Present regression added; 12/12 regression, sustained normal/TSan stress, concurrent adapter stress, and exact-code CI passed. No device claim |
 | 7. Memory, allocation, RCF/I/O | **Complete** | Multi-wait inline storage adopted; RCF deferral rejected; fresh evidence/CI and recovery gates documented |
 | 8. D3D9/DXVK overhead | **Complete** | Anisotropy initialization adopted with host/ARM64 evidence; neutral HostTable relaxation reverted; screenshot move rejected; no DXVK replacement |
-| 9–14 | Not started | Sequential execution and evidence gates required |
+| 9. Shader/loading/cache behavior | **Active** | Patched-DXVK/cache audit and unchanged-backup hypothesis; no candidate result yet |
+| 10–14 | Not started | Sequential execution and evidence gates required |
 
-Current conclusion: Phase 5 retains its quality-preserving host decoder improvement. Phase 6 rejected bounded notification and lazy TID without a runtime scheduling patch. Phase 7 rejected RCF exact-hit basename deferral after 12.96 million exact-output opens showed no paired advantage over A/A; bounded multi-wait storage is adopted in `2e9e31b` after 403.2 million historical actual-handler calls and sanitizer stress; exact-code CI passed. Pre-recreation raw files are unavailable; fresh wait/RCF evidence and exact CI pass; Phase 7 is complete and Phase 8 is complete; Phase 9 is next. PR #38 remains merged at `00976d9`; this continuation creates no merge, tag, or release.
+Current conclusion: Phase 5 retains its quality-preserving host decoder improvement. Phase 6 rejected bounded notification and lazy TID without a runtime scheduling patch. Phase 7 rejected RCF exact-hit basename deferral after 12.96 million exact-output opens showed no paired advantage over A/A; bounded multi-wait storage is adopted in `2e9e31b` after 403.2 million historical actual-handler calls and sanitizer stress; exact-code CI passed. Pre-recreation raw files are unavailable; fresh wait/RCF evidence and exact CI pass; Phase 7 and Phase 8 are complete; Phase 9 is active. PR #38 remains merged at `00976d9`; this continuation creates no merge, tag, or release.

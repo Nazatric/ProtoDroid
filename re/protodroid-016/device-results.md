@@ -1,6 +1,6 @@
 # Physical-device results
 
-No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phase 7 is complete with host memory/I/O fixtures only. Phase 8 is complete with host D3D9 bridge fixtures only; no result fills the physical table or establishes startup, streaming, FPS, or frame-pacing improvement.
+No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phase 7 is complete with host memory/I/O fixtures only. Phase 8 is complete with host D3D9 bridge fixtures only. Phase 9 is active with source/host cache fixtures only; no result fills the physical table or establishes startup, streaming, FPS, or frame-pacing improvement.
 
 | Device/GPU/driver | Source/APK | Settings/scene/cache | Runs | Result | Limitations |
 | --- | --- | --- | --- | --- | --- |
