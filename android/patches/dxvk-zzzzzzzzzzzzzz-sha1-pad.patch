@@ -1,0 +1,35 @@
+diff --git a/src/util/sha1/sha1.c b/src/util/sha1/sha1.c
+--- a/src/util/sha1/sha1.c
++++ b/src/util/sha1/sha1.c
+@@ -145,15 +145,27 @@
+ {
+ 	uint8_t finalcount[8];
+ 	uint32_t i;
++	size_t j, padBytes;
+ 
+ 	for (i = 0; i < 8; i++) {
+ 		finalcount[i] = (uint8_t)((context->count >>
+ 		    ((7 - (i & 7)) * 8)) & 255);	/* Endian independent */
+ 	}
+-	SHA1Update(context, (uint8_t *)"\200", 1);
+-	while ((context->count & 504) != 448)
+-		SHA1Update(context, (uint8_t *)"\0", 1);
+-	SHA1Update(context, finalcount, 8); /* Should cause a SHA1Transform() */
++
++	/* Write the same padding directly instead of dozens of one-byte updates. */
++	j = (size_t)((context->count >> 3) & 63);
++	padBytes = (j < 56 ? 64 : 128) - j;
++	context->buffer[j] = 0x80;
++	if (j < 56) {
++		(void)memset(&context->buffer[j + 1], 0, 55 - j);
++	} else {
++		(void)memset(&context->buffer[j + 1], 0, 63 - j);
++		SHA1Transform(context->state, context->buffer);
++		(void)memset(context->buffer, 0, 56);
++	}
++	(void)memcpy(&context->buffer[56], finalcount, sizeof(finalcount));
++	SHA1Transform(context->state, context->buffer);
++	context->count += (uint64_t)padBytes * 8;
+ }
+ 
+ void

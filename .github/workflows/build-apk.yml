@@ -233,6 +233,13 @@ jobs:
           g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/state_cache_test
+          CFLAGS="-std=c99 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -I/tmp/protodroid-dxvk-test/src/util/sha1"
+          gcc $CFLAGS -c /tmp/protodroid-dxvk-test/src/util/sha1/sha1.c -o /tmp/sha1-pad.o
+          g++ $CXXFLAGS -I/tmp/protodroid-dxvk-test/src/util/sha1 \
+            -c /tmp/protodroid-dxvk-test/src/util/sha1/sha1_util.cpp -o /tmp/sha1-pad-util.o
+          g++ $CXXFLAGS -I/tmp/protodroid-dxvk-test/src/util/sha1 \
+            src/native/tests/sha1_pad_test.cpp /tmp/sha1-pad-util.o /tmp/sha1-pad.o -o /tmp/sha1_pad_test
+          /tmp/sha1_pad_test
 
       - name: Compile and run GameDB video-setting tests
         run: |
@@ -521,6 +528,18 @@ jobs:
           }
           cat /tmp/state-cache-arm64-test.stdout
           test ! -s /tmp/state-cache-arm64-test.stderr
+          CFLAGS="-std=c99 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -I/tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1"
+          gcc $CFLAGS -c /tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1/sha1.c -o /tmp/sha1-pad-arm64.o
+          g++ $CXXFLAGS -I/tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1 \
+            -c /tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1/sha1_util.cpp -o /tmp/sha1-pad-util-arm64.o
+          g++ $CXXFLAGS -I/tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1 \
+            src/native/tests/sha1_pad_test.cpp /tmp/sha1-pad-util-arm64.o /tmp/sha1-pad-arm64.o -o /tmp/sha1_pad_test_arm64
+          /tmp/sha1_pad_test_arm64 > /tmp/sha1-pad-arm64-test.stdout 2> /tmp/sha1-pad-arm64-test.stderr || {
+            cat /tmp/sha1-pad-arm64-test.stdout /tmp/sha1-pad-arm64-test.stderr
+            exit 1
+          }
+          cat /tmp/sha1-pad-arm64-test.stdout
+          test ! -s /tmp/sha1-pad-arm64-test.stderr
 
       - name: Measure exact state-cache backup candidate on native ARM64
         run: |
@@ -537,6 +556,19 @@ jobs:
             --before-cpp /tmp/state-cache-before.cpp --before-header /tmp/state-cache-before.h \
             --after-cpp src/native/state_cache.cpp --after-header src/native/state_cache.h \
             --output /tmp/state-cache-backup-arm64-changed --rounds 12 --order-offset 3 --mode changed
+
+      - name: Measure exact SHA-1 padding candidate on native ARM64
+        run: |
+          set -euo pipefail
+          # Isolated SHA-1 host timing only; this does not measure shader compilation, rendering, or Android FPS.
+          git -C /tmp/protodroid-dxvk-state-cache-arm64 show HEAD:src/util/sha1/sha1.c > /tmp/sha1-pad-before.c
+          python3 tools/measure_sha1_pad.py \
+            --before-c /tmp/sha1-pad-before.c \
+            --after-c /tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1/sha1.c \
+            --sha1-header /tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1/sha1.h \
+            --util-cpp /tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1/sha1_util.cpp \
+            --util-header /tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1/sha1_util.h \
+            --output /tmp/sha1-pad-arm64 --rounds 12 --order-offset 0
 
       - name: Publish ARM64 state-cache evidence summary
         if: success()
@@ -594,6 +626,57 @@ jobs:
             /tmp/state-cache-arm64-test.stderr
             /tmp/state-cache-arm64-check-summary.json
             /tmp/state-cache-check-run.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish ARM64 SHA-1 padding evidence summary
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/sha1-pad-arm64-check-summary.json
+          import json
+          from pathlib import Path
+          base = Path('/tmp/sha1-pad-arm64')
+          result = json.loads((base / 'result.json').read_text())
+          result.pop('build_commands', None)
+          result['raw_timing'] = {}
+          for path in sorted(base.glob('timing-*.jsonl')):
+              size = path.stem.split('-')[1]
+              rows = [json.loads(line) for line in path.read_text().splitlines()]
+              result['raw_timing'][size] = [
+                  {'round': row['round'], 'variant': row['variant'], 'elapsed_ns': row['elapsed_ns']}
+                  for row in rows
+              ]
+          result['correctness_stdout'] = Path('/tmp/sha1-pad-arm64-test.stdout').read_text()
+          result['correctness_stderr'] = Path('/tmp/sha1-pad-arm64-test.stderr').read_text()
+          rendered = '```json\n' + json.dumps(result, indent=2) + '\n```'
+          if len(rendered) > 60000:
+              raise SystemExit(f'Checks summary too large: {len(rendered)}')
+          print(rendered)
+          PY
+          SUMMARY=$(cat /tmp/sha1-pad-arm64-check-summary.json)
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name='arm64-sha1-pad-evidence' \
+            -f head_sha="${GITHUB_SHA}" \
+            -f status='completed' \
+            -f conclusion='neutral' \
+            -f output[title]='Native ARM64 SHA-1 padding microfixture' \
+            -f output[summary]="${SUMMARY}" > /tmp/sha1-pad-check-run.json
+          python3 -c "import json; assert json.load(open('/tmp/sha1-pad-check-run.json'))['id'] > 0"
+
+      - name: Upload ARM64 SHA-1 padding measurements
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-sha1-pad
+          path: |
+            /tmp/sha1-pad-arm64
+            /tmp/sha1-pad-arm64-test.stdout
+            /tmp/sha1-pad-arm64-test.stderr
+            /tmp/sha1-pad-arm64-check-summary.json
+            /tmp/sha1-pad-check-run.json
           retention-days: 30
           if-no-files-found: error
 
