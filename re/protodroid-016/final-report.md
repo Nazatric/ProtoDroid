@@ -1,8 +1,8 @@
 # ProtoDroid 0.16 final performance report
 
-Status: **not final**. Phases 1–12 are complete within their recorded source/host/native-CI scopes; Phase 13 integrated correctness/performance validation is next. The released baseline remains 0.15 `18ba66bd0945e405aaded0de5ff8848a8cd07932`. Phase 12 production/CI validation head is `c8709cb5a553b470f8724dce15faae0779a85528`; the completion documentation is layered on that head. No 0.16 merge, tag, release, or final performance claim is authorized.
+Status: **not final**. Phases 1–13 are complete within their recorded source/host/native-CI scopes; Phase 14 final evidence/release-readiness audit is next. The released baseline remains 0.15 `18ba66bd0945e405aaded0de5ff8848a8cd07932`. Phase 13 production/CI validation head is `2dabecdf3b15b14da56803863bb13b67c80070d6`; the completion documentation is layered on that head. No 0.16 merge, tag, release, or final performance claim is authorized.
 
-Earlier adopted work remains intact: quality-preserving DXT direct32/palette decoding, bounded multi-wait storage, anisotropy initialization, byte-validated unchanged-cache-backup skipping, native launcher/controls, mods/metadata, texture modding, ARM64 ABI, safe defaults/drivers, dynamic shadows, Bink/cutscenes, A/V synchronization, both audio-rate behaviors, and the diagnostic tour. Phase 12 adds one source-provable **XAudio2/FAudio master-lifetime correctness fix**, not a measured FPS optimization.
+Earlier adopted work remains intact: quality-preserving DXT direct32/palette decoding, bounded multi-wait storage, anisotropy initialization, byte-validated unchanged-cache-backup skipping, native launcher/controls, mods/metadata, texture modding, ARM64 ABI, safe defaults/drivers, dynamic shadows, Bink/cutscenes, A/V synchronization, both audio-rate behaviors, and the diagnostic tour. Phase 12 adds one source-provable **XAudio2/FAudio master-lifetime correctness fix**. Phase 13 adds a **Bink failed-output retry** with permanent negative/positive coverage. Neither is a measured FPS optimization or affected-device issue diagnosis.
 
 ## Phase 12 result
 
@@ -37,4 +37,9 @@ Artifact **13359379211** (`prototype-apk`) is server-described as **57,955,156 b
 
 ## Final work still required
 
-The final version of this report still requires comparable exact-revision device/APK provenance, device/driver/settings coverage, median FPS and frame-time p50/p95/p99/long-stall changes, cold/warm shader-loading results, sustained/thermal behavior, visual/media/correctness validation, and explicit unmeasured outcomes. Phase 13 should preserve the adopted lifecycle regression while seeking current affected-version reproductions and comparable ordinary-play/sustained evidence. Empty or unavailable evidence remains explicit rather than replaced by estimates. No release-readiness conclusion is made by Phase 12 completion.
+The final version of this report still requires comparable exact-revision device/APK provenance, device/driver/settings coverage, median FPS and frame-time p50/p95/p99/long-stall changes, cold/warm shader-loading results, sustained/thermal behavior, visual/media/correctness validation, and explicit unmeasured outcomes. Phase 14 should preserve both adopted lifecycle regressions while consolidating final evidence and seeking current affected-version reproductions and comparable ordinary-play/sustained measurements. Empty or unavailable evidence remains explicit rather than replaced by estimates. No release-readiness conclusion is made by Phase 13 completion.
+
+
+## Phase 13 interim result
+
+Bink failed-output retry is adopted in `2dabecdf3b15b14da56803863bb13b67c80070d6` for host-reproducible recovery correctness only. The fresh broad regression passes 62/62 commands; concurrent, integrated, both-rate, and exact XAudio2 controls pass. Exact CI run `41911558127` succeeds, including source-built ARM64/APK verification; release is skipped. Artifact `13364468289` metadata is 57,950,912 bytes with archive SHA-256 `0a980739e8fb05c5dabd8ff48cffb4abff3ab33e66b8cb7cf1d5d060edc2f1e1`. No FPS, physical-device, audible-output, or supplied-issue fix is claimed. Phase 14 is next.

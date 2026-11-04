@@ -1,6 +1,6 @@
 # Physical-device results
 
-No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phases 1–12 are complete only within their recorded source/host/native-CI scopes. Phase 12 adds exact XAudio2/FAudio lifecycle controls, sustained historical-log classification, broad regression, and issue-log classification; none supplies current physical-device FPS, frame-time, rendering, audio-device, thermal, or sustained-playback evidence.
+No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phases 1–12 are complete and Phase 13 is complete only within the recorded source/host/native-CI scopes. Phase 12 adds exact XAudio2/FAudio lifecycle controls, sustained historical-log classification, broad regression, and issue-log classification; none supplies current physical-device FPS, frame-time, rendering, audio-device, thermal, or sustained-playback evidence.
 
 | Device/GPU/driver | Source/APK | Settings/scene/cache | Runs | Result | Limitations |
 | --- | --- | --- | --- | --- | --- |
@@ -25,3 +25,9 @@ CI run `41861964235` verifies the exact-revision source-built APK and skips rele
 Exact CI run `41900484812` on `c8709cb5a553b470f8724dce15faae0779a85528` succeeds, including the source-built APK and embedded-DXVK verification; release is skipped. The fresh host XAudio2 controls pass 43 checks in each of four modes, and 32-cycle normal lifecycle fixtures pass 502/470 checks in reuse/non-reuse modes with sanitizer-clean logs. These tests use fake or host dummy audio and do not populate the physical-device table.
 
 Artifact `13359379211` (`prototype-apk`) is server-described as 57,955,156 bytes with archive digest `sha256:f3863a3f1a946fc72d0dfeaae128913231d600b537b3d948f02974862255a6bd`; the signed payload returned EOF, so no local APK/library hash or installation claim is made. The XAudio2 lifetime repair is not relabeled as a fix for #22, #29, #32, #33, or #35. No new FPS, frame-time, thermal, audio-device, rendering, or sustained-play measurement exists.
+
+## Phase 13 host recovery evidence is not a device result
+
+Exact CI run `41911558127` on `2dabecdf3b15b14da56803863bb13b67c80070d6` succeeds, including source-built ARM64 `libmain.so`, APK packaging/signing, and APK/embedded-DXVK verification; release is skipped. The Bink transient-open candidate passes real host SDL/stub controls, both audio rates, 94 concurrent checks, and 62/62 broad commands. These do not establish Android output coexistence, audible recovery, installation, FPS, rendering, thermal, or sustained-play results.
+
+Artifact `13364468289` is server-described as 57,950,912 bytes with archive digest `sha256:0a980739e8fb05c5dabd8ff48cffb4abff3ab33e66b8cb7cf1d5d060edc2f1e1`; this is not an inner-APK hash or device validation. **#22, #29, #32, #33, and #35 remain open and unfixed by this phase.**
