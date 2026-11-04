@@ -4,6 +4,8 @@ Status: **Phase 14 final evidence/release-readiness audit is complete within ava
 
 The five investigated reports—**#22, #29, #32, #33, and #35—remain open**, not fixed. In #35, a same-revision/settings previous run reached frame 65,536 and opened mission Bink videos, while the failing run stopped before mission Bink and later showed watchdog/`LockRect`/device-loss correlations. This does not justify a speculative Bink, driver, or lock patch. Package evidence is exact-revision CI verification plus current Phase 13 GitHub artifact ZIP digest `0a980739…`; signed-redirect EOF prevented local inner-APK/library hashing or installation claims.
 
+**Post-Phase-14 follow-up:** `issue-32-maintenance4.md` records production commit `e1277dbc6448c27c10d1ee58070b1eefeb10da85`, a source-provable Android compatibility correction: optional maintenance4 now follows physical support on Vulkan 1.3 as well as 1.2, using DXVK's existing temporary-resource fallback. The focused differentiating test and fresh 62/62 broad host regression pass, with 442 independent manifest/raw-output checks. Exact `android-deps` CI `41927692571` and `build-apk` CI `41927692628` are green; 52 metadata checks pass and the release job remains skipped. No affected-device run, FPS result, #32 resolution, or release-readiness change is claimed.
+
 - Released baseline: 0.15, tag `protodroid-v0.15`
 - Baseline source: `18ba66bd0945e405aaded0de5ff8848a8cd07932`
 - Working branch: `arena/5eb1c06c-protodroid`
@@ -58,6 +60,7 @@ At `2026-11-04T12:49Z`, another fresh shallow clone preserved cumulative worktre
 | `phase-12.md` | Complete sustained/memory/lifecycle research, XAudio2 master-lifetime adoption, real-backend controls, and exact CI evidence |
 | `phase-13.md` | Integrated Bink/FAudio controls, transient audio-open recovery adoption, broad regression, exact CI/package evidence, and limitations |
 | `phase-14.md` | Final net-production, evidence, version/package, release-boundary, and unmeasured-device audit |
+| `issue-32-maintenance4.md` | Post-Phase-14 capability-driven maintenance4 correction, differentiating regression, CI/device boundaries, and open-#32 disposition |
 
 Large traces, external clones, benchmark binaries, and raw generated results stay outside Git under `/home/user/protodroid-016-evidence`; `/tmp/protodroid-016` is only a compatibility symlink. The original `/tmp` artifacts were lost during an earlier recreation and replaced by explicitly regenerated, hash-verified evidence. At the 2026-11-03T20:27Z recreation, that external store was also absent; Phase 1–3 raw artifacts are therefore historical committed records here, not files claimed to remain locally available. Local checkout copies were preserved under `/home/user/protodroid-016-recovery/2026-11-03T2027Z`, the branch was fast-forwarded to `f1737b23`, and a fresh Phase 4 store records new evidence and its own provenance. No physical-device performance result is inferred from a host benchmark or another project's device.
 
