@@ -58,7 +58,7 @@ All physical-device FPS, visual correctness, shader latency, pacing, and thermal
 
 ## Phase 10 Vulkan GPU/synchronization/memory/presentation candidates
 
-- **Disabled `DXVK_PRESENT_STATS` overhead:** active exact-patch candidate. Baseline queue pre-acquire always executes steady-clock reads and atomic counter additions; gate only this diagnostic scaffolding through the existing lazy option state. Preserve every Vulkan wait/acquire/present operation and the enabled report. Host/ARM64 microtiming is required and is not device FPS.
+- **Disabled `DXVK_PRESENT_STATS` overhead:** exact-patch candidate pending ARM64/materiality. Baseline queue pre-acquire always executes steady-clock reads and atomic counter additions; gate only this diagnostic scaffolding through the existing lazy option state. Full-source host saves 97.064736 ns/Present (24/24), with clean semantic/sanitizer gates, but this is only ~0.000097 ms and not device FPS. Every Vulkan wait/acquire/present operation and the enabled report is preserved.
 - **FIFO/image-count/frame-latency/lock changes:** not candidates without Present breakdown and device A/B evidence. Historical Present wall is not GPU time; long Present-to-Present intervals cannot be assigned to the swapchain by correlation alone.
 - **Unified-memory/resource-wait/barrier/queue rewrites:** audit-only unless an exact affected workload and compatibility-safe improvement are established. Existing Qualcomm/Mali paths remain correctness requirements.
 

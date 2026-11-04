@@ -210,7 +210,7 @@ index 391cec8..7101c4b 100644
  namespace dxvk {
  
    static uint16_t MapGammaControlPoint(float x) {
-@@ -818,7 +820,37 @@ namespace dxvk {
+@@ -818,7 +820,42 @@ namespace dxvk {
    }
  
  
@@ -237,18 +237,23 @@ index 391cec8..7101c4b 100644
 +  };
 +  static D3D9PresentStats g_presentStats;
 +  extern std::atomic<uint64_t> g_acqFenceUs, g_acqCallUs, g_acqSlow, g_preAcqUs, g_preFenceUs;  // dxvk_presenter.cpp
++  extern std::atomic<bool> g_presentStatsEnabled;
 +#endif
 +
    void D3D9SwapChainEx::PresentImage(UINT SyncInterval) {
 +#ifdef __ANDROID__
-+    static const bool statsOn = env::getEnvVar("DXVK_PRESENT_STATS") == "1";  // read after the host set it
++    static const bool statsOn = [] {
++      const bool enabled = env::getEnvVar("DXVK_PRESENT_STATS") == "1";  // read after the host set it
++      g_presentStatsEnabled.store(enabled, std::memory_order_relaxed);
++      return enabled;
++    }();
 +    g_presentStats.on = statsOn;
 +    const double tStart = g_presentStats.on ? D3D9PresentStats::now() : 0;
 +#endif
      m_parent->EndFrame();
      m_parent->Flush();
  
-@@ -827,7 +859,24 @@ namespace dxvk {
+@@ -827,7 +864,24 @@ namespace dxvk {
      Rc<DxvkImageView> swapImageView = m_backBuffers[0]->GetImageView(false);
  
      for (uint32_t i = 0; i < SyncInterval || i < 1; i++) {
@@ -273,7 +278,7 @@ index 391cec8..7101c4b 100644
  
        // Presentation semaphores and WSI swap chain image
        PresenterInfo info = m_wctx->presenter->info();
-@@ -835,9 +884,35 @@ namespace dxvk {
+@@ -835,9 +889,35 @@ namespace dxvk {
  
        uint32_t imageIndex = 0;
  
@@ -309,7 +314,7 @@ index 391cec8..7101c4b 100644
          RecreateSwapChain();
          
          info = m_wctx->presenter->info();
-@@ -913,7 +988,42 @@ namespace dxvk {
+@@ -913,7 +993,42 @@ namespace dxvk {
        m_parent->FlushCsChunk();
      }
  
@@ -352,7 +357,7 @@ index 391cec8..7101c4b 100644
  
      // Rotate swap chain buffers so that the back
      // buffer at index 0 becomes the front buffer.
-@@ -932,6 +1042,16 @@ namespace dxvk {
+@@ -932,6 +1047,16 @@ namespace dxvk {
        RecreateSwapChain();
    }
  
@@ -851,12 +856,13 @@ index 27d6bb1..922f178 100644
  #include <algorithm>
  
  #include "dxvk_device.h"
-@@ -54,17 +56,29 @@ namespace dxvk {
+@@ -54,17 +56,33 @@ namespace dxvk {
    }
  
  
 +  // Android port diagnostics (DXVK_PRESENT_STATS): where an application-side acquire waits.
 +  std::atomic<uint64_t> g_acqFenceUs{0}, g_acqCallUs{0}, g_acqSlow{0}, g_preAcqUs{0}, g_preFenceUs{0};
++  std::atomic<bool> g_presentStatsEnabled{false};
 +  static uint64_t nowUs() {
 +    return std::chrono::duration_cast<std::chrono::microseconds>(
 +      std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -868,32 +874,38 @@ index 27d6bb1..922f178 100644
  
      // Don't acquire more than one image at a time
      if (m_acquireStatus == VK_NOT_READY) {
-+      uint64_t t0 = nowUs();
++      const bool stats = g_presentStatsEnabled.load(std::memory_order_relaxed);
++      uint64_t t0 = stats ? nowUs() : 0;
        waitForSwapchainFence(semaphores);
-+      uint64_t t1 = nowUs();
++      uint64_t t1 = stats ? nowUs() : 0;
  
        m_acquireStatus = m_vkd->vkAcquireNextImageKHR(m_vkd->device(),
          m_swapchain, std::numeric_limits<uint64_t>::max(),
          sync.acquire, VK_NULL_HANDLE, &m_imageIndex);
-+      g_acqFenceUs += t1 - t0;
-+      g_acqCallUs += nowUs() - t1;
-+      g_acqSlow += 1;
++      if (stats) {
++        g_acqFenceUs += t1 - t0;
++        g_acqCallUs += nowUs() - t1;
++        g_acqSlow += 1;
++      }
      }
  
      if (m_acquireStatus != VK_SUCCESS && m_acquireStatus != VK_SUBOPTIMAL_KHR)
-@@ -122,11 +136,15 @@ namespace dxvk {
+@@ -122,11 +140,18 @@ namespace dxvk {
      m_frameIndex %= m_semaphores.size();
  
      PresenterSync& nextSync = m_semaphores.at(m_frameIndex);
-+    uint64_t t0 = nowUs();
++    const bool stats = g_presentStatsEnabled.load(std::memory_order_relaxed);
++    uint64_t t0 = stats ? nowUs() : 0;
      waitForSwapchainFence(nextSync);
-+    uint64_t t1 = nowUs();
++    uint64_t t1 = stats ? nowUs() : 0;
  
      m_acquireStatus = m_vkd->vkAcquireNextImageKHR(m_vkd->device(),
        m_swapchain, std::numeric_limits<uint64_t>::max(),
        nextSync.acquire, VK_NULL_HANDLE, &m_imageIndex);
-+    g_preFenceUs += t1 - t0;
-+    g_preAcqUs += nowUs() - t1;
++    if (stats) {
++      g_preFenceUs += t1 - t0;
++      g_preAcqUs += nowUs() - t1;
++    }
  
      return status;
    }

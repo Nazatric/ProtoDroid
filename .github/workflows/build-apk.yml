@@ -224,6 +224,10 @@ jobs:
           python3 tools/test_dxvk_fxaa.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_device_preflight.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_bc_support.py /tmp/protodroid-dxvk-test
+          bash tools/run_dxvk_present_stats_test.sh /tmp/protodroid-dxvk-test \
+            /tmp/protodroid-present-stats-host 200000 16 none /tmp/protodroid-present-baseline-host
+          bash tools/run_dxvk_present_stats_test.sh /tmp/protodroid-dxvk-test \
+            /tmp/protodroid-present-stats-ubsan 0 0 ubsan /tmp/protodroid-present-baseline-ubsan
           glslangValidator --quiet -V --target-env vulkan1.3 \
             -I/tmp/protodroid-dxvk-test/src/dxvk/shaders \
             /tmp/protodroid-dxvk-test/src/dxvk/shaders/dxvk_present_frag_fxaa.frag \
@@ -647,6 +651,64 @@ jobs:
             /tmp/state-cache-arm64-test.stderr
             /tmp/state-cache-arm64-check-summary.json
             /tmp/state-cache-check-run.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Measure exact DXVK Present diagnostics on native ARM64
+        run: |
+          set -euo pipefail
+          # Exact extracted presenter functions with fake Vulkan handles: diagnostic CPU overhead only, not GPU time,
+          # Android Present latency, physical-device FPS, or pacing. Application-acquire fallback is reported separately.
+          bash tools/run_dxvk_present_stats_test.sh /tmp/protodroid-dxvk-state-cache-arm64 \
+            /tmp/protodroid-present-stats-arm64 1000000 24 none /tmp/protodroid-present-baseline-arm64
+          bash tools/run_dxvk_present_stats_test.sh /tmp/protodroid-dxvk-state-cache-arm64 \
+            /tmp/protodroid-present-stats-arm64-ubsan 0 0 ubsan /tmp/protodroid-present-baseline-arm64-ubsan
+
+      - name: Publish ARM64 Present diagnostic evidence summary
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/present-stats-arm64-check-summary.json
+          import json
+          from pathlib import Path
+          base = Path('/tmp/protodroid-present-stats-arm64/result')
+          result = json.loads((base / 'result.json').read_text())
+          result['raw_timing'] = json.loads((base / 'timing.json').read_text())
+          ubsan = json.loads(Path('/tmp/protodroid-present-stats-arm64-ubsan/result/result.json').read_text())
+          summary = {
+              'schema': 1,
+              'kind': 'native-linux-arm64-present-diagnostic-microfixtures-not-gpu-or-android-fps',
+              'physical_android_device': False,
+              'present_diagnostics': result,
+              'ubsan': ubsan,
+          }
+          rendered = '```json\n' + json.dumps(summary, separators=(',', ':')) + '\n```'
+          if len(rendered) > 60000:
+              raise SystemExit(f'Checks summary too large: {len(rendered)}')
+          print(rendered)
+          PY
+          SUMMARY=$(cat /tmp/present-stats-arm64-check-summary.json)
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name='arm64-present-diagnostic-evidence' \
+            -f head_sha="${GITHUB_SHA}" \
+            -f status='completed' \
+            -f conclusion='neutral' \
+            -f output[title]='Native ARM64 DXVK Present diagnostic microfixtures' \
+            -f output[summary]="${SUMMARY}" > /tmp/present-stats-arm64-check-run.json
+          python3 -c "import json; assert json.load(open('/tmp/present-stats-arm64-check-run.json'))['id'] > 0"
+
+      - name: Upload ARM64 Present diagnostic measurements
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-present-diagnostics
+          path: |
+            /tmp/protodroid-present-stats-arm64
+            /tmp/protodroid-present-stats-arm64-ubsan
+            /tmp/present-stats-arm64-check-summary.json
+            /tmp/present-stats-arm64-check-run.json
           retention-days: 30
           if-no-files-found: error
 
