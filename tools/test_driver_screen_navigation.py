@@ -11,6 +11,7 @@ setup = (ROOT / "android/java/com/protodroid/SetupView.java").read_text(encoding
 driver = (ROOT / "android/java/com/protodroid/DriverView.java").read_text(encoding="utf-8")
 activity = (ROOT / "android/java/com/protodroid/SetupActivity.java").read_text(encoding="utf-8")
 manager = (ROOT / "android/java/com/protodroid/DriverManager.java").read_text(encoding="utf-8")
+native_main = (ROOT / "src/native/main.cpp").read_text(encoding="utf-8")
 
 show_drivers = activity.split("private void showDrivers()", 1)[1].split("private void closeDrivers()", 1)[0]
 assert "setContentView(driverView);" in show_drivers, "The Drivers action no longer replaces the content view"
@@ -110,8 +111,15 @@ assert "manager.clearFailureMarkers();" in mode_action, "Explicit driver selecti
 assert mode_action.index("manager.clearFailureMarkers();") < mode_action.index("settings.setDriverMode(mode);")
 assert "void clearFailureMarkers()" in manager, "DriverManager has no explicit recovery-marker cleanup"
 cleanup = manager.split("void clearFailureMarkers()", 1)[1].split("\n    }", 1)[0]
+assert "if (chdir(base) != 0) return 1;" in native_main and "SDL_AndroidGetExternalStoragePath()" in native_main, (
+    "The native marker working directory is no longer bound to SDL's external app-specific directory"
+)
+assert "File nativeDirectory = activity.getExternalFilesDir(null);" in cleanup, (
+    "Recovery deletes markers from internal getFilesDir(), not the native external working directory"
+)
+assert "if (nativeDirectory == null) return;" in cleanup, "Unavailable external storage must not redirect marker cleanup"
 for marker in ("turnip_failed", "vulkan_wrapper_failed"):
-    assert f'new File(files(), "{marker}").delete();' in cleanup, f"Explicit recovery leaves {marker} behind"
+    assert f'new File(nativeDirectory, "{marker}").delete();' in cleanup, f"Explicit recovery leaves native {marker} behind"
 assert "private void clearFailureMarkers()" not in manager, "DriverView cannot invoke private recovery cleanup"
 
 print("Drivers navigation, explicit recovery, launch-migration, guided-layout, and touch checks passed")

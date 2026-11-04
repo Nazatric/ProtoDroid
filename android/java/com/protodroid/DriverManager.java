@@ -298,8 +298,11 @@ final class DriverManager {
 
     /** Explicit driver actions may retry a guarded path; ordinary Auto launches must retain its crash-loop guard. */
     void clearFailureMarkers() {
-        new File(files(), "turnip_failed").delete();
-        new File(files(), "vulkan_wrapper_failed").delete();
+        // Native changes directory to SDL_AndroidGetExternalStoragePath(), not getFilesDir(), before writing these.
+        File nativeDirectory = activity.getExternalFilesDir(null);
+        if (nativeDirectory == null) return;
+        new File(nativeDirectory, "turnip_failed").delete();
+        new File(nativeDirectory, "vulkan_wrapper_failed").delete();
     }
 
     private String displayName(Uri uri) {
