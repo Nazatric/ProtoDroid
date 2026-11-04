@@ -47,6 +47,18 @@ The historical Mali device reports `presentId=0` and `presentWait=0`, so its pre
 
 **Disposition: no runtime candidate.** `tools/test_dxvk_frame_pacing.py` passes **25 checks**. Direct-limiter removal, destruction-wait removal, sleep-under-lock, and zero-initial-frame-ID mutations are all detected; one control-setup indentation failure is preserved before the passing run (`frame-pacing-controls.json`). No limiter, signal, present-wait, or queue-depth change is justified by the historical low Present-wall data. This is structural correctness evidence, not measured input latency or frame pacing.
 
+### H6 — Android-owned GPU paths and pipeline-state census
+
+The Android-owned diff and six core queue/command-list/image implementation/header pairs pass a **27-check** ownership/barrier audit: no project-owned patch changes barrier calls or stage/access/layout fields, and no barrier/upload fast path is identified. An enhanced real-trace census passes **2,238 checks** over 171 graphics pipelines. All are single-sample; 15 are depth-only. Sequence 6 alone matches the complete present-blit structural signature and has zero repeated matching creations, consistent with existing caching but not proof of presenter handles/lifetimes. There is no MSAA coverage, GPU time, draw frequency, or visual-output evidence. **Disposition: no runtime change; no sample/format/effect reduction or second pipeline cache.**
+
+### H7 — whole-process memory-window audit
+
+A **551-check** parser pairs all 61 memory records with the exact frame windows. The first 10 windows grow RSS 1,209 MiB during loading. The last 20 span 19.116 seconds with net 0 MiB RSS, +1 MiB arena, +169 MiB virtual, unchanged swap, and +157 MiB system-available. The 1,032.764 ms worst-interval window's memory deltas are not causal evidence. Whole-process values do not isolate DXVK/GPU allocations; early growth is not a leak and stable late RSS does not prove no leak or pressure. **Disposition: no allocator/managed-copy/lifetime change; retain late virtual growth as a Phase 12 long-soak limitation.**
+
+### H8 — exact logged Mali memory-type fixture
+
+`tools/test_dxvk_unified_memory.py` now exercises the actual patched selection function with the historical Mali-G720 MC7 49.1.0 types `0x7/0xb/0x11/0x21`, in addition to three Adreno reports and real system-memory preference. Patched UBSan execution passes host-coherent `0x1`, host-visible `0x3`, all-device-local `0xf`, and cached-coherent fallback. The pristine-upstream expected-failure control detects **8 assertions**, including the Mali host-visible mask. **Disposition: adopt compatibility regression coverage only; no production allocator change or device-performance claim.**
+
 ## Evidence plan
 
 1. Freeze original patch/source/log hashes and parse the historical Present records with raw output.

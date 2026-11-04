@@ -94,6 +94,20 @@ int main() {
         std::printf("validated Qualcomm unified-memory report: %s\n", report);
     }
 
+    // Exact Mali-G720 MC7 49.1.0 heap from the historical diagnostic run. All four types are device-local,
+    // so the allocator must retain compatible device-local types rather than waiting for a system-memory type.
+    Allocator mali;
+    SetTypes(mali, {0x7, 0xb, 0x11, 0x21});
+    Check(mali.m_memTypesByPropertyFlags[hostCoherent] == 0x1,
+          "Mali host-coherent requests must select type 0");
+    Check(mali.m_memTypesByPropertyFlags[VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT] == 0x3,
+          "Mali host-visible mask must retain types 0 and 1 (logged buffer mask 0x3)");
+    Check(mali.m_memTypesByPropertyFlags[VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT] == 0xf,
+          "Mali device-local requests must retain all four types");
+    Check(mali.m_memTypesByPropertyFlags[hostCachedCoherent] == 0x1,
+          "Mali cached-coherent fallback must use the host-coherent type");
+    std::puts("validated Mali-G720 device-local-only memory heap");
+
     // Preserve the other half of upstream's contract: when real system memory exists, prefer it over host-visible
     // device-local memory for requests that do not explicitly require DEVICE_LOCAL.
     Allocator withSystemMemory;
