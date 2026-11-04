@@ -60,6 +60,8 @@ Actual `kernel32.cpp` was compiled into focused baseline/A-A/candidate harnesses
 | 64 | any | 276.394252 | 1.024925 | 119.948563 | 0.433976 | 16/16 |
 | 64 | all | 454.739440 | 1.015428 | 354.375302 | 0.779293 | 15/16 |
 
+A read-only static census of the original `prototypeenginef.dll` (SHA-256 `d331be205bdde99897952ee88261ab7e63c5c65e36a4660e2a367886a3537071`) found three direct import call sites. Address `10abdb6d` passes **n = 2, any, infinite timeout**; `10abbad6` and `10abbbc5` pass dynamic counts, any, infinite timeout. No direct call/jump to the import thunk was found. This establishes a real two-handle any-wait path, but not call frequency, dynamic-count distribution, or immediate-versus-blocking proportions.
+
 These are host handler timings, not frame times. The candidate/baseline median range is 0.361003–0.779293 (about 22.1–63.9% lower handler time in these fixtures); no real game multi-wait frequency or physical-device FPS/pacing share is known.
 
 ### Allocation and correctness evidence
