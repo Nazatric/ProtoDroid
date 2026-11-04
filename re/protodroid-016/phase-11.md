@@ -1,6 +1,6 @@
 # Phase 11 — Texture decode/upload, Bink media, and audio paths
 
-Status: **active**. Started **2026-11-04T14:18:47.034587Z** from Phase 10 completion `e267295766f7dd66b72ac9c70039b90cf7b1517c`. Phase 10 is complete (finalizer 57/57; manifest 1,376 checks over 341 files); Phase 12 remains blocked until Phase 11 completes.
+Status: **complete**. Started **2026-11-04T14:18:47.034587Z**; completion reading **2026-11-04T17:15:07.338209Z** (**10,580.303622 seconds**) from Phase 10 completion `e267295766f7dd66b72ac9c70039b90cf7b1517c`. Validation head is `b5c9e50043bd114520b9acc9dfee8fe65016aabe`; Phase 12 is next. Issues #22, #29, #32, #33, and #35 remain explicitly open rather than being relabeled as fixed.
 
 ## Exact source, fixtures, and settings
 
@@ -99,6 +99,18 @@ The bump-only test heap remains 29,228,960 bytes in every sample. RSS/VM are fla
 
 **Fresh broad regression passes.** The corrected 13-group runner completed **53/53 commands in 108.336966312 s** at `bca15d8abf036d79dfa6c3029679d756cd2ee52e`, covering native launcher/input/runtime/memory, DXT, mods and scripting, diagnostics/pacing policy, patched DXVK structure, the real 1,014-entry cache, both production Bink audio rates, and real-DLL differentials. Independent replay passes **4,008 checks**, including all command/log hashes and byte counts, required result markers, source hashes, both Bink runs, every real-cache SHA-1 pair, and the real-DLL trial counts. The first stopped attempt remains preserved separately: 11 commands passed before plugin-loader command 4 failed because the runner used a custom directory although `mod_plugin_test.cpp` requires `/tmp/protodroid-plugin-test`. That harness invocation failure is not counted as passing or as a production defect; the corrected full rerun is the only passing regression. Local JDK/glslang remain unavailable, so Java and seven-shader compilation stay exact-CI gates. None of these host/native checks is physical-device FPS, rendering, pacing, or audio-device evidence.
 
+### H6 — supplied correctness reports and affected-device evidence boundary
+
+**Read-only investigation complete; no issue is claimed fixed.** The current bodies/comments for issues #35, #33, #32, #29, and #22 were retrieved, all supplied native/D3D9 logs were inventoried, all 44 supplied images were inspected through four labeled contact sheets, and the remaining `crash.log`, `journal.log`, `result.txt`, and `phase.txt` attachments were read. `crash.log` says that no crash was recorded; the other three files only repeat an isolated-tour D3D9 startup failure. `verify_phase11_issues.py` passes **72 checks** over the exact issue JSON, supplied-file hashes, settings, source revisions, and classifications. Its `fixed_issues` and `runtime_changes_selected` arrays are both empty.
+
+- **#35 / Safe House and mission cutscenes:** the failing `fa8b6e55` direct-PanVK run uses 540p, two skipped mips, 512 shadows, and texture dumping; it reaches frame marker 8,192, then reports a watchdog at frame 10,634 with a `LockRect` stack and no mission Bink open. The matching D3D9 log later reports `VK_ERROR_DEVICE_LOST`. Crucially, the previous log has the **same source revision and those same settings**, reaches frame 65,536 without a watchdog, and opens mission Bink videos including `woi_node_093.bik` and `woi_ec2.bik`. This is a useful same-configuration control, not proof that PanVK, dumping, `LockRect`, Bink, or a synchronization change caused or will fix the failure. Do not unconditionally skip cutscenes, disable Bink, or rewrite locks from this correlation.
+- **#33 / Adreno 642L:** the supplied `ea2ba6c9` logs are explicit system-Vulkan-1.1 rejection, not a fatal crash trace. A new comment at **2026-11-04T16:59:51Z** says the issue still occurs, but supplies no current native/D3D9 log or exact affected revision. The old diagnosis must not be carried forward as proof of the latest recurrence.
+- **#32 / Adreno 610/PurpleVK:** the old `fa8b6e55` log ends at `VK_ERROR_FEATURE_NOT_PRESENT`. Its feature list is requested state and contains neither the newer requested-feature audit nor an exact missing-feature name. Capability spoofing, blanket feature disabling, or attributing the failure to a feature from another renderer is rejected.
+- **#22 / Mali-G57:** `proto-native (3).log` and `proto-native-13.log` are byte-identical. The old `ea2ba6c9` D3D9 log shows resets/presents, BC decoding and dummy-resource context, but no logged device-creation or device-loss failure. The same broad fallback profile also appears on longer-running Mali-G720 logs, so it is not a G57-specific diagnosis. Existing 0.15 full-color-DXT1, wrapper, recovery, and diagnostic work remains intact but is not relabeled as a validated #22 fix.
+- **#29 / Itel P55:** the report remains generic launcher/setup text with no actionable native/D3D9 log. No launcher, wrapper, Vulkan-version, or PanVK code change can be validated from it.
+
+Disposition: retain all runtime behavior and keep #22, #29, #32, #33, and #35 open. A future patch needs a current affected-version reproduction or a source-provable defect with focused regression coverage. Host Bink stress, historical logs, successful CI, and image inspection are not affected-device visual, audio, crash, or sustained-playback validation.
+
 ## Evidence plan
 
 1. Freeze production/source/sample/tool hashes and regenerate the minimal decoder and sample without importing large artifacts into Git.
@@ -107,3 +119,39 @@ The bump-only test heap remains 29,228,960 bytes in every sample. RSS/VM are fla
 4. Use balanced baseline/A-A/candidate cohorts only for a source-led candidate; retain raw per-process results, absolute deltas, and cold/warm distinctions.
 5. Run real-DLL audio differentials, media synchronization stress, broad regression, exact ARM64/Android CI, and APK packaging as applicable. Host/native CI is not physical-device FPS, playback, or sustained-performance proof.
 6. Record every adoption/rejection and complete the seven-part report only after at least one hour of substantive work; use a longer budget while useful media work remains.
+
+## Phase 11 completion report
+
+### 1. Actual time and work
+
+Phase 11 started **2026-11-04T14:18:47.034587Z**; the completion reading is **2026-11-04T17:15:07.338209Z**, or **10,580.303622 seconds (2h56m20.303622s)** of substantive source audit, fixture construction, measurements, independent verification, regression, issue investigation, CI, and documentation. It began from Phase 10 completion `e267295766f7dd66b72ac9c70039b90cf7b1517c`; validation head is `b5c9e50043bd114520b9acc9dfee8fe65016aabe`, and exact production/CI validation head is `92b85d1b49c9ff8e4c1fca2e91da76d0fe1d5a59`. H1 regenerated the real Bink baseline; H2 measured production plane copies; H3 measured exact audio candidates on x86-64 and native ARM64; H4 audited DXT/upload paths and ran sustained media stress; H5 reran real-DLL and broad regression; H6 investigated all supplied issue evidence. No timer padding or physical-device claim is included.
+
+### 2. Files and commits
+
+Net Phase 11 production/runtime/workflow delta from Phase 10 is **zero**. Research documentation changed in `re/protodroid-016/phase-11.md`, `README.md`, `experiment-ledger.md`, `profiling.md`, `technique-matrix.md`, `rejected-changes.md`, `final-report.md`, and `device-results.md`. Important revisions are baseline `472caffe`, temporary exact ARM64 fixture `a691e7e8`, restored production/workflow identity and rejected candidates `92b85d1b`, sustained-media documentation `bca15d8a`, and final broad-regression/audio evidence `b5c9e500`; the completion commit is documentation-only. External raw logs, runners, binaries, verification reports, issue JSON, CI metadata, and the finalizer remain under `/home/user/protodroid-016-evidence/phase-11/`. The temporary ARM64 workflow/harness was removed after its exact source and evidence were preserved. No large artifact was added to Git.
+
+### 3. Candidate dispositions
+
+H1 is attribution only; H2 rejects row-call elimination, padding overwrite, opposite-pitch block copies, live-pointer caching, and dropping either populated plane set. H3 rejects conditional subtraction as slower and rejects the genuinely faster span reader because its absolute saving is below the preregistered **0.25 ms CPU/s** gate on both architectures. H4 retains the existing DXT decoder, lock lifetimes, uploads, media synchronization, and both audio-rate behaviors. H5 adopts no synthetic-cost mixer rewrite. H6 selects no speculative runtime patch and leaves issues **#22, #29, #32, #33, and #35 open**. Existing full-color DXT, Bink, dynamic shadows, AA/texture quality, mods, A/V behavior, safe fallbacks, and prior runtime dispositions are unchanged.
+
+### 4. Raw before/after measurements
+
+The balanced Bink baseline covers **40 processes / 11,640 frames**. Median 291-frame `BinkDoFrame` totals are **525.858246 ms unregistered / 650.740283 ms registered**, paired ratio **1.233614**, median delta **125.535526 ms** (about **0.431394 ms/frame**); common output digest is `9e46ff3727b5d03a`. Direct production copies cover **96 processes / 96,000 copies**: padded-negative one/two-set means are **0.238684268/0.479980856 ms**, and tight/padded two-set ratio is **1.0126077570** with tight winning only 3/12 pairs. No copy candidate survives.
+
+The x86 audio cohort covers **240 processes / 960,000 timed callbacks**. Conditional-subtract ratios are 1.025–1.131 (slower); span reading saves only **0.077946–0.130193 ms CPU/s**. Native ARM64 covers **180 processes / 720,000 timed callbacks** and saves only **0.039957–0.059141 ms CPU/s**, despite 12/12 wins. The real-DLL cohort covers **12 processes / 168,000 timed mixer calls**, median of process medians **4.8505 µs/call** (range 4.682–5.474 µs), with no measured game cadence or FPS denominator. Sustained media covers **100 loops / 29,100 frames / 125,712,000 registered rows** in **283.875684564 s**; this is host decoding stress, not real-time Android playback or an FPS before/after result.
+
+### 5. Correctness and regression evidence
+
+The aggregate evidence gate recomputes or validates **1,088,025 checks**: 23,713 Bink baseline, 97,086 plane, 962,723 x86 audio, 113 compact native-ARM64 audio summary, 88 sustained-media, 222 real-DLL cohort, 4,008 broad-regression replay, and 72 issue-audit checks. All 291-frame outputs, compressed inputs, visible padded/negative-pitch planes, audio outputs, and loop digests match their references. Sustained media performs 29,100 full input comparisons and 29,100 audio callbacks (21,650 nonzero). The real cache remains **1,014/1,014 valid SHA-1 entries**. The corrected regression passes **13 groups / 53 commands in 108.336966312 s**; the preserved first attempt's plugin-path harness failure is not counted as passing or as a production defect.
+
+CI run **41861964235** on `92b85d1b` is `completed/success`; `bink-tests`, dependencies, driver packages, native ARM64 graphics, Turnip, and `build-apk` all succeed, optional evidence checks are neutral, and release is skipped. The source-native build and signed-package verification steps pass while the prebuilt fallback is skipped. GitHub artifact **13341818959** is bound to the same run/revision, is 57,950,022-byte ZIP data, and has GitHub archive SHA-256 **`41f57621be39aab6ab21df660233bc6567f5773f5792ab688c2d813cf4880fed`**. This is the artifact ZIP digest, **not an inner-APK digest**.
+
+### 6. Limitations
+
+No ADB, affected physical device, Android/Bionic execution, GPU profiler, or local Android NDK is available. Host/native-CI results are not phone FPS, frame-time/pacing, GPU-upload, shader-loading, audio-device, A/V-quality, thermal, or sustained-playback proof. The ARM64 signed audio artifact remained unavailable, so its compact API summary is not described as per-callback replay. Local JDK/glslang/SPIR-V tools remain exact-CI coverage. The APK payload download ended with EOF after GitHub's signed blob redirect; no local APK/library hash, installation, or device-rendering claim is invented. The first local finalizer attempt also exposed and corrected verifier type/cleanup defects before the passing gate; no failed check was hidden.
+
+Most importantly, the supplied issues are **not resolved by this evidence**. #35 has only correlational PanVK/dumping/`LockRect`/watchdog/device-loss evidence plus a working same-settings previous control; #33's latest recurrence lacks logs; #32 lacks the exact unsupported feature; #22 lacks a visual root cause; #29 lacks actionable logs. Diagnostics and existing compatibility work are not presented as fixes.
+
+### 7. Next priority
+
+Start **Phase 12** with sustained whole-program/memory/frame-stall research and explicit long-soak comparability controls, while carrying the five issues forward as open correctness work rather than silently closing them. Preserve the zero-change Phase 11 media dispositions unless new workload evidence justifies reopening one. Any affected-device fix still requires current exact-version logs or a source-provable defect and focused correctness coverage; no merge, tag, release, quality reduction, cutscene skip, or fabricated performance result is authorized by this completion.

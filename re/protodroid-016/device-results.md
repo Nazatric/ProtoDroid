@@ -1,6 +1,6 @@
 # Physical-device results
 
-No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phase 7 is complete with host memory/I/O fixtures only. Phase 8 is complete with host D3D9 bridge fixtures only. Phase 9 is active with source/host/native-Linux-ARM64 cache fixtures only. The tracked real Prototype cache supplies entry counts and bytes, not a current physical-device timing run; no result fills the physical table or establishes startup, streaming, FPS, or frame-pacing improvement.
+No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phases 1–11 are complete only within their recorded source/host/native-CI scopes. Phase 11 adds exact Bink/audio fixtures, sustained host media, broad regression, and issue-log classification; none supplies current physical-device FPS, frame-time, rendering, audio-device, thermal, or sustained-playback evidence.
 
 | Device/GPU/driver | Source/APK | Settings/scene/cache | Runs | Result | Limitations |
 | --- | --- | --- | --- | --- | --- |
@@ -8,4 +8,14 @@ No physical Android device or `adb` connection is available in the current envir
 
 Historical logs may guide scene selection and instrumentation, but are entered only with their original source revision and are never relabeled as released-0.15 or candidate-0.16 results.
 
-Phase 6 host synchronization/Present measurements and sanitizer/regression runs are not physical Play or diagnostic-tour results. Device FPS, frame-time distributions, audio continuity, shutdown behavior, thermals, and sustained pacing remain unmeasured.
+## Supplied issue evidence is not new device validation
+
+The Phase 11 read-only audit leaves **#22, #29, #32, #33, and #35 open**. It inspected current issue bodies/comments, all supplied native/D3D9 logs, 44 images, and the remaining crash/tour attachments; a 72-check verifier binds the classifications to exact files. No affected device was rerun and no issue fix is claimed.
+
+- **#35:** the failing `fa8b6e55` direct-PanVK/540p/two-mip/512-shadow/dumping run stops before mission Bink open and later shows watchdog/`LockRect`/device-loss correlations. A previous run with the same revision and settings reached frame 65,536 and opened mission Bink videos. This is a comparative historical control, not a current A/B or root-cause result.
+- **#33:** old `ea2ba6c9` logs show explicit system-Vulkan-1.1 rejection. The latest recurrence comment supplies no current logs, so its failure remains undiagnosed.
+- **#32:** old PurpleVK/Adreno 610 evidence ends at `VK_ERROR_FEATURE_NOT_PRESENT`, but requested feature state does not identify the unsupported feature.
+- **#22:** old Mali-G57 logs contain successful reset/present operations and no established visual root cause. Existing full-color DXT1 and compatibility diagnostics are not validated issue fixes.
+- **#29:** generic launcher/setup text and an image supply no actionable native/D3D9 failure evidence.
+
+CI run `41861964235` verifies the exact-revision source-built APK and skips release, but the signed artifact payload could not be reopened after redirect EOF. That packaging result does not populate the physical-device table or establish installation, rendering, audio, or issue resolution.
