@@ -69,6 +69,14 @@ jobs:
           bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test
           bash src/native/tests/run_memory_test.sh /tmp/memory_test
 
+      - name: Check out pinned FAudio header for XAudio2 regression
+        run: |
+          git clone -q --depth 1 --branch 25.10 https://github.com/FNA-XNA/FAudio.git /tmp/protodroid-faudio-test
+          test "$(git -C /tmp/protodroid-faudio-test rev-parse HEAD)" = "ba876ce3be73eabd7094fa276a751ede8328b608"
+
+      - name: Compile and run XAudio2 lifecycle regression
+        run: bash src/native/tests/run_xaudio2_test.sh /tmp/protodroid-faudio-test /tmp/protodroid-xaudio2-test
+
       - name: Compile and run Prototype Fix policy tests
         run: |
           set -euo pipefail
