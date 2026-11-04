@@ -57,6 +57,8 @@ No redundant-state cache will be added speculatively. Reset, StateBlock Apply, G
 
 Independent confirmation with a different order rotation gives anisotropy candidate/baseline **0.7846883221435051**, 36/36 wins (A/A 0.997784); screenshot gives **0.991819521095481**, only 22/36 wins (A/A 0.996348). The screenshot guard move is therefore **rejected as immaterial** for a once-per-Present path despite correct semantics and removed ARM64 guards. The combined external source candidate is not used. The smaller anisotropy-only source candidate is committed as `f5be92170480d4d9a99924f41502108903e0449a`; its exact-code CI run `41784574180` is in progress. Exact production-block fixtures pass 44 processes/176 checks across both platforms, defaults, clamps, and TSan. Independent verification is 62/62 and broad regression is 12/12.
 
+Across the 60 primary+confirmation pairs, anisotropy has median ratio **0.7791195541671706**, 60/60 wins, A/A 0.997651, and median absolute savings of 0.266–0.323 ns per isolated setter. Screenshot has median ratio 0.988630, 42/60 wins, A/A 0.994213; its confirmation absolute saving is only 0.230 ns per Present (primary 1.105 ns). This absolute materiality analysis supports adopting the frequent-setter candidate and rejecting the once-per-Present global-state change. Raw recomputation: `materiality-analysis.json`.
+
 Independent recomputation of the current candidate evidence passes **52/52 checks**. All malformed-output, setup, generator, optimized-out, and sanitizer failures are retained beside the raw evidence.
 
 ## DXVK patch audit and non-actions

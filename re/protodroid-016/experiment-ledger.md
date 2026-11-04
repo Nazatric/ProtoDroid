@@ -353,13 +353,13 @@ Every experiment records hypothesis, exact baseline/candidate revisions, changed
 
 - **Candidate:** `f5be92170480d4d9a99924f41502108903e0449a`; resolve setting in `InitD3D9Bridge` after config/logging are ready and before guest calls. Defaults, clamp, and forwarded sampler policy unchanged.
 - **Correctness:** exact production-block normal/TSan fixture passes 44 processes/176 checks across Android/desktop, explicit values, defaults, and concurrent reads. Broad regression 12/12. Independent candidate verification 62/62.
-- **Performance:** rejected optimized-out same-TU benchmark retained. Canonical separate-TU balanced candidate/baseline 0.773923 (24/24); independent confirmation 0.784688 (36/36), with A/A 0.993443/0.997784. ARM64 loses the `ldarb` static guard.
+- **Performance:** rejected optimized-out same-TU benchmark retained. Canonical separate-TU balanced candidate/baseline 0.773923 (24/24); independent confirmation 0.784688 (36/36), with A/A 0.993443/0.997784. ARM64 loses the `ldarb` static guard. Combined median is 0.779120 across 60 pairs (60/60), with 0.266–0.323 ns isolated setter savings.
 - **Disposition:** **committed, adoption pending exact-code CI** `41784574180`. Isolated host function/ARM64 structure only; no phone FPS or real setter-frequency claim.
 
 ### H5: eager screenshot configuration
 
 - **Evidence:** candidate removes two ARM64 `ldarb` guards. Initial default-path ratio 0.981703 (20/24), confirmation 0.991820 (22/36), with real `shot_now` polling unchanged. Exact normal+ASan/UBSan capture differential passes 16 cases/80 checks with identical PPM bytes.
-- **Disposition:** **rejected on materiality**. Once-per-Present improvement is weak/inconsistent and does not justify new global lifecycle state. Combined config candidate is unused; screenshot behavior is unchanged in source.
+- **Disposition:** **rejected on materiality**. Once-per-Present improvement is weak/inconsistent (combined 0.988630; confirmation absolute saving 0.230 ns/Present) and does not justify new global lifecycle state. Combined config candidate is unused; screenshot behavior is unchanged in source.
 
 ### DXVK audit
 
