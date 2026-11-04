@@ -58,9 +58,9 @@ All physical-device FPS, visual correctness, shader latency, pacing, and thermal
 
 ## Phase 10 Vulkan GPU/synchronization/memory/presentation candidates
 
-- **Disabled `DXVK_PRESENT_STATS` overhead:** exact-patch candidate pending ARM64/materiality. Baseline queue pre-acquire always executes steady-clock reads and atomic counter additions; gate only this diagnostic scaffolding through the existing lazy option state. Full-source host saves 97.064736 ns/Present (24/24), with clean semantic/sanitizer gates, but this is only ~0.000097 ms and not device FPS. Every Vulkan wait/acquire/present operation and the enabled report is preserved.
-- **FIFO/image-count/frame-latency/lock changes:** not candidates without Present breakdown and device A/B evidence. Historical Present wall is not GPU time; long Present-to-Present intervals cannot be assigned to the swapchain by correlation alone.
-- **Unified-memory/resource-wait/barrier/queue rewrites:** audit-only unless an exact affected workload and compatibility-safe improvement are established. Existing Qualcomm/Mali paths remain correctness requirements.
+- **Disabled `DXVK_PRESENT_STATS` overhead:** rejected as immaterial and reverted. Native ARM64 verifies 210 checks/48 rows and saves 102.642780 ns/Present (24/24), but that is only 0.000102643 ms, 0.006159 ms CPU/s at 60 presents/s, and 0.000616% of a 60 Hz interval. Semantics/publication/UBSan pass; fake-Vulkan timing is not device FPS. Production retains the original path.
+- **FIFO/image-count/frame-latency/lock changes:** rejected from current evidence. A 1,229-check historical audit reconstructs 3,131 intervals/3,132 wall calls: 27 intervals but only 3 wall calls exceed 50 ms; interval-average correlation is 0.783964 with EngineService and −0.211326 with wall. Present wall is not GPU time and correlation is not causation, so no presentation-policy change is justified.
+- **Unified-memory/resource-wait/barrier/queue rewrites:** audit complete, no change. Restored all-16-patch source passes memory/depth/FXAA/preflight/BC tests; Android managed-copy release, queue lifetime locks, 500 ms maintenance deadline, and actual-wait timing remain intact. No measured workload justifies a rewrite.
 
 ## Phase 9 shader/loading/cache candidates
 
