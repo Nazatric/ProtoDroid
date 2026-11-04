@@ -1,6 +1,6 @@
 # Physical-device results
 
-No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phases 1–12 are complete and Phase 13 is complete only within the recorded source/host/native-CI scopes. Phase 12 adds exact XAudio2/FAudio lifecycle controls, sustained historical-log classification, broad regression, and issue-log classification; none supplies current physical-device FPS, frame-time, rendering, audio-device, thermal, or sustained-playback evidence.
+No physical Android device or `adb` connection is available in the current environment. No new device benchmark has been run for 0.16. Phase 1 is an explicit 8-minute-2-second available-environment checkpoint, Phases 2–13 are complete within their recorded scopes, and Phase 14 is complete only within the source/host/native-CI scope. Phase 12 adds exact XAudio2/FAudio lifecycle controls, sustained historical-log classification, broad regression, and issue-log classification; none supplies current physical-device FPS, frame-time, rendering, audio-device, thermal, or sustained-playback evidence.
 
 | Device/GPU/driver | Source/APK | Settings/scene/cache | Runs | Result | Limitations |
 | --- | --- | --- | --- | --- | --- |
@@ -31,3 +31,9 @@ Artifact `13359379211` (`prototype-apk`) is server-described as 57,955,156 bytes
 Exact CI run `41911558127` on `2dabecdf3b15b14da56803863bb13b67c80070d6` succeeds, including source-built ARM64 `libmain.so`, APK packaging/signing, and APK/embedded-DXVK verification; release is skipped. The Bink transient-open candidate passes real host SDL/stub controls, both audio rates, 94 concurrent checks, and 62/62 broad commands. These do not establish Android output coexistence, audible recovery, installation, FPS, rendering, thermal, or sustained-play results.
 
 Artifact `13364468289` is server-described as 57,950,912 bytes with archive digest `sha256:0a980739e8fb05c5dabd8ff48cffb4abff3ab33e66b8cb7cf1d5d060edc2f1e1`; this is not an inner-APK hash or device validation. **#22, #29, #32, #33, and #35 remain open and unfixed by this phase.**
+
+## Phase 14 final physical-device gate
+
+The final fresh host regression passes 62/62 commands with 316 independent raw-evidence checks, and exact source CI `41911558127` passes required ARM64/APK jobs. These do not add a device row. The new-run count remains **zero**; no current median FPS, frame-time p50/p95/p99, long-stall, cold/warm shader-loading, GPU-time, thermal, sustained-play, audible-output, installation, or visual/media result exists.
+
+The manifest remains `com.protodroid` 0.15/code 15. The CI artifact uses a disposable signing identity and is not release-eligible. **#22, #29, #32, #33, and #35 remain open.** A future authorized candidate requires exact-APK 0.15/candidate device A/B evidence before any performance or issue-resolution claim.

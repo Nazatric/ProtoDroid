@@ -1,6 +1,6 @@
 # External repository ledger
 
-**Phase 2 is active.** This is a substantive source-audit checkpoint, not a completion or device-validation claim. All five required repositories were pinned and inspected. Dispositions below are audit-level decisions; a technique marked for a later experiment still requires ProtoDroid profiling and controlled correctness/performance evidence.
+**Phase 2 is complete; Phase 14 final evidence consolidation is complete within its recorded source/host/native-CI scope.** The five-repository source audit is complete within its recorded scope, not a device-validation claim. All five required repositories were pinned and inspected. Dispositions below are audit-level decisions; any technique marked for a later experiment was subsequently required to pass ProtoDroid profiling and controlled correctness/performance evidence before adoption.
 
 No external source code has been copied into ProtoDroid. The read-only-at-HEAD, sparse, blob-filtered clones are outside Git under the persistent canonical store `/home/user/protodroid-016-evidence/external`; `/tmp/protodroid-016` is only a compatibility symlink. Fresh file lists, per-file SHA-256 manifests, commit provenance, key-file hashes, license hashes, and the shared-lineage comparison are under `/home/user/protodroid-016-evidence/audit`. `audit-manifest-sha256.txt` hashes the current manifests. The original `/tmp` evidence directory and its raw artifacts were lost during sandbox recreation; the current files are explicitly regenerated artifacts, not recovered originals or a claimed byte-identical reconstruction. These paths are reproducibility records, not files available on another machine.
 
@@ -156,3 +156,9 @@ The five repositories do not justify a forced patch from each. The best-supporte
 - **Original engine:** read-only `prototypeenginef.dll` disassembly and recovered function ranges were used to bound the direct mixer-thread lifecycle call shape. No original binary was modified. Indirect/unseen callback paths are not claimed covered.
 - **DXVK:** v2.5.3 `c707d9026f33b6ab89639f154b6ac5f6326fa037` with the existing ordered Android patches was freshly checked for regression; no DXVK replacement or patch-series change was made.
 - Raw pins, build logs, disassembly, hashes, and real-backend fixtures are under `/home/user/protodroid-016-evidence/phase-12/regenerated/`; they are not imported into the repository.
+
+## Supplemental Phase 14 provenance boundary
+
+- Released 0.15 commit `18ba66bd0945e405aaded0de5ff8848a8cd07932` was fetched read-only for the final net-diff inventory. External dependency pins and licenses remain those recorded above; Phase 14 adds no external source or production dependency.
+- Final raw diffs, source hashes, issue/CI metadata, runner, and manifests remain under `/home/user/protodroid-016-evidence/phase-14/`. They are evidence infrastructure, not tracked third-party source or a new device result.
+- A final read-only GitHub object check verified all five exact commits again: PrototypeRecomp `c9224ecd…`, Black-mobiu `eaab7555…`, GoW III `b3a7c3d5…`, ISS `43c833de…`, and Bloodborne `f241353e…`. The historical local clones and raw audit directory are not present in the current store; their earlier results remain committed historical records, not files claimed to be currently reopenable. No external source code was copied into production.
