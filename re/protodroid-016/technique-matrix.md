@@ -52,6 +52,8 @@ All physical-device FPS, visual correctness, shader latency, pacing, and thermal
 - **Final bounded-notification disposition:** rejected, including the multi-object-safe form. Correctness safety did not translate into performance: single-release latency regressed materially and batch results were neutral/noisy. No variant remains a candidate.
 - **Explicit Present-thread ADPF registration:** inconclusive/device-only. Historical worst-Present samples are concentrated on a priority-0 TID, but the log has no session roster or thread-lifetime proof. The NDK API requires an inter-related, preferably long-lived thread group; no source change is justified without physical A/B evidence.
 
+**Phase 7 is complete after 1h26m26.333805s.** Multi-wait inline/sized-vector storage is adopted at `2e9e31b`; RCF basename deferral is rejected and no speculative index/cache rewrite remains. Fresh raw evidence and exact-code CI pass; older unavailable raw stores are explicitly historical. No phone FPS or pacing claim.
+
 ## Phase 7 memory and I/O candidates
 
 - **RCF exact-hit basename deferral:** rejected after full `OpenFileSource` and direct `OpenArchiveSource` A/A/candidate cohorts. Correctness passed, but 12.96 million opens did not establish an effect beyond identical-control variability. No source change remains.

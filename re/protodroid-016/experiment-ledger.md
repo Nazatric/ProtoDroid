@@ -328,7 +328,7 @@ Every experiment records hypothesis, exact baseline/candidate revisions, changed
 - Observation: a fresh clone initially reported `00976d9` plus uncommitted later content, and the external evidence directory was absent. This was an environment/state issue, not a performance experiment.
 - Recovery: every reported file matched pushed `747db65f753ee01945b6c3d7e4aab51e96b8b23c`; the existing active branch was reattached without changing content or using another branch. Backup patch/document hashes are in `/home/user/protodroid-recovery/`.
 - Evidence disposition: older external raw files/manifests are marked historical/unavailable. No result is fabricated or claimed as reopened. Exact-code Phase 7 CI `41773816427` independently confirms six successful build/test jobs and skipped release at `2e9e31b`.
-- Decision: Phase 7 stays active pending regenerated essential raw evidence and final gates. No new runtime change or performance result is associated with recovery.
+- Decision at that checkpoint: Phase 7 remained active pending regenerated essential raw evidence and final gates; those gates subsequently passed as recorded below. No new runtime change or performance result is associated with recovery.
 
 ## P7-RECOVERY-VERIFY — Regenerated essential raw evidence
 
