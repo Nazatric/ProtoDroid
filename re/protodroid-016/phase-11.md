@@ -35,7 +35,18 @@ Source attribution bounds the next step: `BinkDoFrame` publishes a decoded frame
 
 ### H2 — Bink plane/copy candidate only after exact attribution
 
-If a redundant plane operation is source-established, implement the smallest semantics-preserving candidate and compare baseline/A-A/candidate in balanced fresh processes. Verify every frame and both plane sets, input immutability, strides/pitches, and normal/ASan+UBSan behavior. Reject neutral, immaterial, or output-changing changes; do not remove required registered copies or alter display timing.
+**Complete: no plane-copy candidate.** A direct production `CopyRegisteredFrame` fixture used the same 1920×1080 YUV420P dimensions and source line sizes (1920/960/960), eight padded/tight × positive/negative × one/two-set layouts, 12 balanced rounds, and 1,000 timed copies per fresh process. The 96 processes executed 96,000 production copies; `verify_bink_plane_cohort.py` independently passed **97,086 checks**, and the harness verified **1,866,240 visible rows** plus source immutability, inter-row padding, and outer guards. Set-zero visible output digest is `d4cd313d58d1ba7d` for every layout/process.
+
+| Layout | Mean ms/copy, one set | Mean ms/copy, two sets | Two/one ratio |
+|---|---:|---:|---:|
+| Padded positive | 0.234038 | 0.467849 | 1.988399 |
+| Padded negative | 0.238684 | 0.479981 | 2.015003 |
+| Tight positive (existing contiguous path) | 0.234730 | 0.471506 | 2.003289 |
+| Tight negative | 0.234947 | 0.465063 | 1.971306 |
+
+The padded-negative second set adds 0.240329 ms/copy median, consistent with required bytes dominating. For the primary padded-negative two-set case, per-run p95/p99 medians are 0.516423/0.569415 ms. Existing tight-positive two-set copies are **not faster** than padded-positive copies: tight/padded ratio 1.012608 with only 3/12 wins (p95/p99 0.506492/0.531360 ms). Negative tight/padded comparisons describe guest layout differences, not permission to alter guest pitches. The direct 0.480 ms copy cost is consistent in scale with H1's 0.431 ms registered-path delta but is a separate warm synthetic measurement, not an exact causal equality or GPU upload time.
+
+Disposition: reject row-call elimination, padding overwrite, opposite-pitch block copies, live-pointer caching, or dropping a populated set. One-set rows are attribution controls only. No production source change is justified; required visible bytes and the two live sets dominate, while the existing contiguous path provides no measured material headroom.
 
 ### H3 — audio/mixer and media synchronization audit
 
@@ -53,7 +64,19 @@ The full x86-64 cohort used 12 balanced rounds, four fresh-process labels (basel
 | 44.1 kHz wrap direct | 12.484838 | 1.006120 | 1.089644 | 0.778607 | 0.118885 | 12/12 |
 | 32 kHz wrap direct | 12.066680 | 1.004800 | 1.069786 | 0.793140 | 0.077946 | 12/12 |
 
-**Conditional subtract is rejected:** it is slower in every configuration (median ratios 1.025–1.131); disassembly shows a loop-carried `cmov` chain. The span reader is genuinely faster, but every x86-64 absolute saving is below the preregistered 0.25 ms CPU/s threshold. It is not adopted on this evidence. A temporary portable fixture/`measure_bink_audio_span.py` and exact-source ARM64 CI job will decide whether target-architecture savings cross the same threshold; its embedded generator has been executed locally and matches the measured span source byte-for-byte. Production `bink.cpp` remains unchanged.
+**Conditional subtract is rejected:** it is slower in every configuration (median ratios 1.025–1.131); disassembly shows a loop-carried `cmov` chain. The span reader is genuinely faster, but every x86-64 absolute saving is below the preregistered 0.25 ms CPU/s threshold.
+
+Native ARM64 CI run **41860945892**, job check **126682247381**, and API evidence check **126683105548** then measured the exact generated span source on `aarch64`: 180 fresh processes, 720,000 timed callbacks, and 725,760 bit-checked callbacks. The API-published compact summary passed 113 structural/source/hash/range checks. All span rows beat both baseline and identical control 12/12, but absolute savings remained below threshold:
+
+| ARM64 configuration | Baseline mean (µs) | A/A ratio | Span/baseline | Span/control | Saved (ms CPU/s) |
+|---|---:|---:|---:|---:|---:|
+| 48 kHz wrap direct | 9.806117 | 1.000108 | 0.871390 | 0.870084 | 0.059141 |
+| 48 kHz nowrap direct | 9.640136 | 1.001265 | 0.876797 | 0.874917 | 0.055683 |
+| 48 kHz wrap bin | 9.752605 | 1.000016 | 0.904892 | 0.902891 | 0.043406 |
+| 44.1 kHz wrap direct | 9.788919 | 1.000111 | 0.873595 | 0.874443 | 0.053298 |
+| 32 kHz wrap direct | 9.817021 | 0.998515 | 0.869256 | 0.868675 | 0.039957 |
+
+Even the published per-round saving maxima are below 0.25 ms CPU/s, so the rejection is not close. The signed artifact download returned EOF and was not retried; raw per-callback ARM64 arrays therefore could not be reopened, and this limitation is explicit rather than replaced with an independent-recompute claim. The API check retains per-label and paired summaries, exact source/binary/harness hashes, and correctness counts. **Both audio candidates are rejected on absolute materiality; production `bink.cpp` is unchanged.** The temporary job, portable repo harness, and measurement script are removed after preserving their exact content and CI patch outside Git. No phone underrun, A/V-latency, or FPS improvement is claimed.
 
 ### H4 — texture decode/upload relevance and sustained media validation
 
