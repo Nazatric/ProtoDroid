@@ -436,6 +436,172 @@ jobs:
           /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures
           BINK_TEST_AUDIO_RATE=44100 /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures-44100
 
+  arm64-bink-audio:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the pinned minimal ARM64 Bink decoder stack
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch n7.1.1 https://github.com/FFmpeg/FFmpeg.git /tmp/bink-ffmpeg-src
+          test "$(git -C /tmp/bink-ffmpeg-src rev-parse HEAD)" = db69d06eeeab4f46da15030a80d539efb4503ca8
+          mkdir -p /tmp/bink-ffmpeg-build
+          cd /tmp/bink-ffmpeg-build
+          /tmp/bink-ffmpeg-src/configure \
+            --prefix=/tmp/bink-ffmpeg --enable-static --disable-shared --disable-programs --disable-doc \
+            --disable-debug --disable-network --disable-autodetect --enable-pthreads --disable-w32threads \
+            --disable-os2threads --disable-x86asm --disable-avdevice --disable-avfilter --disable-swscale \
+            --disable-postproc --disable-everything --enable-avformat --enable-avcodec --enable-avutil \
+            --enable-swresample --enable-demuxer=bink --enable-decoder=bink,binkaudio_rdft,binkaudio_dct
+          make -j 2
+          make install
+
+      - name: Generate the exact contiguous-span candidate
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import difflib
+          source = Path('src/native/bink.cpp').read_text()
+          at_start = source.index('    float At(size_t frame, unsigned channel) const {')
+          at_end = source.index('    void Push', at_start)
+          assert source[at_start:at_end] == (
+              '    float At(size_t frame, unsigned channel) const {\n'
+              '        return data[((head + frame) % capacity) * 2 + channel];\n'
+              '    }\n')
+          new_at = '\n'.join([
+              '    template <typename F>',
+              '    void Read(size_t count, F&& fn) const {',
+              '        const size_t first = std::min(count, capacity - head);',
+              '        const float* src = data.data() + head * 2;',
+              '        for (size_t i = 0; i < first; ++i, src += 2) fn(i, src);',
+              '        src = data.data();',
+              '        for (size_t i = first; i < count; ++i, src += 2) fn(i, src);',
+              '    }',
+              '',
+          ])
+          assert source.count('            if (track.mix_bins.empty()) {') == 1
+          mix_start = source.index('            if (track.mix_bins.empty()) {', at_end)
+          mix_end = source.index('            track.ring.Consume(count);', mix_start)
+          old_mix = source[mix_start:mix_end]
+          assert old_mix.count('track.ring.At(i, 0)') == old_mix.count('track.ring.At(i, 1)') == 2
+          new_mix = '\n'.join([
+              '            if (track.mix_bins.empty()) {',
+              '                track.ring.Read(count, [&](size_t i, const float* sample) {',
+              '                    g_audio.mix[i * 2] += sample[0] * gain_l;',
+              '                    g_audio.mix[i * 2 + 1] += sample[1] * gain_r;',
+              '                });',
+              '            } else {',
+              '                for (size_t b = 0; b < track.mix_bins.size() && b < 8; ++b) {',
+              '                    unsigned bin = track.mix_bins[b] & 7;',
+              '                    float bin_gain = b < track.mix_volumes.size() ? track.mix_volumes[b] / 32768.0f : 1.0f;',
+              '                    track.ring.Read(count, [&](size_t i, const float* sample) {',
+              '                        g_audio.bins[bin][i * 2] += sample[0] * gain_l * bin_gain;',
+              '                        g_audio.bins[bin][i * 2 + 1] += sample[1] * gain_r * bin_gain;',
+              '                    });',
+              '                }',
+              '            }',
+              '',
+          ])
+          candidate = source[:at_start] + new_at + source[at_end:mix_start] + new_mix + source[mix_end:]
+          Path('/tmp/bink-audio-span.cpp').write_text(candidate)
+          Path('/tmp/bink-audio-span.diff').write_text(''.join(difflib.unified_diff(
+              source.splitlines(True), candidate.splitlines(True),
+              fromfile='src/native/bink.cpp', tofile='/tmp/bink-audio-span.cpp')))
+          PY
+
+      - name: Compile the production baseline and span candidate
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bink-audio-obj
+          CXXFLAGS="-std=c++17 -O2 -DNDEBUG -g -Wall -Wextra -Werror -Wno-unused-parameter \
+            -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_BINK_TEST -fsigned-char \
+            -I. -Isrc/recomp -Isrc/native -I/tmp/bink-ffmpeg/include"
+          for src in src/native/bink_media.cpp src/native/bink_blit.cpp; do
+            g++ $CXXFLAGS -c "$src" -o "/tmp/bink-audio-obj/$(basename "${src%.cpp}").o"
+          done
+          g++ $CXXFLAGS -c src/native/tests/bink_audio_profile.cpp -o /tmp/bink-audio-obj/baseline.o
+          g++ $CXXFLAGS '-DBINK_PROFILE_SOURCE="/tmp/bink-audio-span.cpp"' \
+            -c src/native/tests/bink_audio_profile.cpp -o /tmp/bink-audio-obj/span.o
+          for label in baseline span; do
+            g++ -pthread "/tmp/bink-audio-obj/$label.o" /tmp/bink-audio-obj/bink_media.o \
+              /tmp/bink-audio-obj/bink_blit.o -L/tmp/bink-ffmpeg/lib \
+              -lavformat -lavcodec -lswresample -lavutil -lz -lm -o "/tmp/bink-audio-$label"
+          done
+          sha256sum src/native/bink.cpp /tmp/bink-audio-span.cpp \
+            /tmp/bink-audio-baseline /tmp/bink-audio-span
+
+      - name: Measure baseline, identical control, and span candidate on ARM64
+        run: |
+          set -euo pipefail
+          python3 tools/measure_bink_audio_span.py \
+            --baseline /tmp/bink-audio-baseline --span /tmp/bink-audio-span \
+            --baseline-source src/native/bink.cpp --span-source /tmp/bink-audio-span.cpp \
+            --harness src/native/tests/bink_audio_profile.cpp --output /tmp/bink-audio-arm64 \
+            --iterations 4000 --rounds 12 > /tmp/bink-audio-arm64.stdout 2> /tmp/bink-audio-arm64.stderr
+          test ! -s /tmp/bink-audio-arm64.stderr
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('/tmp/bink-audio-arm64/summary.json').read_text())
+          assert result['all_correct'] and result['processes'] == 180 and result['timed_callbacks'] == 720000
+          for name, config in result['configurations'].items():
+              paired = config['paired']
+              print(name, 'span/baseline', paired['span_baseline_ratio']['median'],
+                    'span/control', paired['span_control_ratio']['median'],
+                    'saved ms CPU/s', paired['span_saved_ms_cpu_per_second']['median'])
+          PY
+
+      - name: Publish ARM64 Bink audio evidence summary
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/bink-audio-arm64-check-summary.json
+          import json
+          from pathlib import Path
+          result = json.loads(Path('/tmp/bink-audio-arm64/summary.json').read_text())
+          compact = {key: value for key, value in result.items() if key not in ('configurations', 'limitations')}
+          compact['configurations'] = {}
+          for name, config in result['configurations'].items():
+              compact['configurations'][name] = {
+                  'rate': config['rate'], 'wrap': config['wrap'], 'mix': config['mix'],
+                  'output_fnv1a64': config['output_fnv1a64'], 'labels': config['labels'], 'paired': config['paired'],
+              }
+          compact['limitations'] = result['limitations']
+          print('```json\n' + json.dumps(compact, indent=2) + '\n```')
+          PY
+          SUMMARY=$(cat /tmp/bink-audio-arm64-check-summary.json)
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name='arm64-bink-audio-evidence' \
+            -f head_sha="${GITHUB_SHA}" \
+            -f status='completed' \
+            -f conclusion='neutral' \
+            -f output[title]='Native ARM64 Bink audio callback microfixture' \
+            -f output[summary]="${SUMMARY}" > /tmp/bink-audio-arm64-check-run.json
+          python3 -c "import json; assert json.load(open('/tmp/bink-audio-arm64-check-run.json'))['id'] > 0"
+
+      - name: Upload ARM64 Bink audio measurements
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-bink-audio
+          path: |
+            /tmp/bink-audio-arm64
+            /tmp/bink-audio-arm64.stdout
+            /tmp/bink-audio-arm64.stderr
+            /tmp/bink-audio-span.cpp
+            /tmp/bink-audio-span.diff
+            /tmp/bink-audio-arm64-check-summary.json
+            /tmp/bink-audio-arm64-check-run.json
+          retention-days: 30
+          if-no-files-found: error
+
   arm64-graphics-tests:
     runs-on: ubuntu-24.04-arm
     permissions:
@@ -952,7 +1118,7 @@ jobs:
 
   build-apk:
     runs-on: ubuntu-24.04
-    needs: [build-deps, build-turnip, bink-tests, arm64-graphics-tests, driver-package-tests]
+    needs: [build-deps, build-turnip, bink-tests, arm64-graphics-tests, arm64-bink-audio, driver-package-tests]
     env:
       SOURCE_REVISION: ${{ github.sha }}
       PUBLISH_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release == true) }}

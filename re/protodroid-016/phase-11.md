@@ -41,6 +41,20 @@ If a redundant plane operation is source-established, implement the smallest sem
 
 Use the real-DLL differential harness and source inspection to rank mixer, ADPCM, biquad, audio-callback, and media-wait work. Any candidate must pass 32/44.1 kHz differentials and stress, preserve lead/wake behavior, and show material absolute cost in a realistic call shape. Do not infer phone underruns or A/V latency from host timing.
 
+The first source-led candidate is limited to `AudioRing::At`: active callback reads use 64-bit `% capacity` for every sample/channel, although `i < count <= frames <= capacity` guarantees that `head + i < 2 * capacity`, so at most one subtraction is needed. The evidence-only fixture invokes the actual callback with one live movie/track, 1,024 stereo float frames, preallocated output, nontrivial gain/pan, and direct/bin plus wrapping/non-wrapping cases. An independent scalar reference checks every output bit and wrapped consumption outside the timer. Baseline smoke medians are approximately 12.18 µs per callback. Before candidate measurement, the adoption threshold is fixed at a robust win over baseline **and** identical A/A control, exact outputs at 32/44.1/48 kHz, and at least **0.25 ms CPU/s saved** at the corresponding real callback rate (with the relative callback reduction also reported). A ratio-only or smaller absolute win will be rejected; no phone underrun or FPS inference is allowed.
+
+The full x86-64 cohort used 12 balanced rounds, four fresh-process labels (baseline, identical A/A control, conditional subtract, and contiguous-span read), five configurations, and 4,000 timed callbacks per process: **240 processes, 960,000 timed callbacks, and 967,680 bit-checked callbacks**. `verify_bink_audio_cohort.py` independently passed **962,723 checks** over the raw data. Direct and bin output digests are respectively `3cb3a9392356307a` and `479b664ec1a33ddf` for every label/rate/wrap case.
+
+| Configuration | Baseline mean (µs/callback) | A/A ratio | Subtract/baseline | Span/baseline | Span saved (ms CPU/s) | Span wins |
+|---|---:|---:|---:|---:|---:|---:|
+| 48 kHz wrap direct | 12.176941 | 0.975426 | 1.028354 | 0.778143 | 0.126010 | 11/12 |
+| 48 kHz nowrap direct | 12.512207 | 0.991792 | 1.025364 | 0.783329 | 0.126436 | 12/12 |
+| 48 kHz wrap bin | 12.514118 | 0.988582 | 1.131031 | 0.780066 | 0.130193 | 11/12 |
+| 44.1 kHz wrap direct | 12.484838 | 1.006120 | 1.089644 | 0.778607 | 0.118885 | 12/12 |
+| 32 kHz wrap direct | 12.066680 | 1.004800 | 1.069786 | 0.793140 | 0.077946 | 12/12 |
+
+**Conditional subtract is rejected:** it is slower in every configuration (median ratios 1.025–1.131); disassembly shows a loop-carried `cmov` chain. The span reader is genuinely faster, but every x86-64 absolute saving is below the preregistered 0.25 ms CPU/s threshold. It is not adopted on this evidence. A temporary portable fixture/`measure_bink_audio_span.py` and exact-source ARM64 CI job will decide whether target-architecture savings cross the same threshold; its embedded generator has been executed locally and matches the measured span source byte-for-byte. Production `bink.cpp` remains unchanged.
+
 ### H4 — texture decode/upload relevance and sustained media validation
 
 Retain the Phase 5 DXT decoder unless a new exact workload exposes a material remaining path. Audit the boundary from decoded textures/Bink planes to D3D9 registration/upload without reducing texture quality, dynamic shadows, Bink, or mod compatibility. Finish with fresh broad regression, exact CI, explicit raw results, rejected alternatives, and physical-device limitations.
