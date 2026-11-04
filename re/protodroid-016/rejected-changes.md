@@ -68,3 +68,12 @@ These are source/applicability decisions, not controlled performance experiments
 - **Phase 6 speculative scheduler/media-policy changes:** fixed affinity, fewer ADPF reports, a different frame-limiter anchor, surface-lock removal, Bink yield/sleep changes, and XAudio2 lock relaxation are not adopted. They either alter semantics or require physical device/media evidence. D3D9 lock overhead is deferred to its dedicated Phase 8 profile rather than rewritten blindly.
 - **Phase 7 exact-hit RCF basename deferral:** rejected after 12.96 million exact-output opens across full-path and direct-archive A/A/candidate cohorts. Aggregate medians suggested less than 0.5% improvement, but paired rounds did not separate the candidate from the identical control; full-path candidate direction split 18/18 and the direct A/A paired median was slightly better. Baseline/candidate both passed the 8/8 fallback/priority differential. Production source was restored; no startup or streaming claim.
 - **Phase 7 speculative RCF index dedup/pointer rewrite:** not attempted. Exact/basename maps duplicate entry strings, but independent duplicate resolution and process-lifetime pointer stability make a naive rewrite unsafe. Twenty-four fresh baseline processes measured 18,620-KiB whole-process median maxRSS, not index-only or Android pressure; no memory problem or saving is established.
+
+## Phase 8 rejected or unsafe alternatives
+
+- Do not claim the fixed-order HostTable timing cohort as a win: identical x86-64 instructions and a faster A/A control exposed order/noise. The balanced cohort is neutral.
+- Do not use the optimized-out anisotropy benchmark (147 ns candidate loop) as evidence. Only the separate-translation-unit cohort is canonical.
+- Do not remove or bypass `shot_now` polling to make Present faster; the fixed-config candidate preserves the debug feature and exact capture outputs.
+- Do not add bridge-only render/sampler state dedup without Reset, StateBlock Apply, Get/Set, and real call-trace evidence.
+- Do not remove Mali pipeline-compiler serialization or replace DXVK based on these bridge microbenchmarks.
+- The eager screenshot-config move itself is rejected on materiality after the 0.991820 confirmation (22/36 wins), not because of a correctness failure. Its exact 16-case differential passed, but the once-per-Present benefit is too weak to justify extra global lifecycle state.

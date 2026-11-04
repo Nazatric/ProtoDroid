@@ -337,3 +337,30 @@ Every experiment records hypothesis, exact baseline/candidate revisions, changed
 - Raw result: fresh wait cohort 672 processes/134.4 million calls, candidate/baseline ratios 0.323330–0.773926 and 16/16 paired wins in all 14 cases; n=2/any 0.458088. Fresh stress 192 processes/24,960 checks/18,432 wakes, zero sanitizer stderr. Fresh RCF normal+ASan/UBSan semantics each pass 8/8. No fresh RCF performance experiment.
 - Correctness: 257/257 timing verification, exact allocation counts, original-DLL caller audit, 12/12 broad regression in 7.652395760s, and exact-code CI six-job success all pass. Older 403.2-million-call and RCF timing raw data remain historical/unavailable, not merged into this fresh cohort.
 - Decision: **recovery validation passes; no additional runtime change or device claim**. Phase 7 can proceed to final source-scope, release-preservation, documentation, and manifest gates.
+
+## Phase 8 — D3D9 bridge and DXVK overhead
+
+### H1: HostTable chunk acquire is redundant with entry acquire
+
+- **Baseline/revision:** Phase 8 baseline `c033649`; exact baseline source and harnesses in `phase-08/`.
+- **Candidate:** `ca25c4603ca3969fbaabd5e2dfc1264a50101925`; only the chunk-pointer load becomes relaxed. Entry acquire and all release stores/lifetimes remain.
+- **Evidence:** exact production-class ARM64 `ldr` + `ldar` versus baseline `ldar` + `ldar`; 2,828,784-check normal stress and 707,196-check TSan stress per variant with matching digests; canonical ASan+UBSan/TSan stderr empty. Intentional process-lifetime LeakSanitizer finding is retained separately.
+- **Timing:** fixed-order cohort rejected as confounded. Balanced 72-process x86-64 candidate/baseline median 1.006302, A/A 1.005189; neutral because x86-64 instructions are identical.
+- **CI:** run `41781790100`, six build/test jobs successful, release skipped.
+- **Disposition:** **adopted** as an ARM64 structural/host-correctness candidate. No real-game frequency, ARM64 timing, FPS, or pacing claim.
+
+### H4: resolve anisotropy before sampler calls
+
+- **Candidate:** `f5be92170480d4d9a99924f41502108903e0449a`; resolve setting in `InitD3D9Bridge` after config/logging are ready and before guest calls. Defaults, clamp, and forwarded sampler policy unchanged.
+- **Correctness:** exact production-block normal/TSan fixture passes 44 processes/176 checks across Android/desktop, explicit values, defaults, and concurrent reads. Broad regression 12/12. Independent candidate verification 62/62.
+- **Performance:** rejected optimized-out same-TU benchmark retained. Canonical separate-TU balanced candidate/baseline 0.773923 (24/24); independent confirmation 0.784688 (36/36), with A/A 0.993443/0.997784. ARM64 loses the `ldarb` static guard.
+- **Disposition:** **committed, adoption pending exact-code CI** `41784574180`. Isolated host function/ARM64 structure only; no phone FPS or real setter-frequency claim.
+
+### H5: eager screenshot configuration
+
+- **Evidence:** candidate removes two ARM64 `ldarb` guards. Initial default-path ratio 0.981703 (20/24), confirmation 0.991820 (22/36), with real `shot_now` polling unchanged. Exact normal+ASan/UBSan capture differential passes 16 cases/80 checks with identical PPM bytes.
+- **Disposition:** **rejected on materiality**. Once-per-Present improvement is weak/inconsistent and does not justify new global lifecycle state. Combined config candidate is unused; screenshot behavior is unchanged in source.
+
+### DXVK audit
+
+Existing state-cache and Mali compiler-serialization patches remain unchanged. No draw-state cache, compile-lock removal, dependency replacement, or frame/render reduction is justified by the available evidence. Cross-target assembly uses external `ziglang 0.13.0`/Clang 18.1.6; it is not the production NDK or a device profiler. Exact NDK/ARM64 compilation is covered by CI.

@@ -106,3 +106,8 @@ The separate 24-process cold RCF audit measured 18.7939795 ms median cold indexi
 ## Phase 7 regenerated current-host evidence
 
 After the continuation store loss, a fresh actual-handler cohort measured candidate/baseline ratios 0.323330–0.773926 over 134.4 million calls, with 16/16 paired wins per case and n=2/any at 0.458088. Fresh normal/ASan/UBSan/TSan stress and RCF semantic fixtures also pass. Absolute nanoseconds from this host must not be compared with the pre-recreation host as an optimization; only the new raw cohort is currently reopenable. No fresh RCF timing A/B or Android measurement was performed.
+
+## Phase 8 D3D9 bridge profile
+
+Static source attribution found two acquire loads in every `HostTable::Get`, a local-static guard in every `SetSamplerState` config read, and two local-static guards in every `MaybeScreenshot` default Present path. Exact ARM64 fixtures show the respective `ldar`/`ldarb` operations; these are static operation counts, not device timing. Balanced host fixtures measure no x86-64 HostTable delta (candidate 1.006302, A/A 1.005189), a non-eliminated anisotropy config-read ratio of 0.773923 (A/A 0.993443), and a screenshot default-path ratio of 0.981703 including unchanged real `shot_now` polling (A/A 0.990451). None is a frame-time or physical-device result. Real D3D9 call frequencies and DXVK driver time remain unmeasured.
+ Independent confirmation measured anisotropy 0.784688 (36/36 wins) and screenshot 0.991820 (22/36); only the former remains a candidate, while the screenshot config move is rejected as immaterial.

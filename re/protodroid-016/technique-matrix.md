@@ -54,6 +54,13 @@ All physical-device FPS, visual correctness, shader latency, pacing, and thermal
 
 **Phase 7 is complete after 1h26m26.333805s.** Multi-wait inline/sized-vector storage is adopted at `2e9e31b`; RCF basename deferral is rejected and no speculative index/cache rewrite remains. Fresh raw evidence and exact-code CI pass; older unavailable raw stores are explicitly historical. No phone FPS or pacing claim.
 
+## Phase 8 D3D9/DXVK overhead candidates
+
+- **Adopted; exact CI passed:** relax only the never-freed HostTable chunk-pointer load while retaining the entry acquire (`ca25c46`). Exact ARM64 production-class code loses one acquire; normal/TSan/ASan-UBSan differentials pass. Balanced x86-64 timing is neutral, so this is an ARM64 structural candidate, not a measured phone win.
+- **Committed; CI running:** resolve fixed anisotropy during `InitD3D9Bridge`, removing the setter local-static guard. Independent isolated host ratios are 0.773923 and 0.784688, with 60/60 paired wins; defaults, clamping, and TSan pass.
+- **Rejected:** eager screenshot config also passed exact outputs, but confirmation was only 0.991820 with 22/36 wins for a once-per-Present path. The combined candidate is not used; `shot_now` and capture behavior remain untouched.
+- **No patch:** speculative D3D9 state caching, Mali compile-lock removal, DXVK replacement, or screenshot polling removal.
+
 ## Phase 7 memory and I/O candidates
 
 - **RCF exact-hit basename deferral:** rejected after full `OpenFileSource` and direct `OpenArchiveSource` A/A/candidate cohorts. Correctness passed, but 12.96 million opens did not establish an effect beyond identical-control variability. No source change remains.
