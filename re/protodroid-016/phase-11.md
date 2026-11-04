@@ -80,7 +80,18 @@ Even the published per-round saving maxima are below 0.25 ms CPU/s, so the rejec
 
 ### H4 — texture decode/upload relevance and sustained media validation
 
-Retain the Phase 5 DXT decoder unless a new exact workload exposes a material remaining path. Audit the boundary from decoded textures/Bink planes to D3D9 registration/upload without reducing texture quality, dynamic shadows, Bink, or mod compatibility. Finish with fresh broad regression, exact CI, explicit raw results, rejected alternatives, and physical-device limitations.
+**Source audit complete; no texture/upload candidate.** `d3d9_dxt.cpp` remains the adopted Phase 5 decoder, SHA-256 `40c092c82ad0da0d606ea1da8c8a4bfbe041526b7b5e3b2bb16f2b1b0f038b1f`; no new workload justifies reopening direct32/palette-alpha or rejected packed16 forms. Writable adapted locks run mod replacement before `DecodeDxt`, then release compressed scratch after its consumers finish. Read-only locks do not write back, ordinary Play avoids the DXVK description query, disabled texture mods return before tracking/hash work, and dynamic textures are not in the static DXT adaptation path. The remaining `g_mutex` coverage around copies/decode is a possible serialization lead, not proof of concurrent game uploads; moving decode outside it would change lifetime/lock-order reasoning without a workload. Likewise, two relaxed diagnostic loads per unlock do not reopen Phase 10's rejected diagnostic-gating change. No scratch-retention, lock-lifetime, mod-bypass, quality, mip, or upload-policy change is adopted.
+
+**Sustained host media validation complete.** One movie/process ran 50 complete loops at each forced output rate, with selected track 0, registered padded negative-pitch planes, YV12 export, and direct real-callback pumps. Across 32 and 44.1 kHz this covers **100 loops / 29,100 exact frames**, **29,100 full compressed-input comparisons**, **125,712,000 registered visible-row comparisons**, and **29,100 audio callbacks** (21,650 nonzero). Every loop reproduces fresh-baseline digest `9e46ff3727b5d03a`; every frame hash must equal the first loop and every wrap returns to frame 1. Independent log/memory verification passes **88 checks** with empty stderr. Validation wall time is 283.875685 seconds, not real-time playback or an FPS measurement.
+
+| RSS/VM sample (KiB) | Initial | Loop 10 | Loop 20 | Loop 30 | Loop 40 | Loop 50 | After close |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 32 kHz RSS | 69,320 | 82,316 | 82,580 | 82,580 | 82,580 | 82,580 | 62,360 |
+| 32 kHz VM size | 4,255,168 | 4,268,148 | 4,268,148 | 4,268,148 | 4,268,148 | 4,268,148 | 4,247,896 |
+| 44.1 kHz RSS | 69,616 | 78,184 | 78,184 | 78,184 | 78,184 | 78,184 | 58,188 |
+| 44.1 kHz VM size | 4,255,356 | 4,263,836 | 4,263,836 | 4,263,836 | 4,263,836 | 4,263,836 | 4,243,584 |
+
+The bump-only test heap remains 29,228,960 bytes in every sample. RSS/VM are flat from loop 20 onward and close releases host memory; this detects no state drift in this workload but is not a proof of no leaks, physical Android memory pressure, underruns, A/V synchronization quality, or sustained device performance. H4 therefore closes with retained DXT/upload behavior and no production runtime change.
 
 ## Evidence plan
 
