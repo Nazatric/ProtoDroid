@@ -147,7 +147,7 @@ index f80a19f..5f0e02f 100644
      // Only enable Cuda interop extensions in 64-bit builds in
      // order to avoid potential driver or address space issues.
      // VK_KHR_buffer_device_address is expensive on some drivers.
-@@ -917,14 +1010,21 @@ namespace dxvk {
+@@ -917,14 +1010,28 @@ namespace dxvk {
      enabledFeatures.vk13.pipelineCreationCacheControl =
        m_deviceFeatures.vk13.pipelineCreationCacheControl;
  
@@ -164,13 +164,20 @@ index f80a19f..5f0e02f 100644
 +    }
  
 -    // Maintenance4 may cause performance problems on amdvlk in some cases
-+    // Maintenance4 may cause performance problems on amdvlk in some cases. It is optional on the 1.2 path.
++    // Maintenance4 may cause performance problems on amdvlk in some cases.
++    // Android also treats it as optional on the 1.3 path: DXVK's allocator has
++    // temporary-resource fallbacks when the feature is unavailable.
      if (m_deviceInfo.vk12.driverID != VK_DRIVER_ID_AMD_OPEN_SOURCE
 -     && m_deviceInfo.vk12.driverID != VK_DRIVER_ID_AMD_PROPRIETARY)
 -      enabledFeatures.vk13.maintenance4 = VK_TRUE;
 +     && m_deviceInfo.vk12.driverID != VK_DRIVER_ID_AMD_PROPRIETARY) {
-+      enabledFeatures.vk13.maintenance4 = useVulkan12Compatibility()
-+        ? m_deviceFeatures.vk13.maintenance4 : VK_TRUE;
++#ifdef __ANDROID__
++      enabledFeatures.vk13.maintenance4 = m_deviceFeatures.vk13.maintenance4;
++      if (!enabledFeatures.vk13.maintenance4)
++        Logger::warn("DxvkAdapter: maintenance4 unavailable; using temporary-resource memory queries");
++#else
++      enabledFeatures.vk13.maintenance4 = VK_TRUE;
++#endif
 +    }
  
      // We expose depth clip rather than depth clamp to client APIs
