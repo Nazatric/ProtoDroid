@@ -56,6 +56,12 @@ All physical-device FPS, visual correctness, shader latency, pacing, and thermal
 
 **Phase 8 is complete after 2h25m20.116479s.** Anisotropy is adopted with exact CI and native ARM64 microfixture confirmation; neutral HostTable relaxation is reverted and screenshot eager initialization remains rejected. No device FPS or pacing claim.
 
+## Phase 10 Vulkan GPU/synchronization/memory/presentation candidates
+
+- **Disabled `DXVK_PRESENT_STATS` overhead:** active exact-patch candidate. Baseline queue pre-acquire always executes steady-clock reads and atomic counter additions; gate only this diagnostic scaffolding through the existing lazy option state. Preserve every Vulkan wait/acquire/present operation and the enabled report. Host/ARM64 microtiming is required and is not device FPS.
+- **FIFO/image-count/frame-latency/lock changes:** not candidates without Present breakdown and device A/B evidence. Historical Present wall is not GPU time; long Present-to-Present intervals cannot be assigned to the swapchain by correlation alone.
+- **Unified-memory/resource-wait/barrier/queue rewrites:** audit-only unless an exact affected workload and compatibility-safe improvement are established. Existing Qualcomm/Mali paths remain correctness requirements.
+
 ## Phase 9 shader/loading/cache candidates
 
 - **Adopted:** caller-owned unchanged-backup tracking for the exact 30-second shared-cache mirror, but only after complete source/target byte comparison. Metadata-only skipping was rejected after reproduced same-size/timestamp collisions. Native ARM64 unchanged-backup candidate/baseline medians are 0.075922–0.111711 across 4 KiB–4 MiB with 12/12 wins; the exact real-cache host cohort is 0.068241 with 338.860 µs saving, and final real-fixture ARM64 is 0.073964 with 443.623 µs saving. Changed-path timing is inconclusive. This is redundant asynchronous I/O elimination, not phone FPS or shared-FUSE evidence.

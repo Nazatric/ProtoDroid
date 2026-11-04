@@ -1,6 +1,6 @@
 # ProtoDroid 0.16 performance program
 
-Status: **Phase 9 shader/pipeline compilation and cache-loading research is complete; Phase 10 is next after post-commit evidence gates**. The byte-validated unchanged-backup optimization is adopted; immaterial SHA-1 padding and unsafe/unsupported dedup approaches are rejected. No physical-device FPS/pacing or shader-stall improvement is claimed.
+Status: **Phase 10 Vulkan GPU paths, synchronization, memory, and presentation research is active**. Phase 9 is complete. The leading candidate removes always-on DXVK Present diagnostic clock/atomic overhead when `DXVK_PRESENT_STATS` is disabled, without changing Vulkan synchronization or rendering. No physical-device FPS/pacing improvement is claimed.
 
 - Released baseline: 0.15, tag `protodroid-v0.15`
 - Baseline source: `18ba66bd0945e405aaded0de5ff8848a8cd07932`
@@ -17,6 +17,7 @@ Status: **Phase 9 shader/pipeline compilation and cache-loading research is comp
 - Phase 7 started: `2026-11-04T04:19:50Z`; completion reading: `2026-11-04T05:46:16.333805Z`; continuation recovery noted at `2026-11-04T05:40:16Z`
 - Phase 8 started: `2026-11-04T05:47:41Z`; completion reading: `2026-11-04T08:13:01.116479Z`
 - Phase 9 started: `2026-11-04T08:13:48Z`; completion reading: `2026-11-04T13:00:05.483947Z`
+- Phase 10 started: `2026-11-04T13:03:30.762524Z`; active
 - Scope: real, quality-preserving FPS, frame-time, shader-loading, and sustained-performance work only
 
 ## Evidence continuity
@@ -45,7 +46,8 @@ At `2026-11-04T12:49Z`, another fresh shallow clone preserved cumulative worktre
 | `phase-06.md` | Completion report, synchronization/Present experiments, sustained stress, ADPF attribution, and limitations |
 | `phase-07.md` | Phase 7 completion, multi-wait adoption, RCF rejection, and regenerated evidence |
 | `phase-08.md` | Phase 8 completion, anisotropy adoption, HostTable/screenshot rejections, and ARM64 evidence |
-| `phase-09.md` | Active shader/cache research, unchanged-backup adoption, SHA-1 materiality rejection, and validation |
+| `phase-09.md` | Complete shader/cache research, unchanged-backup adoption, SHA-1 materiality rejection, and validation |
+| `phase-10.md` | Active Vulkan GPU/synchronization/memory/presentation audit and disabled-diagnostic overhead candidate |
 
 Large traces, external clones, benchmark binaries, and raw generated results stay outside Git under `/home/user/protodroid-016-evidence`; `/tmp/protodroid-016` is only a compatibility symlink. The original `/tmp` artifacts were lost during an earlier recreation and replaced by explicitly regenerated, hash-verified evidence. At the 2026-11-03T20:27Z recreation, that external store was also absent; Phase 1–3 raw artifacts are therefore historical committed records here, not files claimed to remain locally available. Local checkout copies were preserved under `/home/user/protodroid-016-recovery/2026-11-03T2027Z`, the branch was fast-forwarded to `f1737b23`, and a fresh Phase 4 store records new evidence and its own provenance. No physical-device performance result is inferred from a host benchmark or another project's device.
 
@@ -62,6 +64,7 @@ Large traces, external clones, benchmark binaries, and raw generated results sta
 | 7. Memory, allocation, RCF/I/O | **Complete** | Multi-wait inline storage adopted; RCF deferral rejected; fresh evidence/CI and recovery gates documented |
 | 8. D3D9/DXVK overhead | **Complete** | Anisotropy initialization adopted with host/ARM64 evidence; neutral HostTable relaxation reverted; screenshot move rejected; no DXVK replacement |
 | 9. Shader/loading/cache behavior | **Complete: 4h46m17.483947s wall-clock** | Byte-validated unchanged-backup optimization adopted with host/ARM64 and exact real-cache evidence; 1,014-entry integrity and specialization variants verified; direct SHA-1 padding and unsafe dedup rejected; real-fixture ARM64 0.073964 independently verified; final full CI/APK succeeded, release skipped |
-| 10–14 | Not started | Sequential execution and evidence gates required |
+| 10. Vulkan GPU/sync/memory/presentation | **Active** | Auditing patched Present/acquire/fence and unified-memory paths; normal-Play diagnostic overhead candidate identified; no FIFO/latency/rendering change |
+| 11–14 | Not started | Sequential execution and evidence gates required |
 
-Current conclusion: Phase 5 retains its quality-preserving host decoder improvement. Phase 6 rejected bounded notification and lazy TID without a runtime scheduling patch. Phase 7 rejected RCF exact-hit basename deferral after 12.96 million exact-output opens showed no paired advantage over A/A; bounded multi-wait storage is adopted in `2e9e31b` after 403.2 million historical actual-handler calls and sanitizer stress; exact-code CI passed. Pre-recreation raw files are unavailable; fresh wait/RCF evidence and exact CI pass. Phases 7, 8, and 9 are complete. Phase 9 adopted exact-byte unchanged-backup skipping, rejected the nanosecond-scale SHA-1 candidate, and disproved exact/naive dedup as a safe optimization; Phase 10 is next after post-commit evidence gates. PR #38 remains merged at `00976d9`; this continuation creates no merge, tag, or release.
+Current conclusion: Phase 5 retains its quality-preserving host decoder improvement. Phase 6 rejected bounded notification and lazy TID without a runtime scheduling patch. Phase 7 rejected RCF exact-hit basename deferral after 12.96 million exact-output opens showed no paired advantage over A/A; bounded multi-wait storage is adopted in `2e9e31b` after 403.2 million historical actual-handler calls and sanitizer stress; exact-code CI passed. Pre-recreation raw files are unavailable; fresh wait/RCF evidence and exact CI pass. Phases 7, 8, and 9 are complete. Phase 9 adopted exact-byte unchanged-backup skipping, rejected the nanosecond-scale SHA-1 candidate, and disproved exact/naive dedup as a safe optimization. Phase 10 is auditing Vulkan presentation/synchronization/memory and disabled-diagnostic overhead. PR #38 remains merged at `00976d9`; this continuation creates no merge, tag, or release.
