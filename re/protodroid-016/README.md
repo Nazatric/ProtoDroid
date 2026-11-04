@@ -1,6 +1,6 @@
 # ProtoDroid 0.16 performance program
 
-Status: **Phase 9 shader/pipeline compilation and cache-loading research is in final validation**. The byte-validated unchanged-backup optimization is adopted; the correct but immaterial SHA-1 padding candidate is rejected and removed. No physical-device FPS/pacing or shader-stall improvement is claimed.
+Status: **Phase 9 shader/pipeline compilation and cache-loading research is complete; Phase 10 is next after post-commit evidence gates**. The byte-validated unchanged-backup optimization is adopted; immaterial SHA-1 padding and unsafe/unsupported dedup approaches are rejected. No physical-device FPS/pacing or shader-stall improvement is claimed.
 
 - Released baseline: 0.15, tag `protodroid-v0.15`
 - Baseline source: `18ba66bd0945e405aaded0de5ff8848a8cd07932`
@@ -16,12 +16,14 @@ Status: **Phase 9 shader/pipeline compilation and cache-loading research is in f
 - Phase 6 clean continuation started: `2026-11-04T03:19:00Z`; completion reading: `2026-11-04T04:19:16.064254Z`
 - Phase 7 started: `2026-11-04T04:19:50Z`; completion reading: `2026-11-04T05:46:16.333805Z`; continuation recovery noted at `2026-11-04T05:40:16Z`
 - Phase 8 started: `2026-11-04T05:47:41Z`; completion reading: `2026-11-04T08:13:01.116479Z`
-- Phase 9 started: `2026-11-04T08:13:48Z`; final validation active
+- Phase 9 started: `2026-11-04T08:13:48Z`; completion reading: `2026-11-04T13:00:05.483947Z`
 - Scope: real, quality-preserving FPS, frame-time, shader-loading, and sustained-performance work only
 
 ## Evidence continuity
 
 At `2026-11-04T05:40:16Z`, a fresh environment preserved the working files but not `/home/user/protodroid-016-evidence`. The active branch was verified blob-for-blob against pushed `747db65` and reattached without content changes. Earlier external raw files and manifests are historical summaries, not presently reopenable evidence. Exact commits/CI remain available; regenerated Phase 7 files are clearly separated.
+
+At `2026-11-04T12:49Z`, another fresh shallow clone preserved cumulative worktree bytes but not the external store. The actual active branch was fetched and HEAD/index reattached at validated `39ff0f2c3b8bccc303e2d53e204df8abbc390d81` without changing file contents; only the seven intended research edits remained. Final GitHub run/check metadata and all 360 compact ARM64 rows were reopened and newly verified 390/390. New pipeline/cache audits are labeled as reconstructed evidence; older missing raw files are not claimed as present.
 
 ## Research index
 
@@ -59,7 +61,7 @@ Large traces, external clones, benchmark binaries, and raw generated results sta
 | 6. Scheduling and overlap | **Complete: available host/source research; 1h00m16.064254** | Bounded notification and lazy TID rejected; no runtime optimization adopted. Present regression added; 12/12 regression, sustained normal/TSan stress, concurrent adapter stress, and exact-code CI passed. No device claim |
 | 7. Memory, allocation, RCF/I/O | **Complete** | Multi-wait inline storage adopted; RCF deferral rejected; fresh evidence/CI and recovery gates documented |
 | 8. D3D9/DXVK overhead | **Complete** | Anisotropy initialization adopted with host/ARM64 evidence; neutral HostTable relaxation reverted; screenshot move rejected; no DXVK replacement |
-| 9. Shader/loading/cache behavior | **Active: final validation** | Byte-validated unchanged-backup optimization adopted with host/ARM64 and exact real-cache host evidence; 1,014-entry cache integrity verified; direct SHA-1 padding rejected on absolute materiality and removed; final real-fixture ARM64 pending |
+| 9. Shader/loading/cache behavior | **Complete: 4h46m17.483947s wall-clock** | Byte-validated unchanged-backup optimization adopted with host/ARM64 and exact real-cache evidence; 1,014-entry integrity and specialization variants verified; direct SHA-1 padding and unsafe dedup rejected; real-fixture ARM64 0.073964 independently verified; final full CI/APK succeeded, release skipped |
 | 10–14 | Not started | Sequential execution and evidence gates required |
 
-Current conclusion: Phase 5 retains its quality-preserving host decoder improvement. Phase 6 rejected bounded notification and lazy TID without a runtime scheduling patch. Phase 7 rejected RCF exact-hit basename deferral after 12.96 million exact-output opens showed no paired advantage over A/A; bounded multi-wait storage is adopted in `2e9e31b` after 403.2 million historical actual-handler calls and sanitizer stress; exact-code CI passed. Pre-recreation raw files are unavailable; fresh wait/RCF evidence and exact CI pass. Phase 7 and Phase 8 are complete. Phase 9 has adopted exact-byte unchanged-backup skipping and rejected the nanosecond-scale SHA-1 candidate; final validation remains active. PR #38 remains merged at `00976d9`; this continuation creates no merge, tag, or release.
+Current conclusion: Phase 5 retains its quality-preserving host decoder improvement. Phase 6 rejected bounded notification and lazy TID without a runtime scheduling patch. Phase 7 rejected RCF exact-hit basename deferral after 12.96 million exact-output opens showed no paired advantage over A/A; bounded multi-wait storage is adopted in `2e9e31b` after 403.2 million historical actual-handler calls and sanitizer stress; exact-code CI passed. Pre-recreation raw files are unavailable; fresh wait/RCF evidence and exact CI pass. Phases 7, 8, and 9 are complete. Phase 9 adopted exact-byte unchanged-backup skipping, rejected the nanosecond-scale SHA-1 candidate, and disproved exact/naive dedup as a safe optimization; Phase 10 is next after post-commit evidence gates. PR #38 remains merged at `00976d9`; this continuation creates no merge, tag, or release.
