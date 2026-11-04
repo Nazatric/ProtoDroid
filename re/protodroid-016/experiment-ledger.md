@@ -347,14 +347,15 @@ Every experiment records hypothesis, exact baseline/candidate revisions, changed
 - **Evidence:** exact production-class ARM64 `ldr` + `ldar` versus baseline `ldar` + `ldar`; 2,828,784-check normal stress and 707,196-check TSan stress per variant with matching digests; canonical ASan+UBSan/TSan stderr empty. Intentional process-lifetime LeakSanitizer finding is retained separately.
 - **Timing:** fixed-order cohort rejected as confounded. Balanced 72-process x86-64 candidate/baseline median 1.006302, A/A 1.005189; neutral because x86-64 instructions are identical.
 - **CI:** run `41781790100`, six build/test jobs successful, release skipped.
-- **Disposition:** **adopted** as an ARM64 structural/host-correctness candidate. No real-game frequency, ARM64 timing, FPS, or pacing claim.
+- **Native ARM64 evidence:** run `41791343265` / check `126445347530`: candidate/baseline 0.999767 (14/24), A/A 1.000522; median elapsed 29.8015065 ms versus 29.813208 ms over 20 million calls. The candidate timed loop retains its relaxed chunk `ldr` plus entry `ldar`, so it was not optimized away. Absolute median delta is only -0.000585075 ns/lookup. Raw confirmation is 1.000394 (11/24; A/A 1.000355), for a 48-pair combined 0.999926 (25/48; A/A 1.000417).
+- **Disposition:** **rejected on materiality after initial structural adoption**. Final source restores the original chunk acquire at `9a65eb9b59dc1e755d434ae9204affef547ef5d4`; `ca25c46` and its passing CI remain historical evidence. No real-game frequency, FPS, or pacing claim.
 
 ### H4: resolve anisotropy before sampler calls
 
 - **Candidate:** `f5be92170480d4d9a99924f41502108903e0449a`; resolve setting in `InitD3D9Bridge` after config/logging are ready and before guest calls. Defaults, clamp, and forwarded sampler policy unchanged.
 - **Correctness:** exact production-block normal/TSan fixture passes 44 processes/176 checks across Android/desktop, explicit values, defaults, and concurrent reads. Broad regression 12/12. Independent candidate verification 70/70.
-- **Performance:** rejected optimized-out same-TU benchmark retained. Canonical separate-TU balanced candidate/baseline 0.773923 (24/24); independent confirmation 0.784688 (36/36), with A/A 0.993443/0.997784. ARM64 loses the `ldarb` static guard. Combined median is 0.779120 across 60 pairs (60/60), with 0.266–0.323 ns isolated setter savings.
-- **Disposition:** **adopted**. Exact-code CI `41784574180` passed all six active jobs and skipped release. Isolated host function/ARM64 structure only; no phone FPS or real setter-frequency claim. Native ARM64 fixture CI `41787828484` remains pending.
+- **Performance:** rejected optimized-out same-TU benchmark retained. Canonical separate-TU balanced candidate/baseline 0.773923 (24/24); independent confirmation 0.784688 (36/36), with A/A 0.993443/0.997784. ARM64 loses the `ldarb` static guard. Combined x86-64 median is 0.779120 across 60 pairs (60/60), with 0.266–0.323 ns isolated setter savings. Initial native ARM64 is 0.375614 (24/24; A/A 1.000113), median 13.309993 ms versus 35.4287635 ms over 20 million calls, a 1.105938525 ns/setter median delta. Raw confirmation is 0.375510 (24/24; A/A 1.000018), for a 48-pair combined 0.375547 (48/48; A/A 1.000090) and 1.10613405 ns/setter final median delta.
+- **Disposition:** **adopted**. Exact-code CI `41784574180` passed all six active jobs and skipped release. Isolated host function/ARM64 structure only; no phone FPS or real setter-frequency claim. Native ARM64 checks `126445347530` and `126454408467` pass exact source/protocol assertions; 144 final raw processes recompute successfully.
 
 ### H5: eager screenshot configuration
 
@@ -368,7 +369,9 @@ Existing state-cache and Mali compiler-serialization patches remain unchanged. P
 ### H6: native ARM64 exact-source CI fixtures
 
 - **Revision:** measurement/workflow commit `fdd426729d53db0225194433283b3f57ef23134b`; run `41787828484` completed successfully; readable timing initially unavailable.
-- **Protocol:** exact HostTable `c033649`/current and anisotropy `ca25c46`/current, baseline/A-A/candidate, separate implementation objects, shared anisotropy main object, 20 million calls, 24 balanced rounds, correctness checks, raw JSONL/artifact.
+- **Final revision/files:** `9a65eb9b59dc1e755d434ae9204affef547ef5d4`; `src/native/d3d9.cpp` restores HostTable and retains anisotropy, `tools/measure_d3d9_bridge.py` builds fixtures, and `.github/workflows/build-apk.yml` executes/publishes them.
+- **Device/build/settings/scene/cache:** native `ubuntu-24.04-arm`, AArch64, `g++ -O2 -std=c++20`; fresh process per timing row, 20 million calls, no game scene or shader cache involved. This is neither cold/warm game loading nor physical-device coverage.
+- **Protocol:** exact HostTable `c033649`/pinned rejected `ca25c46` and anisotropy `ca25c46`/final `9a65eb9`, baseline/A-A/candidate, separate implementation objects, shared anisotropy main object, 24 balanced rounds, correctness checks, raw JSONL/artifact/Checks.
 - **Current evidence:** final x86-64 tool validation HostTable 0.997411 neutral; anisotropy 0.815559, 24/24, A/A 1.002361. Earlier short/different-main tool outputs are preserved but excluded.
-- **Current CI:** run `41787828484` passed all six active jobs, but redirected artifact bytes are unavailable in the sandbox; no timing is inferred. A dry-run-tested Checks publisher is prepared for the next exact-head run.
-- **Disposition:** pending readable native ARM64 results; Linux ARM64 is not an Android device or phone FPS/pacing measurement.
+- **Current CI:** run `41787828484` passed all six active jobs but exposed no readable bytes. Run `41791343265` / check `126445347530` then supplied the initial ARM64 cohort: HostTable 0.999767 neutral and anisotropy 0.375614 (24/24). Its full run later completed successfully after the 403 cancellation response left it untouched.
+- **Disposition:** initial ARM64 evidence collected; HostTable rejected and anisotropy retained. Raw final-source confirmation passes with 144 recomputed processes; final full CI `41794182100` passed all six active jobs and skipped release. Linux ARM64 is not an Android device or phone FPS/pacing measurement.

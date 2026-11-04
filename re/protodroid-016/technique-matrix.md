@@ -56,8 +56,8 @@ All physical-device FPS, visual correctness, shader latency, pacing, and thermal
 
 ## Phase 8 D3D9/DXVK overhead candidates
 
-- **Adopted; exact CI passed:** relax only the never-freed HostTable chunk-pointer load while retaining the entry acquire (`ca25c46`). Exact ARM64 production-class code loses one acquire; normal/TSan/ASan-UBSan differentials pass. Balanced x86-64 timing is neutral, so this is an ARM64 structural candidate, not a measured phone win.
-- **Committed; CI running:** resolve fixed anisotropy during `InitD3D9Bridge`, removing the setter local-static guard. Independent isolated host ratios are 0.773923 and 0.784688, with 60/60 paired wins; defaults, clamping, and TSan pass.
+- **Rejected after native ARM64 measurement; final source restores acquire at `9a65eb9`:** the correct `ca25c46` HostTable relaxation is neutral across two actual ARM64 cohorts at combined 0.999926 (25/48) with A/A 1.000417. The timed candidate loop still executes its relaxed chunk load, so this is a materiality rejection, not an optimized-out benchmark.
+- **Adopted; exact CI passed:** resolve fixed anisotropy during `InitD3D9Bridge`, removing the setter local-static guard. Combined native ARM64 candidate/baseline is 0.375547 (48/48; A/A 1.000090); defaults, clamping, TSan, and broad regression pass. This is an isolated setter result, not phone FPS.
 - **Rejected:** eager screenshot config also passed exact outputs, but confirmation was only 0.991820 with 22/36 wins for a once-per-Present path. The combined candidate is not used; `shot_now` and capture behavior remain untouched.
 - **No patch:** speculative D3D9 state caching, Mali compile-lock removal, DXVK replacement, or screenshot polling removal.
 
