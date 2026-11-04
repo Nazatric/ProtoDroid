@@ -91,3 +91,15 @@ At **2026-11-04T05:40:16Z**, the continuation environment was a fresh shallow cl
 The previous `/home/user/protodroid-016-evidence` store was absent. Consequently, pre-recreation raw benchmark files, logs, binaries, and manifests cited above are **historical summarized results, not currently available raw files**. Exact source commits and GitHub CI remain independently available. Phase 7 remains active while essential evidence is regenerated in the new store; no old artifact is represented as recovered.
 
 Exact-code CI run **41773816427** at `2e9e31bb30f1158238865800471c675f57fac5cb` is now confirmed **success**. `build-turnip`, `driver-package-tests`, `build-deps (arm64-v8a)`, `bink-tests`, `arm64-graphics-tests`, and `build-apk` succeeded; `release` correctly skipped. Fresh CI JSON and independent verification are in the new Phase 7 store.
+
+## Regenerated essential evidence after continuation loss
+
+The new `/home/user/protodroid-016-evidence/phase-07/` store contains fresh raw files generated from exact Git sources after the recovery note. These are new runs, not recovered artifacts and not a second measurement on the previous host.
+
+- **Wait differential/timing:** baseline/A-A/candidate again pass 98 checks/64 wakes with identical digest. A fresh 16-round cohort passed **672 processes / 134,400,000 calls** and 257/257 independent checks. Candidate/baseline medians span **0.323330–0.773926**, with 16/16 paired wins in every case; the real-shape n=2/any ratio is **0.458088**. Per-process JSONL, summaries, binaries, sources, and hashes are present.
+- **Wait stress:** fresh normal/ASan+UBSan/TSan repetition passed **192 processes, 24,960 checks, and 18,432 blocking wakes**, including 9/64-handle heap waits, with zero sanitizer stderr and identical 130-check digests.
+- **Mechanism/callers:** fresh allocator counts are baseline 0/1/2/3/3/4/5/5/7 versus candidate 0/0/0/0/0/0/1/1/1 for 0/1/2/3/4/8/9/16/64 handles, plus the four-handle all control. The unchanged original DLL again yields one constant two-handle any/infinite site and two dynamic-count any/infinite sites.
+- **Regression/CI:** fresh broad regression passed **12/12 commands in 7.652395760s**. Exact-code CI `41773816427` passed all six build/test jobs with release skipped.
+- **RCF semantics:** fresh normal and ASan+UBSan runs both pass the same **8/8** generated-fixture checks with empty sanitizer stderr: exact, normalized, basename, exact/basename RZ, loose payload/priority, and missing rejection, with a malformed archive present. `bink_media.cpp` remains unchanged from the Phase 7 baseline. No fresh RCF timing A/B was run; the earlier performance cohort and memory audit remain historical summaries only.
+
+Absolute host times before and after the environment recreation must not be compared as an optimization result. The fresh cohort validates the adopted candidate's direction and correctness on the current host; it does not restore the older raw files or provide Android FPS/pacing evidence.

@@ -329,3 +329,11 @@ Every experiment records hypothesis, exact baseline/candidate revisions, changed
 - Recovery: every reported file matched pushed `747db65f753ee01945b6c3d7e4aab51e96b8b23c`; the existing active branch was reattached without changing content or using another branch. Backup patch/document hashes are in `/home/user/protodroid-recovery/`.
 - Evidence disposition: older external raw files/manifests are marked historical/unavailable. No result is fabricated or claimed as reopened. Exact-code Phase 7 CI `41773816427` independently confirms six successful build/test jobs and skipped release at `2e9e31b`.
 - Decision: Phase 7 stays active pending regenerated essential raw evidence and final gates. No new runtime change or performance result is associated with recovery.
+
+## P7-RECOVERY-VERIFY — Regenerated essential raw evidence
+
+- Hypothesis: exact Git sources can re-establish the essential adopted-candidate and RCF correctness evidence after the external store loss, without presenting historical files as recovered.
+- Baseline/candidate: exact parent of `2e9e31b` versus its `kernel32.cpp`; current `bink_media.cpp` unchanged from `69f8883`. Fresh sources/binaries/scripts are hashed in the new Phase 7 store.
+- Raw result: fresh wait cohort 672 processes/134.4 million calls, candidate/baseline ratios 0.323330–0.773926 and 16/16 paired wins in all 14 cases; n=2/any 0.458088. Fresh stress 192 processes/24,960 checks/18,432 wakes, zero sanitizer stderr. Fresh RCF normal+ASan/UBSan semantics each pass 8/8. No fresh RCF performance experiment.
+- Correctness: 257/257 timing verification, exact allocation counts, original-DLL caller audit, 12/12 broad regression in 7.652395760s, and exact-code CI six-job success all pass. Older 403.2-million-call and RCF timing raw data remain historical/unavailable, not merged into this fresh cohort.
+- Decision: **recovery validation passes; no additional runtime change or device claim**. Phase 7 can proceed to final source-scope, release-preservation, documentation, and manifest gates.

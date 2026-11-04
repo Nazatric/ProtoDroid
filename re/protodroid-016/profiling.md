@@ -102,3 +102,7 @@ Actual `OpenFileSource` + `path.cpp` warm exact opens using the 18,044-entry gen
 Read-only `prototypeenginef.dll` SHA `d331be205bdde99897952ee88261ab7e63c5c65e36a4660e2a367886a3537071` has three direct `WaitForMultipleObjects` import calls in the static census: one constant n=2/any/infinite site (`10abdb6d`) and two dynamic-count/any/infinite sites (`10abbad6`, `10abbbc5`). The adopted inline/sized-vector path therefore covers a confirmed real two-handle shape and all observed direct modes. This is static relevance only: no dynamic call count, blocking share, device timing, or FPS/pacing effect is inferred.
 
 The separate 24-process cold RCF audit measured 18.7939795 ms median cold indexing/open and 18,620-KiB whole-process median maxRSS for the 18,044-entry fixture. Exact/basename entry duplication is visible in source, but these numbers do not isolate it or establish Android pressure. No dedup/pointer patch is justified without that missing evidence.
+
+## Phase 7 regenerated current-host evidence
+
+After the continuation store loss, a fresh actual-handler cohort measured candidate/baseline ratios 0.323330–0.773926 over 134.4 million calls, with 16/16 paired wins per case and n=2/any at 0.458088. Fresh normal/ASan/UBSan/TSan stress and RCF semantic fixtures also pass. Absolute nanoseconds from this host must not be compared with the pre-recreation host as an optimization; only the new raw cohort is currently reopenable. No fresh RCF timing A/B or Android measurement was performed.
