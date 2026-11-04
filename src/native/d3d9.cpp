@@ -101,7 +101,10 @@ HRESULT TimedTextureUpload(Upload upload) {
 class HostTable {
 public:
     void* Get(uint32_t i) const {
-        return chunks_[i >> kBits].load(std::memory_order_acquire)[i & kMask].load(std::memory_order_acquire);
+        // Chunk allocation/zeroing and host initialization precede the entry's release store. The entry acquire
+        // below is therefore the publication edge; the never-freed chunk pointer itself needs only a relaxed load.
+        auto* chunk = chunks_[i >> kBits].load(std::memory_order_relaxed);
+        return chunk[i & kMask].load(std::memory_order_acquire);
     }
     void Set(uint32_t i, void* p) {
         chunks_[i >> kBits].load(std::memory_order_relaxed)[i & kMask].store(p, std::memory_order_release);
