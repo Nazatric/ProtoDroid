@@ -561,14 +561,20 @@ jobs:
         run: |
           set -euo pipefail
           # Isolated SHA-1 host timing only; this does not measure shader compilation, rendering, or Android FPS.
-          git -C /tmp/protodroid-dxvk-state-cache-arm64 show HEAD:src/util/sha1/sha1.c > /tmp/sha1-pad-before.c
+          git -C /tmp/protodroid-dxvk-state-cache-arm64 show HEAD:src/util/sha1/sha1.c \
+            > /tmp/sha1-pad-before.c 2> /tmp/sha1-pad-before-git.stderr
           python3 tools/measure_sha1_pad.py \
             --before-c /tmp/sha1-pad-before.c \
             --after-c /tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1/sha1.c \
             --sha1-header /tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1/sha1.h \
             --util-cpp /tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1/sha1_util.cpp \
             --util-header /tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1/sha1_util.h \
-            --output /tmp/sha1-pad-arm64 --rounds 12 --order-offset 0
+            --output /tmp/sha1-pad-arm64 --rounds 12 --order-offset 0 \
+            > /tmp/sha1-pad-tool.stdout 2> /tmp/sha1-pad-tool.stderr || {
+            cat /tmp/sha1-pad-tool.stdout /tmp/sha1-pad-tool.stderr
+            exit 1
+          }
+          cat /tmp/sha1-pad-tool.stdout
 
       - name: Publish ARM64 state-cache evidence summary
         if: success()
@@ -630,39 +636,72 @@ jobs:
           if-no-files-found: error
 
       - name: Publish ARM64 SHA-1 padding evidence summary
-        if: success()
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python3 - <<'PY' > /tmp/sha1-pad-arm64-check-summary.json
+          import hashlib
           import json
           from pathlib import Path
           base = Path('/tmp/sha1-pad-arm64')
-          result = json.loads((base / 'result.json').read_text())
-          result.pop('build_commands', None)
-          result['raw_timing'] = {}
-          for path in sorted(base.glob('timing-*.jsonl')):
-              size = path.stem.split('-')[1]
-              rows = [json.loads(line) for line in path.read_text().splitlines()]
-              result['raw_timing'][size] = [
-                  {'round': row['round'], 'variant': row['variant'], 'elapsed_ns': row['elapsed_ns']}
-                  for row in rows
-              ]
-          result['correctness_stdout'] = Path('/tmp/sha1-pad-arm64-test.stdout').read_text()
-          result['correctness_stderr'] = Path('/tmp/sha1-pad-arm64-test.stderr').read_text()
+          result_path = base / 'result.json'
+          completed = result_path.is_file()
+          if completed:
+              result = json.loads(result_path.read_text())
+              result.pop('build_commands', None)
+              result['raw_timing'] = {}
+              for path in sorted(base.glob('timing-*.jsonl')):
+                  size = path.stem.split('-')[1]
+                  rows = [json.loads(line) for line in path.read_text().splitlines()]
+                  result['raw_timing'][size] = [
+                      {'round': row['round'], 'variant': row['variant'], 'elapsed_ns': row['elapsed_ns']}
+                      for row in rows
+                  ]
+          else:
+              result = {
+                  'schema': 1,
+                  'kind': 'failed-native-arm64-sha1-microfixture-no-timing-result',
+                  'physical_android_device': False,
+                  'benchmark_completed': False,
+              }
+              diagnostics = {}
+              paths = [Path('/tmp/sha1-pad-before-git.stderr'),
+                       Path('/tmp/sha1-pad-tool.stdout'), Path('/tmp/sha1-pad-tool.stderr')]
+              if base.is_dir():
+                  paths += sorted(path for path in base.iterdir()
+                                  if path.is_file() and path.suffix in ('.stdout', '.stderr'))
+              for path in paths:
+                  if path.is_file():
+                      diagnostics[path.name] = path.read_text(errors='replace')[-4000:]
+              result['diagnostics'] = diagnostics
+              for name, path in [('before', Path('/tmp/sha1-pad-before.c')),
+                                 ('after', Path('/tmp/protodroid-dxvk-state-cache-arm64/src/util/sha1/sha1.c'))]:
+                  if path.is_file():
+                      result.setdefault('source_sha256', {})[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+          for name, path in [('correctness_stdout', Path('/tmp/sha1-pad-arm64-test.stdout')),
+                             ('correctness_stderr', Path('/tmp/sha1-pad-arm64-test.stderr'))]:
+              result[name] = path.read_text() if path.is_file() else 'missing'
+          result['benchmark_completed'] = completed
           rendered = '```json\n' + json.dumps(result, indent=2) + '\n```'
           if len(rendered) > 60000:
               raise SystemExit(f'Checks summary too large: {len(rendered)}')
           print(rendered)
           PY
           SUMMARY=$(cat /tmp/sha1-pad-arm64-check-summary.json)
+          CONCLUSION=neutral
+          TITLE='Native ARM64 SHA-1 padding microfixture'
+          if ! test -f /tmp/sha1-pad-arm64/result.json; then
+            CONCLUSION=failure
+            TITLE='ARM64 SHA-1 microfixture failed before producing a result'
+          fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
             -f name='arm64-sha1-pad-evidence' \
             -f head_sha="${GITHUB_SHA}" \
             -f status='completed' \
-            -f conclusion='neutral' \
-            -f output[title]='Native ARM64 SHA-1 padding microfixture' \
+            -f conclusion="${CONCLUSION}" \
+            -f output[title]="${TITLE}" \
             -f output[summary]="${SUMMARY}" > /tmp/sha1-pad-check-run.json
           python3 -c "import json; assert json.load(open('/tmp/sha1-pad-check-run.json'))['id'] > 0"
 
@@ -679,6 +718,23 @@ jobs:
             /tmp/sha1-pad-check-run.json
           retention-days: 30
           if-no-files-found: error
+
+      - name: Upload failed ARM64 SHA-1 diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-sha1-pad-failure-diagnostics
+          path: |
+            /tmp/sha1-pad-arm64
+            /tmp/sha1-pad-before-git.stderr
+            /tmp/sha1-pad-tool.stdout
+            /tmp/sha1-pad-tool.stderr
+            /tmp/sha1-pad-arm64-test.stdout
+            /tmp/sha1-pad-arm64-test.stderr
+            /tmp/sha1-pad-arm64-check-summary.json
+            /tmp/sha1-pad-check-run.json
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Measure ARM64 BC1 decoder against the corrected baseline
         run: |
