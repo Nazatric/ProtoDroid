@@ -449,9 +449,10 @@ jobs:
           git fetch -q --depth=1 origin ca25c4603ca3969fbaabd5e2dfc1264a50101925
           git show c03364950239b1d7d8a34741fe2c73b92df7258b:src/native/d3d9.cpp > /tmp/d3d9-before-host-table.cpp
           git show ca25c4603ca3969fbaabd5e2dfc1264a50101925:src/native/d3d9.cpp > /tmp/d3d9-before-anisotropy.cpp
+          git show ca25c4603ca3969fbaabd5e2dfc1264a50101925:src/native/d3d9.cpp > /tmp/d3d9-rejected-host-table-candidate.cpp
           python3 tools/measure_d3d9_bridge.py host-table \
-            --before /tmp/d3d9-before-host-table.cpp --output /tmp/d3d9-host-table-arm64 \
-            --calls 20000000 --rounds 24
+            --before /tmp/d3d9-before-host-table.cpp --after /tmp/d3d9-rejected-host-table-candidate.cpp \
+            --output /tmp/d3d9-host-table-arm64 --calls 20000000 --rounds 24
           python3 tools/measure_d3d9_bridge.py anisotropy \
             --before /tmp/d3d9-before-anisotropy.cpp --output /tmp/d3d9-anisotropy-arm64 \
             --calls 20000000 --rounds 24
@@ -469,6 +470,9 @@ jobs:
           from pathlib import Path
           host = json.loads(Path('/tmp/d3d9-host-table-arm64/result.json').read_text())
           aniso = json.loads(Path('/tmp/d3d9-anisotropy-arm64/result.json').read_text())
+          host['raw_timing_jsonl'] = Path('/tmp/d3d9-host-table-arm64/timing.jsonl').read_text()
+          aniso['raw_timing_jsonl'] = Path('/tmp/d3d9-anisotropy-arm64/timing.jsonl').read_text()
+          aniso['correctness_cases'] = json.loads(Path('/tmp/d3d9-anisotropy-arm64/correctness.json').read_text())
           summary = {
               'schema': 1,
               'kind': 'native-linux-arm64-microfixtures-not-android-device-fps',

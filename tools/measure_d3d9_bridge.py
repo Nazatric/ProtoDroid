@@ -61,8 +61,8 @@ int main(int argc, char** argv) {
         sum += static_cast<const Object*>(table.Get(random & (n - 1)))->b;
     }
     const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
-    std::printf("{\"calls\":%" PRIu64 ",\"elapsed_ns\":%" PRId64 ",\"sum\":%" PRIu64 ",\"check_sum\":%" PRIu64 "}\n",
-                calls, ns, sum, check);
+    std::printf("{\"calls\":%" PRIu64 ",\"elapsed_ns\":%lld,\"sum\":%" PRIu64 ",\"check_sum\":%" PRIu64 "}\n",
+                calls, (long long)ns, sum, check);
     return 0;
 }
 '''
