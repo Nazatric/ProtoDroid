@@ -459,3 +459,9 @@ Existing state-cache and Mali compiler-serialization patches remain unchanged. P
 - **Hypothesis/source:** look for redundant memory/queue work in the exact restored all-16-patch renderer without weakening resource lifetime, unified-memory fallback, or Mali/Qualcomm behavior.
 - **Evidence:** fresh pinned clone applies all 16 production patches and passes `git diff --check`, actual unified-memory selection, depth-resolve, FXAA, device-preflight, and BC-support tests. Source hashes/logs are under `restored-production-*`. Android managed-copy release already defaults on; queue/finish locking protects submission/lifetimes; memory maintenance has a 500 ms deadline and resource timing only wraps real waits.
 - **Disposition:** no source change. No workload supports deleting synchronization, delaying maintenance under memory pressure, rewriting allocation, or altering managed-copy rules. The historical windows do not localize these costs, so no performance gain is claimed.
+
+### Phase 10 H4: default present-blit and diagnostic-path audit
+
+- **Hypothesis/source:** determine whether default present barriers, descriptors, shader selection, or pipeline diagnostics contain safely removable work. Exact restored all-16-patch source; no runtime candidate.
+- **Evidence:** source audit plus `tools/test_dxvk_present_path.py` passes 46 checks. Three deliberate unsafe mutations (store op, descriptor count, trace gate) are detected and restored byte-for-byte. CI compiles all seven present shader variants; local glslang/SPIR-V tools are unavailable. The structural pipeline trace has no timestamps and cannot be joined to frame stalls.
+- **Disposition:** no runtime optimization adopted. Required store/layout transitions, uncovered-area clear, gamma descriptor validity, MSAA/color-space behavior, capability fallbacks, and Mali serialization remain. Heavy tracing stays tour-only and timing opt-in. Added regression/CI coverage only; no GPU/FPS claim.

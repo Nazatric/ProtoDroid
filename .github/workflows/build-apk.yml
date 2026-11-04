@@ -222,13 +222,18 @@ jobs:
           python3 tools/test_dxvk_unified_memory.py /tmp/protodroid-dxvk-test/src/dxvk/dxvk_memory.cpp
           python3 tools/test_dxvk_depth_resolve.py /tmp/protodroid-dxvk-test/src/d3d9/d3d9_device.cpp
           python3 tools/test_dxvk_fxaa.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_present_path.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_device_preflight.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_bc_support.py /tmp/protodroid-dxvk-test
-          glslangValidator --quiet -V --target-env vulkan1.3 \
-            -I/tmp/protodroid-dxvk-test/src/dxvk/shaders \
-            /tmp/protodroid-dxvk-test/src/dxvk/shaders/dxvk_present_frag_fxaa.frag \
-            -o /tmp/protodroid-fxaa.spv
-          test -s /tmp/protodroid-fxaa.spv
+          for shader in dxvk_present_vert.vert dxvk_present_frag.frag dxvk_present_frag_blit.frag \
+            dxvk_present_frag_ms.frag dxvk_present_frag_ms_blit.frag dxvk_present_frag_ms_amd.frag \
+            dxvk_present_frag_fxaa.frag; do
+            glslangValidator --quiet -V --target-env vulkan1.3 \
+              -I/tmp/protodroid-dxvk-test/src/dxvk/shaders \
+              "/tmp/protodroid-dxvk-test/src/dxvk/shaders/${shader}" \
+              -o "/tmp/protodroid-${shader}.spv"
+            test -s "/tmp/protodroid-${shader}.spv"
+          done
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-test/src/dxvk"
           g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
