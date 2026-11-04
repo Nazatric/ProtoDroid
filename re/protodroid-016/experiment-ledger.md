@@ -352,9 +352,9 @@ Every experiment records hypothesis, exact baseline/candidate revisions, changed
 ### H4: resolve anisotropy before sampler calls
 
 - **Candidate:** `f5be92170480d4d9a99924f41502108903e0449a`; resolve setting in `InitD3D9Bridge` after config/logging are ready and before guest calls. Defaults, clamp, and forwarded sampler policy unchanged.
-- **Correctness:** exact production-block normal/TSan fixture passes 44 processes/176 checks across Android/desktop, explicit values, defaults, and concurrent reads. Broad regression 12/12. Independent candidate verification 62/62.
+- **Correctness:** exact production-block normal/TSan fixture passes 44 processes/176 checks across Android/desktop, explicit values, defaults, and concurrent reads. Broad regression 12/12. Independent candidate verification 70/70.
 - **Performance:** rejected optimized-out same-TU benchmark retained. Canonical separate-TU balanced candidate/baseline 0.773923 (24/24); independent confirmation 0.784688 (36/36), with A/A 0.993443/0.997784. ARM64 loses the `ldarb` static guard. Combined median is 0.779120 across 60 pairs (60/60), with 0.266–0.323 ns isolated setter savings.
-- **Disposition:** **committed, adoption pending exact-code CI** `41784574180`. Isolated host function/ARM64 structure only; no phone FPS or real setter-frequency claim.
+- **Disposition:** **adopted**. Exact-code CI `41784574180` passed all six active jobs and skipped release. Isolated host function/ARM64 structure only; no phone FPS or real setter-frequency claim. Native ARM64 fixture CI `41787828484` remains pending.
 
 ### H5: eager screenshot configuration
 
@@ -364,3 +364,11 @@ Every experiment records hypothesis, exact baseline/candidate revisions, changed
 ### DXVK audit
 
 Existing state-cache and Mali compiler-serialization patches remain unchanged. Pinned source confirms sampler/render-state dedup after device-lock/StateBlock handling, protected-only recursive spinlocks, and bounded dedicated submission threads. Actual creation flags, redundant-call rates, and contention are unknown. No draw-state cache, compile-lock removal, dependency replacement, queue rewrite, or frame/render reduction is justified by the available evidence. Cross-target assembly uses external `ziglang 0.13.0`/Clang 18.1.6; it is not the production NDK or a device profiler. Exact NDK/ARM64 compilation is covered by CI.
+
+### H6: native ARM64 exact-source CI fixtures
+
+- **Revision:** measurement/workflow commit `fdd426729d53db0225194433283b3f57ef23134b`; run `41787828484` completed successfully; readable timing initially unavailable.
+- **Protocol:** exact HostTable `c033649`/current and anisotropy `ca25c46`/current, baseline/A-A/candidate, separate implementation objects, shared anisotropy main object, 20 million calls, 24 balanced rounds, correctness checks, raw JSONL/artifact.
+- **Current evidence:** final x86-64 tool validation HostTable 0.997411 neutral; anisotropy 0.815559, 24/24, A/A 1.002361. Earlier short/different-main tool outputs are preserved but excluded.
+- **Current CI:** run `41787828484` passed all six active jobs, but redirected artifact bytes are unavailable in the sandbox; no timing is inferred. A dry-run-tested Checks publisher is prepared for the next exact-head run.
+- **Disposition:** pending readable native ARM64 results; Linux ARM64 is not an Android device or phone FPS/pacing measurement.

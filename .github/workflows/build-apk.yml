@@ -426,6 +426,9 @@ jobs:
 
   arm64-graphics-tests:
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
 
@@ -453,6 +456,38 @@ jobs:
             --before /tmp/d3d9-before-anisotropy.cpp --output /tmp/d3d9-anisotropy-arm64 \
             --calls 20000000 --rounds 24
 
+      - name: Publish ARM64 D3D9 bridge evidence summary
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # The artifact retains raw files. Also publish the compact result through Checks so head-specific evidence
+          # is available through the GitHub API without downloading a redirected artifact.
+          python3 - <<'PY' > /tmp/d3d9-arm64-check-summary.json
+          import json
+          from pathlib import Path
+          host = json.loads(Path('/tmp/d3d9-host-table-arm64/result.json').read_text())
+          aniso = json.loads(Path('/tmp/d3d9-anisotropy-arm64/result.json').read_text())
+          summary = {
+              'schema': 1,
+              'kind': 'native-linux-arm64-microfixtures-not-android-device-fps',
+              'physical_android_device': False,
+              'host_table': host,
+              'anisotropy': aniso,
+          }
+          print('```json\n' + json.dumps(summary, indent=2) + '\n```')
+          PY
+          SUMMARY=$(cat /tmp/d3d9-arm64-check-summary.json)
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name='arm64-d3d9-bridge-evidence' \
+            -f head_sha="${GITHUB_SHA}" \
+            -f status='completed' \
+            -f conclusion='neutral' \
+            -f output[title]='Native ARM64 D3D9 bridge microfixtures' \
+            -f output[summary]="${SUMMARY}" > /tmp/d3d9-check-run.json
+          python3 -c "import json; assert json.load(open('/tmp/d3d9-check-run.json'))['id'] > 0"
+
       - name: Upload ARM64 D3D9 bridge measurements
         if: success()
         uses: actions/upload-artifact@v4
@@ -461,6 +496,8 @@ jobs:
           path: |
             /tmp/d3d9-host-table-arm64
             /tmp/d3d9-anisotropy-arm64
+            /tmp/d3d9-arm64-check-summary.json
+            /tmp/d3d9-check-run.json
           retention-days: 30
           if-no-files-found: error
 
