@@ -223,6 +223,7 @@ jobs:
           python3 tools/test_dxvk_depth_resolve.py /tmp/protodroid-dxvk-test/src/d3d9/d3d9_device.cpp
           python3 tools/test_dxvk_fxaa.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_present_path.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_frame_pacing.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_device_preflight.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_bc_support.py /tmp/protodroid-dxvk-test
           for shader in dxvk_present_vert.vert dxvk_present_frag.frag dxvk_present_frag_blit.frag \

@@ -463,5 +463,11 @@ Existing state-cache and Mali compiler-serialization patches remain unchanged. P
 ### Phase 10 H4: default present-blit and diagnostic-path audit
 
 - **Hypothesis/source:** determine whether default present barriers, descriptors, shader selection, or pipeline diagnostics contain safely removable work. Exact restored all-16-patch source; no runtime candidate.
-- **Evidence:** source audit plus `tools/test_dxvk_present_path.py` passes 46 checks. Three deliberate unsafe mutations (store op, descriptor count, trace gate) are detected and restored byte-for-byte. CI compiles all seven present shader variants; local glslang/SPIR-V tools are unavailable. The structural pipeline trace has no timestamps and cannot be joined to frame stalls.
+- **Evidence:** source audit plus `tools/test_dxvk_present_path.py` passes 46 checks. Three deliberate unsafe mutations (store op, descriptor count, trace gate) are detected and restored byte-for-byte. CI run `41839771476` / job `126607939927` step 26 passes the gate and all-seven-shader compilation; the full job remained in progress at the checkpoint. Local glslang/SPIR-V tools are unavailable. The structural pipeline trace has no timestamps and cannot be joined to frame stalls.
 - **Disposition:** no runtime optimization adopted. Required store/layout transitions, uncovered-area clear, gamma descriptor validity, MSAA/color-space behavior, capability fallbacks, and Mali serialization remain. Heavy tracing stays tour-only and timing opt-in. Added regression/CI coverage only; no GPU/FPS claim.
+
+### Phase 10 H5: frame-signal and limiter audit
+
+- **Hypothesis/source:** determine whether present-wait/frame-thread or direct limiter work can be bypassed. Historical Mali feature log has `presentId=0`, `presentWait=0`, so direct signaling is the relevant path; exact restored source provides the pacing/lifetime semantics.
+- **Evidence:** `tools/test_dxvk_frame_pacing.py` passes 25 checks. Four unsafe mutations are detected; one control-setup indentation failure is preserved. The audit verifies direct limiting/signaling, release/acquire publication, destruction order, FIFO present waits, sleep outside the mutex, bounded refresh heuristic, initial frame ID/fence, repeat suppression, and present-ID/present-wait coupling.
+- **Disposition:** no runtime candidate. Skipping these operations changes reconfiguration, queue-latency, or lifetime behavior without a measured bottleneck. Structural tests are not FPS, input-latency, or physical-device pacing evidence.
