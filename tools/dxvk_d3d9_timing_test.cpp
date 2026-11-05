@@ -1,3 +1,4 @@
+#include <atomic>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -40,6 +41,24 @@ namespace dxvk::env {
 
 int main() {
 #ifdef __ANDROID__
+#ifdef TEST_DISABLED
+  constexpr bool expectedEnabled = false;
+#else
+  constexpr bool expectedEnabled = true;
+#endif
+  std::atomic<int> firstUseFailures = { 0 };
+  std::vector<std::thread> firstUseThreads;
+  for (int t = 0; t < 8; t++) {
+    firstUseThreads.emplace_back([&]() {
+      for (int i = 0; i < 1000; i++) {
+        if (dxvk::D3D9Timing::Enabled() != expectedEnabled)
+          firstUseFailures.fetch_add(1, std::memory_order_relaxed);
+      }
+    });
+  }
+  for (auto& thread : firstUseThreads)
+    thread.join();
+  Expect(firstUseFailures.load() == 0, "concurrent first-use enabled state was inconsistent");
 #ifdef TEST_DISABLED
   dxvk::D3D9Timing::Record(dxvk::D3D9Timing::Op::DrawTotal, 1000000);
   dxvk::D3D9Timing::MaybeLog();

@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/src/d3d9/d3d9_timing.h
-@@ -0,0 +1,182 @@
+@@ -0,0 +1,190 @@
 +#pragma once
 +
 +#ifdef __ANDROID__
@@ -19,6 +19,10 @@
 +
 +namespace dxvk {
 +
++  // Native configures the environment after DXVK loads, so only the unknown sentinel is initialized globally.
++  // Concurrent first calls may repeat the idempotent environment read; relaxed ordering publishes no other data.
++  inline std::atomic<int> g_d3d9TimingEnabled = { -1 };
++
 +  // Opt-in D3D9 method attribution. Record never logs and is safe to use after acquiring the device mutex;
 +  // MaybeLog is called from Present after its lock has been released. Method, lock, prepare and emit times are
 +  // inclusive and may be nested, so their totals are attribution signals rather than additive frame-time slices.
@@ -36,8 +40,12 @@
 +    };
 +
 +    static bool Enabled() {
-+      static const bool enabled = env::getEnvVar("PROTODROID_D3D9_TIMING") == "1";
-+      return enabled;
++      int value = g_d3d9TimingEnabled.load(std::memory_order_relaxed);
++      if (value < 0) {
++        value = env::getEnvVar("PROTODROID_D3D9_TIMING") == "1" ? 1 : 0;
++        g_d3d9TimingEnabled.store(value, std::memory_order_relaxed);
++      }
++      return value != 0;
 +    }
 +
 +    static int64_t Now() {

@@ -136,6 +136,20 @@ Two alternating-order benchmark rounds favor the change at every import working 
 
 The production bridge passes with profiling off and on, including eight threads × 2,000 imports per run with exact per-thread active/outer context checks. Strict imports/runtime/thread syntax checks and shared-library TLS isolation pass. Android Clang/ARM64 compilation remains a required CI gate.
 
+## Recovery iteration 6 — DXVK timing guard
+
+Patch 18's disabled `D3D9Timing::Enabled()` still used a function-local static guard on every protected method. The candidate keeps lazy environment evaluation (native sets the variable after DXVK loads) but stores unknown/off/on in a namespace-scope atomic sentinel. Concurrent first calls may repeat the same environment read; relaxed access is sufficient because no associated data is published.
+
+The exact-header disabled benchmark improved from **0.991522 to 0.430360 ns/call**, a 56.6% guard-overhead reduction with identical checksums. This is a small x86-64 host mechanism result, not an FPS estimate. Enabled/disabled UBSan tests now include eight-thread concurrent first use; 82 structural checks with six mutations, four strict translation-unit variants, 24 analyzer checks, and neighboring 56/26/35 pipeline-outcome/drain/warm-cache checks pass. Fresh application of all 20 patches is byte-identical to the tested candidate, with combined diff SHA-256 `8cf88b97768d61f865caef6d7b4c5c854822c38c5e2651c62f4c865477437ec9`.
+
+## Next device-capture contract
+
+For the first candidate build, use ordinary Play with `frame_interval_trace = 1` and leave `detailed_diagnostics`, `d3d9_timing`, `pipeline_timing`, `pipeline_trace`, `import_profile`, `guest_function_trace`, `warm_cache_trace`, and the diagnostic tour off. Keep resolution, quality, dynamic shadows, anisotropy, AA, FIFO/swapchain settings, drivers, audio, mods, controls, saves, and the scene/route unchanged between A/B runs. Do not use frame generation, upscaling, or an FPS unlock as a performance result.
+
+Run a separate warm-up before a measured warm run, then play the same ordinary route for at least 60 seconds and exit cleanly so the CSV close trailer is written. Preserve `proto-frame-intervals.csv`, `proto-native.log`, `app_process64_d3d9.log`, the active INI, and a visual-completeness note. The logs must identify the exact source/device/GPU/configuration and whether cache recovery restored a populated candidate or found none. Cold-cache/stall attribution is a separate run and must not be mixed into the warm baseline.
+
+The supplied files are inputs to `analyze_frame_intervals.py`, `perf_evidence.py summarize`, and `perf_evidence.py compare-raw`; scene and cache-state labels must match. A candidate claim requires exact raw p50/p95/p99/max, threshold rates, and visual correctness. One run is still not significance proof.
+
 ## Current non-completion statement
 
 Work is **not finished**. The newest evidence establishes a cold-cache run and an observability/startup-order weakness, not a complete explanation for every low-FPS report. No default-path root cause, matched FPS recovery, visual verification, 60+ FPS result, 3× result, or stutter elimination has been established. PR #40 remains open and unmerged; no tag or release is authorized.
