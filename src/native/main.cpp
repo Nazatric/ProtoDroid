@@ -466,6 +466,7 @@ int main(int argc, char** argv) {
         unsetenv("PROTODROID_PIPELINE_TRACE_DIR");
         unsetenv("PROTODROID_PIPELINE_TIMING");
         unsetenv("PROTODROID_D3D9_TIMING");
+        unsetenv("PROTODROID_WARM_CACHE_TRACE");
         unsetenv("PROTODROID_IMPORT_PROFILE");
         unsetenv("DXVK_LOG_TIMESTAMPS");
     }
@@ -631,6 +632,10 @@ int main(int argc, char** argv) {
     const bool d3d9_timing = diagnostic_tour || SettingInt("d3d9_timing", 0) != 0;
     setenv("PROTODROID_D3D9_TIMING", d3d9_timing ? "1" : "0", diagnostic_tour ? 1 : 0);
     if (d3d9_timing) Log("DXVK D3D9 method timing enabled (%s)", diagnostic_tour ? "diagnostic tour" : "d3d9_timing = 1");
+    // Independent of the tour to preserve prior tour comparability. This samples existing queues; it never drains them.
+    const bool warm_cache_trace = SettingInt("warm_cache_trace", 0) != 0;
+    setenv("PROTODROID_WARM_CACHE_TRACE", warm_cache_trace ? "1" : "0", 1);
+    if (warm_cache_trace) Log("DXVK warm-cache snapshots enabled (250 ms, try-lock, no drain; warm_cache_trace = 1)");
     if (diagnostic_tour) setenv("PROTODROID_PIPELINE_TRACE_DIR", kDiagnosticTourLogDir, 1);
     if (diagnostic_tour || SettingInt("pipeline_trace", 0) == 1) {
         setenv("PROTODROID_PIPELINE_TRACE", "1", diagnostic_tour ? 1 : 0);

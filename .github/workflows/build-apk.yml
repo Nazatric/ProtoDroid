@@ -194,6 +194,7 @@ jobs:
           python3 tools/test_guest_function_trace.py
           python3 tools/test_guest_function_trace_runtime.py
           python3 tools/test_analyze_guest_function_trace.py
+          python3 tools/test_analyze_warm_cache_trace.py
 
       - name: Compile and run diagnostic-tour plan and guest-clock tests
         run: |
@@ -252,6 +253,9 @@ jobs:
           python3 tools/test_dxvk_pipeline_drain.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_pipeline_drain_runtime.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_pipeline_drain_syntax.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_warm_cache_trace.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_warm_cache_trace_runtime.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_warm_cache_trace_syntax.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_frame_pacing.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_device_preflight.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_bc_support.py /tmp/protodroid-dxvk-test

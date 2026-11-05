@@ -174,7 +174,7 @@ def analyze(paths: list[Path], functions_path: Path) -> dict:
         "complete_count": sum(len(values) for values in durations.values()),
         "anomaly_counts": dict(sorted(anomalies.items())),
         "functions": functions,
-        "game_state_request_arguments": [
+        "game_state_request_wrapper_arguments": [
             {"arg0": f"{args[0]:08x}", "arg1": f"{args[1]:08x}", "arg2": f"{args[2]:08x}", "calls": calls}
             for args, calls in sorted(requests.items())
         ],
@@ -183,6 +183,7 @@ def analyze(paths: list[Path], functions_path: Path) -> dict:
             "Durations are inclusive host wall time for selected recompiled functions, not GPU time or proof of a loading boundary.",
             "Small collector/timestamp overhead remains; persistent log flushing is deferred until the outermost selected call exits.",
             "ecx/caller/arg0-arg2 are raw entry dwords; only a separately validated function signature may assign them meaning.",
+            "The 0x00838b40 wrapper can return early; its completed records do not prove that a GameStateRequest was enqueued.",
             "Active calls at a crash or abnormal exit have no completion record; absence is not a zero-duration measurement.",
             "These records do not establish device FPS, visual correctness, or a warm-cache drain benefit.",
         ],

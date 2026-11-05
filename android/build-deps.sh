@@ -205,7 +205,9 @@ for marker in \
     'DXVK pipeline timing final (' \
     'DXVK D3D9 timing:' \
     'DXVK warm-cache drain:' \
+    'DXVK warm-cache snapshot:' \
     'PROTODROID_D3D9_TIMING' \
+    'PROTODROID_WARM_CACHE_TRACE' \
     'PROTODROID_PIPELINE_TIMING' \
     'DXVK_LOG_TIMESTAMPS' \
     'prototypeenginef.dll'; do

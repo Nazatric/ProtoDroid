@@ -158,6 +158,7 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `dxvk_config` | Extra DXVK options, separated by commas in this file. |
 | `import_profile` | `1` profiles guest and Win32/D3D9 wall time per thread every ten seconds. |
 | `guest_function_trace` | `1` records bounded durations/raw entry arguments for the generation-selected loading-boundary candidates. Diagnostic only. |
+| `warm_cache_trace` | `1` samples existing feeder/pipeline queues every 250 ms with try-lock. Never drains; diagnostic only. |
 | `watchdog` | Enables hang diagnostics. |
 
 Android presentation is fixed to **FIFO, interval 1** for both device creation and reset. An explicit FPS cap uses the host limiter; unlimited mode leaves pacing to FIFO. Desktop builds retain the optional presentation-mode settings. DXVK’s official Prototype DF-format workaround is applied explicitly because the native host does not use the `prototypef.exe` process name; graphics-quality settings are unchanged.
@@ -205,6 +206,18 @@ python3 tools/analyze_guest_function_trace.py proto-native.log --output guest-fu
 ```
 
 The selected functions are investigation candidates, not proven loading-screen callbacks or warm-cache drain points. Active calls at a crash have no completion record, and this trace does not establish GPU time, visual correctness, or an FPS/loading improvement.
+
+To determine whether existing warm-cache work overlaps those candidate calls, enable `warm_cache_trace = 1` in the same run. DXVK writes timestamped queue snapshots from `Present` to its D3D9 log at most once per 250 ms while enabled; no `Present` calls means no samples. The reader uses try-lock and reports `state_known=0` instead of waiting; its feeder count is then unknown, not zero. Raw pipeline totals/completions are retained even if their relaxed sampling order is inconsistent. This option is independent of the diagnostic tour and never calls the dormant drain.
+
+Because guest and DXVK records occupy separate files, correlation requires an explicit assertion that both files came from the same run:
+
+```sh
+python3 tools/analyze_warm_cache_trace.py \
+  --pair proto-native.log app_process64_d3d9.log \
+  --output warm-cache.json
+```
+
+The analyzer preserves input hashes/raw counters and reports same-run before/after snapshot references at guest-function completion. Standalone inputs are never implicitly correlated, and clock-regressed guest completions are excluded but retained as anomalies. These are instantaneous queue samples, not continuous queue-lifetime history, proof of loading semantics, or evidence of a drain/FPS benefit.
 
 <details>
 <summary><strong>Shader-cache recovery and durability</strong></summary>

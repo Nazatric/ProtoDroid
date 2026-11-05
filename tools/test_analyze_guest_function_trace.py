@@ -70,7 +70,7 @@ def main() -> int:
                 first["p99_ns"] == 300 and first["max_ns"] == 300, "nearest-rank statistics differ")
         require(first["symbol"] == "proto::InGameState::vfunction1_for_GameState",
                 "unique function symbolization failed")
-        requests = report["game_state_request_arguments"]
+        requests = report["game_state_request_wrapper_arguments"]
         require(len(requests) == 2 and requests[0]["arg0"] == "00000002" and requests[0]["calls"] == 2 and
                 requests[1]["arg0"] == "00000003" and requests[1]["arg1"] == "00000002" and
                 requests[1]["calls"] == 1, "raw request argument aggregation differs")

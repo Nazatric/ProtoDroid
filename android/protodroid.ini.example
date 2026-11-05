@@ -70,6 +70,11 @@ texture_skip_min_size = 512
 # Use tools/analyze_guest_function_trace.py on proto-native.log. Keep off for ordinary play and FPS baselines.
 #guest_function_trace = 1
 
+# Optional 250 ms warm-cache queue snapshots from Present. Uses try-lock; state_known=0 means feeder count is unknown,
+# not idle. No Present means no sample. Raw pipeline counters are approximate, not GPU work. Never waits or drains;
+# off for the tour unless explicitly requested. Join at_ns (steady-clock ns) with guest records; not an FPS baseline.
+#warm_cache_trace = 1
+
 # Low-level Mali pipeline diagnostics. Disabled by default because every traced pipeline performs
 # SPIR-V analysis plus durable file/fsync writes. Enables pipeline_trace.log and last_vs/last_fs.spv.
 # The PROTODROID_PIPELINE_TRACE=1 environment variable is an equivalent override.

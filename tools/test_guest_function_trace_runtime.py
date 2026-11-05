@@ -38,7 +38,7 @@ def main() -> int:
         report = ANALYZER.analyze([log], ROOT / "re/functions.csv")
         if report["status"] != "valid-guest-function-records" or report["complete_count"] != 2:
             raise AssertionError("actual runtime records did not produce two clean completions")
-        requests = report["game_state_request_arguments"]
+        requests = report["game_state_request_wrapper_arguments"]
         if len(requests) != 1 or requests[0]["arg0"] != "00000002" or requests[0]["arg2"] != "55667788":
             raise AssertionError("actual runtime request metadata differs")
         functions = {row["rva"]: row for row in report["functions"]}
