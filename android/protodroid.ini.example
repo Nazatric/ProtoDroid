@@ -64,6 +64,8 @@ texture_skip_min_size = 512
 
 # Per-thread guest/Win32/D3D9 wall-time profiling for stall investigation. This is opt-in and not an FPS benchmark mode.
 # D3D9 records also include bounded top-three immediate caller RVAs plus exact unlisted residuals for offline symbolization.
+# memcpy/memmove/memset records include exact per-window call/byte totals and 14 size bins; validate them with
+# tools/analyze_memory_sizes.py. Ordinary import dispatch and CRT handlers do not touch these records.
 #import_profile = 1
 
 # Separate loading-boundary investigation: only generation-selected functions in re/loading_boundary_trace.txt.

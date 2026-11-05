@@ -16,6 +16,7 @@
 
 #include "guest.h"
 #include "import_caller_profile.h"
+#include "memory_size_profile.h"
 
 namespace native {
 
@@ -63,6 +64,7 @@ struct ThreadProfile {
     Clock::time_point window = Clock::now();
     std::vector<uint64_t> ns, calls;
     ImportCallerProfile callers;
+    MemorySizeProfile memory_sizes;
     int depth = 0;
 };
 
@@ -78,6 +80,20 @@ void LogCallerStats(const ThreadProfile& tp, const std::vector<uint32_t>& order)
         Log("%s", line.c_str());
 }
 
+bool TrackMemorySize(const Slot& slot) {
+    return slot.dll == "MSVCR80.DLL" &&
+           (slot.name == "memcpy" || slot.name == "memmove" || slot.name == "memset");
+}
+
+void LogMemorySizeStats(const ThreadProfile& tp, const std::vector<uint32_t>& order) {
+    auto& slots = Slots();
+    for (const uint32_t index : order) {
+        const MemorySizeRecord* record = tp.memory_sizes.Find(index);
+        if (record)
+            Log("%s", BuildMemorySizeLine(int(gettid()), slots[index].name, *record, tp.calls[index]).c_str());
+    }
+}
+
 void ProfiledCall(const Slot& s, uint32_t index, Ctx* ctx) {
     thread_local ThreadProfile tp;
     if (tp.ns.size() <= index) {
@@ -85,6 +101,8 @@ void ProfiledCall(const Slot& s, uint32_t index, Ctx* ctx) {
         tp.calls.resize(index + 64);
     }
     const bool track_callers = s.dll == "d3d9.dll";
+    const bool track_memory_size = TrackMemorySize(s);
+    const uint32_t memory_size = track_memory_size ? Arg(ctx, 2) : 0;
     uint32_t caller_rva = 0xffffffffu;
     if (track_callers) {
         const uint32_t return_address = SR32(ctx->esp);  // The import has not popped it yet.
@@ -100,6 +118,7 @@ void ProfiledCall(const Slot& s, uint32_t index, Ctx* ctx) {
     tp.ns[index] += duration;
     ++tp.calls[index];
     if (track_callers) tp.callers.Add(index, caller_rva, duration);
+    if (track_memory_size) tp.memory_sizes.Add(index, memory_size);
     if (tp.depth || t1 - tp.window < std::chrono::seconds(10)) return;
     const double wall = std::chrono::duration<double, std::milli>(t1 - tp.window).count();
     std::vector<uint32_t> order;
@@ -120,9 +139,11 @@ void ProfiledCall(const Slot& s, uint32_t index, Ctx* ctx) {
     }
     Log("imports tid %d: guest %.0f%% |%s", int(gettid()), 100.0 * (wall - in_imports) / wall, line.c_str());
     LogCallerStats(tp, order);
+    LogMemorySizeStats(tp, order);
     std::fill(tp.ns.begin(), tp.ns.end(), 0);
     std::fill(tp.calls.begin(), tp.calls.end(), 0);
     tp.callers.Reset();
+    tp.memory_sizes.Reset();
     tp.window = t1;
 }
 

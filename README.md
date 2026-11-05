@@ -156,7 +156,7 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `pipeline_timing` | Lightweight DXVK pipeline timing; follows `detailed_diagnostics` unless set separately. |
 | `pipeline_trace` | Expensive Mali pipeline tracing and shader dumps. Debugging only. |
 | `dxvk_config` | Extra DXVK options, separated by commas in this file. |
-| `import_profile` | `1` profiles guest and Win32/D3D9 wall time per thread every ten seconds. |
+| `import_profile` | `1` profiles guest and Win32/D3D9 wall time per thread every ten seconds, including bounded D3D9 callers and exact `memcpy`/`memmove`/`memset` call-size histograms. Not a steady-FPS benchmark mode. |
 | `guest_function_trace` | In a native target explicitly rebuilt with `GUEST_FUNCTION_TRACE=1`, `1` records bounded durations/raw entry arguments for generation-selected candidates. Ordinary builds compile the probes out; diagnostic only. |
 | `warm_cache_trace` | `1` samples existing feeder/pipeline queues every 250 ms with try-lock. Never drains; diagnostic only. |
 | `watchdog` | Enables hang diagnostics. |
