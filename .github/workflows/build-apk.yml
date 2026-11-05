@@ -383,7 +383,9 @@ jobs:
           python3 tools/test_analyze_import_callers.py
 
       - name: Test performance-evidence comparability guards
-        run: python3 tools/test_perf_evidence.py
+        run: |
+          python3 tools/test_perf_evidence.py
+          python3 tools/test_perf_raw_compare.py
 
       - name: Test compatibility controls and graphics policies
         run: python3 tools/test_compatibility_batch.py
