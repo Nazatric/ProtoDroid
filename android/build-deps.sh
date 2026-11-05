@@ -157,6 +157,9 @@ endian = 'little'
 # __ANDROID__ to select libSDL2.so, libvulkan.so and Android surface WSI.
 c_args = ['-D__ANDROID__=1']
 cpp_args = ['-D__ANDROID__=1']
+# ThinLTO otherwise drops the deliberately uncalled bounded warm-cache-drain method chain. Root its existing C++
+# symbol without adding a caller or changing the public D3D9 ABI; uint64_t is unsigned long in both Android LP64 ABIs.
+cpp_link_args = ['-Wl,-u,_ZN4dxvk10DxvkDevice16waitForWarmCacheEm']
 EOF
 rm -rf "$SRC/build/dxvk-$ABI"
 # Optimize the existing protected D3D9/DXVK call paths across their internal static-library boundaries. ThinLTO does
@@ -180,6 +183,11 @@ if [ ! -f "$DXVK_LIB" ]; then
     echo "missing installed DXVK library: $DXVK_LIB" >&2
     exit 1
 fi
+# A string alone is not enough: prove that ThinLTO retained the actual bounded-drain entry point as well.
+"$TC/llvm-nm" "$DXVK_LIB" | grep -F '_ZN4dxvk10DxvkDevice16waitForWarmCacheEm' >/dev/null || {
+    echo "DXVK ThinLTO dropped the warm-cache drain entry point" >&2
+    exit 1
+}
 DXVK_STRINGS=$($TC/llvm-strings "$DXVK_LIB")
 printf '%s\n' "$DXVK_STRINGS" | grep -E 'libSDL|vkCreateAndroidSurface|SDL2 WSI' || true
 printf '%s\n' "$DXVK_STRINGS" | grep -Fx 'libSDL2.so' >/dev/null || {

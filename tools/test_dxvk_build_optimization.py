@@ -20,6 +20,11 @@ def validate(text: str) -> None:
     # The optimized dependency must remain usable by the explicit ARMv8.0 native compatibility variant.
     assert "CPU_FAMILY=aarch64; CPU=armv8-a" in text, "the generic ARM64 dependency target changed"
     assert text.count("meson setup \"$SRC/build/dxvk-$ABI\"") == 1
+    root = "_ZN4dxvk10DxvkDevice16waitForWarmCacheEm"
+    assert f"cpp_link_args = ['-Wl,-u,{root}']" in text, "the uncalled diagnostic LTO root is missing"
+    assert f'"$TC/llvm-nm" "$DXVK_LIB" | grep -F \'{root}\'' in text, (
+        "the final library does not verify the retained drain symbol"
+    )
 
 
 validate(BUILD)
@@ -30,6 +35,12 @@ for name, mutated in {
         "ninja -C \"$SRC/build/dxvk-$ABI\" -t commands | grep -F -- '-flto=thin'", "true", 1
     ),
     "compatibility target narrowed": BUILD.replace("CPU_FAMILY=aarch64; CPU=armv8-a", "CPU_FAMILY=aarch64; CPU=armv8.2-a", 1),
+    "diagnostic retention root removed": BUILD.replace(
+        "cpp_link_args = ['-Wl,-u,_ZN4dxvk10DxvkDevice16waitForWarmCacheEm']", "cpp_link_args = []", 1
+    ),
+    "retained-symbol check removed": BUILD.replace(
+        '"$TC/llvm-nm" "$DXVK_LIB" | grep -F \'_ZN4dxvk10DxvkDevice16waitForWarmCacheEm\'', "true", 1
+    ),
 }.items():
     try:
         validate(mutated)
@@ -38,4 +49,4 @@ for name, mutated in {
     else:
         raise AssertionError(f"mutation was not detected: {name}")
 
-print("DXVK ThinLTO build policy checks passed; four mutations detected")
+print("DXVK ThinLTO build policy checks passed; six mutations detected")
