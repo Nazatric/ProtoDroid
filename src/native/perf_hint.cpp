@@ -32,9 +32,11 @@ std::mutex g_mutex;
 APerformanceHintSession* g_session = nullptr;
 // Most unsupported/older devices never create a session. Avoid taking the session mutex on every Present there.
 std::atomic<bool> g_session_active{false};
+std::atomic<bool> g_start_attempted{false};
 std::vector<int32_t> g_tids;
 int64_t g_target_ns = 16666667;
 uint64_t g_reports = 0, g_report_errors = 0, g_target_updates = 0, g_target_errors = 0;
+uint64_t g_thread_updates = 0, g_thread_update_errors = 0;
 
 bool ThreadAlive(int32_t tid) {
     char path[64];
@@ -45,6 +47,7 @@ bool ThreadAlive(int32_t tid) {
 }  // namespace
 
 void PerfHintStart(int fps_target) {
+    g_start_attempted.store(true, std::memory_order_release);
     if (!SettingInt("perf_hint", 1)) return;
     void* lib = dlopen("libandroid.so", RTLD_NOW);
     if (!lib) return;
@@ -89,8 +92,24 @@ void PerfHintAddThread(int tid) {
     for (int32_t t : g_tids)
         if (t == tid) return;
     g_tids.push_back(int32_t(tid));
-    if (g_session && g_api.setThreads && g_api.setThreads(g_session, g_tids.data(), g_tids.size()) != 0)
-        g_tids.pop_back();
+    const char* outcome = g_start_attempted.load(std::memory_order_acquire)
+                              ? "recorded; no active session"
+                              : "queued for session creation";
+    if (g_session && g_api.setThreads) {
+        ++g_thread_updates;
+        if (g_api.setThreads(g_session, g_tids.data(), g_tids.size()) != 0) {
+            ++g_thread_update_errors;
+            g_tids.pop_back();
+            outcome = "rejected by dynamic thread update";
+        } else {
+            outcome = "added to active session";
+        }
+    } else if (g_session) {
+        outcome = "recorded; active session predates dynamic thread updates";
+    }
+    // Registration happens only for a newly observed engine/audio/Present thread, never once per frame. In particular,
+    // this makes a rejected Android update visible instead of silently losing the real render thread from the session.
+    Log("perf hint: thread %d %s (registered=%zu)", tid, outcome, g_tids.size());
 }
 
 void PerfHintTarget(int fps_target) {
@@ -121,6 +140,8 @@ PerfHintSnapshot GetPerfHintStats() {
     out.report_errors = g_report_errors;
     out.target_updates = g_target_updates;
     out.target_errors = g_target_errors;
+    out.thread_updates = g_thread_updates;
+    out.thread_update_errors = g_thread_update_errors;
     return out;
 }
 

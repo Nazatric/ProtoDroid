@@ -184,6 +184,14 @@ jobs:
           /tmp/present_stats_test
           /tmp/frame_interval_trace_test
 
+      - name: Compile and run successful-Present frame-limiter tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/frame_limiter.cpp src/native/tests/frame_limiter_test.cpp -o /tmp/frame_limiter_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/frame_limiter_test
+
       - name: Test selected guest-function tracing
         run: |
           set -euo pipefail
@@ -377,8 +385,10 @@ jobs:
       - name: Test Vulkan wrapper negotiation policy
         run: python3 tools/test_vulkan_wrapper_policy.py
 
-      - name: Test ordinary-play hot-path and failed-driver recovery policies
-        run: python3 tools/test_runtime_performance.py
+      - name: Test ordinary-play hot-path, Present-limiter, and failed-driver recovery policies
+        run: |
+          python3 tools/test_runtime_performance.py
+          python3 tools/test_frame_limiter.py
 
       - name: Test opt-in rect-lock attribution boundaries
         run: python3 tools/test_rect_lock_diagnostics.py
@@ -942,6 +952,14 @@ jobs:
           /tmp/diagnostic_tour_plan_test_arm64
           /tmp/present_stats_test_arm64
           /tmp/guest_time_test_arm64
+
+      - name: Compile and run native ARM64 successful-Present frame-limiter tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/frame_limiter.cpp src/native/tests/frame_limiter_test.cpp -o /tmp/frame_limiter_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/frame_limiter_test_arm64
 
       - name: Compile and run native ARM64 CPU affinity tests
         run: |

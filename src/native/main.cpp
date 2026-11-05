@@ -35,6 +35,7 @@
 #include "diagnostic_tour.h"
 #include "diagnostics.h"
 #include "dxvk_config.h"
+#include "frame_limiter.h"
 #include "guest.h"
 #include "guest_time.h"
 #include "input.h"
@@ -365,9 +366,8 @@ extern SDL_Window* g_sdl_window;
 }  // namespace native
 
 
-// ---- frame limiter and presented-frame counters (read by the on-screen overlay through JNI) ----
+// ---- presented-frame counters (read by the on-screen overlay through JNI) ----
 namespace native {
-std::atomic<int> g_fps_limit{0};  // 0 = no limit (the swap interval still applies)
 std::atomic<bool> g_unlock_menu_fps{true};
 
 bool MenuFpsUnlocked() { return g_unlock_menu_fps.load(std::memory_order_relaxed); }
@@ -396,8 +396,11 @@ extern "C" JNIEXPORT jint JNICALL Java_com_protodroid_TouchControls_nativeMemory
     return jint(native::ResidentMiB());
 }
 extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetFpsLimit(JNIEnv*, jclass, jint fps) {
-    native::g_fps_limit.store(fps);
+    const int previous = native::FrameLimitTarget();
+    native::SetFrameLimitTarget(fps);
     native::PerfHintTarget(fps);
+    if (previous != native::FrameLimitTarget())
+        native::Log("fps limit: live target %d -> %d (successful-Present pacing)", previous, native::FrameLimitTarget());
 }
 extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetMenuFpsUnlocked(
     JNIEnv*, jclass, jboolean unlocked) {
@@ -874,27 +877,15 @@ int main(int argc, char** argv) {
     StartWatchdog(&frames);
     int fps_limit = SettingInt("fps_limit", 0);
     if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
-    g_fps_limit.store(fps_limit);
+    SetFrameLimitTarget(fps_limit);
     PerfHintStart(fps_limit);
-    using Clock = std::chrono::steady_clock;
-    Clock::time_point frame_start = Clock::now();
+    Log("fps limit: target=%d (successful-Present pacing; FIFO/display timing remains independent)",
+        FrameLimitTarget());
     for (uint64_t frame = 0;; ++frame) {
         frames.store(frame, std::memory_order_relaxed);
         if (frame == 900) VulkanDriverConfirm();  // well past the intro movies: the driver survived startup
-        // The limiter remains anchored to the engine loop. FPS, frame statistics, and ADPF are anchored only to real
-        // D3D9 presents, so thousands of empty message-pump iterations cannot inflate them or skew CPU clocking.
-        Clock::time_point now = Clock::now();
-        int64_t limiter_ns = -1;
-        if (int limit = g_fps_limit.load(); limit > 0) {
-            const Clock::time_point limiter_start = now;
-            Clock::time_point due = frame_start + std::chrono::microseconds(1000000 / limit);
-            if (now < due) {
-                std::this_thread::sleep_until(due);
-                now = Clock::now();
-            }
-            limiter_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - limiter_start).count();
-        }
-        frame_start = now;
+        // Do not pace this loop: it can iterate thousands of times without a Present in menus/loading and can block
+        // inside EngineService during gameplay. The dedicated limiter runs only after a successful D3D9 Present.
         for (const Tap& t : taps) {
             if (t.key == SDL_SCANCODE_UNKNOWN) continue;
             if (frame == t.frame) InjectKey(t.key, true);
@@ -934,7 +925,7 @@ int main(int argc, char** argv) {
         if (timing) {
             const int64_t focus_end_ns = MonotonicNanos();
             RecordEngineLoop(service_end_ns, service_end_ns - service_start_ns, service_start_ns - pump_start_ns,
-                             limiter_ns, focus_end_ns - service_end_ns);
+                             focus_end_ns - service_end_ns);
         }
         ModPlatformFrame();
         if (!keep) {

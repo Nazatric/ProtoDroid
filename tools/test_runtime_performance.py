@@ -20,6 +20,19 @@ assert frame.index("g_session_active.load") < frame.index("std::lock_guard<std::
 assert "g_session_active.store(g_session != nullptr" in perf
 print("No-session ADPF fast-path checks passed")
 
+d3d9 = (ROOT / "src/native/d3d9.cpp").read_text(encoding="utf-8")
+register = d3d9.split("void RegisterPresentPerfHintThread()", 1)[1].split("template <typename F>", 1)[0]
+assert "thread_local bool registered = false;" in register
+assert register.index("if (registered) return;") < register.index("PerfHintAddThread(int(gettid()))")
+guarded = d3d9.split("HRESULT GuardedPresent(F present)", 1)[1].split("#ifdef __ANDROID__", 1)[0]
+assert guarded.index("RecordPresent();") < guarded.index("RegisterPresentPerfHintThread();")
+assert guarded.index("RegisterPresentPerfHintThread();") < guarded.index("} else {")
+assert "thread_updates" in perf and "thread_update_errors" in perf
+assert "rejected by dynamic thread update" in perf and "added to active session" in perf
+snapshot = (ROOT / "src/native/guest.h").read_text(encoding="utf-8")
+assert "uint64_t thread_updates = 0;" in snapshot and "uint64_t thread_update_errors = 0;" in snapshot
+print("Actual-Present-thread ADPF registration and update-evidence checks passed")
+
 driver = (ROOT / "src/native/vulkan_driver.cpp").read_text(encoding="utf-8")
 failed = driver.split("else if (std::string why = FailedBefore()", 1)[1].split("const std::string model", 1)[0]
 assert "AutomaticSystemDevice();" in failed, "failed Auto Turnip must enter the fresh direct/wrapper policy"

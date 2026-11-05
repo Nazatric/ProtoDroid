@@ -31,6 +31,7 @@
 #include "d3d9_dxt.h"
 #include "d3d9_state.h"
 #include "diagnostics.h"
+#include "frame_limiter.h"
 #include "mod_platform.h"
 #include "operation_timing.h"
 #include "present_stats.h"
@@ -933,6 +934,7 @@ M(IDirect3DDevice9, Reset) {
         pp.MultiSampleType, pp.MultiSampleQuality, pp.PresentationInterval, uint32_t(hr),
         double(MonotonicNanos() - reset_start_ns) / 1e6);
     if (SUCCEEDED(hr)) {
+        ResetPresentFrameLimiter();  // a swapchain reset is a new pacing boundary, not a catch-up opportunity
         if (OverrideModes()) SetClientSize(int(pp.BackBufferWidth), int(pp.BackBufferHeight));
     }
     ToGuest(pp, Arg(c, 1));
@@ -997,11 +999,21 @@ void MaybeScreenshot(IDirect3DDevice9* dev) {
 std::mutex g_present_mutex;
 bool g_surface_gone = false;  // under g_present_mutex
 
+void RegisterPresentPerfHintThread() {
+    // Guest priority labels do not reliably identify the real D3D9 render/Present thread. Register the observed thread
+    // once, independently of that label; subsequent Presents only read this thread-local boolean.
+    thread_local bool registered = false;
+    if (registered) return;
+    PerfHintAddThread(int(gettid()));
+    registered = true;
+}
+
 template <typename F>
 HRESULT GuardedPresent(F present) {
     std::unique_lock<std::mutex> lock(g_present_mutex);
     if (g_surface_gone) {
         lock.unlock();
+        ResetPresentFrameLimiter();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return D3D_OK;
     }
@@ -1017,6 +1029,18 @@ HRESULT GuardedPresent(F present) {
         // complete end-to-end interval; empty guest pump iterations and skipped surface-less presents do not.
         const int64_t duration_ns = RecordPresent();
         if (duration_ns > 0) PerfHintFrame(duration_ns);
+        RegisterPresentPerfHintThread();
+    } else {
+        ResetPresentFrameLimiter();
+    }
+
+    // Never sleep with the surface mutex held: Android must remain free to report surface loss/recreation. Record the
+    // actual Present before this wait, so the next real interval includes the preceding pacing delay without moving
+    // or inventing a presentation timestamp. Failed/skipped calls do not advance the limiter's deadline grid.
+    lock.unlock();
+    if (SUCCEEDED(hr)) {
+        const FrameLimitResult limit = LimitPresentedFrame();
+        if (timing) RecordPresentLimiter(limit);
     }
     return hr;
 }

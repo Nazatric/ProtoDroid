@@ -96,8 +96,8 @@ final class GameSettings {
             case "texture_skip_mips": return "Full keeps every texture level. Lower choices save memory on the next Play.";
             case "decode_16bit": return "Decoded DXT1 color on GPUs without BC. 32-bit preserves more color; 16-bit saves memory and bandwidth. Applies on the next Play.";
             case "max_anisotropy": return "Texture sharpness at glancing angles. Applies on the next Play.";
-            case "fps_limit": return "Caps the engine loop. Your display and FIFO still pace presented frames.";
-            case "battery_saver": return "Limits the engine to 30 FPS when the selected cap is higher or unlimited.";
+            case "fps_limit": return "Caps successful game Presents with absolute deadlines. Your display and FIFO still apply.";
+            case "battery_saver": return "Caps successful game Presents to 30 FPS when the selected cap is higher or unlimited.";
             case "unlock_menu_fps": return "Keeps silent menu movies responsive. Audio-backed movies retain their normal pacing.";
             case "vulkan_driver": return "Auto is recommended. Change drivers from the Drivers screen when recovery is needed.";
             case "game_aa_level": return "FXAA filters the final image with built-in MSAA disabled. 2x/4x keep the game's original MSAA. Applies on the next Play.";

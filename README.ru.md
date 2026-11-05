@@ -56,7 +56,7 @@ Android 10+, arm64 и купленная игра (PC, Steam app 10150, сбор
 |---|---|
 | `render_height` | 720, 900, 1080, 0 = экран |
 | `texture_skip_mips` | 0 оригинал, 1 вдвое меньше, 2 вчетверо |
-| `fps_limit` | 30 / 45 / 60 |
+| `fps_limit` | 0 = без ограничения; 30–1000 = абсолютные интервалы между успешными D3D9 Present |
 | `battery_saver` | 30 fps, без привязки к большим ядрам |
 | `perf_hint` | ADPF вкл/выкл |
 | `vulkan_driver` | `auto` / `system` / `turnip` |

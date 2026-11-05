@@ -143,7 +143,7 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `decode_16bit` | On decoded DXT1 textures, `0` keeps full 32-bit color and `1` uses the lower-bandwidth 16-bit path. |
 | `max_anisotropy` | Texture anisotropy: 1, 2, 4, 8, or another supported value. |
 | `game_aa_level` | `-1` Game default, `0` Off, `1` 2x MSAA, `2` 4x MSAA, `3` FXAA. FXAA keeps GameDB/present MSAA at zero and applies on the next Play. |
-| `fps_limit` | Host frame limit: `0` disables it; positive values use the existing limiter. The UI offers 30–1000, without promising the resulting frame rate. |
+| `fps_limit` | `0` disables the host cap. Positive values pace successful D3D9 Presents against absolute nanosecond deadlines; the engine message loop is not throttled. The UI offers 30–1000, without promising that the workload/display can reach the target. |
 | `battery_saver` | Enables the battery-saving frame policy. |
 | `unlock_menu_fps` | `1` keeps menu movies responsive without blocking waits. Default: `1`. |
 | `audio_driver` | `aaudio` or `openslES`. |

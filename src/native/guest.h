@@ -146,6 +146,8 @@ struct PerfHintSnapshot {
     uint64_t report_errors = 0;
     uint64_t target_updates = 0;
     uint64_t target_errors = 0;
+    uint64_t thread_updates = 0;
+    uint64_t thread_update_errors = 0;
 };
 PerfHintSnapshot GetPerfHintStats();
 

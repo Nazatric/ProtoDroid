@@ -91,6 +91,7 @@ unlock_menu_fps = 1
 # 2 logs every five-second timing window, and 0 disables the diagnostics and their callback timers.
 #present_stats = 1
 #audio_stats = 2
+# fps_limit=0 is unlimited; positive values pace successful D3D9 Presents, not empty engine-loop iterations.
 #fps_limit = 30
 #battery_saver = 1
 

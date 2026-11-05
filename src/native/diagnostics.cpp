@@ -46,8 +46,6 @@ std::string TakeTextureTimingStats();
 std::string TakeLockTimingStats();
 TimingWindowSnapshot TakePresentTimingWindow();
 
-extern std::atomic<int> g_fps_limit;
-
 namespace {
 
 std::atomic<bool> g_active{false};
@@ -60,7 +58,8 @@ bool g_frame_interval_trace = false;
 
 std::mutex g_engine_mutex;
 TimingWindow g_service_timing{65536}, g_pump_timing{65536}, g_focus_timing{65536};
-TimingWindow g_limiter_timing;
+TimingWindow g_limiter_timing, g_limiter_oversleep;
+uint64_t g_limiter_calls = 0, g_limiter_sleeps = 0, g_limiter_resets = 0, g_limiter_late_resets = 0;
 
 std::string ReadText(const std::string& path, size_t maximum = 262144) {
     std::ifstream input(path, std::ios::binary);
@@ -460,12 +459,21 @@ std::string WorstEvents(const TimingWindowSnapshot& snapshot, size_t maximum = 4
 }
 
 struct EngineSnapshot {
-    TimingWindowSnapshot service, pump, limiter, focus;
+    TimingWindowSnapshot service, pump, focus;
+    TimingWindowSnapshot limiter, limiter_oversleep;
+    uint64_t limiter_calls = 0, limiter_sleeps = 0, limiter_resets = 0, limiter_late_resets = 0;
 };
 
 EngineSnapshot TakeEngineSnapshot() {
     std::lock_guard<std::mutex> lock(g_engine_mutex);
-    return {g_service_timing.Take(), g_pump_timing.Take(), g_limiter_timing.Take(), g_focus_timing.Take()};
+    EngineSnapshot out{g_service_timing.Take(), g_pump_timing.Take(), g_focus_timing.Take(),
+                       g_limiter_timing.Take(), g_limiter_oversleep.Take()};
+    out.limiter_calls = g_limiter_calls;
+    out.limiter_sleeps = g_limiter_sleeps;
+    out.limiter_resets = g_limiter_resets;
+    out.limiter_late_resets = g_limiter_late_resets;
+    g_limiter_calls = g_limiter_sleeps = g_limiter_resets = g_limiter_late_resets = 0;
+    return out;
 }
 
 struct RunSummary {
@@ -531,13 +539,16 @@ void EmitWindow(HealthProbe& health, CpuMonitor& cpu, RunSummary& run, int& last
 
     Log("diag%s: window=%.3fs loops=%llu rate=%.2f/s fps_limit=%d; present_fps=%.3f intervals %s",
         final ? " final" : "", window_seconds, (unsigned long long)engine.service.count,
-        window_seconds > 0 ? double(engine.service.count) / window_seconds : 0.0, g_fps_limit.load(),
+        window_seconds > 0 ? double(engine.service.count) / window_seconds : 0.0, FrameLimitTarget(),
         present.Frequency(), TimingSummary(present).c_str());
     if (present.count) Log("diag: present worst: %s", WorstEvents(present).c_str());
     Log("diag: EngineService %s; worst: %s", TimingSummary(engine.service).c_str(),
         WorstEvents(engine.service, 2).c_str());
-    Log("diag: event pump %s; limiter wait %s; focus %s", TimingBasic(engine.pump).c_str(),
-        TimingBasic(engine.limiter).c_str(), TimingBasic(engine.focus).c_str());
+    Log("diag: event pump %s; focus %s", TimingBasic(engine.pump).c_str(), TimingBasic(engine.focus).c_str());
+    Log("diag: present limiter calls=%llu sleeps=%llu resets=%llu late_resets=%llu; wait %s; oversleep %s",
+        (unsigned long long)engine.limiter_calls, (unsigned long long)engine.limiter_sleeps,
+        (unsigned long long)engine.limiter_resets, (unsigned long long)engine.limiter_late_resets,
+        TimingBasic(engine.limiter).c_str(), TimingBasic(engine.limiter_oversleep).c_str());
     Log("diag: Present wall (includes FIFO/vsync, not GPU time) %s; worst: %s", TimingSummary(present_wall).c_str(),
         WorstEvents(present_wall, 2).c_str());
     Log("diag: texture %s", TakeTextureTimingStats().c_str());
@@ -573,10 +584,11 @@ void EmitWindow(HealthProbe& health, CpuMonitor& cpu, RunSummary& run, int& last
 
     const PerfHintSnapshot hint = GetPerfHintStats();
     Log("diag: adpf session=%s target=%.3fms threads=%zu reports_total=%llu report_errors_total=%llu "
-        "target_updates_total=%llu target_errors_total=%llu",
+        "target_updates_total=%llu target_errors_total=%llu dynamic_thread_updates_total=%llu dynamic_thread_errors_total=%llu",
         hint.session ? "yes" : "no", double(hint.target_ns) / 1e6, hint.threads, (unsigned long long)hint.reports,
         (unsigned long long)hint.report_errors, (unsigned long long)hint.target_updates,
-        (unsigned long long)hint.target_errors);
+        (unsigned long long)hint.target_errors, (unsigned long long)hint.thread_updates,
+        (unsigned long long)hint.thread_update_errors);
 }
 
 void DiagnosticsWorker() {
@@ -652,14 +664,27 @@ bool DetailedDiagnosticsEnabled() {
     return g_active.load(std::memory_order_relaxed) && g_detailed.load(std::memory_order_relaxed);
 }
 
-void RecordEngineLoop(int64_t at_ns, int64_t service_ns, int64_t event_pump_ns, int64_t limiter_ns, int64_t focus_ns) {
+void RecordEngineLoop(int64_t at_ns, int64_t service_ns, int64_t event_pump_ns, int64_t focus_ns) {
     if (!DetailedDiagnosticsEnabled()) return;
     thread_local const int tid = int(gettid());
     std::lock_guard<std::mutex> lock(g_engine_mutex);
     g_service_timing.Add(at_ns, service_ns, tid);
     g_pump_timing.Add(at_ns, event_pump_ns, tid);
-    if (limiter_ns >= 0) g_limiter_timing.Add(at_ns, limiter_ns, tid);
     g_focus_timing.Add(at_ns, focus_ns, tid);
+}
+
+void RecordPresentLimiter(const FrameLimitResult& result) {
+    if (result.target_fps <= 0 || !DetailedDiagnosticsEnabled()) return;
+    thread_local const int tid = int(gettid());
+    std::lock_guard<std::mutex> lock(g_engine_mutex);
+    ++g_limiter_calls;
+    g_limiter_timing.Add(result.present_ns, result.wait_ns, tid);
+    if (result.requested_wait_ns > 0) {
+        ++g_limiter_sleeps;
+        g_limiter_oversleep.Add(result.present_ns, result.oversleep_ns, tid);
+    }
+    if (result.schedule_reset) ++g_limiter_resets;
+    if (result.late_reset) ++g_limiter_late_resets;
 }
 
 void DiagnosticsStart() {
