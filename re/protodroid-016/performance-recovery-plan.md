@@ -142,6 +142,21 @@ Patch 18's disabled `D3D9Timing::Enabled()` still used a function-local static g
 
 The exact-header disabled benchmark improved from **0.991522 to 0.430360 ns/call**, a 56.6% guard-overhead reduction with identical checksums. This is a small x86-64 host mechanism result, not an FPS estimate. Enabled/disabled UBSan tests now include eight-thread concurrent first use; 82 structural checks with six mutations, four strict translation-unit variants, 24 analyzer checks, and neighboring 56/26/35 pipeline-outcome/drain/warm-cache checks pass. Fresh application of all 20 patches is byte-identical to the tested candidate, with combined diff SHA-256 `8cf88b97768d61f865caef6d7b4c5c854822c38c5e2651c62f4c865477437ec9`.
 
+## Recovery iteration 7 — native ARM64 import-dispatch confirmation
+
+The exact-source fixture added in `f5121a8` registers 1,024 imports, uses eight tagged handlers, warms lazy initialization before timing, checks every timed process's tagged sum and guest-context restoration, and runs balanced baseline/A-A/candidate processes. A deliberate wrong-slot mutation exits with the intended checksum failure. The fixture measures initialized dispatch only; it does not include D3D9 method execution, GPU work, or frame pacing.
+
+Run `42053304301` / neutral check `127335298775` produced two native AArch64 cohorts with 2,000,000 timed calls per process and 24 paired rounds:
+
+| Exact source comparison | Baseline median | Candidate median | Paired candidate/baseline | Wins | A/A median |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Pre-dense `e30a2b8` → dense `87d3f2e` | 5.993961 ns/import | 4.728427 ns/import | 0.788690 | 24/24 | 0.999970 |
+| Dense `87d3f2e` → current GNU TLS | 4.727398 ns/import | 3.849185 ns/import | 0.814461 | 24/24 | 1.000124 |
+
+The median-derived combined ratio is 0.642177 (about 1.557× mechanism speedup and 2.144776 ns/import saved). This is derived from two separate paired cohorts, not a third combined benchmark, and is not an FPS multiplier. All 144 timed processes returned matching tagged sums. Exact before/after source hashes and the complete paired-ratio arrays are retained under the external `p4-import-dispatch/f5121a8-arm64/` evidence directory.
+
+The CI artifact uploaded successfully, but the sandbox's redirected artifact download failed with EOF; therefore this cohort's raw JSONL is not claimed as independently reopened. Subsequent CI publishes the complete import raw timelines through a separate size-bounded Checks payload as well as the artifact. The same measurement-only update screens the remaining local-static `ImportProfiling()` guard against an atomic relaxed sentinel on ARM64. Its earlier x86-64 result was neutral and the short smoke A/A control was noisy; neither is evidence for adopting that candidate.
+
 ## Next device-capture contract
 
 For the first candidate build, use ordinary Play with `frame_interval_trace = 1` and leave `detailed_diagnostics`, `d3d9_timing`, `pipeline_timing`, `pipeline_trace`, `import_profile`, `guest_function_trace`, `warm_cache_trace`, and the diagnostic tour off. Keep resolution, quality, dynamic shadows, anisotropy, AA, FIFO/swapchain settings, drivers, audio, mods, controls, saves, and the scene/route unchanged between A/B runs. Do not use frame generation, upscaling, or an FPS unlock as a performance result.

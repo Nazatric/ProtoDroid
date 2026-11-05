@@ -531,6 +531,32 @@ jobs:
           python3 tools/measure_import_dispatch.py \
             --before /tmp/imports-dense.cpp --after src/native/imports.cpp \
             --output /tmp/import-tls-arm64 --calls 2000000 --rounds 24 --working-set 1024
+          # Architecture-specific screening only: the x86-64 atomic-guard experiment was neutral, while ARM64 has
+          # different local-static guard instructions. Generate an exact candidate without changing production source.
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('src/native/imports.cpp').read_text()
+          source = source.replace('#include <sys/mman.h>\n', '#include <sys/mman.h>\n\n#include <atomic>\n', 1)
+          old = '''bool ImportProfiling() {
+              static const bool on = SettingInt("import_profile", 0) != 0;
+              return on;
+          }'''
+          new = '''std::atomic<int> g_import_profiling{-1};
+
+          bool ImportProfiling() {
+              int value = g_import_profiling.load(std::memory_order_relaxed);
+              if (value < 0) {
+                  value = SettingInt("import_profile", 0) != 0;
+                  g_import_profiling.store(value, std::memory_order_relaxed);
+              }
+              return value != 0;
+          }'''
+          assert source.count(old) == 1
+          Path('/tmp/imports-atomic-profile.cpp').write_text(source.replace(old, new))
+          PY
+          python3 tools/measure_import_dispatch.py \
+            --before src/native/imports.cpp --after /tmp/imports-atomic-profile.cpp \
+            --output /tmp/import-profile-guard-arm64 --calls 2000000 --rounds 24 --working-set 1024
 
       - name: Publish ARM64 D3D9 bridge evidence summary
         if: success()
@@ -545,13 +571,8 @@ jobs:
           from pathlib import Path
           host = json.loads(Path('/tmp/d3d9-host-table-arm64/result.json').read_text())
           aniso = json.loads(Path('/tmp/d3d9-anisotropy-arm64/result.json').read_text())
-          dense = json.loads(Path('/tmp/import-dense-arm64/result.json').read_text())
-          tls = json.loads(Path('/tmp/import-tls-arm64/result.json').read_text())
           host['raw_timing_jsonl'] = Path('/tmp/d3d9-host-table-arm64/timing.jsonl').read_text()
           aniso['raw_timing_jsonl'] = Path('/tmp/d3d9-anisotropy-arm64/timing.jsonl').read_text()
-          # Full raw timelines stay in the artifact; duplicating four timelines here can exceed the Checks size limit.
-          dense['raw_timing_artifact'] = 'import-dense-arm64/timing.jsonl'
-          tls['raw_timing_artifact'] = 'import-tls-arm64/timing.jsonl'
           aniso['correctness_cases'] = json.loads(Path('/tmp/d3d9-anisotropy-arm64/correctness.json').read_text())
           summary = {
               'schema': 1,
@@ -559,8 +580,6 @@ jobs:
               'physical_android_device': False,
               'host_table': host,
               'anisotropy': aniso,
-              'import_dense': dense,
-              'import_tls': tls,
           }
           print('```json\n' + json.dumps(summary, indent=2) + '\n```')
           PY
@@ -574,6 +593,45 @@ jobs:
             -f output[summary]="${SUMMARY}" > /tmp/d3d9-check-run.json
           python3 -c "import json; assert json.load(open('/tmp/d3d9-check-run.json'))['id'] > 0"
 
+      - name: Publish ARM64 import-dispatch evidence summary
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Keep complete raw timelines available through the GitHub API even when redirected artifact downloads fail.
+          # This payload is separate from the D3D9 timelines to remain below the Checks output size limit.
+          python3 - <<'PY' > /tmp/import-arm64-check-summary.json
+          import json
+          from pathlib import Path
+          dense = json.loads(Path('/tmp/import-dense-arm64/result.json').read_text())
+          tls = json.loads(Path('/tmp/import-tls-arm64/result.json').read_text())
+          guard = json.loads(Path('/tmp/import-profile-guard-arm64/result.json').read_text())
+          dense['raw_timing_jsonl'] = Path('/tmp/import-dense-arm64/timing.jsonl').read_text()
+          tls['raw_timing_jsonl'] = Path('/tmp/import-tls-arm64/timing.jsonl').read_text()
+          guard['raw_timing_jsonl'] = Path('/tmp/import-profile-guard-arm64/timing.jsonl').read_text()
+          summary = {
+              'schema': 1,
+              'kind': 'native-linux-arm64-import-microfixtures-not-android-device-fps',
+              'physical_android_device': False,
+              'import_dense': dense,
+              'import_tls': tls,
+              'import_profile_guard_candidate': guard,
+          }
+          payload = '```json\n' + json.dumps(summary, indent=2) + '\n```'
+          assert len(payload.encode()) < 60000, len(payload.encode())
+          print(payload)
+          PY
+          SUMMARY=$(cat /tmp/import-arm64-check-summary.json)
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name='arm64-import-dispatch-evidence' \
+            -f head_sha="${GITHUB_SHA}" \
+            -f status='completed' \
+            -f conclusion='neutral' \
+            -f output[title]='Native ARM64 import-dispatch microfixtures' \
+            -f output[summary]="${SUMMARY}" > /tmp/import-check-run.json
+          python3 -c "import json; assert json.load(open('/tmp/import-check-run.json'))['id'] > 0"
+
       - name: Upload ARM64 D3D9 bridge measurements
         if: success()
         uses: actions/upload-artifact@v4
@@ -584,8 +642,11 @@ jobs:
             /tmp/d3d9-anisotropy-arm64
             /tmp/import-dense-arm64
             /tmp/import-tls-arm64
+            /tmp/import-profile-guard-arm64
             /tmp/d3d9-arm64-check-summary.json
             /tmp/d3d9-check-run.json
+            /tmp/import-arm64-check-summary.json
+            /tmp/import-check-run.json
           retention-days: 30
           if-no-files-found: error
 
