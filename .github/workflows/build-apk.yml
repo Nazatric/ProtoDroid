@@ -557,6 +557,7 @@ jobs:
           python3 tools/measure_import_dispatch.py \
             --before src/native/imports.cpp --after /tmp/imports-atomic-profile.cpp \
             --output /tmp/import-profile-guard-arm64 --calls 2000000 --rounds 24 --working-set 1024
+          git fetch -q --depth=1 origin ba19b5a32c186e0e5fe39a6a3c63fa92c1b9dd86
           git show ba19b5a32c186e0e5fe39a6a3c63fa92c1b9dd86:android/patches/dxvk-zzzzzzzzzzzzzzzzz-submission-timing.patch \
             > /tmp/d3d9-timing-before.patch
           cp android/patches/dxvk-zzzzzzzzzzzzzzzzz-submission-timing.patch /tmp/d3d9-timing-after.patch
