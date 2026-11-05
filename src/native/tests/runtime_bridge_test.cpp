@@ -353,9 +353,35 @@ std::string HostPath(const char*) { return {}; }
 
 }  // namespace native
 
+void CheckAlignedAndUnalignedOrderedAccesses() {
+    // The aligned-first layout must preserve every width, including the fenced unaligned fallbacks and their exact
+    // store bounds. These cases execute on both the x86-64 UBSan runner and native AArch64 CI.
+    for (uint32_t offset = 0; offset < 8; ++offset) {
+        const uint32_t a16 = 0x9000 + offset, a32 = 0x9100 + offset, a64 = 0x9200 + offset;
+        G(a16 - 1)[0] = 0x51;
+        G(a16 + 2)[0] = 0x52;
+        W16(a16, uint16_t(0xabc0 + offset));
+        Check(R16(a16) == uint16_t(0xabc0 + offset), "16-bit ordered access changed");
+        Check(G(a16 - 1)[0] == 0x51 && G(a16 + 2)[0] == 0x52, "16-bit store crossed its bounds");
+
+        G(a32 - 1)[0] = 0x53;
+        G(a32 + 4)[0] = 0x54;
+        W32(a32, 0x12345670u + offset);
+        Check(R32(a32) == 0x12345670u + offset, "32-bit ordered access changed");
+        Check(G(a32 - 1)[0] == 0x53 && G(a32 + 4)[0] == 0x54, "32-bit store crossed its bounds");
+
+        G(a64 - 1)[0] = 0x55;
+        G(a64 + 8)[0] = 0x56;
+        W64(a64, 0x0123456789abcdefull + offset);
+        Check(R64(a64) == 0x0123456789abcdefull + offset, "64-bit ordered access changed");
+        Check(G(a64 - 1)[0] == 0x55 && G(a64 + 8)[0] == 0x56, "64-bit store crossed its bounds");
+    }
+}
+
 int main() {
     using namespace native;
     RecompMemoryBase = g_memory.data();
+    CheckAlignedAndUnalignedOrderedAccesses();
     g_engine_lo = 0x110000;
     g_engine_hi = 0x111000;
 

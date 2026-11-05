@@ -17,6 +17,18 @@ void Check(bool condition, const char* message) {
 
 struct FakeSession {};
 
+void TestDxvkFrameThreadSelection() {
+    using native::detail::IsDxvkFrameThreadComm;
+    Check(IsDxvkFrameThreadComm("dxvk-cs"), "DXVK CS thread must join the frame session");
+    Check(IsDxvkFrameThreadComm("dxvk-submit\n"), "submission thread comm newline handling");
+    Check(IsDxvkFrameThreadComm("dxvk-cs\r\n"), "submission comm CRLF handling");
+    Check(!IsDxvkFrameThreadComm("dxvk-worker"), "pipeline workers are not per-frame submitters");
+    Check(!IsDxvkFrameThreadComm("mali-compiler"), "driver compiler threads must stay excluded");
+    Check(!IsDxvkFrameThreadComm("dxvk-cs-extra"), "near-name matches must stay excluded");
+    Check(!IsDxvkFrameThreadComm("dxvk-submit-extra"), "submission prefix matches must stay excluded");
+    Check(!IsDxvkFrameThreadComm(""), "empty comm is not a frame thread");
+}
+
 void TestLiveThreadPruning() {
     Threads threads = native::detail::LiveHintThreads({10, 11, 12, 11, -1}, 20, [](int32_t tid) {
         return tid == 10 || tid == 11;  // 12 exited; invalid and duplicate entries are discarded too
@@ -96,6 +108,7 @@ void TestRejectedSessions() {
 }  // namespace
 
 int main() {
+    TestDxvkFrameThreadSelection();
     TestLiveThreadPruning();
     TestInitialSession();
     TestFallbackAndRestore();

@@ -653,9 +653,14 @@ int main(int argc, char** argv) {
     setenv("PROTODROID_PIPELINE_TIMING",
            (diagnostic_tour || SettingInt("pipeline_timing", detailed_diagnostics ? 1 : 0)) ? "1" : "0",
            diagnostic_tour ? 1 : 0);
-    const bool d3d9_timing = diagnostic_tour || SettingInt("d3d9_timing", 0) != 0;
+    // Detailed diagnostics already opt into slower measurement. Include the existing method/lock attribution by
+    // default there, while ordinary Play remains free of these clocks and relaxed counters. d3d9_timing = 0 still
+    // provides an explicit escape for a lighter detailed capture.
+    const bool d3d9_timing = diagnostic_tour || SettingInt("d3d9_timing", detailed_diagnostics ? 1 : 0) != 0;
     setenv("PROTODROID_D3D9_TIMING", d3d9_timing ? "1" : "0", diagnostic_tour ? 1 : 0);
-    if (d3d9_timing) Log("DXVK D3D9 method timing enabled (%s)", diagnostic_tour ? "diagnostic tour" : "d3d9_timing = 1");
+    if (d3d9_timing)
+        Log("DXVK D3D9 method timing enabled (%s)",
+            diagnostic_tour ? "diagnostic tour" : detailed_diagnostics ? "detailed diagnostics" : "d3d9_timing = 1");
     if (SettingInt("guest_function_trace", 0) != 0) {
 #ifdef PROTODROID_GUEST_FUNCTION_TRACE
         Log("guest-function probes compiled in; runtime records enabled");

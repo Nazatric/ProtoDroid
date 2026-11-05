@@ -3,9 +3,17 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 namespace native::detail {
+
+// DXVK's native submission threads never pass through the guest Win32 priority shim. Only the threads that submit
+// frame work belong in the frame session; compiler/pipeline workers and similarly prefixed names stay excluded.
+inline bool IsDxvkFrameThreadComm(std::string_view comm) {
+    while (!comm.empty() && (comm.back() == '\n' || comm.back() == '\r')) comm.remove_suffix(1);
+    return comm == "dxvk-cs" || comm == "dxvk-submit";
+}
 
 inline void AddHintThread(std::vector<int32_t>& tids, int32_t tid) {
     if (tid <= 0) return;

@@ -33,6 +33,30 @@ snapshot = (ROOT / "src/native/guest.h").read_text(encoding="utf-8")
 assert "uint64_t thread_updates = 0;" in snapshot and "uint64_t thread_update_errors = 0;" in snapshot
 print("Actual-Present-thread ADPF registration and update-evidence checks passed")
 
+start = perf.split("void PerfHintStart(int fps_target)", 1)[1].split("// A thread that works on every frame", 1)[0]
+assert start.index("AddDxvkFrameThreads(g_tids);") < start.index("detail::LiveHintThreads")
+scan = perf.split("size_t AddDxvkFrameThreads", 1)[1].split("}  // namespace", 1)[0]
+assert 'detail::IsDxvkFrameThreadComm(comm)' in scan
+assert 'opendir("/proc/self/task")' in scan
+selector = (ROOT / "src/native/perf_hint_session.h").read_text(encoding="utf-8")
+assert 'comm == "dxvk-cs" || comm == "dxvk-submit"' in selector
+assert "dxvk-worker" not in selector and "mali-compiler" not in selector
+print("DXVK native frame-thread discovery and pruning-order checks passed")
+
+runtime = (ROOT / "src/recomp/runtime.h").read_text(encoding="utf-8")
+assert runtime.count("if (RECOMP_ALIGNED_LIKELY(a,") == 6
+assert "__builtin_expect(RECOMP_ALIGNED((a), (n)), 1)" in runtime
+for width in (16, 32, 64):
+    assert f"RecompR{width}Unaligned" not in runtime and f"RecompW{width}Unaligned" not in runtime, (
+        "cold helper experiment unexpectedly returned to the inline runtime"
+    )
+print("Aligned-first TSO layout source checks passed")
+
+main = (ROOT / "src/native/main.cpp").read_text(encoding="utf-8")
+assert 'SettingInt("d3d9_timing", detailed_diagnostics ? 1 : 0)' in main
+assert 'setenv("PROTODROID_D3D9_TIMING", d3d9_timing ? "1" : "0"' in main
+print("Detailed-only D3D9 method-timing default checks passed")
+
 driver = (ROOT / "src/native/vulkan_driver.cpp").read_text(encoding="utf-8")
 failed = driver.split("else if (std::string why = FailedBefore()", 1)[1].split("const std::string model", 1)[0]
 assert "AutomaticSystemDevice();" in failed, "failed Auto Turnip must enter the fresh direct/wrapper policy"

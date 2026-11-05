@@ -6,10 +6,14 @@
 #include "perf_hint_session.h"
 
 #ifdef __ANDROID__
+#include <dirent.h>
 #include <dlfcn.h>
 #include <unistd.h>
 
 #include <atomic>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <vector>
 
@@ -44,6 +48,38 @@ bool ThreadAlive(int32_t tid) {
     return access(path, F_OK) == 0;
 }
 
+// CreateDevice starts DXVK's native CS and submission threads before the engine starts its frame session. Discover
+// those exact threads once here; Present still performs its separate first-success registration for API-34 updates.
+size_t AddDxvkFrameThreads(std::vector<int32_t>& tids) {
+    size_t added = 0;
+    DIR* dir = opendir("/proc/self/task");
+    if (!dir) {
+        Log("perf hint: native DXVK frame-thread scan unavailable");
+        return 0;
+    }
+    while (dirent* entry = readdir(dir)) {
+        char* end = nullptr;
+        const long tid = strtol(entry->d_name, &end, 10);
+        if (!end || *end || tid <= 0 || tid > INT32_MAX) continue;
+        char path[128], comm[64];
+        snprintf(path, sizeof(path), "/proc/self/task/%ld/comm", tid);
+        FILE* file = fopen(path, "r");
+        if (!file) continue;
+        char* line = fgets(comm, sizeof(comm), file);
+        fclose(file);
+        if (!line || !detail::IsDxvkFrameThreadComm(comm)) continue;
+        comm[strcspn(comm, "\r\n")] = 0;
+        const size_t before = tids.size();
+        detail::AddHintThread(tids, int32_t(tid));
+        if (tids.size() != before) {
+            ++added;
+            Log("perf hint: native frame thread %ld (%s)", tid, comm);
+        }
+    }
+    closedir(dir);
+    return added;
+}
+
 }  // namespace
 
 void PerfHintStart(int fps_target) {
@@ -65,6 +101,7 @@ void PerfHintStart(int fps_target) {
     std::lock_guard<std::mutex> lock(g_mutex);
     const int32_t current = int32_t(gettid());
     detail::AddHintThread(g_tids, current);
+    AddDxvkFrameThreads(g_tids);
     g_target_ns = 1000000000ll / (fps_target > 0 ? fps_target : 60);
 
     // A worker can exit between SetThreadPriority and session creation. Android rejects the complete session when an
