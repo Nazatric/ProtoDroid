@@ -108,6 +108,16 @@ std::string StateCacheFile(const std::string& directory, const std::string& file
     return directory + '/' + filename;
 }
 
+const char* StateCacheStatusName(StateCacheStatus status) {
+    switch (status) {
+        case StateCacheStatus::Missing: return "missing";
+        case StateCacheStatus::Invalid: return "invalid";
+        case StateCacheStatus::Empty: return "empty";
+        case StateCacheStatus::Populated: return "populated";
+    }
+    return "unknown";
+}
+
 StateCacheStatus InspectStateCache(const std::string& path) {
     struct stat st;
     if (stat(path.c_str(), &st) != 0) return StateCacheStatus::Missing;

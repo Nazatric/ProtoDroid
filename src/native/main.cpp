@@ -519,24 +519,12 @@ int main(int argc, char** argv) {
         return 1;
     }
     // DXVK v2.5.3 reads DXVK_STATE_CACHE_PATH and the Android patch resolves prototypeenginef.dll.dxvk-cache within
-    // it. Ordinary Play recovers a populated cache without inventing a seed. The tour starts with its own cache path
-    // and performs no ordinary migration or backup.
+    // it. Ordinary recovery runs after shared mirror initialization below, but still before D3D9/DXVK creation.
+    // The tour starts with its own cache path and performs no ordinary migration or backup.
     const char* cache_dir = diagnostic_tour ? diagnostic_cache_dir.c_str() : base;
     std::string state_cache = native::StateCacheFile(cache_dir, native::kStateCacheFilename);
-    if (!diagnostic_tour) {
-        native::StateCacheMigration cache_migration = native::PlanStateCacheMigration(
-            base, {"/storage/emulated/0/Prototype/logs", "/storage/emulated/0/Prototype"});
-        if (!cache_migration.source.empty()) {
-            native::StateCacheMigrationResult migrated = native::MigrateStateCache(cache_migration);
-            if (migrated == native::StateCacheMigrationResult::Migrated)
-                Log("DXVK state cache restored from %s", cache_migration.source.c_str());
-            else
-                Log("DXVK state cache migration from %s failed: %s", cache_migration.source.c_str(), strerror(errno));
-        }
-    }
     setenv("DXVK_STATE_CACHE_PATH", cache_dir, 1);
     setenv("DXVK_LOG_PATH", diagnostic_tour ? kDiagnosticTourLogDir : base, 1);
-    Log("DXVK state cache: %s", state_cache.c_str());
     // Attempt to find game dir across multiple locations (Issue 4)
     if (!g_game_dir || access((std::string(g_game_dir) + "/prototypeenginef.dll").c_str(), R_OK) != 0) {
         std::string found = FindGameDir(base, g_game_dir);
@@ -603,6 +591,39 @@ int main(int argc, char** argv) {
         // We'll set DXVK_LOG_PATH to mirror dir if writable
         setenv("DXVK_LOG_PATH", g_mirror_dir.c_str(), 1);
         Log("DXVK logs mirrored to %s", g_mirror_dir.c_str());
+    }
+    // Recover only an actually populated legacy/shared cache; never invent or bundle a shader seed. Doing this after
+    // MirrorInit makes shared storage ready and, importantly, puts the result in the persistent/uploaded native log.
+    // It remains well before InitD3D9Bridge, so DXVK still observes the recovered file on its first cache open.
+    if (!diagnostic_tour) {
+        const native::StateCacheStatus cache_before = native::InspectStateCache(state_cache);
+        native::StateCacheMigration cache_migration = native::PlanStateCacheMigration(
+            base, {"/storage/emulated/0/Prototype/logs", "/storage/emulated/0/Prototype"});
+        native::StateCacheMigrationResult cache_result = native::StateCacheMigrationResult::NoCandidate;
+        int cache_error = 0;
+        if (!cache_migration.source.empty()) {
+            errno = 0;
+            cache_result = native::MigrateStateCache(cache_migration);
+            if (cache_result == native::StateCacheMigrationResult::Failed) cache_error = errno;
+        }
+        const native::StateCacheStatus cache_after = native::InspectStateCache(state_cache);
+        Log("DXVK state cache: %s (before=%s, after=%s)", state_cache.c_str(),
+            native::StateCacheStatusName(cache_before), native::StateCacheStatusName(cache_after));
+        if (!cache_migration.source.empty()) {
+            if (cache_result == native::StateCacheMigrationResult::Migrated) {
+                Log("DXVK state cache restored from %s", cache_migration.source.c_str());
+            } else {
+                Log("DXVK state cache migration from %s failed: %s", cache_migration.source.c_str(),
+                    cache_error ? strerror(cache_error) : "unknown error");
+            }
+        } else if (cache_before == native::StateCacheStatus::Missing ||
+                   cache_before == native::StateCacheStatus::Empty) {
+            Log("DXVK state cache recovery: no populated legacy/shared candidate");
+        } else if (cache_before == native::StateCacheStatus::Invalid) {
+            Log("DXVK state cache recovery: invalid app-private target preserved for DXVK diagnosis");
+        }
+    } else {
+        Log("DXVK state cache: %s (isolated diagnostic tour; ordinary recovery disabled)", state_cache.c_str());
     }
     // Log game dir detection
     Log("game dir: %s", g_game_dir);

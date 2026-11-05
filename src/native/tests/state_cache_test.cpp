@@ -124,6 +124,11 @@ void TestExactDxvkResolution() {
 }
 
 void TestCacheHeaderInspection() {
+    Check(std::string(native::StateCacheStatusName(native::StateCacheStatus::Missing)) == "missing" &&
+              std::string(native::StateCacheStatusName(native::StateCacheStatus::Invalid)) == "invalid" &&
+              std::string(native::StateCacheStatusName(native::StateCacheStatus::Empty)) == "empty" &&
+              std::string(native::StateCacheStatusName(native::StateCacheStatus::Populated)) == "populated",
+          "persistent cache-status labels changed or are incomplete");
     TempDirectory temp;
     fs::path cache = temp.path / "cache.dxvk-cache";
     Check(native::InspectStateCache(cache.string()) == native::StateCacheStatus::Missing,

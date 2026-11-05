@@ -31,6 +31,7 @@ enum class StateCacheMigrationResult {
 };
 
 std::string StateCacheFile(const std::string& directory, const std::string& filename);
+const char* StateCacheStatusName(StateCacheStatus status);
 StateCacheStatus InspectStateCache(const std::string& path);
 
 // The app-private cache is authoritative once it contains entries. An empty valid cache can be replaced by a
