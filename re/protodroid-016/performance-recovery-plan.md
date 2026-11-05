@@ -169,6 +169,20 @@ Run `42054113460` / neutral check `127338254611` publishes all three complete ra
 
 The rejected candidate's exact source hash is `80d30f0573bfdfc76f6167d881fa2c7e188f937f7edb81c1222920d74d6ab542`; production remains at the retained local-static guard and has no diff from this experiment. The full host control was also excluded from adoption because its A/A cohort contained large scheduling outliers. These are native import-dispatch results, not frame-time or FPS evidence.
 
+## Recovery iteration 9 — DXVK timing guard confirmed on native ARM64
+
+The import-guard regression made an architecture-specific check of the superficially similar DXVK guard necessary. The exact-header fixture uses the pre-P6 `ba19b5a` and current patch headers, initializes the disabled guard before timing, balances baseline/A-A/candidate processes, and checks each result against the same arithmetic without a guard. An always-enabled mutation is detected. The baseline and candidate header hashes remain `3c6c8f62a5cae99f22e5c56533396c392ff5cca3fbf442682dfb0f67dd40d352` and `17e72205218bd91c2d0f4836b1db24763662d816e6b40b713eaecc92a5076c8a`.
+
+Run `42056747768` / neutral check `127347677468` produced **24/24 candidate wins**, paired median ratio **0.749980**, and A/A **0.999975**. Whole-fixture medians were 47.163171 → 35.3709085 ms over 20 million calls, or **2.358159 → 1.768545 ns/call**, saving **0.589613 ns/call**. This is a whole-function guard-fixture result, not the x86 guard-only 56.6% metric and not an FPS estimate. Independent extraction/recomputation passes **236 assertions** over all 72 raw processes, exact patch/header hashes, checksums, medians/ranges, every ratio, and win counts. Raw evidence is under `p6-dxvk-timing-guard/d5a0aac-arm64/`; P6 is retained.
+
+The first attempt at this fixture (`42055953358`) exited 128 before benchmarking because its shallow checkout lacked the baseline revision. A local shallow-clone reproduction matched the failure; `d5a0aac` adds the required fetch. No timing result from that failed attempt is used.
+
+## Recovery iteration 10 — source-built candidate APK and remaining device gate
+
+Run `42053304301` on `f5121a8e381eec862e18a8b89961c019609c3638` completed successfully, including source-built Android ARM64 `libmain.so`, APK package/sign, and APK/embedded-DXVK verification. The candidate is artifact **`13430555528`**, `prototype-apk`, with server-reported ZIP size 57,993,323 bytes and SHA-256 `995c9857a975a6cf45d7484d6dfb08605d24625a0c0e8ecdcf9f2918880e0933`. Its browser URL is `https://github.com/Nazatric/ProtoDroid/actions/runs/42053304301/artifacts/13430555528`.
+
+A local artifact download failed with EOF at the redirected GitHub blob host, so the digest is ZIP metadata rather than an independently reopened inner-APK hash. No installation or physical-device result is claimed. Later `f43bf0e`, `7f45d90`, and `d5a0aac` commits change only CI/workflow, measurement tools, and research documentation; their runtime code is identical to the candidate reference. Confirmation runs `42054113460` (`f43bf0e`) and `42056747768` (`d5a0aac`) also completed successfully with source-built APK/embedded-DXVK verification. No prebuilt-native fallback, merge, tag, or release was used.
+
 ## Next device-capture contract
 
 For the first candidate build, use ordinary Play with `frame_interval_trace = 1` and leave `detailed_diagnostics`, `d3d9_timing`, `pipeline_timing`, `pipeline_trace`, `import_profile`, `guest_function_trace`, `warm_cache_trace`, and the diagnostic tour off. Keep resolution, quality, dynamic shadows, anisotropy, AA, FIFO/swapchain settings, drivers, audio, mods, controls, saves, and the scene/route unchanged between A/B runs. Do not use frame generation, upscaling, or an FPS unlock as a performance result.
