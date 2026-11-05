@@ -62,6 +62,9 @@ void RecompGuestFunctionExitRuntime(Ctx* context, uint32_t rva);
 #define RecompGuestFunctionExit(context, rva) ((void)0)
 #endif
 
+/* Builds the immutable dispatch table during native startup. RecompLookup retains a thread-safe lazy fallback for
+ * tests and early embedders; after publication its fast path does not call pthread_once on every computed call. */
+void RecompInitializeDispatch(void);
 /* Looks up the recompiled implementation of a guest function entry, or null. */
 RecompFn RecompLookup(uint32_t target);
 

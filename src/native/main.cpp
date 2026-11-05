@@ -674,6 +674,7 @@ int main(int argc, char** argv) {
     const bool fxaa = AaUsesFxaa(SettingInt("game_aa_level", kAaGameDefault));
     setenv("PROTODROID_FXAA", fxaa ? "1" : "0", 1);
     if (fxaa) Log("AA policy: FXAA present filter requested; Prototype built-in MSAA disabled");
+    RecompInitializeDispatch();
     InitGuestMemory();
     AttachThread(8u << 20);
     InitD3D9Bridge();

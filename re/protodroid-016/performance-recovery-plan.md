@@ -89,6 +89,23 @@ Continue pinned-source research (including Skate 3/Buku313, rexglue, DXVK, cache
 
 The preserved local edits that remove the same three generated probes remain uncommitted and untouched. The production candidate instead removes their calls during ordinary preprocessing, so clean generated-source verification and optional instrumented generation remain intact.
 
+## Recovery iteration 2 — computed guest dispatch
+
+The generated inventory contains 21,904 computed `RecompDispatch` sites. Disassembly showed that every `RecompLookup` still entered generic `std::call_once`/`pthread_once` and its TLS setup after the immutable hash had been built. The candidate builds the complete table, release-publishes its pointer, and uses an acquire/null fast path; native startup initializes it explicitly, while a synchronized lazy fallback remains for tests and early embedders.
+
+Validation: concurrent first-use, same-hash collisions, unknown/zero targets, imports, followed thunks, guest context, and publication-order checks pass. A host benchmark uses the actual 126,974 production VAs and 18-bit hash distribution (2 MiB table, load factor 0.484367, mean successful insertion probe 1.343645). Median lookup time improves at every tested working set:
+
+| Working set | Baseline ns/lookup | Candidate ns/lookup | Mechanism speedup |
+| ---: | ---: | ---: | ---: |
+| 1 | 3.627843 | 2.145136 | 1.69× |
+| 8 | 3.713713 | 1.842958 | 2.01× |
+| 64 | 3.764751 | 1.963420 | 1.92× |
+| 256 | 3.724704 | 1.973314 | 1.89× |
+| 4,096 | 3.684405 | 2.073695 | 1.78× |
+| 16,384 | 4.767008 | 2.916501 | 1.63× |
+
+Rejected experiments remain rejected: a 64-entry recent-target cache regressed 256/4096-target workloads; 14/15-bit hashes are invalid for 126,974 entries and their small synthetic timing was not production-valid. An initial full-table benchmark used the wrong synthetic workload and returned all misses (`checksum=0`); it was discarded and rerun with actual VAs/nonzero checksums. These are x86-64 host mechanism results, not ARM64 frame-time or FPS results.
+
 ## Current non-completion statement
 
 Work is **not finished**. The newest evidence establishes a cold-cache run and an observability/startup-order weakness, not a complete explanation for every low-FPS report. No default-path root cause, matched FPS recovery, visual verification, 60+ FPS result, 3× result, or stutter elimination has been established. PR #40 remains open and unmerged; no tag or release is authorized.

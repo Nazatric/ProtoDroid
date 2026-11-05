@@ -24,7 +24,19 @@ dispatch = dispatch.split('extern "C" void RecompCpuid', 1)[0]
 assert dispatch.index("if (DispatchImport(ctx, target)) return;") < dispatch.index("RecompLookup(target)"), (
     "direct imports must not attempt a known-miss recompiled-function lookup"
 )
-print("Runtime bridge dispatch-order check passed")
+build = source.split("void BuildHash()", 1)[1].split("\n}", 1)[0]
+assert build.index("for (uint32_t i = 0; i < g_recomp_count; ++i)") < build.index("g_hash.store"), (
+    "the dispatch table was published before it was fully populated"
+)
+lookup = source.split('extern "C" RecompFn RecompLookup(uint32_t target)', 1)[1]
+lookup = lookup.split('extern "C" void RecompCpuid', 1)[0]
+assert lookup.index("g_hash.load") < lookup.index("if (!hash)") < lookup.index("RecompInitializeDispatch();"), (
+    "the initialized lookup fast path still enters lazy initialization"
+)
+assert lookup.index("RecompInitializeDispatch();") < lookup.index("for (uint32_t h = HashOf(target)"), (
+    "lazy fallback does not complete before hash probes"
+)
+print("Runtime bridge dispatch-order and publication fast-path checks passed")
 PY
 
 # The engine resolves this export dynamically rather than through its static import table. Keep both halves of that
