@@ -960,7 +960,21 @@ jobs:
       - name: Test staged driver imports, rollback, and pinned catalog packages
         env:
           DRIVER_CATALOG_ONLINE: '1'
-        run: android/test-driver-package.sh
+        run: |
+          set -euo pipefail
+          # Release-asset gateways can transiently return 504. Retry the complete verifier, never its size,
+          # SHA-256, ZIP-safety, backend, or direct-ICD assertions; three genuine failures still fail CI.
+          for attempt in 1 2 3; do
+            if android/test-driver-package.sh; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              delay=$((attempt * 10))
+              echo "Driver catalog verification attempt $attempt failed; retrying in ${delay}s"
+              sleep "$delay"
+            fi
+          done
+          exit 1
 
   build-turnip:
     runs-on: ubuntu-24.04
