@@ -497,6 +497,25 @@ void LogRunSummary(const RunSummary& run) {
         (unsigned long long)run.over[4], (unsigned long long)run.over[5], (unsigned long long)run.over[6]);
 }
 
+void WriteFrameIntervals(FrameIntervalTrace& frame_trace, const TimingWindowSnapshot& present) {
+    const bool was_capped = frame_trace.capped();
+    const std::string previous_trace_error = frame_trace.error();
+    frame_trace.Write(present);
+    if (!was_capped && frame_trace.capped())
+        Log("diagnostics: frame interval trace reached its byte cap after %llu rows; valid prefix retained at %s",
+            (unsigned long long)frame_trace.rows(), frame_trace.path().c_str());
+    if (previous_trace_error != frame_trace.error())
+        Log("diagnostics: frame interval trace stopped after %llu rows: %s",
+            (unsigned long long)frame_trace.rows(), frame_trace.error().c_str());
+}
+
+void CloseFrameIntervals(FrameIntervalTrace& frame_trace) {
+    frame_trace.Close("final");
+    Log("diagnostics: frame interval trace final rows=%llu bytes=%llu capped=%d error=%s",
+        (unsigned long long)frame_trace.rows(), (unsigned long long)frame_trace.bytes(),
+        frame_trace.capped() ? 1 : 0, frame_trace.error().empty() ? "none" : frame_trace.error().c_str());
+}
+
 void EmitWindow(HealthProbe& health, CpuMonitor& cpu, RunSummary& run, int& last_thermal, int64_t& last_emit_ns,
                 FrameIntervalTrace& frame_trace, bool final) {
     const int64_t now = MonotonicNanos();
@@ -506,16 +525,8 @@ void EmitWindow(HealthProbe& health, CpuMonitor& cpu, RunSummary& run, int& last
     auto present = TakePresentDetailedStats();
     auto present_wall = TakePresentTimingWindow();
     EngineSnapshot engine = TakeEngineSnapshot();
-    const bool was_capped = frame_trace.capped();
-    const std::string previous_trace_error = frame_trace.error();
     // Persist chronological samples before TimingSummary's percentile selection reorders its sample vector.
-    frame_trace.Write(present);
-    if (!was_capped && frame_trace.capped())
-        Log("diagnostics: frame interval trace reached its byte cap after %llu rows; valid prefix retained at %s",
-            (unsigned long long)frame_trace.rows(), frame_trace.path().c_str());
-    if (previous_trace_error != frame_trace.error())
-        Log("diagnostics: frame interval trace stopped after %llu rows: %s",
-            (unsigned long long)frame_trace.rows(), frame_trace.error().c_str());
+    WriteFrameIntervals(frame_trace, present);
     run.Add(present);
 
     Log("diag%s: window=%.3fs loops=%llu rate=%.2f/s fps_limit=%d; present_fps=%.3f intervals %s",
@@ -587,14 +598,18 @@ void DiagnosticsWorker() {
     if (detailed) Log("diagnostics health APIs: %s", health.Capabilities().c_str());
 
     std::unique_lock<std::mutex> lock(g_lifecycle_mutex);
-    auto next_emit = detailed ? std::chrono::steady_clock::now() + std::chrono::seconds(1)
-                              : std::chrono::steady_clock::time_point::max();
+    auto next_emit = (detailed || g_frame_interval_trace)
+                         ? std::chrono::steady_clock::now() + std::chrono::seconds(detailed ? 1 : g_interval_seconds)
+                         : std::chrono::steady_clock::time_point::max();
     auto next_mirror = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     while (g_active.load(std::memory_order_acquire)) {
         const auto now = std::chrono::steady_clock::now();
         if (now >= next_emit) {
             lock.unlock();
-            EmitWindow(health, cpu, run, last_thermal, last_emit_ns, frame_trace, false);
+            if (detailed)
+                EmitWindow(health, cpu, run, last_thermal, last_emit_ns, frame_trace, false);
+            else
+                WriteFrameIntervals(frame_trace, TakePresentDetailedStats());
             lock.lock();
             next_emit = std::chrono::steady_clock::now() + std::chrono::seconds(g_interval_seconds);
         }
@@ -608,16 +623,12 @@ void DiagnosticsWorker() {
         g_wake.wait_until(lock, wake, [] { return !g_active.load(std::memory_order_acquire); });
     }
     lock.unlock();
-    if (detailed) {
+    if (detailed)
         EmitWindow(health, cpu, run, last_thermal, last_emit_ns, frame_trace, true);
-        if (g_frame_interval_trace) {
-            frame_trace.Close("final");
-            Log("diagnostics: frame interval trace final rows=%llu bytes=%llu capped=%d error=%s",
-                (unsigned long long)frame_trace.rows(), (unsigned long long)frame_trace.bytes(),
-                frame_trace.capped() ? 1 : 0, frame_trace.error().empty() ? "none" : frame_trace.error().c_str());
-        }
-        LogRunSummary(run);
-    }
+    else if (g_frame_interval_trace)
+        WriteFrameIntervals(frame_trace, TakePresentDetailedStats());
+    if (g_frame_interval_trace) CloseFrameIntervals(frame_trace);
+    if (detailed) LogRunSummary(run);
 }
 
 void RunDiagnosticsWorker() noexcept {
@@ -656,16 +667,21 @@ void DiagnosticsStart() {
     if (g_thread.joinable() || g_active.load()) return;
     const bool tour = DiagnosticTourEnabled();
     const bool frame_trace = tour || SettingInt("frame_interval_trace", 0) != 0;
-    const bool detailed = tour || frame_trace || SettingInt("detailed_diagnostics", kDetailedDiagnosticsDefault) != 0;
+    const bool detailed = tour || SettingInt("detailed_diagnostics", kDetailedDiagnosticsDefault) != 0;
     g_frame_interval_trace = frame_trace;
     g_detailed.store(detailed, std::memory_order_release);
-    SetPresentDetailedEnabled(detailed);
-    g_interval_seconds = detailed ? (tour ? 1 : std::clamp(SettingInt("detailed_diagnostics_interval", 5), 1, 60)) : 0;
+    SetPresentDetailedEnabled(detailed || frame_trace);
+    g_interval_seconds = (detailed || frame_trace)
+                             ? (tour ? 1 : std::clamp(SettingInt("detailed_diagnostics_interval", 5), 1, 60))
+                             : 0;
+    if (detailed || frame_trace) LogDeviceInfo();
     if (detailed) {
-        LogDeviceInfo();
         Log("diagnostics: enabled; window=%ds; native/DXVK timestamps are monotonic seconds with thread IDs; "
             "Present wall is not GPU time",
             g_interval_seconds);
+    } else if (frame_trace) {
+        Log("diagnostics: raw Present intervals enabled; detailed native and Present-wall metrics remain disabled; "
+            "window=%ds", g_interval_seconds);
     } else {
         Log("diagnostics: detailed metrics disabled; shared log mirroring remains active");
     }

@@ -93,7 +93,7 @@ The preserved local edits that remove the same three generated probes remain unc
 
 The generated inventory contains 21,904 computed `RecompDispatch` sites. Disassembly showed that every `RecompLookup` still entered generic `std::call_once`/`pthread_once` and its TLS setup after the immutable hash had been built. The candidate builds the complete table, release-publishes its pointer, and uses an acquire/null fast path; native startup initializes it explicitly, while a synchronized lazy fallback remains for tests and early embedders.
 
-Validation: concurrent first-use, same-hash collisions, unknown/zero targets, imports, followed thunks, guest context, and publication-order checks pass. A host benchmark uses the actual 126,974 production VAs and 18-bit hash distribution (2 MiB table, load factor 0.484367, mean successful insertion probe 1.343645). Median lookup time improves at every tested working set:
+Validation: concurrent first-use, same-hash collisions, unknown/zero targets, imports, followed thunks, guest context, and publication-order checks pass. A host benchmark uses the actual 126,974 production VAs and 18-bit hash distribution (4 MiB of 16-byte `{VA, function pointer}` slots on 64-bit, load factor 0.484367, mean successful insertion probe 1.343645). Median lookup time improves at every tested working set:
 
 | Working set | Baseline ns/lookup | Candidate ns/lookup | Mechanism speedup |
 | ---: | ---: | ---: | ---: |
@@ -104,7 +104,13 @@ Validation: concurrent first-use, same-hash collisions, unknown/zero targets, im
 | 4,096 | 3.684405 | 2.073695 | 1.78× |
 | 16,384 | 4.767008 | 2.916501 | 1.63× |
 
-Rejected experiments remain rejected: a 64-entry recent-target cache regressed 256/4096-target workloads; 14/15-bit hashes are invalid for 126,974 entries and their small synthetic timing was not production-valid. An initial full-table benchmark used the wrong synthetic workload and returned all misses (`checksum=0`); it was discarded and rerun with actual VAs/nonzero checksums. These are x86-64 host mechanism results, not ARM64 frame-time or FPS results.
+Rejected experiments remain rejected: a 64-entry recent-target cache regressed 256/4096-target workloads; 14/15-bit hashes are invalid for 126,974 entries and their small synthetic timing was not production-valid. Packed 8-byte `(VA, table-index)` slots saved 2 MiB but the additional hit-path table read regressed every tested working set, so the 16-byte `{VA, function pointer}` slots remain. An initial full-table benchmark used the wrong synthetic workload and returned all misses (`checksum=0`); it was discarded and rerun with actual VAs/nonzero checksums. These are x86-64 host mechanism results, not ARM64 frame-time or FPS results.
+
+## Recovery iteration 3 — non-distorting frame capture
+
+`frame_interval_trace = 1` previously implied full native detailed diagnostics. It now enables only the existing Present-interval collector and worker-only CSV persistence. Full detailed mode, the diagnostic tour, raw periodic/residual drains, cap/error reporting, final close, and shared log mirroring retain their behavior. Raw-only mode does not enable rect/engine/texture timing or the additional Present-wall timing window; startup records device/source information for later matched reports.
+
+Validation includes 29 structural checks with six detected mutations, UBSan Present/writer/diagnostics/tour tests, runtime bridge tests, 47 rect-lock structural checks, and strict warning-free syntax compilation of the edited production translation units against pinned SDL 2.30.9 and DXVK DirectX headers. This is measurement-path work, not an FPS improvement. It allows the next ordinary-play capture to provide raw p50/p95/p99/max and threshold counts without turning on the heavier diagnostics being investigated.
 
 ## Current non-completion statement
 

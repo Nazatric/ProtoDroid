@@ -55,7 +55,8 @@ texture_skip_min_size = 512
 # Shared log mirroring and ordinary FPS tracking remain active when detailed diagnostics are off.
 #detailed_diagnostics = 1
 #detailed_diagnostics_interval = 5
-# Raw Present intervals imply detailed native diagnostics. The tour also enables this worker-only CSV trace (64 MiB cap).
+# Raw Present intervals use worker-only CSV writes (64 MiB cap) without enabling detailed native or Present-wall timing.
+# The tour enables both this trace and full detailed diagnostics. Keep heavy profiling separate from steady FPS captures.
 #frame_interval_trace = 1
 #pipeline_timing = 1
 # Higher-overhead DXVK method/state/query timing is independent and tour-enabled. Do not use it for a steady FPS baseline.

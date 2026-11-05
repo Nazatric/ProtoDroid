@@ -76,7 +76,8 @@ void RecordTextureTiming(TextureTiming& timing, std::chrono::steady_clock::durat
 }
 
 void RecordPresentTiming(int64_t at_ns, int64_t duration_ns) {
-    if (!PresentDetailedEnabled()) return;
+    // Raw interval capture needs PresentDetailedEnabled(), but must not opt into this additional wall-clock window.
+    if (!DetailedDiagnosticsEnabled()) return;
     thread_local const int tid = int(gettid());
     std::lock_guard<std::mutex> lock(g_present_timing_mutex);
     g_present_timing.Add(at_ns, duration_ns, tid);
