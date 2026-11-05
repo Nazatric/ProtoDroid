@@ -21,7 +21,7 @@ namespace native {
 
 // Defined by runtime.cpp. Import handlers can call back into guest code, so the active context must follow the
 // import even when dispatch recognizes its thunk before attempting a recompiled-function lookup.
-extern thread_local Ctx* tl_ctx;
+extern __thread Ctx* tl_ctx;
 
 namespace {
 

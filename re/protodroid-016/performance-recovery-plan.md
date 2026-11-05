@@ -128,6 +128,14 @@ The real-`DispatchImport` host benchmark links optimized production code without
 
 Checksums match. The complete UBSan runtime bridge passes with profiling both disabled and enabled; dense publication/bounds checks, 24 caller-profile structural checks with six mutations, the UBSan caller collector, real formatter/analyzer golden path, and 22 analyzer checks pass. This removes measured bridge overhead but is not a D3D9 method-time, frame-time, or FPS multiplier.
 
+## Recovery iteration 5 — trivial guest-context TLS
+
+Cross-translation-unit C++ `thread_local` access emitted weak TLS-init checks around the active guest-context load/store in every import. `tl_ctx` is only a zero-initialized pointer with no destructor, so the candidate uses GNU `__thread` consistently in runtime, imports, threads, and the bridge declaration. It does not force `initial-exec`; a `dlopen` probe has no `STATIC_TLS` flag and passes eight-thread isolation.
+
+Two alternating-order benchmark rounds favor the change at every import working set in aggregate, adding approximately 1.08–1.13× mechanism speedup over dense dispatch alone. Current candidate medians across those rounds are approximately 4.24–4.46 ns/import, versus 5.80–5.92 ns for the original lazy-metadata/C++-TLS baseline. These are host mechanism results with normal run-to-run variation, not FPS evidence.
+
+The production bridge passes with profiling off and on, including eight threads × 2,000 imports per run with exact per-thread active/outer context checks. Strict imports/runtime/thread syntax checks and shared-library TLS isolation pass. Android Clang/ARM64 compilation remains a required CI gate.
+
 ## Current non-completion statement
 
 Work is **not finished**. The newest evidence establishes a cold-cache run and an observability/startup-order weakness, not a complete explanation for every low-FPS report. No default-path root cause, matched FPS recovery, visual verification, 60+ FPS result, 3× result, or stutter elimination has been established. PR #40 remains open and unmerged; no tag or release is authorized.

@@ -54,7 +54,9 @@ void BuildHash() {
 
 // Ctx of the guest code that most recently called out to the host on this thread/fiber; host callbacks into guest
 // code continue below its stack pointer.
-thread_local Ctx* tl_ctx = nullptr;
+// A trivially zero-initialized pointer has no C++ TLS destructor. GNU TLS avoids redundant per-access TLS-init
+// wrappers on ELF/Android without forcing an initial-exec TLS model or changing thread lifetime semantics.
+__thread Ctx* tl_ctx;
 uint32_t g_engine_lo = 0, g_engine_hi = 0;
 
 }  // namespace native
