@@ -59,6 +59,7 @@ At `2026-11-04T12:49Z`, another fresh shallow clone preserved cumulative worktre
 | `phase-07.md` | Phase 7 completion, multi-wait adoption, RCF rejection, and regenerated evidence |
 | `phase-08.md` | Phase 8 completion, anisotropy adoption, HostTable/screenshot rejections, and ARM64 evidence |
 | `phase-09.md` | Complete shader/cache research, unchanged-backup adoption, SHA-1 materiality rejection, and validation |
+| `spartanport-shader-warmup.md` | User-requested SpartanPort warm-cache/startup audit, DXVK baseline equivalence, focused helper tests, and feasibility boundary |
 | `phase-10.md` | Complete Vulkan GPU/synchronization/memory/presentation audit; rejected diagnostic gating and presentation-policy changes |
 | `phase-11.md` | Complete texture/Bink/audio/media profiling, sustained validation, issue audit, and candidate dispositions |
 | `phase-12.md` | Complete sustained/memory/lifecycle research, XAudio2 master-lifetime adoption, real-backend controls, and exact CI evidence |
