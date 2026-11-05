@@ -157,6 +157,18 @@ The median-derived combined ratio is 0.642177 (about 1.557× mechanism speedup a
 
 The CI artifact uploaded successfully, but the sandbox's redirected artifact download failed with EOF; therefore this cohort's raw JSONL is not claimed as independently reopened. Subsequent CI publishes the complete import raw timelines through a separate size-bounded Checks payload as well as the artifact. The same measurement-only update screens the remaining local-static `ImportProfiling()` guard against an atomic relaxed sentinel on ARM64. Its earlier x86-64 result was neutral and the short smoke A/A control was noisy; neither is evidence for adopting that candidate.
 
+## Recovery iteration 8 — ARM64 raw confirmation and rejected profiling-guard candidate
+
+Run `42054113460` / neutral check `127338254611` publishes all three complete raw timelines through the GitHub API. Independent extraction and recomputation passes **702 assertions** over exact source hashes, 216 successful/checksummed processes, per-variant medians/ranges, every paired ratio, and win/loss counts. Raw files and the verification report are under `p4-import-dispatch/f43bf0e-arm64/` in the external evidence store.
+
+| Fixture | Candidate/baseline | Candidate wins/losses | A/A median | Disposition |
+| --- | ---: | ---: | ---: | --- |
+| Dense dispatch confirmation | 0.789109 | 24/0 | 0.998754 | Retained; second ARM64 cohort confirms the mechanism result |
+| GNU TLS confirmation | 0.816613 | 24/0 | 1.000111 | Retained; second ARM64 cohort confirms the mechanism result |
+| Atomic relaxed `ImportProfiling()` sentinel | 1.026074 | 0/24 | 0.998935 | **Rejected:** 3.859701 → 3.961780 ns/import, about 2.6% slower |
+
+The rejected candidate's exact source hash is `80d30f0573bfdfc76f6167d881fa2c7e188f937f7edb81c1222920d74d6ab542`; production remains at the retained local-static guard and has no diff from this experiment. The full host control was also excluded from adoption because its A/A cohort contained large scheduling outliers. These are native import-dispatch results, not frame-time or FPS evidence.
+
 ## Next device-capture contract
 
 For the first candidate build, use ordinary Play with `frame_interval_trace = 1` and leave `detailed_diagnostics`, `d3d9_timing`, `pipeline_timing`, `pipeline_trace`, `import_profile`, `guest_function_trace`, `warm_cache_trace`, and the diagnostic tour off. Keep resolution, quality, dynamic shadows, anisotropy, AA, FIFO/swapchain settings, drivers, audio, mods, controls, saves, and the scene/route unchanged between A/B runs. Do not use frame generation, upscaling, or an FPS unlock as a performance result.

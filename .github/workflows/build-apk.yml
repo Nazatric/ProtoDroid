@@ -557,6 +557,12 @@ jobs:
           python3 tools/measure_import_dispatch.py \
             --before src/native/imports.cpp --after /tmp/imports-atomic-profile.cpp \
             --output /tmp/import-profile-guard-arm64 --calls 2000000 --rounds 24 --working-set 1024
+          git show ba19b5a32c186e0e5fe39a6a3c63fa92c1b9dd86:android/patches/dxvk-zzzzzzzzzzzzzzzzz-submission-timing.patch \
+            > /tmp/d3d9-timing-before.patch
+          cp android/patches/dxvk-zzzzzzzzzzzzzzzzz-submission-timing.patch /tmp/d3d9-timing-after.patch
+          python3 tools/measure_dxvk_timing_guard.py \
+            --before-patch /tmp/d3d9-timing-before.patch --after-patch /tmp/d3d9-timing-after.patch \
+            --output /tmp/dxvk-timing-guard-arm64 --calls 20000000 --rounds 24
 
       - name: Publish ARM64 D3D9 bridge evidence summary
         if: success()
@@ -571,8 +577,10 @@ jobs:
           from pathlib import Path
           host = json.loads(Path('/tmp/d3d9-host-table-arm64/result.json').read_text())
           aniso = json.loads(Path('/tmp/d3d9-anisotropy-arm64/result.json').read_text())
+          dxvk_guard = json.loads(Path('/tmp/dxvk-timing-guard-arm64/result.json').read_text())
           host['raw_timing_jsonl'] = Path('/tmp/d3d9-host-table-arm64/timing.jsonl').read_text()
           aniso['raw_timing_jsonl'] = Path('/tmp/d3d9-anisotropy-arm64/timing.jsonl').read_text()
+          dxvk_guard['raw_timing_jsonl'] = Path('/tmp/dxvk-timing-guard-arm64/timing.jsonl').read_text()
           aniso['correctness_cases'] = json.loads(Path('/tmp/d3d9-anisotropy-arm64/correctness.json').read_text())
           summary = {
               'schema': 1,
@@ -580,8 +588,11 @@ jobs:
               'physical_android_device': False,
               'host_table': host,
               'anisotropy': aniso,
+              'dxvk_timing_guard': dxvk_guard,
           }
-          print('```json\n' + json.dumps(summary, indent=2) + '\n```')
+          payload = '```json\n' + json.dumps(summary, indent=2) + '\n```'
+          assert len(payload.encode()) < 60000, len(payload.encode())
+          print(payload)
           PY
           SUMMARY=$(cat /tmp/d3d9-arm64-check-summary.json)
           gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
@@ -643,6 +654,7 @@ jobs:
             /tmp/import-dense-arm64
             /tmp/import-tls-arm64
             /tmp/import-profile-guard-arm64
+            /tmp/dxvk-timing-guard-arm64
             /tmp/d3d9-arm64-check-summary.json
             /tmp/d3d9-check-run.json
             /tmp/import-arm64-check-summary.json
