@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/src/d3d9/d3d9_timing.h
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,182 @@
 +#pragma once
 +
 +#ifdef __ANDROID__
@@ -171,6 +171,7 @@
 +        out << Name(op) << " n=" << s.calls
 +            << " ok=" << s.ok << " false=" << s.falseResults << " errors=" << s.errors
 +            << " changed=" << s.changed << " flagged=" << s.flagged << " units=" << s.units
++            << " total_ns=" << s.totalNs << " max_ns=" << s.maxNs
 +            << " avg=" << double(s.totalNs) / double(s.calls) / 1.0e6
 +            << " max=" << double(s.maxNs) / 1.0e6 << "ms";
 +      }

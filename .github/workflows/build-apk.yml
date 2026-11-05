@@ -373,6 +373,9 @@ jobs:
           python3 tools/test_frame_interval_trace.py
           python3 tools/test_analyze_frame_intervals.py
 
+      - name: Test exact D3D9 timing aggregation
+        run: python3 tools/test_analyze_d3d9_timing.py
+
       - name: Test performance-evidence comparability guards
         run: python3 tools/test_perf_evidence.py
 

@@ -55,7 +55,7 @@ int main() {
   Clock::MaybeLog();
   Expect(messages.size() == 2, "initial MaybeLog did not emit announcement and one snapshot");
   Expect(messages[0].find("not GPU time") != std::string::npos, "missing timing limitation");
-  Expect(LastContains("draw_total n=3 ok=1 false=1 errors=1 changed=1 flagged=1 units=3 avg=1.000 max=2.000ms"),
+  Expect(LastContains("draw_total n=3 ok=1 false=1 errors=1 changed=1 flagged=1 units=3 total_ns=3000000 max_ns=2000000 avg=1.000 max=2.000ms"),
          "incorrect aggregate/result/unit output: " + messages.back());
   Clock::MaybeLog();
   Expect(messages.size() == 2, "immediate MaybeLog emitted a duplicate interval");
@@ -72,7 +72,7 @@ int main() {
   for (auto& thread : threads)
     thread.join();
   Clock::Flush("concurrent");
-  Expect(LastContains("stream_total n=4000 ok=4000 false=0 errors=0 changed=4000 flagged=0 units=8000 avg=0.125 max=0.125ms"),
+  Expect(LastContains("stream_total n=4000 ok=4000 false=0 errors=0 changed=4000 flagged=0 units=8000 total_ns=500000000 max_ns=125000 avg=0.125 max=0.125ms"),
          "concurrent/residual accounting mismatch: " + messages.back());
   Expect(!LastContains("draw_total"), "interval counter was not reset");
 

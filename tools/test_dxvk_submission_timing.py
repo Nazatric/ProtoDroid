@@ -37,6 +37,8 @@ def validate(header: str, device: str, query: str, main: str, ini: str, build: s
         check(marker in record, f"record category {marker}")
     check("inclusive nested phases are non-additive" in header and "not GPU time" in header,
           "timing limitations are emitted")
+    check("<< \" total_ns=\" << s.totalNs" in header and "<< \" max_ns=\" << s.maxNs" in header,
+          "exact integer totals/maxima accompany rounded display values")
     check("Relaxed per-counter snapshots" in header and "std::mutex" not in header,
           "non-transactional residual limitation and no hot-path mutex")
     for field in ("calls", "totalNs", "maxNs", "ok", "falseResults", "errors", "changed", "flagged", "units"):
@@ -114,8 +116,9 @@ def validate(header: str, device: str, query: str, main: str, ini: str, build: s
           "CI materializes the pinned compile-test headers")
     check("test_dxvk_submission_timing.py" in workflow and
           "test_dxvk_submission_timing_runtime.py" in workflow and
-          "test_dxvk_submission_timing_syntax.py" in workflow,
-          "CI runs structural, runtime, and syntax gates")
+          "test_dxvk_submission_timing_syntax.py" in workflow and
+          "test_analyze_d3d9_timing.py" in workflow,
+          "CI runs structural, runtime, syntax, and exact analyzer gates")
     return checks
 
 
