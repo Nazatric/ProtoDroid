@@ -6,6 +6,8 @@ The five investigated reports—**#22, #29, #32, #33, and #35—remain open**, n
 
 **Post-Phase-14 follow-up:** `issue-32-maintenance4.md` records production commit `e1277dbc6448c27c10d1ee58070b1eefeb10da85`, a source-provable Android compatibility correction: optional maintenance4 now follows physical support on Vulkan 1.3 as well as 1.2, using DXVK's existing temporary-resource fallback. The focused differentiating test and fresh 62/62 broad host regression pass, with 442 independent manifest/raw-output checks. Exact `android-deps` CI `41927692571` and `build-apk` CI `41927692628` are green; 52 metadata checks pass and the release job remains skipped. No affected-device run, FPS result, #32 resolution, or release-readiness change is claimed.
 
+**Post-Phase-14 Vulkan recovery follow-up:** `issue-33-wrapper-recovery.md` records production commits `e3122267ca8f41ef845abfd58eaeb45c28ae0e3f` and `99db3e8b2d9fefab8fe62526b086f6ba834fe5a1`. Explicit driver actions now clear both Turnip and wrapper same-build failure guards in native's actual external app-specific directory; ordinary Auto launches retain crash-loop protection and Custom policy is unchanged. The final 62/62 broad regression and 442 raw-output checks pass, alongside 26 mocked production-probe checks. Exact final `build-apk` CI `41936405825` is green with 53 independent metadata checks; release remains skipped. #33 remains open with no affected-device, FPS, or release-readiness claim.
+
 - Released baseline: 0.15, tag `protodroid-v0.15`
 - Baseline source: `18ba66bd0945e405aaded0de5ff8848a8cd07932`
 - Working branch: `arena/5eb1c06c-protodroid`
@@ -61,6 +63,7 @@ At `2026-11-04T12:49Z`, another fresh shallow clone preserved cumulative worktre
 | `phase-13.md` | Integrated Bink/FAudio controls, transient audio-open recovery adoption, broad regression, exact CI/package evidence, and limitations |
 | `phase-14.md` | Final net-production, evidence, version/package, release-boundary, and unmeasured-device audit |
 | `issue-32-maintenance4.md` | Post-Phase-14 capability-driven maintenance4 correction, differentiating regression, CI/device boundaries, and open-#32 disposition |
+| `issue-33-wrapper-recovery.md` | Post-Phase-14 explicit Vulkan recovery and native external-marker-directory correction, negotiation audit, regression evidence, and open-#33 disposition |
 
 Large traces, external clones, benchmark binaries, and raw generated results stay outside Git under `/home/user/protodroid-016-evidence`; `/tmp/protodroid-016` is only a compatibility symlink. The original `/tmp` artifacts were lost during an earlier recreation and replaced by explicitly regenerated, hash-verified evidence. At the 2026-11-03T20:27Z recreation, that external store was also absent; Phase 1–3 raw artifacts are therefore historical committed records here, not files claimed to remain locally available. Local checkout copies were preserved under `/home/user/protodroid-016-recovery/2026-11-03T2027Z`, the branch was fast-forwarded to `f1737b23`, and a fresh Phase 4 store records new evidence and its own provenance. No physical-device performance result is inferred from a host benchmark or another project's device.
 
