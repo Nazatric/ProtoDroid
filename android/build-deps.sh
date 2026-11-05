@@ -204,6 +204,7 @@ for marker in \
     'DXVK pipeline outcome:' \
     'DXVK pipeline timing final (' \
     'DXVK D3D9 timing:' \
+    'DXVK warm-cache drain:' \
     'PROTODROID_D3D9_TIMING' \
     'PROTODROID_PIPELINE_TIMING' \
     'DXVK_LOG_TIMESTAMPS' \

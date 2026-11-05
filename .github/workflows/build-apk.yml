@@ -238,6 +238,9 @@ jobs:
           python3 tools/test_dxvk_submission_timing.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_submission_timing_runtime.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_submission_timing_syntax.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_pipeline_drain.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_pipeline_drain_runtime.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_pipeline_drain_syntax.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_frame_pacing.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_device_preflight.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_bc_support.py /tmp/protodroid-dxvk-test
