@@ -1,252 +1,247 @@
-[mono=21875.672 tid=26517] info:  Game: app_process64
-[mono=21875.673 tid=26517] info:  DXVK: v2.5.3+
-[mono=21875.673 tid=26517] info:  Build: aarch64 clang 21.0.0
-[mono=21875.673 tid=26517] info:  Found config env: d3d9.presentInterval = 1;d3d9.samplerAnisotropy = 2;d3d9.supportDFFormats = False
-[mono=21875.674 tid=26517] info:  Effective configuration:
-[mono=21875.674 tid=26517] info:    d3d9.samplerAnisotropy = 2
-[mono=21875.674 tid=26517] info:    d3d9.supportDFFormats = False
-[mono=21875.674 tid=26517] info:    d3d9.presentInterval = 1
-[mono=21875.675 tid=26517] info:  Vulkan: Found vkGetInstanceProcAddr in libvulkan.so @ 0x7f88ca0d00
-[mono=21875.675 tid=26517] info:  Built-in extension providers:
-[mono=21875.675 tid=26517] info:    Platform WSI
-[mono=21875.675 tid=26517] info:  Enabled instance extensions:
-[mono=21875.675 tid=26517] info:    VK_EXT_surface_maintenance1
-[mono=21875.675 tid=26517] info:    VK_KHR_android_surface
-[mono=21875.675 tid=26517] info:    VK_KHR_get_surface_capabilities2
-[mono=21875.675 tid=26517] info:    VK_KHR_surface
-[mono=21875.675 tid=26517] info:  DXVK: Negotiated Vulkan 1.3 instance (1.3 preferred; 1.2 uses KHR/EXT compatibility paths)
-[mono=21875.676 tid=26517] info:  D3D9: VK_FORMAT_D16_UNORM_S8_UINT -> VK_FORMAT_D24_UNORM_S8_UINT
-[mono=21875.676 tid=26517] info:  Mali-G720 MC7:
-[mono=21875.676 tid=26517] info:    Driver : Mali-G720 MC7 49.1.0
-[mono=21875.676 tid=26517] info:    Memory Heap[0]: 
-[mono=21875.676 tid=26517] info:      Size: 11260 MiB
-[mono=21875.676 tid=26517] info:      Flags: 0x1
-[mono=21875.676 tid=26517] info:      Memory Type[0]: Property Flags = 0x7
-[mono=21875.676 tid=26517] info:      Memory Type[1]: Property Flags = 0xb
-[mono=21875.676 tid=26517] info:      Memory Type[2]: Property Flags = 0x11
-[mono=21875.676 tid=26517] info:    Memory Heap[1]: 
-[mono=21875.676 tid=26517] info:      Size: 100 MiB
-[mono=21875.676 tid=26517] info:      Flags: 0x1
-[mono=21875.676 tid=26517] info:      Memory Type[3]: Property Flags = 0x21
-[mono=21875.676 tid=26517] info:  DXVK: Disabling maintenance5, EDS3, line/conservative rasterization, depth-clip and custom-border-color on ARM
-[mono=21875.676 tid=26517] info:  Device properties:
-[mono=21875.676 tid=26517] info:    Device : Mali-G720 MC7
-[mono=21875.676 tid=26517] info:    Driver : Mali-G720 MC7 49.1.0
-[mono=21875.677 tid=26517] info:  Enabled device extensions:
-[mono=21875.677 tid=26517] info:    VK_EXT_hdr_metadata
-[mono=21875.677 tid=26517] info:    VK_EXT_swapchain_maintenance1
-[mono=21875.677 tid=26517] info:    VK_KHR_swapchain
-[mono=21875.677 tid=26517] info:  Device features:
-[mono=21875.677 tid=26517] info:    robustBufferAccess                     : 1
-[mono=21875.677 tid=26517] info:    fullDrawIndexUint32                    : 1
-[mono=21875.677 tid=26517] info:    imageCubeArray                         : 1
-[mono=21875.677 tid=26517] info:    independentBlend                       : 1
-[mono=21875.677 tid=26517] info:    geometryShader                         : 1
-[mono=21875.677 tid=26517] info:    tessellationShader                     : 0
-[mono=21875.677 tid=26517] info:    sampleRateShading                      : 1
-[mono=21875.677 tid=26517] info:    dualSrcBlend                           : 0
-[mono=21875.677 tid=26517] info:    logicOp                                : 0
-[mono=21875.677 tid=26517] info:    multiDrawIndirect                      : 1
-[mono=21875.677 tid=26517] info:    drawIndirectFirstInstance              : 0
-[mono=21875.677 tid=26517] info:    depthClamp                             : 1
-[mono=21875.677 tid=26517] info:    depthBiasClamp                         : 1
-[mono=21875.677 tid=26517] info:    fillModeNonSolid                       : 1
-[mono=21875.677 tid=26517] info:    depthBounds                            : 0
-[mono=21875.677 tid=26517] info:    wideLines                              : 1
-[mono=21875.677 tid=26517] info:    multiViewport                          : 1
-[mono=21875.677 tid=26517] info:    samplerAnisotropy                      : 1
-[mono=21875.677 tid=26517] info:    textureCompressionBC                   : 0
-[mono=21875.677 tid=26517] info:    occlusionQueryPrecise                  : 1
-[mono=21875.677 tid=26517] info:    pipelineStatisticsQuery                : 0
-[mono=21875.677 tid=26517] info:    vertexPipelineStoresAndAtomics         : 0
-[mono=21875.677 tid=26517] info:    fragmentStoresAndAtomics               : 0
-[mono=21875.677 tid=26517] info:    shaderImageGatherExtended              : 0
-[mono=21875.677 tid=26517] info:    shaderClipDistance                     : 0
-[mono=21875.677 tid=26517] info:    shaderCullDistance                     : 0
-[mono=21875.677 tid=26517] info:    shaderFloat64                          : 0
-[mono=21875.677 tid=26517] info:    shaderInt64                            : 0
-[mono=21875.677 tid=26517] info:    variableMultisampleRate                : 0
-[mono=21875.677 tid=26517] info:    shaderResourceResidency                : 0
-[mono=21875.678 tid=26517] info:    shaderResourceMinLod                   : 0
-[mono=21875.678 tid=26517] info:    sparseBinding                          : 0
-[mono=21875.678 tid=26517] info:    sparseResidencyBuffer                  : 0
-[mono=21875.678 tid=26517] info:    sparseResidencyImage2D                 : 0
-[mono=21875.678 tid=26517] info:    sparseResidencyImage3D                 : 0
-[mono=21875.678 tid=26517] info:    sparseResidency2Samples                : 0
-[mono=21875.678 tid=26517] info:    sparseResidency4Samples                : 0
-[mono=21875.678 tid=26517] info:    sparseResidency8Samples                : 0
-[mono=21875.678 tid=26517] info:    sparseResidency16Samples               : 0
-[mono=21875.678 tid=26517] info:    sparseResidencyAliased                 : 0
-[mono=21875.678 tid=26517] info:  Vulkan 1.1
-[mono=21875.678 tid=26517] info:    shaderDrawParameters                   : 1
-[mono=21875.678 tid=26517] info:  Vulkan 1.2
-[mono=21875.678 tid=26517] info:    samplerMirrorClampToEdge               : 1
-[mono=21875.678 tid=26517] info:    drawIndirectCount                      : 1
-[mono=21875.678 tid=26517] info:    samplerFilterMinmax                    : 0
-[mono=21875.678 tid=26517] info:    hostQueryReset                         : 1
-[mono=21875.678 tid=26517] info:    timelineSemaphore                      : 1
-[mono=21875.678 tid=26517] info:    bufferDeviceAddress                    : 0
-[mono=21875.678 tid=26517] info:    shaderOutputViewportIndex              : 1
-[mono=21875.678 tid=26517] info:    shaderOutputLayer                      : 1
-[mono=21875.678 tid=26517] info:    vulkanMemoryModel                      : 1
-[mono=21875.678 tid=26517] info:  Vulkan 1.3
-[mono=21875.678 tid=26517] info:    robustImageAccess                      : 1
-[mono=21875.678 tid=26517] info:    pipelineCreationCacheControl           : 1
-[mono=21875.678 tid=26517] info:    shaderDemoteToHelperInvocation         : 0
-[mono=21875.678 tid=26517] info:    shaderZeroInitializeWorkgroupMemory    : 0
-[mono=21875.678 tid=26517] info:    synchronization2                       : 1
-[mono=21875.678 tid=26517] info:    dynamicRendering                       : 1
-[mono=21875.678 tid=26517] info:  VK_AMD_shader_fragment_mask
-[mono=21875.678 tid=26517] info:    extension supported                    : 0
-[mono=21875.678 tid=26517] info:  VK_EXT_attachment_feedback_loop_layout
-[mono=21875.678 tid=26517] info:    attachmentFeedbackLoopLayout           : 0
-[mono=21875.678 tid=26517] info:  VK_EXT_conservative_rasterization
-[mono=21875.678 tid=26517] info:    extension supported                    : 0
-[mono=21875.678 tid=26517] info:  VK_EXT_custom_border_color
-[mono=21875.678 tid=26517] info:    customBorderColors                     : 0
-[mono=21875.678 tid=26517] info:    customBorderColorWithoutFormat         : 0
-[mono=21875.678 tid=26517] info:  VK_EXT_depth_clip_enable
-[mono=21875.679 tid=26517] info:    depthClipEnable                        : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_depth_bias_control
-[mono=21875.679 tid=26517] info:    depthBiasControl                       : 0
-[mono=21875.679 tid=26517] info:    leastRepresentableValueForceUnormRepresentation : 0
-[mono=21875.679 tid=26517] info:    floatRepresentation                    : 0
-[mono=21875.679 tid=26517] info:    depthBiasExact                         : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_extended_dynamic_state3
-[mono=21875.679 tid=26517] info:    extDynamicState3AlphaToCoverageEnable  : 0
-[mono=21875.679 tid=26517] info:    extDynamicState3DepthClipEnable        : 0
-[mono=21875.679 tid=26517] info:    extDynamicState3RasterizationSamples   : 0
-[mono=21875.679 tid=26517] info:    extDynamicState3SampleMask             : 0
-[mono=21875.679 tid=26517] info:    extDynamicState3LineRasterizationMode  : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_fragment_shader_interlock
-[mono=21875.679 tid=26517] info:    fragmentShaderSampleInterlock          : 0
-[mono=21875.679 tid=26517] info:    fragmentShaderPixelInterlock           : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_full_screen_exclusive
-[mono=21875.679 tid=26517] info:    extension supported                    : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_graphics_pipeline_library
-[mono=21875.679 tid=26517] info:    graphicsPipelineLibrary                : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_line_rasterization
-[mono=21875.679 tid=26517] info:    rectangularLines                       : 0
-[mono=21875.679 tid=26517] info:    smoothLines                            : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_memory_budget
-[mono=21875.679 tid=26517] info:    extension supported                    : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_memory_priority
-[mono=21875.679 tid=26517] info:    memoryPriority                         : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_non_seamless_cube_map
-[mono=21875.679 tid=26517] info:    nonSeamlessCubeMap                     : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_pageable_device_local_memory
-[mono=21875.679 tid=26517] info:    pageableDeviceLocalMemory              : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_robustness2
-[mono=21875.679 tid=26517] info:    robustBufferAccess2                    : 0
-[mono=21875.679 tid=26517] info:    robustImageAccess2                     : 0
-[mono=21875.679 tid=26517] info:    nullDescriptor                         : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_shader_module_identifier
-[mono=21875.679 tid=26517] info:    shaderModuleIdentifier                 : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_shader_stencil_export
-[mono=21875.679 tid=26517] info:    extension supported                    : 0
-[mono=21875.679 tid=26517] info:  VK_EXT_swapchain_colorspace
-[mono=21875.680 tid=26517] info:    extension supported                    : 0
-[mono=21875.680 tid=26517] info:  VK_EXT_swapchain_maintenance1
-[mono=21875.680 tid=26517] info:    swapchainMaintenance1                  : 1
-[mono=21875.680 tid=26517] info:  VK_EXT_hdr_metadata
-[mono=21875.680 tid=26517] info:    extension supported                    : 1
-[mono=21875.680 tid=26517] info:  VK_EXT_transform_feedback
-[mono=21875.680 tid=26517] info:    transformFeedback                      : 0
-[mono=21875.680 tid=26517] info:    geometryStreams                        : 0
-[mono=21875.680 tid=26517] info:  VK_EXT_vertex_attribute_divisor
-[mono=21875.680 tid=26517] info:    vertexAttributeInstanceRateDivisor     : 0
-[mono=21875.680 tid=26517] info:    vertexAttributeInstanceRateZeroDivisor : 0
-[mono=21875.680 tid=26517] info:  VK_KHR_external_memory_win32
-[mono=21875.680 tid=26517] info:    extension supported                    : 0
-[mono=21875.680 tid=26517] info:  VK_KHR_external_semaphore_win32
-[mono=21875.680 tid=26517] info:    extension supported                    : 0
-[mono=21875.680 tid=26517] info:  VK_KHR_maintenance5
-[mono=21875.680 tid=26517] info:    maintenance5                           : 0
-[mono=21875.680 tid=26517] info:  VK_KHR_present_id
-[mono=21875.680 tid=26517] info:    presentId                              : 0
-[mono=21875.680 tid=26517] info:  VK_KHR_present_wait
-[mono=21875.680 tid=26517] info:    presentWait                            : 0
-[mono=21875.680 tid=26517] info:  VK_NV_descriptor_pool_overallocation
-[mono=21875.680 tid=26517] info:    descriptorPoolOverallocation           : 0
-[mono=21875.680 tid=26517] info:  VK_NV_raw_access_chains
-[mono=21875.680 tid=26517] info:    shaderRawAccessChains                  : 0
-[mono=21875.680 tid=26517] info:  VK_NVX_binary_import
-[mono=21875.680 tid=26517] info:    extension supported                    : 0
-[mono=21875.680 tid=26517] info:  VK_NVX_image_view_handle
-[mono=21875.680 tid=26517] info:    extension supported                    : 0
-[mono=21875.680 tid=26517] info:  VK_KHR_win32_keyed_mutex
-[mono=21875.680 tid=26517] info:    extension supported                    : 0
-[mono=21875.680 tid=26517] info:  Queue families:
-[mono=21875.680 tid=26517] info:    Graphics : 0
-[mono=21875.680 tid=26517] info:    Transfer : 0
-[mono=21875.680 tid=26517] info:    Sparse   : n/a
-[mono=21875.685 tid=26517] info:  DXVK: Serializing Vulkan pipeline compilation on ARM
-[mono=21875.685 tid=26517] info:  DXVK: ARM pipeline trace: /storage/emulated/0/Prototype/logs/pipeline_trace.log
-[mono=21875.685 tid=26517] info:  DXVK: Lightweight pipeline timing enabled; serialization=on
-[mono=21875.685 tid=26517] info:  Memory type mask for buffer resources: 0x3, usage: 0x1b7
-[mono=21875.685 tid=26517] warn:  DXVK: No state cache file found
-[mono=21875.685 tid=26517] info:  DXVK: Graphics pipeline libraries not supported
-[mono=21875.687 tid=26517] info:  DxvkUnboundResources: pre-created dummy sampler, buffer, and all 14 image views
-[mono=21875.690 tid=26517] info:  DxvkUnboundResources: dummy image GPU initialization complete
-[mono=21875.700 tid=26517] info:  DXVK pipeline timing: graphics calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms; compute calls=1 requested=1 errors=0 wait_avg=7.7e-05 wait_max=7.7e-05 driver_avg=9.88523 driver_max=9.88523 ms
-[mono=21875.731 tid=26517] warn:  D3D9DeviceEx::SetupFPU: not supported on this arch.
-[mono=21875.732 tid=26517] info:  D3D9DeviceEx::ResetSwapChain:
-[mono=21875.732 tid=26517] info:    Requested Presentation Parameters
-[mono=21875.732 tid=26517] info:      - Width:              2400
-[mono=21875.732 tid=26517] info:      - Height:             1080
-[mono=21875.732 tid=26517] info:      - Format:             D3D9Format::X8R8G8B8
-[mono=21875.732 tid=26517] info:      - Auto Depth Stencil: true
-[mono=21875.732 tid=26517] info:                  ^ Format: D3D9Format::D24S8
-[mono=21875.732 tid=26517] info:      - Windowed:           true
-[mono=21875.732 tid=26517] info:      - Swap effect:        1
-[mono=21875.733 tid=26517] info:  Presenter: Actual swap chain properties:
-[mono=21875.733 tid=26517] info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
-[mono=21875.733 tid=26517] info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-[mono=21875.733 tid=26517] info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
-[mono=21875.733 tid=26517] info:    Buffer size:  2712x1220
-[mono=21875.733 tid=26517] info:    Image count:  6
-[mono=21875.836 tid=26517] info:  Presenter: Actual swap chain properties:
-[mono=21875.836 tid=26517] info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
-[mono=21875.836 tid=26517] info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-[mono=21875.836 tid=26517] info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
-[mono=21875.836 tid=26517] info:    Buffer size:  2712x1220
-[mono=21875.836 tid=26517] info:    Image count:  6
-[mono=21876.256 tid=26517] info:  Device reset
-[mono=21876.257 tid=26517] warn:  D3D9Cursor::ResetCursor: Not supported on current platform.
-[mono=21876.257 tid=26517] info:  D3D9DeviceEx::ResetSwapChain:
-[mono=21876.257 tid=26517] info:    Requested Presentation Parameters
-[mono=21876.257 tid=26517] info:      - Width:              2400
-[mono=21876.257 tid=26517] info:      - Height:             1080
-[mono=21876.257 tid=26517] info:      - Format:             D3D9Format::X8R8G8B8
-[mono=21876.257 tid=26517] info:      - Auto Depth Stencil: true
-[mono=21876.257 tid=26517] info:                  ^ Format: D3D9Format::D24S8
-[mono=21876.257 tid=26517] info:      - Windowed:           true
-[mono=21876.257 tid=26517] info:      - Swap effect:        1
-[mono=21876.259 tid=26517] info:  Presenter: Actual swap chain properties:
-[mono=21876.259 tid=26517] info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
-[mono=21876.259 tid=26517] info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-[mono=21876.259 tid=26517] info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
-[mono=21876.259 tid=26517] info:    Buffer size:  2712x1220
-[mono=21876.259 tid=26517] info:    Image count:  6
-[mono=21876.355 tid=26561] warn:  DXVK: Creating new state cache file
-[mono=21881.346 tid=26543] info:  DXVK pipeline timing: graphics calls=12 requested=12 errors=0 wait_avg=3.84167e-05 wait_max=7.7e-05 driver_avg=10.2701 driver_max=14.5277 ms; compute calls=7 requested=7 errors=0 wait_avg=9.88571e-05 wait_max=0.000308 driver_avg=4.39489 driver_max=6.49531 ms
-[mono=21886.354 tid=26543] info:  DXVK pipeline timing: graphics calls=31 requested=31 errors=0 wait_avg=9.91935e-05 wait_max=0.000538 driver_avg=14.7915 driver_max=39.6375 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21894.610 tid=26543] info:  DXVK pipeline timing: graphics calls=90 requested=90 errors=0 wait_avg=8.72e-05 wait_max=0.000385 driver_avg=26.865 driver_max=47.1138 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21901.904 tid=26543] info:  DXVK pipeline timing: graphics calls=12 requested=12 errors=0 wait_avg=0.000141 wait_max=0.000539 driver_avg=25.1974 driver_max=40.713 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21907.026 tid=26543] info:  DXVK pipeline timing: graphics calls=9 requested=9 errors=0 wait_avg=0.000128 wait_max=0.000231 driver_avg=20.1269 driver_max=39.388 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21912.160 tid=26543] info:  DXVK pipeline timing: graphics calls=8 requested=8 errors=0 wait_avg=7.7e-05 wait_max=0.000231 driver_avg=35.3072 driver_max=58.9062 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21919.281 tid=26543] info:  DXVK pipeline timing: graphics calls=7 requested=7 errors=0 wait_avg=4.4e-05 wait_max=0.000231 driver_avg=23.2601 driver_max=47.2385 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21924.318 tid=26543] info:  DXVK pipeline timing: graphics calls=15 requested=15 errors=0 wait_avg=0.0001128 wait_max=0.000385 driver_avg=24.7244 driver_max=43.2492 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21934.601 tid=26543] info:  DXVK pipeline timing: graphics calls=10 requested=10 errors=0 wait_avg=0.0001384 wait_max=0.000616 driver_avg=22.1383 driver_max=40.4487 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21939.813 tid=26543] info:  DXVK pipeline timing: graphics calls=74 requested=74 errors=0 wait_avg=9.46486e-05 wait_max=0.000539 driver_avg=35.5913 driver_max=53.5467 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21947.104 tid=26543] info:  DXVK pipeline timing: graphics calls=14 requested=14 errors=0 wait_avg=0.000120857 wait_max=0.000231 driver_avg=40.3348 driver_max=46.6196 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21959.242 tid=26543] info:  DXVK pipeline timing: graphics calls=7 requested=7 errors=0 wait_avg=0.000176 wait_max=0.000308 driver_avg=41.8383 driver_max=53.4705 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21978.564 tid=26543] info:  DXVK pipeline timing: graphics calls=1 requested=1 errors=0 wait_avg=0.000231 wait_max=0.000231 driver_avg=14.5197 driver_max=14.5197 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21984.232 tid=26543] info:  DXVK pipeline timing: graphics calls=18 requested=18 errors=0 wait_avg=9.39444e-05 wait_max=0.000384 driver_avg=36.0916 driver_max=56.3123 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21990.917 tid=26543] info:  DXVK pipeline timing: graphics calls=5 requested=5 errors=0 wait_avg=9.24e-05 wait_max=0.000231 driver_avg=13.4881 driver_max=22.8625 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=21996.236 tid=26543] info:  DXVK pipeline timing: graphics calls=1 requested=1 errors=0 wait_avg=7.7e-05 wait_max=7.7e-05 driver_avg=12.1615 driver_max=12.1615 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=22006.797 tid=26543] info:  DXVK pipeline timing: graphics calls=2 requested=2 errors=0 wait_avg=0.0001155 wait_max=0.000231 driver_avg=14.3946 driver_max=15.2591 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=22018.860 tid=26543] info:  DXVK pipeline timing: graphics calls=1 requested=1 errors=0 wait_avg=7.6e-05 wait_max=7.6e-05 driver_avg=56.9304 driver_max=56.9304 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=22026.340 tid=26543] info:  DXVK pipeline timing: graphics calls=1 requested=1 errors=0 wait_avg=7.7e-05 wait_max=7.7e-05 driver_avg=46.7218 driver_max=46.7218 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=22036.985 tid=26543] info:  DXVK pipeline timing: graphics calls=3 requested=3 errors=0 wait_avg=0.000179333 wait_max=0.000307 driver_avg=45.9277 driver_max=57.0945 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
-[mono=22045.324 tid=26543] info:  DXVK pipeline timing: graphics calls=10 requested=10 errors=0 wait_avg=0.0001537 wait_max=0.000615 driver_avg=37.6972 driver_max=52.7055 ms; compute calls=0 requested=0 errors=0 wait_avg=0 wait_max=0 driver_avg=0 driver_max=0 ms
+info:  Game: app_process64
+info:  DXVK: v2.5.3+
+info:  Build: aarch64 clang 21.0.0
+info:  Found config env: d3d9.presentInterval = 1;d3d9.samplerAnisotropy = 2;d3d9.supportDFFormats = False
+info:  Effective configuration:
+info:    d3d9.samplerAnisotropy = 2
+info:    d3d9.supportDFFormats = False
+info:    d3d9.presentInterval = 1
+info:  Vulkan: Found vkGetInstanceProcAddr in libvulkan.so @ 0x7f88ca0d00
+info:  Built-in extension providers:
+info:    Platform WSI
+info:  Enabled instance extensions:
+info:    VK_EXT_surface_maintenance1
+info:    VK_KHR_android_surface
+info:    VK_KHR_get_surface_capabilities2
+info:    VK_KHR_surface
+info:  DXVK: Negotiated Vulkan 1.3 instance (1.3 preferred; 1.2 uses KHR/EXT compatibility paths)
+info:  D3D9: VK_FORMAT_D16_UNORM_S8_UINT -> VK_FORMAT_D24_UNORM_S8_UINT
+info:  Mali-G720 MC7:
+info:    Driver : Mali-G720 MC7 49.1.0
+info:    Memory Heap[0]: 
+info:      Size: 11260 MiB
+info:      Flags: 0x1
+info:      Memory Type[0]: Property Flags = 0x7
+info:      Memory Type[1]: Property Flags = 0xb
+info:      Memory Type[2]: Property Flags = 0x11
+info:    Memory Heap[1]: 
+info:      Size: 100 MiB
+info:      Flags: 0x1
+info:      Memory Type[3]: Property Flags = 0x21
+info:  DXVK: Disabling maintenance5, EDS3, line/conservative rasterization, depth-clip and custom-border-color on ARM
+info:  Device properties:
+info:    Device : Mali-G720 MC7
+info:    Driver : Mali-G720 MC7 49.1.0
+info:  Enabled device extensions:
+info:    VK_EXT_hdr_metadata
+info:    VK_EXT_swapchain_maintenance1
+info:    VK_KHR_swapchain
+info:  Device features:
+info:    robustBufferAccess                     : 1
+info:    fullDrawIndexUint32                    : 1
+info:    imageCubeArray                         : 1
+info:    independentBlend                       : 1
+info:    geometryShader                         : 1
+info:    tessellationShader                     : 0
+info:    sampleRateShading                      : 1
+info:    dualSrcBlend                           : 0
+info:    logicOp                                : 0
+info:    multiDrawIndirect                      : 1
+info:    drawIndirectFirstInstance              : 0
+info:    depthClamp                             : 1
+info:    depthBiasClamp                         : 1
+info:    fillModeNonSolid                       : 1
+info:    depthBounds                            : 0
+info:    wideLines                              : 1
+info:    multiViewport                          : 1
+info:    samplerAnisotropy                      : 1
+info:    textureCompressionBC                   : 0
+info:    occlusionQueryPrecise                  : 1
+info:    pipelineStatisticsQuery                : 0
+info:    vertexPipelineStoresAndAtomics         : 0
+info:    fragmentStoresAndAtomics               : 0
+info:    shaderImageGatherExtended              : 0
+info:    shaderClipDistance                     : 0
+info:    shaderCullDistance                     : 0
+info:    shaderFloat64                          : 0
+info:    shaderInt64                            : 0
+info:    variableMultisampleRate                : 0
+info:    shaderResourceResidency                : 0
+info:    shaderResourceMinLod                   : 0
+info:    sparseBinding                          : 0
+info:    sparseResidencyBuffer                  : 0
+info:    sparseResidencyImage2D                 : 0
+info:    sparseResidencyImage3D                 : 0
+info:    sparseResidency2Samples                : 0
+info:    sparseResidency4Samples                : 0
+info:    sparseResidency8Samples                : 0
+info:    sparseResidency16Samples               : 0
+info:    sparseResidencyAliased                 : 0
+info:  Vulkan 1.1
+info:    shaderDrawParameters                   : 1
+info:  Vulkan 1.2
+info:    samplerMirrorClampToEdge               : 1
+info:    drawIndirectCount                      : 1
+info:    samplerFilterMinmax                    : 0
+info:    hostQueryReset                         : 1
+info:    timelineSemaphore                      : 1
+info:    bufferDeviceAddress                    : 0
+info:    shaderOutputViewportIndex              : 1
+info:    shaderOutputLayer                      : 1
+info:    vulkanMemoryModel                      : 1
+info:  Vulkan 1.3
+info:    robustImageAccess                      : 1
+info:    pipelineCreationCacheControl           : 1
+info:    shaderDemoteToHelperInvocation         : 0
+info:    shaderZeroInitializeWorkgroupMemory    : 0
+info:    synchronization2                       : 1
+info:    dynamicRendering                       : 1
+info:  VK_AMD_shader_fragment_mask
+info:    extension supported                    : 0
+info:  VK_EXT_attachment_feedback_loop_layout
+info:    attachmentFeedbackLoopLayout           : 0
+info:  VK_EXT_conservative_rasterization
+info:    extension supported                    : 0
+info:  VK_EXT_custom_border_color
+info:    customBorderColors                     : 0
+info:    customBorderColorWithoutFormat         : 0
+info:  VK_EXT_depth_clip_enable
+info:    depthClipEnable                        : 0
+info:  VK_EXT_depth_bias_control
+info:    depthBiasControl                       : 0
+info:    leastRepresentableValueForceUnormRepresentation : 0
+info:    floatRepresentation                    : 0
+info:    depthBiasExact                         : 0
+info:  VK_EXT_extended_dynamic_state3
+info:    extDynamicState3AlphaToCoverageEnable  : 0
+info:    extDynamicState3DepthClipEnable        : 0
+info:    extDynamicState3RasterizationSamples   : 0
+info:    extDynamicState3SampleMask             : 0
+info:    extDynamicState3LineRasterizationMode  : 0
+info:  VK_EXT_fragment_shader_interlock
+info:    fragmentShaderSampleInterlock          : 0
+info:    fragmentShaderPixelInterlock           : 0
+info:  VK_EXT_full_screen_exclusive
+info:    extension supported                    : 0
+info:  VK_EXT_graphics_pipeline_library
+info:    graphicsPipelineLibrary                : 0
+info:  VK_EXT_line_rasterization
+info:    rectangularLines                       : 0
+info:    smoothLines                            : 0
+info:  VK_EXT_memory_budget
+info:    extension supported                    : 0
+info:  VK_EXT_memory_priority
+info:    memoryPriority                         : 0
+info:  VK_EXT_non_seamless_cube_map
+info:    nonSeamlessCubeMap                     : 0
+info:  VK_EXT_pageable_device_local_memory
+info:    pageableDeviceLocalMemory              : 0
+info:  VK_EXT_robustness2
+info:    robustBufferAccess2                    : 0
+info:    robustImageAccess2                     : 0
+info:    nullDescriptor                         : 0
+info:  VK_EXT_shader_module_identifier
+info:    shaderModuleIdentifier                 : 0
+info:  VK_EXT_shader_stencil_export
+info:    extension supported                    : 0
+info:  VK_EXT_swapchain_colorspace
+info:    extension supported                    : 0
+info:  VK_EXT_swapchain_maintenance1
+info:    swapchainMaintenance1                  : 1
+info:  VK_EXT_hdr_metadata
+info:    extension supported                    : 1
+info:  VK_EXT_transform_feedback
+info:    transformFeedback                      : 0
+info:    geometryStreams                        : 0
+info:  VK_EXT_vertex_attribute_divisor
+info:    vertexAttributeInstanceRateDivisor     : 0
+info:    vertexAttributeInstanceRateZeroDivisor : 0
+info:  VK_KHR_external_memory_win32
+info:    extension supported                    : 0
+info:  VK_KHR_external_semaphore_win32
+info:    extension supported                    : 0
+info:  VK_KHR_maintenance5
+info:    maintenance5                           : 0
+info:  VK_KHR_present_id
+info:    presentId                              : 0
+info:  VK_KHR_present_wait
+info:    presentWait                            : 0
+info:  VK_NV_descriptor_pool_overallocation
+info:    descriptorPoolOverallocation           : 0
+info:  VK_NV_raw_access_chains
+info:    shaderRawAccessChains                  : 0
+info:  VK_NVX_binary_import
+info:    extension supported                    : 0
+info:  VK_NVX_image_view_handle
+info:    extension supported                    : 0
+info:  VK_KHR_win32_keyed_mutex
+info:    extension supported                    : 0
+info:  Queue families:
+info:    Graphics : 0
+info:    Transfer : 0
+info:    Sparse   : n/a
+info:  DXVK: Serializing Vulkan pipeline compilation on ARM
+info:  DXVK: ARM pipeline trace disabled; set PROTODROID_PIPELINE_TRACE=1 or pipeline_trace = 1 to enable
+info:  Memory type mask for buffer resources: 0x3, usage: 0x1b7
+info:  DXVK: Read 1037 valid state cache entries
+info:  DXVK: Graphics pipeline libraries not supported
+info:  DxvkUnboundResources: pre-created dummy sampler, buffer, and all 14 image views
+info:  DxvkUnboundResources: dummy image GPU initialization complete
+warn:  D3D9DeviceEx::SetupFPU: not supported on this arch.
+info:  D3D9DeviceEx::ResetSwapChain:
+info:    Requested Presentation Parameters
+info:      - Width:              2400
+info:      - Height:             1080
+info:      - Format:             D3D9Format::X8R8G8B8
+info:      - Auto Depth Stencil: true
+info:                  ^ Format: D3D9Format::D24S8
+info:      - Windowed:           true
+info:      - Swap effect:        1
+info:  Presenter: Actual swap chain properties:
+info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
+info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
+info:    Buffer size:  2712x1220
+info:    Image count:  6
+info:  DXVK: Capping ARM compiler threads at 2
+info:  DXVK: Using 2 compiler threads
+info:  Presenter: Actual swap chain properties:
+info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
+info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
+info:    Buffer size:  2712x1220
+info:    Image count:  6
+info:  Device reset
+warn:  D3D9Cursor::ResetCursor: Not supported on current platform.
+info:  D3D9DeviceEx::ResetSwapChain:
+info:    Requested Presentation Parameters
+info:      - Width:              2400
+info:      - Height:             1080
+info:      - Format:             D3D9Format::X8R8G8B8
+info:      - Auto Depth Stencil: true
+info:                  ^ Format: D3D9Format::D24S8
+info:      - Windowed:           true
+info:      - Swap effect:        1
+info:  Presenter: Actual swap chain properties:
+info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
+info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
+info:    Buffer size:  2712x1220
+info:    Image count:  6
+info:  Device reset
+warn:  D3D9Cursor::ResetCursor: Not supported on current platform.
+info:  D3D9DeviceEx::ResetSwapChain:
+info:    Requested Presentation Parameters
+info:      - Width:              2400
+info:      - Height:             1080
+info:      - Format:             D3D9Format::X8R8G8B8
+info:      - Auto Depth Stencil: true
+info:                  ^ Format: D3D9Format::D24S8
+info:      - Windowed:           true
+info:      - Swap effect:        1
+info:  Presenter: Actual swap chain properties:
+info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
+info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
+info:    Buffer size:  2712x1220
+info:    Image count:  6
