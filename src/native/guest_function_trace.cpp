@@ -71,7 +71,7 @@ void Flush(GuestFunctionTrace* trace) {
 }  // namespace
 }  // namespace native
 
-extern "C" void RecompGuestFunctionEnter(Ctx* context, uint32_t rva) {
+extern "C" void RecompGuestFunctionEnterRuntime(Ctx* context, uint32_t rva) {
     using namespace native;
     if (!Enabled()) return;
 
@@ -88,7 +88,7 @@ extern "C" void RecompGuestFunctionEnter(Ctx* context, uint32_t rva) {
     trace.Enter(entry, static_cast<uint64_t>(MonotonicNanos()));
 }
 
-extern "C" void RecompGuestFunctionExit(Ctx* context, uint32_t rva) {
+extern "C" void RecompGuestFunctionExitRuntime(Ctx* context, uint32_t rva) {
     using namespace native;
     (void)context;
     if (!Enabled()) return;

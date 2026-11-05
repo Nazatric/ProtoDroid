@@ -79,6 +79,16 @@ Required A/B controls: exact APK/source hash, same device/driver and settings, s
 
 Continue pinned-source research (including Skate 3/Buku313, rexglue, DXVK, cache/pipeline reconstruction, drivers, SDL/FAudio, and mobile renderers). Record exact revisions and why each mechanism does or does not transfer. Batch justified source changes; run broad regression and exact CI; independently verify downloadable source-built APK artifacts when possible; then iterate on device evidence.
 
+## Recovery iteration 1 — source candidates and mechanism evidence
+
+| Candidate | Exact validation | Boundary |
+| --- | --- | --- |
+| Cache recovery after mirror initialization, with persistent before/source/result/after reporting (`c180276`) | Fresh DXVK v2.5.3 + all 20 patches; cache suite passes; real 180,832-byte/1,038-entry shared backup restores missing → populated with identical bytes and retained source; startup-order report checks pass | Startup host correctness only. It does not prove the device had a candidate, that Android shared-storage recovery now succeeds, or any FPS/stall change |
+| Compile generation-selected guest probes only for an explicit `GUEST_FUNCTION_TRACE=1` investigation build | Ordinary C object has no probe references; instrumented object retains both; enabled runtime/analyzer, collector, structural/mutation, and real-DLL differential tests pass. Real generation: 3,593 functions, zero unsupported instructions | No gameplay or rendering semantics change. The ordinary APK no longer promises guest records merely from the INI switch; the startup log explicitly identifies that mismatch |
+| Disabled guest-probe mechanism benchmark | Same arithmetic/control, 21 interleaved samples of 1,000,000 pairs: checked-in runtime median 3.092231 ns/pair; compile-out candidate 0.004234 ns/pair; checksums identical | x86-64 host screening only, not ARM64 device cost, function-call frequency, frame time, or FPS. This small cost alone does not explain the reported regression |
+
+The preserved local edits that remove the same three generated probes remain uncommitted and untouched. The production candidate instead removes their calls during ordinary preprocessing, so clean generated-source verification and optional instrumented generation remain intact.
+
 ## Current non-completion statement
 
 Work is **not finished**. The newest evidence establishes a cold-cache run and an observability/startup-order weakness, not a complete explanation for every low-FPS report. No default-path root cause, matched FPS recovery, visual verification, 60+ FPS result, 3× result, or stutter elimination has been established. PR #40 remains open and unmerged; no tag or release is authorized.

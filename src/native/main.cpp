@@ -653,6 +653,13 @@ int main(int argc, char** argv) {
     const bool d3d9_timing = diagnostic_tour || SettingInt("d3d9_timing", 0) != 0;
     setenv("PROTODROID_D3D9_TIMING", d3d9_timing ? "1" : "0", diagnostic_tour ? 1 : 0);
     if (d3d9_timing) Log("DXVK D3D9 method timing enabled (%s)", diagnostic_tour ? "diagnostic tour" : "d3d9_timing = 1");
+    if (SettingInt("guest_function_trace", 0) != 0) {
+#ifdef PROTODROID_GUEST_FUNCTION_TRACE
+        Log("guest-function probes compiled in; runtime records enabled");
+#else
+        Log("guest_function_trace requested, but ordinary builds contain no guest probes; rebuild with GUEST_FUNCTION_TRACE=1");
+#endif
+    }
     // Independent of the tour to preserve prior tour comparability. This samples existing queues; it never drains them.
     const bool warm_cache_trace = SettingInt("warm_cache_trace", 0) != 0;
     setenv("PROTODROID_WARM_CACHE_TRACE", warm_cache_trace ? "1" : "0", 1);

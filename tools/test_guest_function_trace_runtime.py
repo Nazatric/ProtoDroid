@@ -25,6 +25,7 @@ def main() -> int:
         subprocess.run([
             os.environ.get("CXX", "g++"), "-std=c++17", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
             "-fsanitize=undefined", "-fno-sanitize-recover=all", "-DRECOMP_GUEST_BASE=0",
+            "-DPROTODROID_GUEST_FUNCTION_TRACE=1",
             f"-I{ROOT / 'src/native'}", f"-I{ROOT / 'src/recomp'}",
             str(ROOT / "src/native/guest_function_trace.cpp"),
             str(ROOT / "src/native/tests/guest_function_trace_runtime_test.cpp"), "-o", str(binary),
@@ -45,7 +46,24 @@ def main() -> int:
         if functions["004e5250"]["symbol"] != "proto::InGameState::vfunction1_for_GameState" or \
                 functions["00838b40"]["symbol"] != "FUN_10838b40":
             raise AssertionError("actual runtime symbolization differs")
-    print("guest function trace runtime-to-analyzer test passed")
+
+        # Match generated C, not only C++: ordinary objects must have no probe symbol references at all, while the
+        # explicit investigation object retains exactly the two renamed runtime entry points.
+        fixture = ROOT / "src/native/tests/guest_function_probe_compile_test.c"
+        for name, define in (("ordinary", []), ("instrumented", ["-DPROTODROID_GUEST_FUNCTION_TRACE=1"])):
+            obj = root / f"probes-{name}.o"
+            subprocess.run([
+                os.environ.get("CC", "cc"), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                *define, f"-I{ROOT / 'src/recomp'}", "-c", str(fixture), "-o", str(obj),
+            ], cwd=ROOT, env=environment, check=True)
+            undefined = subprocess.check_output([os.environ.get("NM", "nm"), "-u", str(obj)], text=True)
+            has_enter = "RecompGuestFunctionEnterRuntime" in undefined
+            has_exit = "RecompGuestFunctionExitRuntime" in undefined
+            if name == "ordinary" and (has_enter or has_exit or "RecompGuestFunction" in undefined):
+                raise AssertionError(f"ordinary object retained guest probe references: {undefined}")
+            if name == "instrumented" and not (has_enter and has_exit):
+                raise AssertionError(f"instrumented object lost guest probe references: {undefined}")
+    print("guest function trace runtime/analyzer and ordinary compile-out tests passed")
     return 0
 
 

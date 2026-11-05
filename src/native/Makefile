@@ -15,6 +15,12 @@ SOURCE_REVISION ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unk
 # Qualcomm's GPU driver use.
 COMMON_FLAGS := -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -fsigned-char -I../recomp \
                 -DPROTODROID_SOURCE_REVISION=\"$(SOURCE_REVISION)\"
+# Ordinary builds contain no generated guest-probe calls. Investigators must deliberately rebuild all native and
+# generated objects with GUEST_FUNCTION_TRACE=1 before guest_function_trace=1 can record the selected functions.
+GUEST_FUNCTION_TRACE ?= 0
+ifeq ($(GUEST_FUNCTION_TRACE),1)
+COMMON_FLAGS += -DPROTODROID_GUEST_FUNCTION_TRACE=1
+endif
 # Generated code: flat memory turns G() into plain pointers. -O1 on the desktop keeps rebuilds quick; Android gets
 # -O2, matching the upstream port and avoiding the code-size/register-pressure regression of globally optimizing the
 # recompiled engine at -O3. Keep the established TSO ordering flags unchanged.

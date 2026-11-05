@@ -47,14 +47,23 @@ def structural_tests() -> None:
             "thread_local GuestFunctionTrace trace;" in runtime.split("GuestFunctionTrace& ThreadTrace()", 1)[1].split(
                 "bool ReserveRecord", 1)[0],
             "enter and exit do not share exactly one per-thread collector")
-    enter_body = runtime.split("RecompGuestFunctionEnter(Ctx* context", 1)[1].split(
-        "RecompGuestFunctionExit(Ctx* context", 1)[0]
+    enter_body = runtime.split("RecompGuestFunctionEnterRuntime(Ctx* context", 1)[1].split(
+        "RecompGuestFunctionExitRuntime(Ctx* context", 1)[0]
     require("Flush(" not in enter_body and "Log(" not in enter_body,
             "entry performs logging inside the measured region")
     require("guest_function_trace.cpp" in makefile, "native runtime is not linked")
-    require("void RecompGuestFunctionEnter(Ctx* context, uint32_t rva);" in runtime_h and
-            "void RecompGuestFunctionExit(Ctx* context, uint32_t rva);" in runtime_h,
-            "generated-code hook declarations are missing")
+    require("GUEST_FUNCTION_TRACE ?= 0" in makefile and
+            "COMMON_FLAGS += -DPROTODROID_GUEST_FUNCTION_TRACE=1" in makefile,
+            "the explicit whole-target investigation build option is missing")
+    require("void RecompGuestFunctionEnterRuntime(Ctx* context, uint32_t rva);" in runtime_h and
+            "void RecompGuestFunctionExitRuntime(Ctx* context, uint32_t rva);" in runtime_h,
+            "generated-code runtime hook declarations are missing")
+    require('#ifdef PROTODROID_GUEST_FUNCTION_TRACE' in runtime_h and
+            '#define RecompGuestFunctionEnter(context, rva) RecompGuestFunctionEnterRuntime((context), (rva))' in runtime_h and
+            '#define RecompGuestFunctionExit(context, rva) RecompGuestFunctionExitRuntime((context), (rva))' in runtime_h and
+            runtime_h.count('#define RecompGuestFunctionEnter(context, rva) ((void)0)') == 1 and
+            runtime_h.count('#define RecompGuestFunctionExit(context, rva) ((void)0)') == 1,
+            "ordinary generated probes are not compiled out or the enabled mapping is incomplete")
 
     with tempfile.TemporaryDirectory(prefix="protodroid-guest-trace-structural-") as temporary:
         root = Path(temporary)

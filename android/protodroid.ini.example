@@ -66,8 +66,10 @@ texture_skip_min_size = 512
 #import_profile = 1
 
 # Separate loading-boundary investigation: only generation-selected functions in re/loading_boundary_trace.txt.
-# Emits capped guest-function-v1 durations/raw entry dwords; candidates are not proven loading/drain hook points.
-# Use tools/analyze_guest_function_trace.py on proto-native.log. Keep off for ordinary play and FPS baselines.
+# Ordinary APKs compile these probes out completely. First rebuild the whole native target with
+# GUEST_FUNCTION_TRACE=1; then this setting emits capped guest-function-v1 durations/raw entry dwords.
+# Candidates are not proven loading/drain hook points. Use tools/analyze_guest_function_trace.py on proto-native.log.
+# Keep this investigation build/setting out of ordinary-play FPS baselines.
 #guest_function_trace = 1
 
 # Optional 250 ms warm-cache queue snapshots from Present. Uses try-lock; state_known=0 means feeder count is unknown,
