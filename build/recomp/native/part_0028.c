@@ -10780,7 +10780,7 @@ void f_7c28ba50(Ctx* c) {
     { uint32_t v = r_ebp; LPush32(&r_esp, v); }  /* 7c28ba50: push ebp */
     r_ebp = (uint32_t)(r_esp);  /* 7c28ba51: mov ebp, esp */
     r_esp = (uint32_t)((r_esp & 0xfffffff8u));  /* 7c28ba53: and esp, 0xfffffff8 */
-    r_eax = (uint32_t)(R32((uint32_t)(r_ebp + 0x8u)));  /* 7c28ba56: mov eax, dword ptr [ebp + 8] */
+    r_eax = (uint32_t)(SR32((uint32_t)(r_ebp + 0x8u)));  /* 7c28ba56: mov eax, dword ptr [ebp + 8] */
     r_esp = (uint32_t)((r_esp - 0x70u - 0));  /* 7c28ba59: sub esp, 0x70 */
     { uint32_t v = r_esi; LPush32(&r_esp, v); }  /* 7c28ba5c: push esi */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c28ba5d: push edi */

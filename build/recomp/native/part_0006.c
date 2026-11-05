@@ -7610,7 +7610,7 @@ void f_7c067000(Ctx* c) {
     r_esp = (uint32_t)((r_esp - 0x1cu - 0));  /* 7c067006: sub esp, 0x1c */
     { uint32_t v = r_ebx; LPush32(&r_esp, v); }  /* 7c067009: push ebx */
     { uint32_t v = r_esi; LPush32(&r_esp, v); }  /* 7c06700a: push esi */
-    r_esi = (uint32_t)(R32((uint32_t)(r_ebp + 0x8u)));  /* 7c06700b: mov esi, dword ptr [ebp + 8] */
+    r_esi = (uint32_t)(SR32((uint32_t)(r_ebp + 0x8u)));  /* 7c06700b: mov esi, dword ptr [ebp + 8] */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c06700e: push edi */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c06700f: lea eax, [esp + 0x10] */
     r_ebx = (uint32_t)(r_ecx);  /* 7c067013: mov ebx, ecx */

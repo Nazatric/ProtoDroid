@@ -10012,7 +10012,7 @@ void f_7c20a680(Ctx* c) {
     r_ebp = (uint32_t)(r_esp);  /* 7c20a681: mov ebp, esp */
     r_esp = (uint32_t)((r_esp & 0xfffffff8u));  /* 7c20a683: and esp, 0xfffffff8 */
     r_esp = (uint32_t)((r_esp - 0x54u - 0));  /* 7c20a686: sub esp, 0x54 */
-    r_eax = (uint32_t)(R32((uint32_t)(r_ebp + 0x10u)));  /* 7c20a689: mov eax, dword ptr [ebp + 0x10] */
+    r_eax = (uint32_t)(SR32((uint32_t)(r_ebp + 0x10u)));  /* 7c20a689: mov eax, dword ptr [ebp + 0x10] */
     { uint32_t v = r_ebx; LPush32(&r_esp, v); }  /* 7c20a68c: push ebx */
     { uint32_t v = r_esi; LPush32(&r_esp, v); }  /* 7c20a68d: push esi */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c20a68e: push edi */

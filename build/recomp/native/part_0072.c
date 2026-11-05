@@ -4824,7 +4824,7 @@ void f_7c724be0(Ctx* c) {
     { uint32_t v = r_ebx; LPush32(&r_esp, v); }  /* 7c724be9: push ebx */
     { uint32_t v = r_esi; LPush32(&r_esp, v); }  /* 7c724bea: push esi */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c724beb: push edi */
-    r_edi = (uint32_t)(R32((uint32_t)(r_ebp + 0x8u)));  /* 7c724bec: mov edi, dword ptr [ebp + 8] */
+    r_edi = (uint32_t)(SR32((uint32_t)(r_ebp + 0x8u)));  /* 7c724bec: mov edi, dword ptr [ebp + 8] */
     r_esi = (uint32_t)((r_esi ^ r_esi));  /* 7c724bef: xor esi, esi */
     W32((uint32_t)(r_ecx + 0x60u), (uint32_t)(r_esi));  /* 7c724bf1: mov dword ptr [ecx + 0x60], esi */
     W32((uint32_t)(r_ecx + 0x94u), (uint32_t)(r_edi));  /* 7c724bf4: mov dword ptr [ecx + 0x94], edi */

@@ -375,14 +375,14 @@ void f_7c05e0b0(Ctx* c) {
     { uint32_t v = r_ebp; LPush32(&r_esp, v); }  /* 7c05e0b0: push ebp */
     r_ebp = (uint32_t)(r_esp);  /* 7c05e0b1: mov ebp, esp */
     r_esp = (uint32_t)((r_esp & 0xfffffff0u));  /* 7c05e0b3: and esp, 0xfffffff0 */
-    r_edx = (uint32_t)(R32((uint32_t)(r_ebp + 0xcu)));  /* 7c05e0b6: mov edx, dword ptr [ebp + 0xc] */
+    r_edx = (uint32_t)(SR32((uint32_t)(r_ebp + 0xcu)));  /* 7c05e0b6: mov edx, dword ptr [ebp + 0xc] */
     r_eax = (uint32_t)(r_ecx);  /* 7c05e0b9: mov eax, ecx */
-    r_ecx = (uint32_t)(R32((uint32_t)(r_ebp + 0x8u)));  /* 7c05e0bb: mov ecx, dword ptr [ebp + 8] */
+    r_ecx = (uint32_t)(SR32((uint32_t)(r_ebp + 0x8u)));  /* 7c05e0bb: mov ecx, dword ptr [ebp + 8] */
     r_xmm0 = RecompLoad128((uint32_t)(r_ecx));  /* 7c05e0be: movaps xmm0, xmmword ptr [ecx] */
-    r_ecx = (uint32_t)(R32((uint32_t)(r_ebp + 0x10u)));  /* 7c05e0c1: mov ecx, dword ptr [ebp + 0x10] */
+    r_ecx = (uint32_t)(SR32((uint32_t)(r_ebp + 0x10u)));  /* 7c05e0c1: mov ecx, dword ptr [ebp + 0x10] */
     RecompStore128((uint32_t)(r_eax), r_xmm0);  /* 7c05e0c4: movaps xmmword ptr [eax], xmm0 */
     r_xmm0 = RecompLoad128((uint32_t)(r_edx));  /* 7c05e0c7: movaps xmm0, xmmword ptr [edx] */
-    r_edx = (uint32_t)(R32((uint32_t)(r_ebp + 0x14u)));  /* 7c05e0ca: mov edx, dword ptr [ebp + 0x14] */
+    r_edx = (uint32_t)(SR32((uint32_t)(r_ebp + 0x14u)));  /* 7c05e0ca: mov edx, dword ptr [ebp + 0x14] */
     RecompStore128((uint32_t)(r_eax + 0x10u), r_xmm0);  /* 7c05e0cd: movaps xmmword ptr [eax + 0x10], xmm0 */
     r_xmm0 = RecompLoad128((uint32_t)(r_ecx));  /* 7c05e0d1: movaps xmm0, xmmword ptr [ecx] */
     RecompStore128((uint32_t)(r_eax + 0x20u), r_xmm0);  /* 7c05e0d4: movaps xmmword ptr [eax + 0x20], xmm0 */

@@ -6741,7 +6741,7 @@ void f_7c117480(Ctx* c) {
     r_esp = (uint32_t)((r_esp - 0xb4u - 0));  /* 7c117486: sub esp, 0xb4 */
     { uint32_t v = r_ebx; LPush32(&r_esp, v); }  /* 7c11748c: push ebx */
     r_ebx = (uint32_t)((r_ebx ^ r_ebx));  /* 7c11748d: xor ebx, ebx */
-    (void)SubFlagsL(&rf, R32((uint32_t)(r_ebp + 0x8u)), r_ebx, 0, 32);  /* 7c11748f: cmp dword ptr [ebp + 8], ebx */
+    (void)SubFlagsL(&rf, SR32((uint32_t)(r_ebp + 0x8u)), r_ebx, 0, 32);  /* 7c11748f: cmp dword ptr [ebp + 8], ebx */
     { uint32_t v = r_esi; LPush32(&r_esp, v); }  /* 7c117492: push esi */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c117493: push edi */
     SW32((uint32_t)(r_esp + 0xcu), (uint32_t)(r_ecx));  /* 7c117494: mov dword ptr [esp + 0xc], ecx */

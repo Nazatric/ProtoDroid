@@ -435,6 +435,8 @@ class FunctionCompiler:
         self.direct_calls = set()  # recompiled functions called directly (need a prototype in the output)
         self.unknown_targets = set()  # direct call/jump targets that are no known function entry
         self.ins = self.decode()
+        self.ebp_frame_in = {}
+        self.ebp_stack_sites = 0
 
     # ---- operands ----
     def reg_get(self, name):
@@ -1308,6 +1310,90 @@ class FunctionCompiler:
                 succ.append(nxt)
         return succ
 
+    @staticmethod
+    def writes_ebp(ins):
+        try:
+            _, written = ins.regs_access()
+        except capstone.CsError:
+            written = ins.regs_write
+        return X.X86_REG_EBP in written or X.X86_REG_BP in written
+
+    @staticmethod
+    def establishes_ebp_frame(ins):
+        ops = ins.operands
+        return (ins.mnemonic == "mov" and len(ops) == 2 and
+                ops[0].type == X.X86_OP_REG and ops[0].reg == X.X86_REG_EBP and
+                ops[1].type == X.X86_OP_REG and ops[1].reg == X.X86_REG_ESP)
+
+    def has_setjmp(self, ins):
+        if not ins.group(capstone.CS_GRP_CALL) or not ins.operands:
+            return False
+        op = ins.operands[0]
+        if op.type == X.X86_OP_IMM:
+            return (op.imm & 0xffffffff) in SETJMP_TARGETS
+        return (op.type == X.X86_OP_MEM and op.mem.base == 0 and op.mem.index == 0 and
+                (op.mem.disp & 0xffffffff) in SETJMP_IAT)
+
+    def ebp_frame_states(self, decoded):
+        """Must-analysis for a conventional EBP frame at each instruction boundary.
+
+        EBP is also a general register, so an EBP-based address is not implicitly a stack address. A frame fact
+        starts only at `mov ebp, esp`, survives ordinary ABI-conforming calls, and is killed by every other EBP
+        write. Intersections use AND: one incoming path with a different EBP is enough to keep ordered accesses.
+        setjmp's second return is deliberately excluded from this proof.
+        """
+        if any(self.has_setjmp(i) for i in self.ins):
+            return {a: False for a in decoded}
+        predecessors = {a: [] for a in decoded}
+        for i in self.ins:
+            for target in self.successors(i, decoded):
+                predecessors[target].append(i.address)
+        # Optimistic initial facts let a frame established before a loop survive the backedge. Facts only shrink.
+        frame_in = {a: a != self.va for a in decoded}
+        frame_out = {a: True for a in decoded}
+        changed = True
+        while changed:
+            changed = False
+            for i in self.ins:
+                a = i.address
+                incoming = (False if a == self.va or not predecessors[a] else
+                            all(frame_out[p] for p in predecessors[a]))
+                outgoing = incoming
+                if self.establishes_ebp_frame(i):
+                    outgoing = True
+                elif self.writes_ebp(i):
+                    outgoing = False
+                if incoming != frame_in[a] or outgoing != frame_out[a]:
+                    frame_in[a], frame_out[a] = incoming, outgoing
+                    changed = True
+        return frame_in
+
+    def relax_ebp_stack(self, ins, line):
+        """Use the existing plain stack helpers for proven, non-indexed EBP frame accesses.
+
+        This deliberately preserves relaxed-atomic host accesses rather than embedding values or asserting that
+        other memory is read-only. It relies on the same thread-private stack contract as ESP localization. An
+        instruction that itself writes EBP is left ordered, even though its memory read uses the old value.
+        """
+        if not self.ebp_frame_in.get(ins.address, False) or self.writes_ebp(ins):
+            return line
+        for op in ins.operands:
+            if op.type != X.X86_OP_MEM:
+                continue
+            mem = op.mem
+            if (mem.base != X.X86_REG_EBP or mem.index != 0 or
+                    mem.segment not in (0, X.X86_REG_DS, X.X86_REG_SS, X.X86_REG_ES, X.X86_REG_CS)):
+                continue
+            address = self.address(ins, op)
+            for helper in ("R8", "R16", "R32", "R64", "RF32", "RF64",
+                           "W8", "W16", "W32", "W64", "WF32", "WF64"):
+                needle = f"{helper}({address}"
+                count = line.count(needle)
+                if count:
+                    line = line.replace(needle, f"S{needle}")
+                    self.ebp_stack_sites += count
+        return line
+
     def liveness(self, decoded):
         """Flags live after each instruction. Calls clobber the flags (MSVC never reads flags across a call);
         nothing is live after leaving the function."""
@@ -1342,6 +1428,7 @@ class FunctionCompiler:
         labels = self.targets()
         decoded = {i.address for i in self.ins}
         self.liveness(decoded)
+        self.ebp_frame_in = self.ebp_frame_states(decoded)
         body = []
         for i in self.ins:
             line = ""
@@ -1350,7 +1437,7 @@ class FunctionCompiler:
             except Unsupported as e:
                 self.unsupported[str(e)] += 1
                 line = f'RecompUnimplemented(c, 0x{i.address:08x}u, "{i.mnemonic} {i.op_str}"); return;'
-            body.append((i, line))
+            body.append((i, self.relax_ebp_stack(i, line)))
         out = [f"void f_{self.va:08x}(Ctx* c) {{"]
         if LOCALIZE:
             out.append("    RLOCALS;")
@@ -1568,6 +1655,7 @@ def main():
     md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
     md.detail = True
     unsupported = collections.Counter()
+    ebp_stack_sites = 0
     funcs = []
     patches = []
     compiled = {va for va in vas if va in sizes}
@@ -1589,6 +1677,7 @@ def main():
             continue
         fc = FunctionCompiler(md, pe, va, sizes[va], compiled, trace=va in trace_vas)
         funcs.append((va, fc.compile()))
+        ebp_stack_sites += fc.ebp_stack_sites
         for t in sorted(fc.unknown_targets):
             if text_lo <= t < text_hi and t not in compiled:
                 import bisect
@@ -1609,7 +1698,8 @@ def main():
     if args.split:
         parts = write_split(args.out, funcs, patches, args.split)
         print(f"{len(funcs)} functions in {parts} files; {len(patches)} enterable from native code; "
-              f"{sum(unsupported.values())} unsupported instructions")
+              f"{sum(unsupported.values())} unsupported instructions; "
+              f"{ebp_stack_sites} proven EBP stack accesses")
         for k, v in unsupported.most_common(30):
             print(f"  {v:6d}  {k}")
         return
@@ -1627,7 +1717,8 @@ def main():
             f.write(f"    {{0x{va:08x}u, f_{va:08x}}},\n")
         f.write("};\nconst uint32_t g_recomp_count = sizeof(g_recomp_table) / sizeof(g_recomp_table[0]);\n")
     total = sum(unsupported.values())
-    print(f"{len(funcs)} functions recompiled; {total} unsupported instructions")
+    print(f"{len(funcs)} functions recompiled; {total} unsupported instructions; "
+          f"{ebp_stack_sites} proven EBP stack accesses")
     for k, v in unsupported.most_common(30):
         print(f"  {v:6d}  {k}")
 

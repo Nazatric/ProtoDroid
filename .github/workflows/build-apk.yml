@@ -1015,9 +1015,10 @@ jobs:
           git show FETCH_HEAD:prototypeenginef.dll > /tmp/protodroid-hot-engine.dll
           test "$(stat -c%s /tmp/protodroid-hot-engine.dll)" = 20205568
           python3 -m venv /tmp/protodroid-hot-venv
-          /tmp/protodroid-hot-venv/bin/pip install -q capstone pefile
+          /tmp/protodroid-hot-venv/bin/pip install -q capstone==5.0.7 pefile==2023.2.7
           export PATH=/tmp/protodroid-hot-venv/bin:$PATH
           export PROTODROID_ENGINE=/tmp/protodroid-hot-engine.dll
+          python3 tools/test_ebp_stack.py
           src/native/tests/run_hot_test.sh 2>&1 | tee /tmp/protodroid-arm-hot-test.log
 
       - name: Report native ARM64 hot-test failure
@@ -1167,7 +1168,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip p7zip-full unzip
-          pip3 install --user --break-system-packages meson==1.5.2 capstone pefile
+          pip3 install --user --break-system-packages meson==1.5.2 capstone==5.0.7 pefile==2023.2.7
           echo "SDK: $ANDROID_SDK_ROOT $ANDROID_HOME"
           echo "NDK: $ANDROID_NDK_LATEST_HOME"
           ls $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt 2>&1 | head
@@ -1182,6 +1183,9 @@ jobs:
             echo \"platform android-35 not found, using 34\"
             sudo ln -sf $ANDROID_SDK_ROOT/platforms/android-34 $ANDROID_SDK_ROOT/platforms/android-35 || true
           fi
+
+      - name: Test proven EBP frame stack generation
+        run: python3 tools/test_ebp_stack.py
 
       - name: Download deps artifacts
         uses: actions/download-artifact@v4

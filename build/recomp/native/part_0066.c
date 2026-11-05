@@ -32,7 +32,7 @@ void f_7c660050(Ctx* c) {
     if (!rf.zf) { goto L_7c6600a1; }  /* 7c660098: jne 0x7c6600a1 */
     W8((uint32_t)(0x7d0beb94u), (uint8_t)(0x0u));  /* 7c66009a: mov byte ptr [0x7d0beb94], 0 */
 L_7c6600a1:;
-    r_ecx = (uint32_t)(R32((uint32_t)(r_ebp + 0x8u)));  /* 7c6600a1: mov ecx, dword ptr [ebp + 8] */
+    r_ecx = (uint32_t)(SR32((uint32_t)(r_ebp + 0x8u)));  /* 7c6600a1: mov ecx, dword ptr [ebp + 8] */
     r_eax = (uint32_t)(R32((uint32_t)(r_ecx)));  /* 7c6600a4: mov eax, dword ptr [ecx] */
     r_edx = (uint32_t)(R32((uint32_t)(r_ecx + 0x4u)));  /* 7c6600a6: mov edx, dword ptr [ecx + 4] */
     r_ebx = (uint32_t)((r_ebx ^ r_ebx));  /* 7c6600a9: xor ebx, ebx */
@@ -60,7 +60,7 @@ L_7c6600d0:;
     r_edi = (uint32_t)((r_edi + 0x1u + 0));  /* 7c6600e6: add edi, 1 */
     (void)SubFlagsL(&rf, r_edi, SR32((uint32_t)(r_esp + 0xcu)), 0, 32);  /* 7c6600e9: cmp edi, dword ptr [esp + 0xc] */
     if (rf.cf) { goto L_7c6600d0; }  /* 7c6600ed: jb 0x7c6600d0 */
-    r_ecx = (uint32_t)(R32((uint32_t)(r_ebp + 0x8u)));  /* 7c6600ef: mov ecx, dword ptr [ebp + 8] */
+    r_ecx = (uint32_t)(SR32((uint32_t)(r_ebp + 0x8u)));  /* 7c6600ef: mov ecx, dword ptr [ebp + 8] */
 L_7c6600f2:;
     r_edx = (uint32_t)(R32((uint32_t)(r_esi + 0x54u)));  /* 7c6600f2: mov edx, dword ptr [esi + 0x54] */
     r_eax = (uint32_t)(R32((uint32_t)(r_edx + r_ebx * 4u)));  /* 7c6600f5: mov eax, dword ptr [edx + ebx*4] */

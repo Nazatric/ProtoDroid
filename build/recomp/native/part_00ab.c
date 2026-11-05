@@ -144,7 +144,7 @@ void f_7cab0200(Ctx* c) {
     r_ebp = (uint32_t)(r_esp);  /* 7cab0201: mov ebp, esp */
     r_esp = (uint32_t)((r_esp & 0xfffffff8u));  /* 7cab0203: and esp, 0xfffffff8 */
     r_esp = (uint32_t)((r_esp - 0x84u - 0));  /* 7cab0206: sub esp, 0x84 */
-    r_eax = (uint32_t)(R32((uint32_t)(r_ebp + 0x10u)));  /* 7cab020c: mov eax, dword ptr [ebp + 0x10] */
+    r_eax = (uint32_t)(SR32((uint32_t)(r_ebp + 0x10u)));  /* 7cab020c: mov eax, dword ptr [ebp + 0x10] */
     { uint32_t v = r_ebx; LPush32(&r_esp, v); }  /* 7cab020f: push ebx */
     { uint32_t v = r_esi; LPush32(&r_esp, v); }  /* 7cab0210: push esi */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7cab0211: push edi */
@@ -202,7 +202,7 @@ L_7cab02b7:;
     if (rf.zf) { goto L_7cab02e6; }  /* 7cab02c0: je 0x7cab02e6 */
     (void)SubFlagsL(&rf, r_eax, 0x503344ffu, 0, 32);  /* 7cab02c2: cmp eax, 0x503344ff */
     if (rf.zf) { goto L_7cab02db; }  /* 7cab02c7: je 0x7cab02db */
-    r_eax = (uint32_t)(R32((uint32_t)(r_ebp + 0x8u)));  /* 7cab02c9: mov eax, dword ptr [ebp + 8] */
+    r_eax = (uint32_t)(SR32((uint32_t)(r_ebp + 0x8u)));  /* 7cab02c9: mov eax, dword ptr [ebp + 8] */
     W32((uint32_t)(r_eax), (uint32_t)(0x0u));  /* 7cab02cc: mov dword ptr [eax], 0 */
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7cab02d2: pop edi */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7cab02d3: pop esi */
@@ -245,7 +245,7 @@ L_7cab02f0:;
     r_esp = (uint32_t)((r_esp + 0x8u + 0));  /* 7cab032f: add esp, 8 */
     { uint32_t r = ((r_eax & 0xffu) & (r_eax & 0xffu)) & 0xffu; RECOMP_FLAGS_LOGIC(&rf, r, 8); }  /* 7cab0332: test al, al */
     if (rf.zf) { goto L_7cab034f; }  /* 7cab0334: je 0x7cab034f */
-    r_esi = (uint32_t)(R32((uint32_t)(r_ebp + 0x10u)));  /* 7cab0336: mov esi, dword ptr [ebp + 0x10] */
+    r_esi = (uint32_t)(SR32((uint32_t)(r_ebp + 0x10u)));  /* 7cab0336: mov esi, dword ptr [ebp + 0x10] */
     r_eax = (uint32_t)(R32((uint32_t)(r_esi)));  /* 7cab0339: mov eax, dword ptr [esi] */
     r_edx = (uint32_t)(R32((uint32_t)(r_eax + 0xcu)));  /* 7cab033b: mov edx, dword ptr [eax + 0xc] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x1cu));  /* 7cab033e: lea ecx, [esp + 0x1c] */
@@ -257,7 +257,7 @@ L_7cab02f0:;
     r_ebx = (r_ebx & 0xffffff00u) | ((uint32_t)(0x1u) & 0xffu);  /* 7cab034b: mov bl, 1 */
     goto L_7cab0354;  /* 7cab034d: jmp 0x7cab0354 */
 L_7cab034f:;
-    r_esi = (uint32_t)(R32((uint32_t)(r_ebp + 0x10u)));  /* 7cab034f: mov esi, dword ptr [ebp + 0x10] */
+    r_esi = (uint32_t)(SR32((uint32_t)(r_ebp + 0x10u)));  /* 7cab034f: mov esi, dword ptr [ebp + 0x10] */
 L_7cab0352:;
     r_ebx = (r_ebx & 0xffffff00u) | ((uint32_t)(((r_ebx & 0xffu) ^ (r_ebx & 0xffu))) & 0xffu);  /* 7cab0352: xor bl, bl */
 L_7cab0354:;
@@ -375,7 +375,7 @@ L_7cab0496:;
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x50u));  /* 7cab0496: lea eax, [esp + 0x50] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7cab049a: push eax */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7cab049b: push ecx */
-    r_ecx = (uint32_t)(R32((uint32_t)(r_ebp + 0xcu)));  /* 7cab049c: mov ecx, dword ptr [ebp + 0xc] */
+    r_ecx = (uint32_t)(SR32((uint32_t)(r_ebp + 0xcu)));  /* 7cab049c: mov ecx, dword ptr [ebp + 0xc] */
     r_eax = (uint32_t)(r_esp);  /* 7cab049f: mov eax, esp */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7cab04a1: push ecx */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x24u));  /* 7cab04a2: lea edx, [esp + 0x24] */
@@ -410,7 +410,7 @@ L_7cab04f7:;
     r_esi = (uint32_t)(SR32((uint32_t)(r_esp + 0x14u)));  /* 7cab04f7: mov esi, dword ptr [esp + 0x14] */
 L_7cab04fb:;
     { uint32_t r = (r_esi & r_esi) & 0xffffffffu; RECOMP_FLAGS_LOGIC(&rf, r, 32); }  /* 7cab04fb: test esi, esi */
-    r_edi = (uint32_t)(R32((uint32_t)(r_ebp + 0x8u)));  /* 7cab04fd: mov edi, dword ptr [ebp + 8] */
+    r_edi = (uint32_t)(SR32((uint32_t)(r_ebp + 0x8u)));  /* 7cab04fd: mov edi, dword ptr [ebp + 8] */
     W32((uint32_t)(r_edi), (uint32_t)(r_esi));  /* 7cab0500: mov dword ptr [edi], esi */
     if (rf.zf) { goto L_7cab0512; }  /* 7cab0502: je 0x7cab0512 */
     r_ecx = (uint32_t)(r_esi);  /* 7cab0504: mov ecx, esi */

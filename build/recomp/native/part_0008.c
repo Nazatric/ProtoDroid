@@ -135,7 +135,7 @@ void f_7c080180(Ctx* c) {
     r_ebx = (uint32_t)((r_ebx ^ r_ebx));  /* 7c08018d: xor ebx, ebx */
     (void)SubFlagsL(&rf, R32((uint32_t)(r_esi + 0x34u)), r_ebx, 0, 32);  /* 7c08018f: cmp dword ptr [esi + 0x34], ebx */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c080192: push edi */
-    r_edi = (uint32_t)(R32((uint32_t)(r_ebp + 0x8u)));  /* 7c080193: mov edi, dword ptr [ebp + 8] */
+    r_edi = (uint32_t)(SR32((uint32_t)(r_ebp + 0x8u)));  /* 7c080193: mov edi, dword ptr [ebp + 8] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x13u));  /* 7c080196: lea ecx, [esp + 0x13] */
     r_eax = (r_eax & 0xffffff00u) | ((uint32_t)((!rf.zf) ? 1u : 0u) & 0xffu);  /* 7c08019a: setne al */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c08019d: push ecx */
