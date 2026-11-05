@@ -421,11 +421,12 @@ def localize(line, x87=False):
 
 
 class FunctionCompiler:
-    def __init__(self, md, pe, va, size, known_entries):
+    def __init__(self, md, pe, va, size, known_entries, trace=False):
         self.md = md
         self.va = va
         self.size = size
         self.known = known_entries
+        self.trace = trace
         self.pe = pe
         self.code = pe.get_data(va - BASE, size)
         self.out = []
@@ -1390,6 +1391,16 @@ class FunctionCompiler:
             xmms = sorted(set(_XMM_RE.findall("\n".join(out))))  # (already renamed: read the declarations)
             xmms = [d.split("r_xmm")[1].split(" ")[0] for d in decl if d.startswith("XmmValue r_xmm")]
             out = out[:1] + apply_spills(out[1:], xmms, x87, DIRTY_TRACKING)
+        if self.trace:
+            # Use original-image RVAs so the records join functions.csv and import-caller evidence directly. Entry
+            # is before RLOCALS and sees the guest call stack. Exits are inserted after localization/spilling, when
+            # Ctx is current; replacing every generated return also covers traps and tail transfers. The default
+            # (trace=False) output does not change.
+            rva = self.va - BASE
+            traced = [out[0], f"    RecompGuestFunctionEnter(c, 0x{rva:08x}u);"]
+            exit_call = f"RecompGuestFunctionExit(c, 0x{rva:08x}u); return;"
+            traced.extend(re.sub(r"\breturn;", exit_call, line) for line in out[1:])
+            out = traced
         out.append("}")
         # Prototypes last: tail jumps added while assembling the body are direct calls too.
         protos = [f"void f_{t:08x}(Ctx* c);" for t in sorted(self.direct_calls - {self.va})]
@@ -1507,6 +1518,8 @@ def main():
     ap.add_argument("--no-localize", action="store_true", help="keep general registers in the context")
     ap.add_argument("--no-dirty", action="store_true", help="spill all localized state at every call")
     ap.add_argument("--no-native", action="store_true", help="recompile NATIVE_OVERRIDES too (difftests)")
+    ap.add_argument("--trace-functions", metavar="PATH",
+                    help="native host only: emit opt-in duration hooks for original VAs/RVAs listed in this file")
     args = ap.parse_args()
     global LOCALIZE, DIRTY_TRACKING
     LOCALIZE = not args.no_localize
@@ -1520,6 +1533,36 @@ def main():
     else:
         vas = sorted((int(l.strip(), 16) if int(l.strip(), 16) >= ORIG_BASE else int(l.strip(), 16) + ORIG_BASE)
                      - ORIG_BASE + BASE for l in open(args.functions) if l.strip())
+    trace_vas = set()
+    if args.trace_functions:
+        if args.base == ORIG_BASE:
+            ap.error("--trace-functions requires the native host's rebased --base")
+        for line_number, line in enumerate(open(args.trace_functions), 1):
+            token = line.split("#", 1)[0].strip()
+            if not token:
+                continue
+            try:
+                value = int(token, 16)
+            except ValueError:
+                ap.error(f"{args.trace_functions}:{line_number}: invalid hexadecimal function address")
+            if not 0 <= value <= 0xffffffff:
+                ap.error(f"{args.trace_functions}:{line_number}: function address is outside 32-bit range")
+            original = value if value >= ORIG_BASE else value + ORIG_BASE
+            va = original - ORIG_BASE + BASE
+            if va in trace_vas:
+                ap.error(f"{args.trace_functions}:{line_number}: duplicate trace function {original:08x}")
+            trace_vas.add(va)
+        if not trace_vas:
+            ap.error(f"{args.trace_functions}: empty trace set")
+        missing = sorted(trace_vas - set(vas))
+        if missing:
+            ap.error("trace function is not a requested known entry: " +
+                     ", ".join(f"{va - BASE + ORIG_BASE:08x}" for va in missing))
+        native_overrides = sorted(va for va in trace_vas if va - BASE + ORIG_BASE in NATIVE_OVERRIDES)
+        if native_overrides:
+            ap.error("trace function is a native override without a generated guest body: " +
+                     ", ".join(f"{va - BASE + ORIG_BASE:08x}" for va in native_overrides))
+        print(f"opt-in guest function trace: {len(trace_vas)} selected functions", file=sys.stderr)
     pe = pefile.PE(DLL, fast_load=True)
     relocate_pe(pe)
     md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
@@ -1544,7 +1587,7 @@ def main():
         if NATIVE and orig in NATIVE_OVERRIDES:
             funcs.append((va, f"void Native_{orig:08x}(Ctx* c);\nvoid f_{va:08x}(Ctx* c) {{ Native_{orig:08x}(c); }}"))
             continue
-        fc = FunctionCompiler(md, pe, va, sizes[va], compiled)
+        fc = FunctionCompiler(md, pe, va, sizes[va], compiled, trace=va in trace_vas)
         funcs.append((va, fc.compile()))
         for t in sorted(fc.unknown_targets):
             if text_lo <= t < text_hi and t not in compiled:

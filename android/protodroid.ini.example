@@ -65,6 +65,11 @@ texture_skip_min_size = 512
 # D3D9 records also include bounded top-three immediate caller RVAs plus exact unlisted residuals for offline symbolization.
 #import_profile = 1
 
+# Separate loading-boundary investigation: only generation-selected functions in re/loading_boundary_trace.txt.
+# Emits capped guest-function-v1 durations/raw entry dwords; candidates are not proven loading/drain hook points.
+# Use tools/analyze_guest_function_trace.py on proto-native.log. Keep off for ordinary play and FPS baselines.
+#guest_function_trace = 1
+
 # Low-level Mali pipeline diagnostics. Disabled by default because every traced pipeline performs
 # SPIR-V analysis plus durable file/fsync writes. Enables pipeline_trace.log and last_vs/last_fs.spv.
 # The PROTODROID_PIPELINE_TRACE=1 environment variable is an equivalent override.

@@ -48,6 +48,11 @@ void RecompVideoSettingRead(Ctx* c);
 /* Native Android optional policy: nonzero removes only the 15 ms simulation skip. Other embedders return zero. */
 int RecompRemoveTickRateLimit(void);
 
+/* Native host diagnostics: emitted only for generation-time-selected functions (--trace-functions). The default
+ * recompiler output has no references to these hooks. RVAs are relative to the original DLL image base. */
+void RecompGuestFunctionEnter(Ctx* context, uint32_t rva);
+void RecompGuestFunctionExit(Ctx* context, uint32_t rva);
+
 /* Looks up the recompiled implementation of a guest function entry, or null. */
 RecompFn RecompLookup(uint32_t target);
 

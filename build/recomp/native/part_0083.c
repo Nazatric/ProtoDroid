@@ -11739,6 +11739,7 @@ L_7c838b36:;
 void f_7c8389d0(Ctx* c);
 void f_7c890930(Ctx* c);
 void f_7c838b40(Ctx* c) {
+    RecompGuestFunctionEnter(c, 0x00838b40u);
     RLOCALS;
     { uint32_t v = r_esi; LPush32(&r_esp, v); }  /* 7c838b40: push esi */
     r_esi = (uint32_t)(SR32((uint32_t)(r_esp + 0x8u)));  /* 7c838b41: mov esi, dword ptr [esp + 8] */
@@ -11761,7 +11762,7 @@ L_7c838b5e:;
     r_esp = (uint32_t)((r_esp + 0x10u + 0));  /* 7c838b70: add esp, 0x10 */
 L_7c838b73:;
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c838b73: pop esi */
-    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->esp = r_esp, c->esi = r_esi); return; }  /* 7c838b74: ret  */
+    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->esp = r_esp, c->esi = r_esi); RecompGuestFunctionExit(c, 0x00838b40u); return; }  /* 7c838b74: ret  */
 }
 
 void f_7c8389d0(Ctx* c);

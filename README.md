@@ -157,6 +157,7 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `pipeline_trace` | Expensive Mali pipeline tracing and shader dumps. Debugging only. |
 | `dxvk_config` | Extra DXVK options, separated by commas in this file. |
 | `import_profile` | `1` profiles guest and Win32/D3D9 wall time per thread every ten seconds. |
+| `guest_function_trace` | `1` records bounded durations/raw entry arguments for the generation-selected loading-boundary candidates. Diagnostic only. |
 | `watchdog` | Enables hang diagnostics. |
 
 Android presentation is fixed to **FIFO, interval 1** for both device creation and reset. An explicit FPS cap uses the host limiter; unlimited mode leaves pacing to FIFO. Desktop builds retain the optional presentation-mode settings. DXVK’s official Prototype DF-format workaround is applied explicitly because the native host does not use the `prototypef.exe` process name; graphics-quality settings are unchanged.
@@ -196,6 +197,14 @@ import_profile = 1
 ```
 
 Detailed reports include frame and engine timing, worst events, texture and file I/O, CPU threads, memory, ADPF, and thermal information where Android provides it. Use profiling to find a problem—not as an FPS benchmark. Leave these options off for ordinary play.
+
+For a separate loading-boundary investigation, `guest_function_trace = 1` emits `guest-function-v1` records for only the three functions listed in `re/loading_boundary_trace.txt`. The records contain inclusive host-wall durations and raw `ecx`/caller/stack dwords; those dwords are not assigned a signature unless disassembly independently establishes it. Per-thread fixed buffers defer log flushing until the outermost selected call exits, and the process log is capped with explicit truncation records. Analyze a captured log with:
+
+```sh
+python3 tools/analyze_guest_function_trace.py proto-native.log --output guest-functions.json
+```
+
+The selected functions are investigation candidates, not proven loading-screen callbacks or warm-cache drain points. Active calls at a crash have no completion record, and this trace does not establish GPU time, visual correctness, or an FPS/loading improvement.
 
 <details>
 <summary><strong>Shader-cache recovery and durability</strong></summary>

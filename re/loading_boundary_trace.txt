@@ -1,0 +1,8 @@
+# Original prototypeenginef.dll image VAs selected for opt-in native duration records.
+# These are investigation candidates, not proven loading callbacks or drain hook points.
+# functions.csv: proto::InGameState::vfunction1_for_GameState
+104e5250
+# functions.csv: proto::InGameState::vfunction2_for_GameState
+104e5e30
+# Unnamed three-argument wrapper that constructs the GameStateRequest at 0x108389d0.
+10838b40
