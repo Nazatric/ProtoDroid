@@ -62,6 +62,7 @@ texture_skip_min_size = 512
 #d3d9_timing = 1
 
 # Per-thread guest/Win32/D3D9 wall-time profiling for stall investigation. This is opt-in and not an FPS benchmark mode.
+# D3D9 records also include bounded top-three immediate caller RVAs plus exact unlisted residuals for offline symbolization.
 #import_profile = 1
 
 # Low-level Mali pipeline diagnostics. Disabled by default because every traced pipeline performs

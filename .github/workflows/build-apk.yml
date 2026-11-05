@@ -376,6 +376,12 @@ jobs:
       - name: Test exact D3D9 timing aggregation
         run: python3 tools/test_analyze_d3d9_timing.py
 
+      - name: Test bounded guest caller attribution
+        run: |
+          python3 tools/test_import_caller_profile.py
+          python3 tools/test_import_caller_profile_runtime.py
+          python3 tools/test_analyze_import_callers.py
+
       - name: Test performance-evidence comparability guards
         run: python3 tools/test_perf_evidence.py
 

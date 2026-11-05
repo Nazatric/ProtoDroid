@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "guest.h"
+#include "import_caller_profile.h"
 
 namespace native {
 
@@ -57,8 +58,21 @@ struct ThreadProfile {
     using Clock = std::chrono::steady_clock;
     Clock::time_point window = Clock::now();
     std::vector<uint64_t> ns, calls;
+    ImportCallerProfile callers;
     int depth = 0;
 };
+
+void LogCallerStats(const ThreadProfile& tp, const std::vector<uint32_t>& order) {
+    auto& slots = Slots();
+    std::vector<ImportCallerMethod> methods;
+    for (size_t k = 0; k < order.size() && k < 10; ++k) {
+        const uint32_t index = order[k];
+        if (slots[index].dll == "d3d9.dll")
+            methods.push_back({index, slots[index].name, tp.ns[index], tp.calls[index]});
+    }
+    for (const auto& line : BuildImportCallerLines(tp.callers, int(gettid()), methods))
+        Log("%s", line.c_str());
+}
 
 void ProfiledCall(const Slot& s, uint32_t index, Ctx* ctx) {
     thread_local ThreadProfile tp;
@@ -66,13 +80,22 @@ void ProfiledCall(const Slot& s, uint32_t index, Ctx* ctx) {
         tp.ns.resize(index + 64);
         tp.calls.resize(index + 64);
     }
+    const bool track_callers = s.dll == "d3d9.dll";
+    uint32_t caller_rva = 0xffffffffu;
+    if (track_callers) {
+        const uint32_t return_address = SR32(ctx->esp);  // The import has not popped it yet.
+        if (return_address >= g_engine_lo && return_address < g_engine_hi)
+            caller_rva = return_address - g_engine_lo;
+    }
     auto t0 = ThreadProfile::Clock::now();
     ++tp.depth;
     s.fn(ctx);
     --tp.depth;
     auto t1 = ThreadProfile::Clock::now();
-    tp.ns[index] += uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+    const uint64_t duration = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+    tp.ns[index] += duration;
     ++tp.calls[index];
+    if (track_callers) tp.callers.Add(index, caller_rva, duration);
     if (tp.depth || t1 - tp.window < std::chrono::seconds(10)) return;
     const double wall = std::chrono::duration<double, std::milli>(t1 - tp.window).count();
     std::vector<uint32_t> order;
@@ -92,8 +115,10 @@ void ProfiledCall(const Slot& s, uint32_t index, Ctx* ctx) {
         line += buf;
     }
     Log("imports tid %d: guest %.0f%% |%s", int(gettid()), 100.0 * (wall - in_imports) / wall, line.c_str());
+    LogCallerStats(tp, order);
     std::fill(tp.ns.begin(), tp.ns.end(), 0);
     std::fill(tp.calls.begin(), tp.calls.end(), 0);
+    tp.callers.Reset();
     tp.window = t1;
 }
 

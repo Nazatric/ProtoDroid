@@ -117,6 +117,7 @@ $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/present_stats.o $(OUT)/diagnostics.o: present
 $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/diagnostics.o: diagnostics.h
 $(OUT)/main.o $(OUT)/runtime.o $(OUT)/diagnostics.o $(OUT)/vulkan_driver.o $(OUT)/diagnostic_tour.o: diagnostic_tour.h
 $(OUT)/runtime.o: diagnostic_tour_probe.h
+$(OUT)/imports.o: import_caller_profile.h
 $(OUT)/main.o $(OUT)/kernel32.o $(OUT)/misc.o $(OUT)/bink.o: guest_time.h
 $(OUT)/kernel32.o: diagnostics.h
 $(OUT)/watchdog.o: diagnostic_tour.h
