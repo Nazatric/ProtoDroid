@@ -80,10 +80,10 @@ assert shadow_unlock.index("if (release_scratch)") < shadow_unlock.index("HeapFr
 texture_unlock = d3d9.split("M(IDirect3DTexture9, UnlockRect)", 1)[1].split(
     "M(IDirect3DCubeTexture9, LockRect)", 1
 )[0]
-assert "ShadowUnlock(t, level, &guest_desc, a != nullptr)" in texture_unlock
-assert "ShadowUnlock(t, level, nullptr, a != nullptr)" in texture_unlock
+assert "ShadowUnlock(t, level, &guest_desc, a != nullptr, true)" in texture_unlock
+assert "ShadowUnlock(t, level, nullptr, a != nullptr, true)" in texture_unlock
 cube_unlock = d3d9.split("M(IDirect3DCubeTexture9, UnlockRect)", 1)[1].split(
     "// D3DLOCKED_BOX", 1
 )[0]
-assert "ShadowUnlock(t, face * 64 + level, nullptr, a != nullptr)" in cube_unlock
+assert "ShadowUnlock(t, face * 64 + level, nullptr, a != nullptr, true)" in cube_unlock
 print("Touch keyboard, AA/quality, orientation-default, archive, and texture-scratch lifetime checks passed")

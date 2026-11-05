@@ -179,8 +179,10 @@ jobs:
           set -euo pipefail
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
           g++ $CXXFLAGS src/native/present_stats.cpp src/native/tests/present_stats_test.cpp -o /tmp/present_stats_test
+          g++ $CXXFLAGS src/native/tests/frame_interval_trace_test.cpp -o /tmp/frame_interval_trace_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/present_stats_test
+          /tmp/frame_interval_trace_test
 
       - name: Compile and run diagnostic-tour plan and guest-clock tests
         run: |
@@ -362,6 +364,11 @@ jobs:
 
       - name: Test opt-in rect-lock attribution boundaries
         run: python3 tools/test_rect_lock_diagnostics.py
+
+      - name: Test worker-only raw frame interval tracing
+        run: |
+          python3 tools/test_frame_interval_trace.py
+          python3 tools/test_analyze_frame_intervals.py
 
       - name: Test performance-evidence comparability guards
         run: python3 tools/test_perf_evidence.py
