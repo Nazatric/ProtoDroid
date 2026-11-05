@@ -201,6 +201,10 @@ for marker in \
     'DXVK: Using Vulkan 1.2 KHR/EXT compatibility path' \
     'DXVK: Capping ARM compiler threads at 2' \
     'DXVK pipeline timing:' \
+    'DXVK pipeline outcome:' \
+    'DXVK pipeline timing final (' \
+    'DXVK D3D9 timing:' \
+    'PROTODROID_D3D9_TIMING' \
     'PROTODROID_PIPELINE_TIMING' \
     'DXVK_LOG_TIMESTAMPS' \
     'prototypeenginef.dll'; do

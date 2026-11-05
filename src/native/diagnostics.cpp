@@ -42,6 +42,7 @@ std::string TakeIoStats();
 std::string TakeIoEvents();
 std::string ArenaUsage();
 std::string TakeTextureTimingStats();
+std::string TakeLockTimingStats();
 TimingWindowSnapshot TakePresentTimingWindow();
 
 extern std::atomic<int> g_fps_limit;
@@ -512,6 +513,8 @@ void EmitWindow(HealthProbe& health, CpuMonitor& cpu, RunSummary& run, int& last
     Log("diag: Present wall (includes FIFO/vsync, not GPU time) %s; worst: %s", TimingSummary(present_wall).c_str(),
         WorstEvents(present_wall, 2).c_str());
     Log("diag: texture %s", TakeTextureTimingStats().c_str());
+    // Host UnlockRect remains the existing texture upload timer. Rect wait counts mutex acquisitions, not calls.
+    Log("diag: rect locks %s", TakeLockTimingStats().c_str());
     Log("diag: io %s", TakeIoStats().c_str());
     const std::string io_events = TakeIoEvents();
     if (!io_events.empty()) Log("diag: slow io: %s", io_events.c_str());

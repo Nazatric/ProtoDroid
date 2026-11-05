@@ -165,7 +165,7 @@ ProtoDroid already has whole-function flag liveness/dead-flag elimination, and f
 
 ## Non-actions for this investigation
 
-No production runtime patch is adopted from this evidence alone. In particular, do not:
+No production performance optimization is adopted from this evidence alone; the Phase 15 slice below is diagnostic instrumentation. In particular, do not:
 
 - equate Skate 3's reduced-quality Performance mode with a ProtoDroid engine-FPS gain;
 - replace RexGlue/Recomp, SDL, Android-patched DXVK, or the whole runtime based on headline FPS;
@@ -176,6 +176,20 @@ No production runtime patch is adopted from this evidence alone. In particular, 
 - use cosmetic FPS, frame generation, upscaling, unconditional cutscene skipping, or a hidden resolution/effect reduction as an engine-performance result;
 - treat the diagnostic-tour 61.313 FPS average or late-tour descriptive cohorts as ordinary gameplay performance.
 
+## Phase 15 implementation slice: outcome and protected-path attribution
+
+The first source implementation is **measurement-only**; it does not claim an FPS improvement or change rendering features:
+
+- Native rect-only diagnostics split host `LockRect`, shadow-mutex wait, allocation, copy-in, adaptation, copy-back, and scratch-free phases. Host `UnlockRect` remains in the existing texture-upload timer. Buffer and box locks do not feed these rect counters.
+- DXVK pipeline diagnostics now distinguish begun/completed/succeeded/failed calls, compilation-required outcomes, in-flight calls, wait/trace/driver phases, and a final residual snapshot. Attempted trace records are no longer the only outcome evidence.
+- An independently opt-in `PROTODROID_D3D9_TIMING` path instruments the actual protected indexed-draw, stream-source, indices, texture-state, and query-`GetData` methods. Seventeen bounded aggregate operations include lock wait, inclusive method/upload/prepare/emit phases, query type/result/flush flags, and state changed/StateBlock-recorded counts. `Present` performs periodic logging after the swapchain call; ordinary device destruction drains residuals after device idle.
+- State `changed` means DXVK's actual `needsUpdate` or pointer-change result, not merely a different incoming call. State `flagged` means StateBlock recording; query `flagged` means `D3DGETDATA_FLUSH`. Result fields on pure lock/upload/prepare/emit phases are not HRESULT evidence. Nested inclusive times are non-additive, relaxed residual snapshots are approximate, and none of these values is GPU time.
+- Ordinary Play defaults this higher-overhead method timing off and clears stale tour environment. The diagnostic tour enables it deliberately; it must not be used as a steady FPS baseline.
+
+Validation on the complete 18-patch series from exact DXVK `c707d9026f33b6ab89639f154b6ac5f6326fa037` includes clean application and byte comparison, 56 pipeline-outcome structural checks with four detected mutations, 81 submission-timing structural checks with six detected mutations, enabled/disabled UBSan runtime tests including 4,000 concurrent records and residual reset, and strict syntax compilation of Android and non-Android device/query translation units with the pinned headers. Existing DXVK present/frame-pacing/preflight/BC/unified-memory/depth-resolve/FXAA tests and native diagnostics/rect/tour/runtime/evidence tests also pass. These are host/source gates, not Android rendering or phone-FPS proof.
+
+The next gate is an exact-head CI/Android build followed by a matched device capture. No changed-state reduction, query fix, lock fix, or renderer optimization is justified until those records show material cost and the candidate passes correctness and visual gates.
+
 ## Immediate next experiment
 
-The next decisive artifact is a **matched warm ordinary-play baseline on the exact candidate**, followed by a separate cold/traced run. In parallel, the lowest-risk source work is diagnostic: pipeline begin/end/queue timing, LockRect subphases, and DXVK protected draw/state/query timing. Those results decide whether the first production candidate should be a loading-screen warm-cache drain, submission batching/culling, a specific lock/query fix, or GPU/renderer work. Until then, assigning a percentage FPS gain to any of them would be fabrication.
+The next decisive artifact is a **matched warm ordinary-play baseline on the exact candidate**, followed by a separate cold/traced run using the new outcome and protected-path attribution. Those results decide whether the first production candidate should be a loading-screen warm-cache drain, submission batching/culling, a specific lock/query fix, or GPU/renderer work. Until then, assigning a percentage FPS gain to any of them would be fabrication.

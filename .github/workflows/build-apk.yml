@@ -223,6 +223,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone -q --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/protodroid-dxvk-test
+          git -C /tmp/protodroid-dxvk-test submodule update --init --depth 1 include/native/directx include/vulkan include/spirv
           for patch in "$PWD"/android/patches/dxvk-*.patch; do
             git -C /tmp/protodroid-dxvk-test apply --check "$patch"
             git -C /tmp/protodroid-dxvk-test apply "$patch"
@@ -231,6 +232,10 @@ jobs:
           python3 tools/test_dxvk_depth_resolve.py /tmp/protodroid-dxvk-test/src/d3d9/d3d9_device.cpp
           python3 tools/test_dxvk_fxaa.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_present_path.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_pipeline_outcomes.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_submission_timing.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_submission_timing_runtime.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_submission_timing_syntax.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_frame_pacing.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_device_preflight.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_bc_support.py /tmp/protodroid-dxvk-test
@@ -354,6 +359,9 @@ jobs:
 
       - name: Test ordinary-play hot-path and failed-driver recovery policies
         run: python3 tools/test_runtime_performance.py
+
+      - name: Test opt-in rect-lock attribution boundaries
+        run: python3 tools/test_rect_lock_diagnostics.py
 
       - name: Test performance-evidence comparability guards
         run: python3 tools/test_perf_evidence.py

@@ -49,10 +49,15 @@ texture_skip_min_size = 512
 # Timestamped frame/system diagnostics are opt-in so normal gameplay does not pay their timing/sample overhead.
 # Set detailed_diagnostics = 1 for five-second native/device metrics; the interval accepts 1-60 seconds.
 # Lightweight pipeline-call timing follows detailed_diagnostics unless pipeline_timing is set independently.
+# Pipeline records include outcomes, in-flight calls, slow wait/trace/driver phases, and a final residual snapshot.
+# Detailed native logs also split rect host-lock, shadow-wait/allocation/copy, adaptation, and copy-back phases;
+# host UnlockRect remains in the texture upload timer. These records are diagnostic, not GPU-time or FPS proof.
 # Shared log mirroring and ordinary FPS tracking remain active when detailed diagnostics are off.
 #detailed_diagnostics = 1
 #detailed_diagnostics_interval = 5
 #pipeline_timing = 1
+# Higher-overhead DXVK method/state/query timing is independent and tour-enabled. Do not use it for a steady FPS baseline.
+#d3d9_timing = 1
 
 # Per-thread guest/Win32/D3D9 wall-time profiling for stall investigation. This is opt-in and not an FPS benchmark mode.
 #import_profile = 1

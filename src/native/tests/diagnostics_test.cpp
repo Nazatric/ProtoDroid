@@ -1,4 +1,5 @@
 #include "diagnostics.h"
+#include "operation_timing.h"
 #include "proc_stats.h"
 #include "timing_window.h"
 
@@ -71,6 +72,28 @@ void TestWorstEventTiesAndZeroDuration() {
     Check(zero.Take().count == 1, "zero-duration limiter samples must be countable");
 }
 
+void TestOperationTimingCounters() {
+    native::OperationTiming timing;
+    const uint64_t samples[] = {10000000ull, 10000001ull, 50000001ull, 100000001ull, 7ull};
+    uint64_t total = 0;
+    for (uint64_t sample : samples) {
+        timing.Add(sample);
+        total += sample;
+    }
+    auto snapshot = timing.Take();
+    Check(snapshot.calls == 5 && snapshot.total_ns == total && snapshot.max_ns == 100000001ull,
+          "operation count/total/max is wrong");
+    Check(snapshot.over[0] == 3 && snapshot.over[1] == 2 && snapshot.over[2] == 1,
+          "operation thresholds must be strict greater-than comparisons");
+    Check(timing.calls == 0 && timing.total_ns == 0 && timing.max_ns == 0 && timing.over[0] == 0 &&
+              timing.over[1] == 0 && timing.over[2] == 0,
+          "operation Take did not reset every counter");
+    timing.Add(99);
+    Check(timing.Take().calls == 1, "operation counter did not continue after a snapshot");
+    Check(native::DurationNanos(std::chrono::nanoseconds(12345)) == 12345,
+          "operation duration conversion is wrong");
+}
+
 std::string ProcLine(const std::string& comm) {
     std::vector<std::string> fields(39, "0");
     fields[0] = "R";
@@ -113,8 +136,9 @@ int main() {
     TestDetailedDiagnosticsAreOptIn();
     TestDistributionThresholdsAndWorstEvents();
     TestWorstEventTiesAndZeroDuration();
+    TestOperationTimingCounters();
     TestCpuBusyAvailability();
     TestProcStatParser();
-    std::puts("diagnostics tests passed (opt-in default, timing windows, CPU availability, worst events, /proc parsing)");
+    std::puts("diagnostics tests passed (opt-in default, operation/timing windows, CPU availability, worst events, /proc parsing)");
     return 0;
 }

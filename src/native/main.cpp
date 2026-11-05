@@ -465,6 +465,7 @@ int main(int argc, char** argv) {
         unsetenv("PROTODROID_PIPELINE_TRACE");
         unsetenv("PROTODROID_PIPELINE_TRACE_DIR");
         unsetenv("PROTODROID_PIPELINE_TIMING");
+        unsetenv("PROTODROID_D3D9_TIMING");
         unsetenv("PROTODROID_IMPORT_PROFILE");
         unsetenv("DXVK_LOG_TIMESTAMPS");
     }
@@ -627,6 +628,9 @@ int main(int argc, char** argv) {
     setenv("PROTODROID_PIPELINE_TIMING",
            (diagnostic_tour || SettingInt("pipeline_timing", detailed_diagnostics ? 1 : 0)) ? "1" : "0",
            diagnostic_tour ? 1 : 0);
+    const bool d3d9_timing = diagnostic_tour || SettingInt("d3d9_timing", 0) != 0;
+    setenv("PROTODROID_D3D9_TIMING", d3d9_timing ? "1" : "0", diagnostic_tour ? 1 : 0);
+    if (d3d9_timing) Log("DXVK D3D9 method timing enabled (%s)", diagnostic_tour ? "diagnostic tour" : "d3d9_timing = 1");
     if (diagnostic_tour) setenv("PROTODROID_PIPELINE_TRACE_DIR", kDiagnosticTourLogDir, 1);
     if (diagnostic_tour || SettingInt("pipeline_trace", 0) == 1) {
         setenv("PROTODROID_PIPELINE_TRACE", "1", diagnostic_tour ? 1 : 0);
