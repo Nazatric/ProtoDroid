@@ -8,6 +8,8 @@ The five investigated reports—**#22, #29, #32, #33, and #35—remain open**, n
 
 **Post-Phase-14 Vulkan recovery follow-up:** `issue-33-wrapper-recovery.md` records production commits `e3122267ca8f41ef845abfd58eaeb45c28ae0e3f` and `99db3e8b2d9fefab8fe62526b086f6ba834fe5a1`. Explicit driver actions now clear both Turnip and wrapper same-build failure guards in native's actual external app-specific directory; ordinary Auto launches retain crash-loop protection and Custom policy is unchanged. The final 62/62 broad regression and 442 raw-output checks pass, alongside 26 mocked production-probe checks. Exact final `build-apk` CI `41936405825` is green with 53 independent metadata checks; release remains skipped. #33 remains open with no affected-device, FPS, or release-readiness claim.
 
+**Candidate package identity:** at the user's explicit request on 2026-11-05, the open PR manifest advances from 0.15/code 15 to **0.16/code 16** through `tools/bump_version.py`. This corrects the candidate's visible package version and Android update identity; it does not alter the released 0.15 artifact, authorize a merge/tag/release, or satisfy the open physical-device gates.
+
 - Released baseline: 0.15, tag `protodroid-v0.15`
 - Baseline source: `18ba66bd0945e405aaded0de5ff8848a8cd07932`
 - Working branch: `arena/5eb1c06c-protodroid`
