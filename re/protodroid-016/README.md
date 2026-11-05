@@ -10,6 +10,8 @@ The five investigated reports—**#22, #29, #32, #33, and #35—remain open**, n
 
 **Candidate package identity:** at the user's explicit request on 2026-11-05, the open PR manifest advances from 0.15/code 15 to **0.16/code 16** through `tools/bump_version.py`. This corrects the candidate's visible package version and Android update identity; it does not alter the released 0.15 artifact, authorize a merge/tag/release, or satisfy the open physical-device gates.
 
+**Post-Phase-14 Skate 3/performance investigation:** `skate3-performance-investigation.md` analyzes the newly supplied `61869cbb…` diagnostic-tour capture and the real Skate 3/RexGlue sources. It separates cold pipeline/Present/LockRect stalls from unclassified ordinary-play cost and from Skate 3's native-renderer and quality-profile advantages. No production runtime optimization, device FPS gain, or issue fix is adopted or claimed; the next gate is a matched warm ordinary-play baseline plus targeted DXVK/pipeline/lock attribution.
+
 - Released baseline: 0.15, tag `protodroid-v0.15`
 - Baseline source: `18ba66bd0945e405aaded0de5ff8848a8cd07932`
 - Working branch: `arena/5eb1c06c-protodroid`
@@ -60,6 +62,7 @@ At `2026-11-04T12:49Z`, another fresh shallow clone preserved cumulative worktre
 | `phase-08.md` | Phase 8 completion, anisotropy adoption, HostTable/screenshot rejections, and ARM64 evidence |
 | `phase-09.md` | Complete shader/cache research, unchanged-backup adoption, SHA-1 materiality rejection, and validation |
 | `spartanport-shader-warmup.md` | User-requested SpartanPort warm-cache/startup audit, DXVK baseline equivalence, focused helper tests, and feasibility boundary |
+| `skate3-performance-investigation.md` | Fresh supplied-log census, real Skate 3/RexGlue comparison, cold/steady attribution boundaries, and ranked next experiments |
 | `phase-10.md` | Complete Vulkan GPU/synchronization/memory/presentation audit; rejected diagnostic gating and presentation-policy changes |
 | `phase-11.md` | Complete texture/Bink/audio/media profiling, sustained validation, issue audit, and candidate dispositions |
 | `phase-12.md` | Complete sustained/memory/lifecycle research, XAudio2 master-lifetime adoption, real-backend controls, and exact CI evidence |
