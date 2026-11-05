@@ -97,39 +97,32 @@ static inline uint8_t* G(uint32_t a) { return RecompMemoryBase + a; }
  * Guest loads are acquire and stores release, which gives the same guarantees; unaligned accesses (rare) use
  * plain copies fenced on the right side. */
 #define RECOMP_ALIGNED(a, n) ((((uintptr_t)G(a)) & ((n) - 1)) == 0)
-#if defined(__GNUC__)
-/* Naturally aligned accesses dominate the x86 workload. Keep their ordered instruction on the fall-through path;
- * the rare unaligned case retains exactly the same plain access and acquire/release fence. */
-#define RECOMP_ALIGNED_LIKELY(a, n) __builtin_expect(RECOMP_ALIGNED((a), (n)), 1)
-#else
-#define RECOMP_ALIGNED_LIKELY(a, n) RECOMP_ALIGNED((a), (n))
-#endif
 static inline uint8_t R8(uint32_t a) { return __atomic_load_n(G(a), __ATOMIC_ACQUIRE); }
 static inline uint16_t R16(uint32_t a) {
-    if (RECOMP_ALIGNED_LIKELY(a, 2)) return __atomic_load_n((uint16_t*)G(a), __ATOMIC_ACQUIRE);
+    if (RECOMP_ALIGNED(a, 2)) return __atomic_load_n((uint16_t*)G(a), __ATOMIC_ACQUIRE);
     uint16_t v; memcpy(&v, G(a), 2); __atomic_thread_fence(__ATOMIC_ACQUIRE); return v;
 }
 static inline uint32_t R32(uint32_t a) {
-    if (RECOMP_ALIGNED_LIKELY(a, 4)) return __atomic_load_n((uint32_t*)G(a), __ATOMIC_ACQUIRE);
+    if (RECOMP_ALIGNED(a, 4)) return __atomic_load_n((uint32_t*)G(a), __ATOMIC_ACQUIRE);
     uint32_t v; memcpy(&v, G(a), 4); __atomic_thread_fence(__ATOMIC_ACQUIRE); return v;
 }
 static inline uint64_t R64(uint32_t a) {
-    if (RECOMP_ALIGNED_LIKELY(a, 8)) return __atomic_load_n((uint64_t*)G(a), __ATOMIC_ACQUIRE);
+    if (RECOMP_ALIGNED(a, 8)) return __atomic_load_n((uint64_t*)G(a), __ATOMIC_ACQUIRE);
     uint64_t v; memcpy(&v, G(a), 8); __atomic_thread_fence(__ATOMIC_ACQUIRE); return v;
 }
 static inline float RF32(uint32_t a) { uint32_t b = R32(a); float v; memcpy(&v, &b, 4); return v; }
 static inline double RF64(uint32_t a) { uint64_t b = R64(a); double v; memcpy(&v, &b, 8); return v; }
 static inline void W8(uint32_t a, uint8_t v) { __atomic_store_n(G(a), v, __ATOMIC_RELEASE); }
 static inline void W16(uint32_t a, uint16_t v) {
-    if (RECOMP_ALIGNED_LIKELY(a, 2)) { __atomic_store_n((uint16_t*)G(a), v, __ATOMIC_RELEASE); return; }
+    if (RECOMP_ALIGNED(a, 2)) { __atomic_store_n((uint16_t*)G(a), v, __ATOMIC_RELEASE); return; }
     __atomic_thread_fence(__ATOMIC_RELEASE); memcpy(G(a), &v, 2);
 }
 static inline void W32(uint32_t a, uint32_t v) {
-    if (RECOMP_ALIGNED_LIKELY(a, 4)) { __atomic_store_n((uint32_t*)G(a), v, __ATOMIC_RELEASE); return; }
+    if (RECOMP_ALIGNED(a, 4)) { __atomic_store_n((uint32_t*)G(a), v, __ATOMIC_RELEASE); return; }
     __atomic_thread_fence(__ATOMIC_RELEASE); memcpy(G(a), &v, 4);
 }
 static inline void W64(uint32_t a, uint64_t v) {
-    if (RECOMP_ALIGNED_LIKELY(a, 8)) { __atomic_store_n((uint64_t*)G(a), v, __ATOMIC_RELEASE); return; }
+    if (RECOMP_ALIGNED(a, 8)) { __atomic_store_n((uint64_t*)G(a), v, __ATOMIC_RELEASE); return; }
     __atomic_thread_fence(__ATOMIC_RELEASE); memcpy(G(a), &v, 8);
 }
 static inline void WF32(uint32_t a, float v) { uint32_t b; memcpy(&b, &v, 4); W32(a, b); }

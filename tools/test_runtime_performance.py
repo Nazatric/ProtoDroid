@@ -44,13 +44,13 @@ assert "dxvk-worker" not in selector and "mali-compiler" not in selector
 print("DXVK native frame-thread discovery and pruning-order checks passed")
 
 runtime = (ROOT / "src/recomp/runtime.h").read_text(encoding="utf-8")
-assert runtime.count("if (RECOMP_ALIGNED_LIKELY(a,") == 6
-assert "__builtin_expect(RECOMP_ALIGNED((a), (n)), 1)" in runtime
+assert runtime.count("if (RECOMP_ALIGNED(a,") == 6
+assert "RECOMP_ALIGNED_LIKELY" not in runtime, "the immaterial ARM64 layout experiment returned"
 for width in (16, 32, 64):
     assert f"RecompR{width}Unaligned" not in runtime and f"RecompW{width}Unaligned" not in runtime, (
         "cold helper experiment unexpectedly returned to the inline runtime"
     )
-print("Aligned-first TSO layout source checks passed")
+print("Ordered TSO aligned/unaligned fallback preservation checks passed")
 
 main = (ROOT / "src/native/main.cpp").read_text(encoding="utf-8")
 assert 'SettingInt("d3d9_timing", detailed_diagnostics ? 1 : 0)' in main

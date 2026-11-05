@@ -252,6 +252,7 @@ jobs:
       - name: Test DXVK memory selection and state-cache behavior
         run: |
           set -euo pipefail
+          python3 tools/test_dxvk_build_optimization.py
           git clone -q --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/protodroid-dxvk-test
           git -C /tmp/protodroid-dxvk-test submodule update --init --depth 1 include/native/directx include/vulkan include/spirv
           for patch in "$PWD"/android/patches/dxvk-*.patch; do
@@ -587,14 +588,6 @@ jobs:
           python3 tools/measure_dxvk_timing_guard.py \
             --before-patch /tmp/d3d9-timing-before.patch --after-patch /tmp/d3d9-timing-after.patch \
             --output /tmp/dxvk-timing-guard-arm64 --calls 20000000 --rounds 24
-          # Exact production TSO headers, opaque aligned addresses, and an A/A control. This measures the branch
-          # layout on native AArch64 without claiming that isolated ordered loads are phone frame time.
-          git fetch -q --depth=1 origin 28a7e56d6a62f1e77570f2509b77a4d25a8a89dc
-          git show 28a7e56d6a62f1e77570f2509b77a4d25a8a89dc:src/recomp/runtime.h > /tmp/runtime-before-tso-layout.h
-          python3 tools/measure_tso_layout.py \
-            --before-header /tmp/runtime-before-tso-layout.h --after-header src/recomp/runtime.h \
-            --output /tmp/tso-layout-arm64 --calls 5000000 --rounds 24
-
       - name: Publish ARM64 D3D9 bridge evidence summary
         if: success()
         env:
@@ -674,31 +667,6 @@ jobs:
             -f output[summary]="${SUMMARY}" > /tmp/import-check-run.json
           python3 -c "import json; assert json.load(open('/tmp/import-check-run.json'))['id'] > 0"
 
-      - name: Publish ARM64 TSO layout evidence summary
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' > /tmp/tso-layout-arm64-check-summary.json
-          import json
-          from pathlib import Path
-          result = json.loads(Path('/tmp/tso-layout-arm64/result.json').read_text())
-          result['raw_timing_jsonl'] = Path('/tmp/tso-layout-arm64/timing.jsonl').read_text()
-          payload = '```json\n' + json.dumps(result, indent=2) + '\n```'
-          assert len(payload.encode()) < 60000, len(payload.encode())
-          print(payload)
-          PY
-          SUMMARY=$(cat /tmp/tso-layout-arm64-check-summary.json)
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
-            -f name='arm64-tso-layout-evidence' \
-            -f head_sha="${GITHUB_SHA}" \
-            -f status='completed' \
-            -f conclusion='neutral' \
-            -f output[title]='Native ARM64 ordered-load layout microfixture' \
-            -f output[summary]="${SUMMARY}" > /tmp/tso-layout-check-run.json
-          python3 -c "import json; assert json.load(open('/tmp/tso-layout-check-run.json'))['id'] > 0"
-
       - name: Upload ARM64 D3D9 bridge measurements
         if: success()
         uses: actions/upload-artifact@v4
@@ -711,9 +679,6 @@ jobs:
             /tmp/import-tls-arm64
             /tmp/import-profile-guard-arm64
             /tmp/dxvk-timing-guard-arm64
-            /tmp/tso-layout-arm64
-            /tmp/tso-layout-arm64-check-summary.json
-            /tmp/tso-layout-check-run.json
             /tmp/d3d9-arm64-check-summary.json
             /tmp/d3d9-check-run.json
             /tmp/import-arm64-check-summary.json

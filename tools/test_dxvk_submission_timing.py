@@ -103,11 +103,13 @@ def validate(header: str, device: str, query: str, main: str, ini: str, build: s
     check(destructor.index("waitForIdle()") < destructor.index('D3D9Timing::Flush("device_destroy")'),
           "final flush follows device idle")
 
-    check('SettingInt("d3d9_timing", 0)' in main, "native setting defaults off")
+    check('SettingInt("d3d9_timing", detailed_diagnostics ? 1 : 0)' in main,
+          "ordinary Play defaults off while detailed diagnostics opt into method timing")
     check('unsetenv("PROTODROID_D3D9_TIMING")' in main, "ordinary Play clears stale tour state")
     check('setenv("PROTODROID_D3D9_TIMING", d3d9_timing ? "1" : "0"' in main,
           "native environment wiring")
-    check("diagnostic_tour || SettingInt(\"d3d9_timing\", 0)" in main, "tour opt-in and independent ordinary setting")
+    check("diagnostic_tour || SettingInt(\"d3d9_timing\", detailed_diagnostics ? 1 : 0)" in main,
+          "tour opt-in, detailed default, and independent ordinary override")
     check("#d3d9_timing = 1" in ini and "not use it for a steady FPS baseline" in ini,
           "user-facing overhead/baseline warning")
     check("'DXVK D3D9 timing:'" in build and "'PROTODROID_D3D9_TIMING'" in build,
@@ -139,7 +141,9 @@ expect_detection("final flush removed", device=DEVICE.replace('D3D9Timing::Flush
 expect_detection("logging moved into Record",
                  header=HEADER.replace("stats.calls.fetch_add", "Logger::info(\"bad\"); stats.calls.fetch_add", 1))
 expect_detection("steady-baseline warning removed", ini=INI.replace("not use it for a steady FPS baseline", "baseline-safe", 1))
-expect_detection("default enabled", main=MAIN.replace('SettingInt("d3d9_timing", 0)', 'SettingInt("d3d9_timing", 1)', 1))
+expect_detection("ordinary and detailed defaults both forced on",
+                 main=MAIN.replace('SettingInt("d3d9_timing", detailed_diagnostics ? 1 : 0)',
+                                   'SettingInt("d3d9_timing", 1)', 1))
 expect_detection("CI header submodules removed",
                  workflow=WORKFLOW.replace(" include/native/directx include/vulkan include/spirv", "", 1))
 print(f"DXVK submission timing structural checks passed ({count}; 6 negative controls detected)")

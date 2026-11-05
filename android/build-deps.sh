@@ -159,9 +159,17 @@ c_args = ['-D__ANDROID__=1']
 cpp_args = ['-D__ANDROID__=1']
 EOF
 rm -rf "$SRC/build/dxvk-$ABI"
+# Optimize the existing protected D3D9/DXVK call paths across their internal static-library boundaries. ThinLTO does
+# not change the pinned source, ARM target, public version script, renderer, or cache format. Keep the generic target:
+# the same DXVK binary also serves the explicit ARMv8.0 native compatibility variant.
 meson setup "$SRC/build/dxvk-$ABI" "$SRC/dxvk" --cross-file "$CROSS" --buildtype release --prefix "$PREFIX" \
       -Denable_d3d9=true -Denable_d3d8=false -Denable_d3d10=false -Denable_d3d11=false -Denable_dxgi=false \
-      -Ddxvk_native_wsi=sdl2
+      -Ddxvk_native_wsi=sdl2 -Db_lto=true -Db_lto_mode=thin
+# Verify Meson actually propagated ThinLTO to this NDK/Clang build instead of silently accepting an unused option.
+ninja -C "$SRC/build/dxvk-$ABI" -t commands | grep -F -- '-flto=thin' >/dev/null || {
+  echo "DXVK ThinLTO is missing from the effective compile/link commands" >&2
+  exit 1
+}
 ninja -C "$SRC/build/dxvk-$ABI" -j "$JOBS"
 ninja -C "$SRC/build/dxvk-$ABI" install
 
