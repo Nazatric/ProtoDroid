@@ -520,6 +520,17 @@ jobs:
           python3 tools/measure_d3d9_bridge.py anisotropy \
             --before /tmp/d3d9-before-anisotropy.cpp --output /tmp/d3d9-anisotropy-arm64 \
             --calls 20000000 --rounds 24
+          git fetch -q --depth=1 origin \
+            e30a2b81c0118501c86caed1a2c8a3b6981adb8a \
+            87d3f2e371a4184c82dd95d2667fdeef6129b3c3
+          git show e30a2b81c0118501c86caed1a2c8a3b6981adb8a:src/native/imports.cpp > /tmp/imports-before-dense.cpp
+          git show 87d3f2e371a4184c82dd95d2667fdeef6129b3c3:src/native/imports.cpp > /tmp/imports-dense.cpp
+          python3 tools/measure_import_dispatch.py \
+            --before /tmp/imports-before-dense.cpp --after /tmp/imports-dense.cpp \
+            --output /tmp/import-dense-arm64 --calls 2000000 --rounds 24 --working-set 1024
+          python3 tools/measure_import_dispatch.py \
+            --before /tmp/imports-dense.cpp --after src/native/imports.cpp \
+            --output /tmp/import-tls-arm64 --calls 2000000 --rounds 24 --working-set 1024
 
       - name: Publish ARM64 D3D9 bridge evidence summary
         if: success()
@@ -534,8 +545,13 @@ jobs:
           from pathlib import Path
           host = json.loads(Path('/tmp/d3d9-host-table-arm64/result.json').read_text())
           aniso = json.loads(Path('/tmp/d3d9-anisotropy-arm64/result.json').read_text())
+          dense = json.loads(Path('/tmp/import-dense-arm64/result.json').read_text())
+          tls = json.loads(Path('/tmp/import-tls-arm64/result.json').read_text())
           host['raw_timing_jsonl'] = Path('/tmp/d3d9-host-table-arm64/timing.jsonl').read_text()
           aniso['raw_timing_jsonl'] = Path('/tmp/d3d9-anisotropy-arm64/timing.jsonl').read_text()
+          # Full raw timelines stay in the artifact; duplicating four timelines here can exceed the Checks size limit.
+          dense['raw_timing_artifact'] = 'import-dense-arm64/timing.jsonl'
+          tls['raw_timing_artifact'] = 'import-tls-arm64/timing.jsonl'
           aniso['correctness_cases'] = json.loads(Path('/tmp/d3d9-anisotropy-arm64/correctness.json').read_text())
           summary = {
               'schema': 1,
@@ -543,6 +559,8 @@ jobs:
               'physical_android_device': False,
               'host_table': host,
               'anisotropy': aniso,
+              'import_dense': dense,
+              'import_tls': tls,
           }
           print('```json\n' + json.dumps(summary, indent=2) + '\n```')
           PY
@@ -564,6 +582,8 @@ jobs:
           path: |
             /tmp/d3d9-host-table-arm64
             /tmp/d3d9-anisotropy-arm64
+            /tmp/import-dense-arm64
+            /tmp/import-tls-arm64
             /tmp/d3d9-arm64-check-summary.json
             /tmp/d3d9-check-run.json
           retention-days: 30

@@ -366,12 +366,14 @@ int main() {
     Check(import == 0x1000u, "unexpected import thunk address");
     Check(ImportThunk("test.dll", "Probe") == import, "import thunk identity changed");
 
+    // This is deliberately the first dispatched import: it races lazy profiling initialization as well as TLS state.
+    CheckConcurrentImportIsolation(thread_import);
+
     Ctx ctx;
     Ctx outer;
     memset(&outer, 0, sizeof(outer));
     CheckImportCall(&ctx, import, &outer);
     Check(g_import_calls == 1, "direct import was not dispatched exactly once");
-    CheckConcurrentImportIsolation(thread_import);
 
     // The direct import returned before hash lookup, so this still races lazy first-use construction.
     CheckConcurrentFirstUse();
