@@ -112,6 +112,22 @@ Rejected experiments remain rejected: a 64-entry recent-target cache regressed 2
 
 Validation includes 29 structural checks with six detected mutations, UBSan Present/writer/diagnostics/tour tests, runtime bridge tests, 47 rect-lock structural checks, and strict warning-free syntax compilation of the edited production translation units against pinned SDL 2.30.9 and DXVK DirectX headers. This is measurement-path work, not an FPS improvement. It allows the next ordinary-play capture to provide raw p50/p95/p99/max and threshold counts without turning on the heavier diagnostics being investigated.
 
+## Recovery iteration 4 — dense import dispatch
+
+Optimized disassembly showed that every ordinary import called a lazy-static accessor and indexed a 72-byte record containing two strings solely to obtain its function pointer. The candidate publishes a dense `ImportFn` array in lockstep with the existing metadata, including exception rollback. Default dispatch now bounds-checks and calls that array; null-handler diagnostics, registration, D3D9 caller attribution, profiling, `SwitchToFiber`, and context restoration retain the metadata path.
+
+The real-`DispatchImport` host benchmark links optimized production code without UBSan and cycles actual registered thunks. Fourteen measured samples per working set (after warmup and an untimed sample) produced:
+
+| Import-target working set | Baseline ns/import | Candidate ns/import | Mechanism speedup |
+| ---: | ---: | ---: | ---: |
+| 1 | 5.816045 | 4.603366 | 1.26× |
+| 8 | 5.917628 | 4.677889 | 1.27× |
+| 64 | 5.799421 | 4.788951 | 1.21× |
+| 256 | 5.801734 | 4.724080 | 1.23× |
+| 1,024 | 5.838124 | 4.663669 | 1.25× |
+
+Checksums match. The complete UBSan runtime bridge passes with profiling both disabled and enabled; dense publication/bounds checks, 24 caller-profile structural checks with six mutations, the UBSan caller collector, real formatter/analyzer golden path, and 22 analyzer checks pass. This removes measured bridge overhead but is not a D3D9 method-time, frame-time, or FPS multiplier.
+
 ## Current non-completion statement
 
 Work is **not finished**. The newest evidence establishes a cold-cache run and an observability/startup-order weakness, not a complete explanation for every low-FPS report. No default-path root cause, matched FPS recovery, visual verification, 60+ FPS result, 3× result, or stutter elimination has been established. PR #40 remains open and unmerged; no tag or release is authorized.

@@ -50,8 +50,9 @@ def validate(imports: str, header: str, makefile: str, analyzer: str, runtime: s
           "existing top-ten method bound and D3D9 filter")
     check("BuildImportCallerLines(tp.callers" in log_stats, "production uses tested formatter")
     dispatch = imports.split("bool DispatchImport", 1)[1]
-    check("if (ImportProfiling() && s.name != \"SwitchToFiber\")" in dispatch and
-          "} else {\n        s.fn(ctx);" in dispatch, "ordinary dispatch remains unprofiled")
+    check("if (ImportProfiling())" in dispatch and "if (s.name != \"SwitchToFiber\")" in dispatch and
+          "ProfiledCall(s, index, ctx);" in dispatch and "\n    fn(ctx);" in dispatch,
+          "ordinary dense dispatch remains unprofiled and fiber switching remains excluded")
     check("ImportCallerProfile callers" in imports and "thread_local ThreadProfile tp" in profile,
           "caller storage exists only in profiling thread-local state")
 
@@ -86,8 +87,8 @@ total = validate(IMPORTS, HEADER, MAKEFILE, ANALYZER, RUNTIME, WORKFLOW, INI)
 expect_detection("cap removed", header=HEADER.replace("kMaxEntries = 2048", "kMaxEntries = 0", 1))
 expect_detection("post-pop capture", imports=IMPORTS.replace("const uint32_t return_address = SR32(ctx->esp)",
                                                              "const uint32_t return_address = 0", 1))
-expect_detection("ordinary path profiled", imports=IMPORTS.replace("} else {\n        s.fn(ctx);",
-                                                                   "} else {\n        ProfiledCall(s, index, ctx);", 1))
+expect_detection("ordinary path profiled", imports=IMPORTS.replace("\n    fn(ctx);",
+                                                                   "\n    ProfiledCall(Slots()[index], index, ctx);", 1))
 expect_detection("residual removed", header=HEADER.replace("method.total_ns - listed_ns", "0", 1))
 expect_detection("dependency removed", makefile=MAKEFILE.replace("$(OUT)/imports.o: import_caller_profile.h", "", 1))
 expect_detection("CI removed", workflow=WORKFLOW.replace("python3 tools/test_analyze_import_callers.py", "", 1))

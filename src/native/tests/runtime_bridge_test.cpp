@@ -304,7 +304,12 @@ GuestThread* CurrentThread() {
     return &thread;
 }
 
-int SettingInt(const char*, int fallback) { return fallback; }
+int SettingInt(const char* key, int fallback) {
+    if (std::strcmp(key, "import_profile") == 0) {
+        if (const char* value = std::getenv("PROTODROID_IMPORT_PROFILE")) return std::atoi(value);
+    }
+    return fallback;
+}
 void DiagnosticTourGameplayObserved(uint32_t) {}
 
 // misc.cpp's production import table references these factory hooks and path helper. The selected OLEAUT32 and

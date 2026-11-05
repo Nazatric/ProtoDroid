@@ -44,6 +44,10 @@ std::vector<Slot>& Slots() {
     return slots;
 }
 
+// Default dispatch needs only the function pointer. Keep this dense hot array in lockstep with Slots() so ordinary
+// imports do not touch lazy-static guards or the two strings in each metadata record.
+std::vector<ImportFn> g_slot_functions;
+
 std::string Key(const char* dll, const char* name) { return std::string(dll) + "!" + name; }
 
 // Setting import_profile: every thread logs, every 10 s, where its wall time went - the imports (WinAPI, D3D9
@@ -142,6 +146,12 @@ uint32_t ImportThunk(const char* dll, const char* name) {
     }
     auto h = Handlers().find(key);
     slots.push_back({dll, name, h == Handlers().end() ? nullptr : h->second});
+    try {
+        g_slot_functions.push_back(slots.back().fn);
+    } catch (...) {
+        slots.pop_back();
+        throw;
+    }
     uint32_t addr = g_thunk_base + kSlot * uint32_t(slots.size() - 1);
     if (strcmp(name, "_HUGE") == 0) {
         WF64(addr, HUGE_VAL);
@@ -154,20 +164,24 @@ bool DispatchImport(Ctx* ctx, uint32_t target) {
     Ctx* saved = tl_ctx;
     tl_ctx = ctx;
     uint32_t index = (target - g_thunk_base) / kSlot;
-    auto& slots = Slots();
-    if (index >= slots.size() || (target & (kSlot - 1))) {
+    if (index >= g_slot_functions.size() || (target & (kSlot - 1))) {
         Fatal("call into the import area at %08x", target);
     }
-    const Slot& s = slots[index];
-    if (!s.fn) {
+    const ImportFn fn = g_slot_functions[index];
+    if (!fn) {
+        const Slot& s = Slots()[index];
         Fatal("unimplemented import %s!%s (called from %08x, args %08x %08x %08x %08x)", s.dll.c_str(),
               s.name.c_str(), R32(ctx->esp), Arg(ctx, 0), Arg(ctx, 1), Arg(ctx, 2), Arg(ctx, 3));
     }
-    if (ImportProfiling() && s.name != "SwitchToFiber") {  // a fiber switch does not return until switched back
-        ProfiledCall(s, index, ctx);
-    } else {
-        s.fn(ctx);
+    if (ImportProfiling()) {
+        const Slot& s = Slots()[index];
+        if (s.name != "SwitchToFiber") {  // a fiber switch does not return until switched back
+            ProfiledCall(s, index, ctx);
+            tl_ctx = saved;
+            return true;
+        }
     }
+    fn(ctx);
     tl_ctx = saved;
     return true;
 }
