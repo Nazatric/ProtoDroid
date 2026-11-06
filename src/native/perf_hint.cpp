@@ -132,21 +132,38 @@ void PerfHintAddThread(int tid) {
     const char* outcome = g_start_attempted.load(std::memory_order_acquire)
                               ? "recorded; no active session"
                               : "queued for session creation";
+    bool dynamic_update = false;
+    int update_status = 0;
+    size_t stale_pruned = 0;
     if (g_session && g_api.setThreads) {
+        dynamic_update = true;
+        // Android rejects the complete list when any earlier worker has exited. Startup pruning alone is insufficient:
+        // audio and other frame workers are created later, after loading threads may already have terminated. Refresh
+        // only on this rare registration path, never once per frame, and send the same live list that we retain.
         ++g_thread_updates;
-        if (g_api.setThreads(g_session, g_tids.data(), g_tids.size()) != 0) {
+        update_status = detail::RefreshHintSessionThreads(
+            g_tids, tid, ThreadAlive, [&](const std::vector<int32_t>& live) {
+                return g_api.setThreads(g_session, live.data(), live.size());
+            },
+            stale_pruned);
+        if (update_status != 0) {
             ++g_thread_update_errors;
-            g_tids.pop_back();
             outcome = "rejected by dynamic thread update";
         } else {
-            outcome = "added to active session";
+            bool retained = false;
+            for (int32_t t : g_tids) retained = retained || t == tid;
+            outcome = retained ? "added to active session" : "live roster refreshed; new thread exited";
         }
     } else if (g_session) {
         outcome = "recorded; active session predates dynamic thread updates";
     }
     // Registration happens only for a newly observed engine/audio/Present thread, never once per frame. In particular,
     // this makes a rejected Android update visible instead of silently losing the real render thread from the session.
-    Log("perf hint: thread %d %s (registered=%zu)", tid, outcome, g_tids.size());
+    if (dynamic_update)
+        Log("perf hint: thread %d %s (registered=%zu, update_status=%d, stale_pruned=%zu)", tid, outcome,
+            g_tids.size(), update_status, stale_pruned);
+    else
+        Log("perf hint: thread %d %s (registered=%zu)", tid, outcome, g_tids.size());
 }
 
 void PerfHintTarget(int fps_target) {

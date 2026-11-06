@@ -42,6 +42,7 @@ jobs:
           python3 tools/test_native_launcher.py
           REQUIRE_JAVA_COMPILER=1 python3 tools/test_native_diagnostics.py
           python3 tools/test_sdl_version.py
+          python3 tools/test_recomp_lto_policy.py
 
       - name: Install host test dependencies
         run: |
@@ -1020,6 +1021,10 @@ jobs:
           export PROTODROID_ENGINE=/tmp/protodroid-hot-engine.dll
           python3 tools/test_ebp_stack.py
           src/native/tests/run_hot_test.sh 2>&1 | tee /tmp/protodroid-arm-hot-test.log
+          command -v clang
+          command -v ld.lld
+          CC=clang LINK_FLAGS=-fuse-ld=lld python3 tools/measure_recomp_thin_lto.py \
+            --rounds 24 --iterations 1000000 --output /tmp/arm64-recomp-thin-lto.json
 
       - name: Report native ARM64 hot-test failure
         if: failure() && steps.hot.outcome == 'failure'
@@ -1028,6 +1033,15 @@ jobs:
         run: |
           gh api repos/${{ github.repository }}/issues/1/comments \
             --raw-field body="ARM64 hot-test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-arm-hot-test.log 2>/dev/null || echo 'no hot-test log')\n\`\`\`" || true
+
+      - name: Upload ARM64 generated-ThinLTO measurement
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-recomp-thin-lto
+          path: /tmp/arm64-recomp-thin-lto.json
+          retention-days: 30
+          if-no-files-found: error
 
   build-deps:
     runs-on: ubuntu-24.04
@@ -1505,6 +1519,38 @@ jobs:
               exit 1
             fi
           done
+          # Generated C is the only source compiled with ThinLTO. Both ARM variants must retain every exported guest
+          # entry for dispatch, native hooks, and crash symbols even when a caller inlines a separate-part callee.
+          for LOG in /tmp/make.log /tmp/make_v80.log; do
+            grep -q -- '-flto=thin -fno-semantic-interposition' "$LOG"
+            grep -q -- '-flto=thin -Wl,--thinlto-jobs=1' "$LOG"
+            if grep -E 'clang\+\+.+-c .+\.cpp' "$LOG" | grep -q -- '-flto=thin'; then
+              echo "ERROR: native C++ unexpectedly entered the generated-only ThinLTO batch"
+              exit 1
+            fi
+          done
+          NDK_TOOLS="$EFFECTIVE_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "$NDK_TOOLS/llvm-nm" -D --defined-only build/android/arm64-v8a/libmain.so > /tmp/libmain-main.nm
+          "$NDK_TOOLS/llvm-nm" -D --defined-only build/android/arm64-v8a-v80/libmain.so > /tmp/libmain-v80.nm
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+          expected = set()
+          for path in Path('build/recomp/native').glob('part_*.c'):
+              expected.update(re.findall(r'(?m)^void (f_[0-9a-f]{8})\(Ctx\* c\) \{', path.read_text()))
+          assert len(expected) == 126974, len(expected)
+          report = {'expected_functions': len(expected), 'variants': {}}
+          for variant in ('main', 'v80'):
+              rows = Path(f'/tmp/libmain-{variant}.nm').read_text().splitlines()
+              actual = {parts[-1] for row in rows if len(parts := row.split()) >= 3 and parts[-1].startswith('f_')}
+              missing = sorted(expected - actual)
+              if missing:
+                  raise SystemExit(f'{variant}: ThinLTO dropped {len(missing)} generated entries: {missing[:12]}')
+              report['variants'][variant] = {'generated_dynamic_functions': len(actual), 'missing': 0}
+          Path('/tmp/recomp-lto-symbols.json').write_text(json.dumps(report, indent=2) + '\n')
+          print(json.dumps(report))
+          PY
           printf 'nativeBuild=compiled\nsourceRevision=%s\n' "$SOURCE_REVISION" > build/native-build.txt
 
       - name: Build source ARM64 plugin and Lua examples
@@ -1532,6 +1578,7 @@ jobs:
             ./make_v80.log
             /tmp/dxvk-addr2line.txt
             /tmp/dxvk-nm.txt
+            /tmp/recomp-lto-symbols.json
           retention-days: 7
           if-no-files-found: warn
 

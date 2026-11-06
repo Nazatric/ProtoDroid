@@ -29,6 +29,15 @@ assert guarded.index("RecordPresent();") < guarded.index("RegisterPresentPerfHin
 assert guarded.index("RegisterPresentPerfHintThread();") < guarded.index("} else {")
 assert "thread_updates" in perf and "thread_update_errors" in perf
 assert "rejected by dynamic thread update" in perf and "added to active session" in perf
+dynamic = perf.split("void PerfHintAddThread(int tid)", 1)[1].split("void PerfHintTarget", 1)[0]
+assert "detail::RefreshHintSessionThreads(" in dynamic
+assert "stale_pruned" in dynamic and "update_status=%d" in dynamic
+assert "live roster refreshed; new thread exited" in dynamic
+selector = (ROOT / "src/native/perf_hint_session.h").read_text(encoding="utf-8")
+refresh = selector.split("int RefreshHintSessionThreads", 1)[1].split("// Creates the session", 1)[0]
+assert "tids = ExistingLiveHintThreads(tids, alive);" in refresh
+assert refresh.index("const int status = set_threads(tids);") < refresh.index("if (status != 0)")
+assert "tids.erase(it);" in refresh
 snapshot = (ROOT / "src/native/guest.h").read_text(encoding="utf-8")
 assert "uint64_t thread_updates = 0;" in snapshot and "uint64_t thread_update_errors = 0;" in snapshot
 print("Actual-Present-thread ADPF registration and update-evidence checks passed")

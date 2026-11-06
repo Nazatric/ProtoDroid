@@ -25,7 +25,22 @@ endif
 # -O2, matching the upstream port and avoiding the code-size/register-pressure regression of globally optimizing the
 # recompiled engine at -O3. Keep the established TSO ordering flags unchanged.
 RECOMP_OPT ?= -O1
-RECOMP_CFLAGS = -std=c11 $(RECOMP_OPT) $(RECOMP_EXTRA) -g0 -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -w $(COMMON_FLAGS) \
+# Android links libmain with -Bsymbolic, so generated guest functions are bound locally even though they remain exported
+# for dispatch/crash symbols. ThinLTO can therefore inline ordinary calls across the 192 generated parts while keeping
+# every out-of-line entry point. Native C++ remains non-LTO; RECOMP_LTO=0 provides an independently revertible baseline.
+RECOMP_LTO ?= $(if $(filter android,$(PLATFORM)),thin,0)
+ifeq ($(RECOMP_LTO),thin)
+RECOMP_LTO_FLAGS := -flto=thin -fno-semantic-interposition
+RECOMP_LTO_LINK_FLAGS := -flto=thin -Wl,--thinlto-jobs=1
+else ifneq ($(RECOMP_LTO),0)
+$(error RECOMP_LTO must be 0 or thin)
+endif
+ifneq ($(PLATFORM),android)
+ifneq ($(RECOMP_LTO),0)
+$(error RECOMP_LTO=thin requires the Android Clang build)
+endif
+endif
+RECOMP_CFLAGS = -std=c11 $(RECOMP_OPT) $(RECOMP_EXTRA) $(RECOMP_LTO_FLAGS) -g0 -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -w $(COMMON_FLAGS) \
                 $(TARGET_FLAGS)
 CXXFLAGS = -std=c++17 -O2 -g -Wall -Wextra -Wno-unused-parameter $(COMMON_FLAGS) $(TARGET_FLAGS) \
            -I$(DXVK)/include/native/directx -I$(DXVK)/include/native/windows -I$(DXVK)/include/native/wsi \
@@ -55,7 +70,7 @@ DEP_INCLUDES := -I$(DEPS)/include
 FFMPEG_LIBS := -Wl,--start-group $(DEPS)/lib/libavformat.a $(DEPS)/lib/libavcodec.a \
                $(DEPS)/lib/libswresample.a $(DEPS)/lib/libavutil.a -Wl,--end-group -lz -lm
 # Keep symbol tables for crash stack traces (dladdr) even after strip: --export-dynamic preserves symbols in dynamic table
-LDFLAGS := -shared -Wl,-Bsymbolic -static-libstdc++ -Wl,--no-undefined -Wl,--export-dynamic -L$(DEPS)/lib \
+LDFLAGS := -shared -Wl,-Bsymbolic $(RECOMP_LTO_LINK_FLAGS) -static-libstdc++ -Wl,--no-undefined -Wl,--export-dynamic -L$(DEPS)/lib \
            $(DEPS)/lib/libdobby.a -ldxvk_d3d9 -lFAudio -lSDL2 $(FFMPEG_LIBS) -llog -landroid -ldl
 # Adreno: Turnip and libadrenotools from android/build-turnip.sh (arm64 only; built without them otherwise).
 TURNIP ?= $(HOME)/protodroid-data/android-turnip
