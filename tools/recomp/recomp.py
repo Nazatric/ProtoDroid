@@ -1445,6 +1445,26 @@ class FunctionCompiler:
             return True
         return any(target <= ins.address for ins in self.ins for target in self.successors(ins, decoded))
 
+    def xmm_sync_sites(self, decoded):
+        """Points where a localized body stores its local XMM state back to Ctx.
+
+        That is every call, every instruction that leaves the function, and every branch that can leave it (a
+        conditional jump keeps its fall-through successor, so an external target is invisible to `successors`).
+        """
+        sites = set()
+        inside = {i.address for i in self.ins}
+        for ins in self.ins:
+            if ins.group(capstone.CS_GRP_CALL):
+                sites.add(ins.address)
+            elif not self.successors(ins, decoded):
+                sites.add(ins.address)
+            elif ins.group(capstone.CS_GRP_JUMP):
+                targets = [op.imm for op in ins.operands if op.type == X.X86_OP_IMM]
+                targets += list(self.table_targets.get(ins.address, ()))
+                if any(target not in inside for target in targets):
+                    sites.add(ins.address)
+        return sites
+
     def xmm_entry_copies(self, decoded):
         """XMM registers whose incoming value the function overwrites before it can read it.
 
@@ -1478,6 +1498,17 @@ class FunctionCompiler:
         for address, state in written.items():
             if address in instructions:
                 observed |= xmm_reads(instructions[address]) - state
+        # A local register is also stored back to Ctx wherever the body synchronises state: before a call, and on
+        # every exit. Dirty tracking is path-insensitive, so such a store can happen on a path that never executed
+        # the from-scratch write. Require the write to be defined on every path at each of those points as well.
+        sync = self.xmm_sync_sites(decoded)
+        guaranteed = None
+        for address in sync:
+            state = written.get(address)
+            if state is None:  # unreachable synchronisation point: assume nothing
+                guaranteed = None
+                break
+            guaranteed = set(state) if guaranteed is None else guaranteed & state
         used = set()
         for ins in self.ins:
             for op in ins.operands:
@@ -1485,7 +1516,9 @@ class FunctionCompiler:
                     name = ins.reg_name(op.reg)
                     if name.startswith("xmm"):
                         used.add(int(name[3:]))
-        return frozenset(used - observed)
+        if sync and guaranteed is None:
+            return frozenset()  # an unreachable synchronisation point: keep every copy
+        return frozenset((used - observed) & (guaranteed or set()))
 
     def liveness(self, decoded):
         """Flags live after each instruction. Calls clobber the flags (MSVC never reads flags across a call);

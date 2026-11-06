@@ -54,6 +54,7 @@ def runtime_differential() -> None:
         "0f580500000000 c3",  # addps reads its destination: entry copy stays
         "0f2805 00000000 0f5805 00000000 c3",  # dead write then read-modify-write
         "0f58c1 49 75fa c3",  # a backward loop that reads first keeps every copy
+        "7408 0f280500000000 c3",  # one path reaches the return without the write: it must still be initialised
         "0f28c1 e8 f80f0000 0f28c1 c3",  # callee redefines all XMM state
         "d9e1 0f2805 00000000 0f58c1 c3",  # local x87 with an elided XMM copy
         "d9e8 dec1 d9e8 dec1 d9e8 dec1 0f2805 00000000 0f58c1 c3",  # local x87 + dead XMM entry
@@ -139,7 +140,7 @@ int main(void) {
     for index in range(len(cases)):
         harness += f"    int result_{index} = run_pair({index}, baseline_{index}, candidate_{index});\n"
         harness += f"    if (result_{index}) return result_{index};\n"
-    harness += '    puts("XMM runtime differential: 9 cases x 256 trials match");\n    return 0;\n}\n'
+    harness += f'    puts("XMM runtime differential: {len(cases)} cases x 256 trials match");\n    return 0;\n}}\n'
     with tempfile.TemporaryDirectory(prefix="protodroid-xmm-runtime-") as temporary:
         root = Path(temporary)
         source = root / "differential.c"
@@ -177,6 +178,10 @@ def main() -> int:
     require("XmmValue r_xmm0;" in output and output.count("r_xmm0") >= 3,
             "a dead write followed by a read-modify-write lost the local register")
 
+    output, _ = generate("7408 0f280500000000 c3")
+    require("XmmValue r_xmm0 = c->xmm[0];" in output,
+            "a conditionally skipped write elided an entry copy that a path-synchronous spill can read")
+
     output, _ = generate("0f58c1 49 75fa c3")
     require("XmmValue r_xmm0 = c->xmm[0];" in output and "XmmValue r_xmm1 = c->xmm[1];" in output,
             "a loop that reads before writing elided a live entry copy")
@@ -196,7 +201,7 @@ def main() -> int:
             "local x87 and elided XMM entry copies did not coexist")
 
     runtime_differential()
-    print("XMM entry-copy elision tests passed (7 decode cases, 9 runtime cases)")
+    print("XMM entry-copy elision tests passed (8 decode cases, 10 runtime cases)")
     return 0
 
 

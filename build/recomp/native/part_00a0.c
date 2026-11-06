@@ -19994,8 +19994,8 @@ void f_7ca0dc15(Ctx* c) {
 
 void f_7ca0dc64(Ctx* c) {
     RLOCALS;
-    XmmValue r_xmm1;
-    (((void)0), RecompUnimplemented(c, 0x7ca0dc64u, "pop ds"), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm1 = c->xmm[1])); { ((void)0); return; }  /* 7ca0dc64: pop ds */
+    XmmValue r_xmm1 = c->xmm[1];
+    ((c->xmm[1] = r_xmm1), RecompUnimplemented(c, 0x7ca0dc64u, "pop ds"), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm1 = c->xmm[1])); { (c->xmm[1] = r_xmm1); return; }  /* 7ca0dc64: pop ds */
     (((void)0), RecompUnimplemented(c, 0x7ca0dc65u, "iretd "), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm1 = c->xmm[1])); { ((void)0); return; }  /* 7ca0dc65: iretd  */
     r_eax = (r_eax & 0xffffff00u) | ((uint32_t)(R8((uint32_t)(0xa0d01f7cu))) & 0xffu);  /* 7ca0dc66: mov al, byte ptr [0xa0d01f7c] */
     if ((rf.sf != rf.of)) { goto L_7ca0dc76; }  /* 7ca0dc6b: jl 0x7ca0dc76 */

@@ -6564,7 +6564,7 @@ void f_7ca857c0(Ctx* c) {
     XmmValue r_xmm4 = c->xmm[4];
     XmmValue r_xmm5 = c->xmm[5];
     XmmValue r_xmm6 = c->xmm[6];
-    XmmValue r_xmm7;
+    XmmValue r_xmm7 = c->xmm[7];
     double r_st[8]; memcpy(r_st, c->st, sizeof r_st); uint32_t r_top = c->st_top; uint16_t r_cw = c->fpu_cw;
     r_esp = (uint32_t)((r_esp - 0x18u - 0));  /* 7ca857c0: sub esp, 0x18 */
     r_edx = (uint32_t)(R32((uint32_t)(r_ecx + 0xcu)));  /* 7ca857c3: mov edx, dword ptr [ecx + 0xc] */
@@ -11662,11 +11662,11 @@ void f_7ca88df0(Ctx* c);
 void f_7ca88e35(Ctx* c);
 void f_7ca88f3f(Ctx* c) {
     RLOCALS;
-    XmmValue r_xmm0;
+    XmmValue r_xmm0 = c->xmm[0];
     XmmValue r_xmm1 = c->xmm[1];
     LPush32(&r_esp, 0xcu);  /* 7ca88f3f: push 0xc */
     LPush32(&r_esp, 0x7cfe8d30u);  /* 7ca88f41: push 0x7cfe8d30 */
-    LPush32(&r_esp, 0x7ca88f4bu); if (RecompDirect(0x7ca88df0u)) ((c->esp = r_esp, c->xmm[1] = r_xmm1), f_7ca88df0(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1])); else ((c->esp = r_esp, c->xmm[1] = r_xmm1), RecompDispatch(c, 0x7ca88df0u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1]));  /* 7ca88f46: call 0x7ca88df0 */
+    LPush32(&r_esp, 0x7ca88f4bu); if (RecompDirect(0x7ca88df0u)) ((c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1), f_7ca88df0(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1])); else ((c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1), RecompDispatch(c, 0x7ca88df0u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1]));  /* 7ca88f46: call 0x7ca88df0 */
     W32((uint32_t)(r_ebp + 0xfffffffcu), (uint32_t)((R32((uint32_t)(r_ebp + 0xfffffffcu)) & 0x0u)));  /* 7ca88f4b: and dword ptr [ebp - 4], 0 */
     r_xmm0 = r_xmm1;  /* 7ca88f4f: movapd xmm0, xmm1 */
     W32((uint32_t)(r_ebp + 0xffffffe4u), (uint32_t)(0x1u));  /* 7ca88f53: mov dword ptr [ebp - 0x1c], 1 */
