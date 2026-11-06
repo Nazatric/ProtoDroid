@@ -16081,7 +16081,7 @@ L_7cacdf24:;
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7cacdf2f: push edx */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7cacdf30: push ecx */
     r_eax = (uint32_t)(r_esp);  /* 7cacdf31: mov eax, esp */
-    SW32((uint32_t)(r_eax), (uint32_t)(r_ecx));  /* 7cacdf33: mov dword ptr [eax], ecx */
+    W32((uint32_t)(r_eax), (uint32_t)(r_ecx));  /* 7cacdf33: mov dword ptr [eax], ecx */
     r_eax = (uint32_t)(R32((uint32_t)(r_ebx)));  /* 7cacdf35: mov eax, dword ptr [ebx] */
     r_edx = (uint32_t)(R32((uint32_t)(r_eax + 0x44u)));  /* 7cacdf37: mov edx, dword ptr [eax + 0x44] */
     r_ecx = (uint32_t)(r_ebx);  /* 7cacdf3a: mov ecx, ebx */
