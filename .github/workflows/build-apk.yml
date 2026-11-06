@@ -1021,10 +1021,30 @@ jobs:
           export PROTODROID_ENGINE=/tmp/protodroid-hot-engine.dll
           python3 tools/test_ebp_stack.py
           src/native/tests/run_hot_test.sh 2>&1 | tee /tmp/protodroid-arm-hot-test.log
-          command -v clang
-          command -v ld.lld
-          CC=clang LINK_FLAGS=-fuse-ld=lld python3 tools/measure_recomp_thin_lto.py \
-            --rounds 24 --iterations 1000000 --output /tmp/arm64-recomp-thin-lto.json
+
+      - name: Test and measure generated ThinLTO on native ARM64
+        id: recomp_lto
+        run: |
+          set -euo pipefail
+          {
+            if ! command -v clang >/dev/null || ! command -v ld.lld >/dev/null; then
+              sudo apt-get update
+              sudo apt-get install -y --no-install-recommends clang lld
+            fi
+            clang --version
+            ld.lld --version
+            CC=clang LINK_FLAGS=-fuse-ld=lld /tmp/protodroid-hot-venv/bin/python \
+              tools/measure_recomp_thin_lto.py --rounds 24 --iterations 1000000 \
+              --output /tmp/arm64-recomp-thin-lto.json
+          } 2>&1 | tee /tmp/arm64-recomp-thin-lto.log
+
+      - name: Report native ARM64 generated-ThinLTO failure
+        if: failure() && steps.recomp_lto.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/1/comments \
+            --raw-field body="ARM64 generated-ThinLTO failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/arm64-recomp-thin-lto.log 2>/dev/null || echo 'no ThinLTO log')\n\`\`\`" || true
 
       - name: Report native ARM64 hot-test failure
         if: failure() && steps.hot.outcome == 'failure'
@@ -1035,13 +1055,15 @@ jobs:
             --raw-field body="ARM64 hot-test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-arm-hot-test.log 2>/dev/null || echo 'no hot-test log')\n\`\`\`" || true
 
       - name: Upload ARM64 generated-ThinLTO measurement
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: arm64-recomp-thin-lto
-          path: /tmp/arm64-recomp-thin-lto.json
+          path: |
+            /tmp/arm64-recomp-thin-lto.json
+            /tmp/arm64-recomp-thin-lto.log
           retention-days: 30
-          if-no-files-found: error
+          if-no-files-found: warn
 
   build-deps:
     runs-on: ubuntu-24.04
