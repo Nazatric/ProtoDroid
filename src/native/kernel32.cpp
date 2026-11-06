@@ -762,20 +762,28 @@ K(WaitForSingleObject) {
 }
 K(WaitForMultipleObjects) {
     uint32_t n = Arg(c, 0), handles = Arg(c, 1), all = Arg(c, 2), ms = Arg(c, 3);
-    std::vector<KObject*> objs;
-    for (uint32_t i = 0; i < n; ++i) objs.push_back(HandleObject(R32(handles + 4 * i)));
+    // Common small waits avoid heap allocation; arbitrary larger counts retain vector storage.
+    constexpr uint32_t kInlineObjects = 8;
+    KObject* inline_objs[kInlineObjects];
+    std::vector<KObject*> heap_objs;
+    KObject** objs = inline_objs;
+    if (n > kInlineObjects) {
+        heap_objs.resize(n);
+        objs = heap_objs.data();
+    }
+    for (uint32_t i = 0; i < n; ++i) objs[i] = HandleObject(R32(handles + 4 * i));
     uint32_t tid = CurrentTid();
     uint32_t which = 0x102;
     std::unique_lock<std::mutex> lock(g_kernel_mutex);
-    WaitKernel(lock, ms, objs.data(), objs.size(), [&] {
+    WaitKernel(lock, ms, objs, n, [&] {
         if (all) {
-            for (KObject* o : objs)
-                if (!o || !o->Signaled(tid)) return false;
-            for (KObject* o : objs) o->Acquire(tid);
+            for (uint32_t i = 0; i < n; ++i)
+                if (!objs[i] || !objs[i]->Signaled(tid)) return false;
+            for (uint32_t i = 0; i < n; ++i) objs[i]->Acquire(tid);
             which = 0;
             return true;
         }
-        for (uint32_t i = 0; i < objs.size(); ++i) {
+        for (uint32_t i = 0; i < n; ++i) {
             if (objs[i] && objs[i]->Signaled(tid)) {
                 objs[i]->Acquire(tid);
                 which = i;

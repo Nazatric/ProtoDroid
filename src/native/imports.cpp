@@ -15,12 +15,14 @@
 #include <vector>
 
 #include "guest.h"
+#include "import_caller_profile.h"
+#include "memory_size_profile.h"
 
 namespace native {
 
 // Defined by runtime.cpp. Import handlers can call back into guest code, so the active context must follow the
 // import even when dispatch recognizes its thunk before attempting a recompiled-function lookup.
-extern thread_local Ctx* tl_ctx;
+extern __thread Ctx* tl_ctx;
 
 namespace {
 
@@ -43,6 +45,10 @@ std::vector<Slot>& Slots() {
     return slots;
 }
 
+// Default dispatch needs only the function pointer. Keep this dense hot array in lockstep with Slots() so ordinary
+// imports do not touch lazy-static guards or the two strings in each metadata record.
+std::vector<ImportFn> g_slot_functions;
+
 std::string Key(const char* dll, const char* name) { return std::string(dll) + "!" + name; }
 
 // Setting import_profile: every thread logs, every 10 s, where its wall time went - the imports (WinAPI, D3D9
@@ -57,8 +63,36 @@ struct ThreadProfile {
     using Clock = std::chrono::steady_clock;
     Clock::time_point window = Clock::now();
     std::vector<uint64_t> ns, calls;
+    ImportCallerProfile callers;
+    MemorySizeProfile memory_sizes;
     int depth = 0;
 };
+
+void LogCallerStats(const ThreadProfile& tp, const std::vector<uint32_t>& order) {
+    auto& slots = Slots();
+    std::vector<ImportCallerMethod> methods;
+    for (size_t k = 0; k < order.size() && k < 10; ++k) {
+        const uint32_t index = order[k];
+        if (slots[index].dll == "d3d9.dll")
+            methods.push_back({index, slots[index].name, tp.ns[index], tp.calls[index]});
+    }
+    for (const auto& line : BuildImportCallerLines(tp.callers, int(gettid()), methods))
+        Log("%s", line.c_str());
+}
+
+bool TrackMemorySize(const Slot& slot) {
+    return slot.dll == "MSVCR80.DLL" &&
+           (slot.name == "memcpy" || slot.name == "memmove" || slot.name == "memset");
+}
+
+void LogMemorySizeStats(const ThreadProfile& tp, const std::vector<uint32_t>& order) {
+    auto& slots = Slots();
+    for (const uint32_t index : order) {
+        const MemorySizeRecord* record = tp.memory_sizes.Find(index);
+        if (record)
+            Log("%s", BuildMemorySizeLine(int(gettid()), slots[index].name, *record, tp.calls[index]).c_str());
+    }
+}
 
 void ProfiledCall(const Slot& s, uint32_t index, Ctx* ctx) {
     thread_local ThreadProfile tp;
@@ -66,13 +100,25 @@ void ProfiledCall(const Slot& s, uint32_t index, Ctx* ctx) {
         tp.ns.resize(index + 64);
         tp.calls.resize(index + 64);
     }
+    const bool track_callers = s.dll == "d3d9.dll";
+    const bool track_memory_size = TrackMemorySize(s);
+    const uint32_t memory_size = track_memory_size ? Arg(ctx, 2) : 0;
+    uint32_t caller_rva = 0xffffffffu;
+    if (track_callers) {
+        const uint32_t return_address = SR32(ctx->esp);  // The import has not popped it yet.
+        if (return_address >= g_engine_lo && return_address < g_engine_hi)
+            caller_rva = return_address - g_engine_lo;
+    }
     auto t0 = ThreadProfile::Clock::now();
     ++tp.depth;
     s.fn(ctx);
     --tp.depth;
     auto t1 = ThreadProfile::Clock::now();
-    tp.ns[index] += uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+    const uint64_t duration = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+    tp.ns[index] += duration;
     ++tp.calls[index];
+    if (track_callers) tp.callers.Add(index, caller_rva, duration);
+    if (track_memory_size) tp.memory_sizes.Add(index, memory_size);
     if (tp.depth || t1 - tp.window < std::chrono::seconds(10)) return;
     const double wall = std::chrono::duration<double, std::milli>(t1 - tp.window).count();
     std::vector<uint32_t> order;
@@ -92,8 +138,12 @@ void ProfiledCall(const Slot& s, uint32_t index, Ctx* ctx) {
         line += buf;
     }
     Log("imports tid %d: guest %.0f%% |%s", int(gettid()), 100.0 * (wall - in_imports) / wall, line.c_str());
+    LogCallerStats(tp, order);
+    LogMemorySizeStats(tp, order);
     std::fill(tp.ns.begin(), tp.ns.end(), 0);
     std::fill(tp.calls.begin(), tp.calls.end(), 0);
+    tp.callers.Reset();
+    tp.memory_sizes.Reset();
     tp.window = t1;
 }
 
@@ -117,6 +167,12 @@ uint32_t ImportThunk(const char* dll, const char* name) {
     }
     auto h = Handlers().find(key);
     slots.push_back({dll, name, h == Handlers().end() ? nullptr : h->second});
+    try {
+        g_slot_functions.push_back(slots.back().fn);
+    } catch (...) {
+        slots.pop_back();
+        throw;
+    }
     uint32_t addr = g_thunk_base + kSlot * uint32_t(slots.size() - 1);
     if (strcmp(name, "_HUGE") == 0) {
         WF64(addr, HUGE_VAL);
@@ -129,20 +185,24 @@ bool DispatchImport(Ctx* ctx, uint32_t target) {
     Ctx* saved = tl_ctx;
     tl_ctx = ctx;
     uint32_t index = (target - g_thunk_base) / kSlot;
-    auto& slots = Slots();
-    if (index >= slots.size() || (target & (kSlot - 1))) {
+    if (index >= g_slot_functions.size() || (target & (kSlot - 1))) {
         Fatal("call into the import area at %08x", target);
     }
-    const Slot& s = slots[index];
-    if (!s.fn) {
+    const ImportFn fn = g_slot_functions[index];
+    if (!fn) {
+        const Slot& s = Slots()[index];
         Fatal("unimplemented import %s!%s (called from %08x, args %08x %08x %08x %08x)", s.dll.c_str(),
               s.name.c_str(), R32(ctx->esp), Arg(ctx, 0), Arg(ctx, 1), Arg(ctx, 2), Arg(ctx, 3));
     }
-    if (ImportProfiling() && s.name != "SwitchToFiber") {  // a fiber switch does not return until switched back
-        ProfiledCall(s, index, ctx);
-    } else {
-        s.fn(ctx);
+    if (ImportProfiling()) {
+        const Slot& s = Slots()[index];
+        if (s.name != "SwitchToFiber") {  // a fiber switch does not return until switched back
+            ProfiledCall(s, index, ctx);
+            tl_ctx = saved;
+            return true;
+        }
     }
+    fn(ctx);
     tl_ctx = saved;
     return true;
 }

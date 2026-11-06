@@ -49,13 +49,36 @@ texture_skip_min_size = 512
 # Timestamped frame/system diagnostics are opt-in so normal gameplay does not pay their timing/sample overhead.
 # Set detailed_diagnostics = 1 for five-second native/device metrics; the interval accepts 1-60 seconds.
 # Lightweight pipeline-call timing follows detailed_diagnostics unless pipeline_timing is set independently.
+# Pipeline records include outcomes, in-flight calls, slow wait/trace/driver phases, and a final residual snapshot.
+# Detailed native logs also split rect host-lock, shadow-wait/allocation/copy, adaptation, and copy-back phases;
+# host UnlockRect remains in the texture upload timer. These records are diagnostic, not GPU-time or FPS proof.
 # Shared log mirroring and ordinary FPS tracking remain active when detailed diagnostics are off.
 #detailed_diagnostics = 1
 #detailed_diagnostics_interval = 5
+# Raw Present intervals use worker-only CSV writes (64 MiB cap) without enabling detailed native or Present-wall timing.
+# The tour enables both this trace and full detailed diagnostics. Keep heavy profiling separate from steady FPS captures.
+#frame_interval_trace = 1
 #pipeline_timing = 1
+# Higher-overhead DXVK method/state/query timing is independent and tour-enabled. Do not use it for a steady FPS baseline.
+#d3d9_timing = 1
 
 # Per-thread guest/Win32/D3D9 wall-time profiling for stall investigation. This is opt-in and not an FPS benchmark mode.
+# D3D9 records also include bounded top-three immediate caller RVAs plus exact unlisted residuals for offline symbolization.
+# memcpy/memmove/memset records include exact per-window call/byte totals and 14 size bins; validate them with
+# tools/analyze_memory_sizes.py. Ordinary import dispatch and CRT handlers do not touch these records.
 #import_profile = 1
+
+# Separate loading-boundary investigation: only generation-selected functions in re/loading_boundary_trace.txt.
+# Ordinary APKs compile these probes out completely. First rebuild the whole native target with
+# GUEST_FUNCTION_TRACE=1; then this setting emits capped guest-function-v1 durations/raw entry dwords.
+# Candidates are not proven loading/drain hook points. Use tools/analyze_guest_function_trace.py on proto-native.log.
+# Keep this investigation build/setting out of ordinary-play FPS baselines.
+#guest_function_trace = 1
+
+# Optional 250 ms warm-cache queue snapshots from Present. Uses try-lock; state_known=0 means feeder count is unknown,
+# not idle. No Present means no sample. Raw pipeline counters are approximate, not GPU work. Never waits or drains;
+# off for the tour unless explicitly requested. Join at_ns (steady-clock ns) with guest records; not an FPS baseline.
+#warm_cache_trace = 1
 
 # Low-level Mali pipeline diagnostics. Disabled by default because every traced pipeline performs
 # SPIR-V analysis plus durable file/fsync writes. Enables pipeline_trace.log and last_vs/last_fs.spv.
@@ -70,6 +93,7 @@ unlock_menu_fps = 1
 # 2 logs every five-second timing window, and 0 disables the diagnostics and their callback timers.
 #present_stats = 1
 #audio_stats = 2
+# fps_limit=0 is unlimited; positive values pace successful D3D9 Presents, not empty engine-loop iterations.
 #fps_limit = 30
 #battery_saver = 1
 

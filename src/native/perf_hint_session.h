@@ -3,9 +3,17 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 namespace native::detail {
+
+// DXVK's native submission threads never pass through the guest Win32 priority shim. Only the threads that submit
+// frame work belong in the frame session; compiler/pipeline workers and similarly prefixed names stay excluded.
+inline bool IsDxvkFrameThreadComm(std::string_view comm) {
+    while (!comm.empty() && (comm.back() == '\n' || comm.back() == '\r')) comm.remove_suffix(1);
+    return comm == "dxvk-cs" || comm == "dxvk-submit";
+}
 
 inline void AddHintThread(std::vector<int32_t>& tids, int32_t tid) {
     if (tid <= 0) return;
@@ -15,12 +23,39 @@ inline void AddHintThread(std::vector<int32_t>& tids, int32_t tid) {
 }
 
 template <typename IsAlive>
-std::vector<int32_t> LiveHintThreads(const std::vector<int32_t>& registered, int32_t current, IsAlive alive) {
+std::vector<int32_t> ExistingLiveHintThreads(const std::vector<int32_t>& registered, IsAlive alive) {
     std::vector<int32_t> result;
     for (int32_t tid : registered)
         if (alive(tid)) AddHintThread(result, tid);
+    return result;
+}
+
+template <typename IsAlive>
+std::vector<int32_t> LiveHintThreads(const std::vector<int32_t>& registered, int32_t current, IsAlive alive) {
+    std::vector<int32_t> result = ExistingLiveHintThreads(registered, alive);
     AddHintThread(result, current);  // the calling thread is alive by definition
     return result;
+}
+
+// Dynamic updates have the same all-or-nothing stale-TID failure mode as creation. Send a freshly pruned list; if
+// Android still rejects it, retain the previous live workers but remove the newly requested thread so a later explicit
+// registration can retry instead of leaving a permanently poisoned pending entry.
+template <typename IsAlive, typename SetThreads>
+int RefreshHintSessionThreads(std::vector<int32_t>& tids, int32_t new_tid, IsAlive alive, SetThreads set_threads,
+                              size_t& stale_pruned) {
+    const size_t before = tids.size();
+    tids = ExistingLiveHintThreads(tids, alive);
+    stale_pruned = before - tids.size();
+    const int status = set_threads(tids);
+    if (status != 0) {
+        for (auto it = tids.begin(); it != tids.end(); ++it) {
+            if (*it == new_tid) {
+                tids.erase(it);
+                break;
+            }
+        }
+    }
+    return status;
 }
 
 // Creates the session with all live workers. If Android rejects that list, retry with the calling engine thread;

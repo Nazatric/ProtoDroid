@@ -157,11 +157,22 @@ endian = 'little'
 # __ANDROID__ to select libSDL2.so, libvulkan.so and Android surface WSI.
 c_args = ['-D__ANDROID__=1']
 cpp_args = ['-D__ANDROID__=1']
+# ThinLTO otherwise drops the deliberately uncalled bounded warm-cache-drain method chain. Root its existing C++
+# symbol without adding a caller or changing the public D3D9 ABI; uint64_t is unsigned long in both Android LP64 ABIs.
+cpp_link_args = ['-Wl,-u,_ZN4dxvk10DxvkDevice16waitForWarmCacheEm']
 EOF
 rm -rf "$SRC/build/dxvk-$ABI"
+# Optimize the existing protected D3D9/DXVK call paths across their internal static-library boundaries. ThinLTO does
+# not change the pinned source, ARM target, public version script, renderer, or cache format. Keep the generic target:
+# the same DXVK binary also serves the explicit ARMv8.0 native compatibility variant.
 meson setup "$SRC/build/dxvk-$ABI" "$SRC/dxvk" --cross-file "$CROSS" --buildtype release --prefix "$PREFIX" \
       -Denable_d3d9=true -Denable_d3d8=false -Denable_d3d10=false -Denable_d3d11=false -Denable_dxgi=false \
-      -Ddxvk_native_wsi=sdl2
+      -Ddxvk_native_wsi=sdl2 -Db_lto=true -Db_lto_mode=thin
+# Verify Meson actually propagated ThinLTO to this NDK/Clang build instead of silently accepting an unused option.
+ninja -C "$SRC/build/dxvk-$ABI" -t commands | grep -F -- '-flto=thin' >/dev/null || {
+  echo "DXVK ThinLTO is missing from the effective compile/link commands" >&2
+  exit 1
+}
 ninja -C "$SRC/build/dxvk-$ABI" -j "$JOBS"
 ninja -C "$SRC/build/dxvk-$ABI" install
 
@@ -172,6 +183,11 @@ if [ ! -f "$DXVK_LIB" ]; then
     echo "missing installed DXVK library: $DXVK_LIB" >&2
     exit 1
 fi
+# A string alone is not enough: prove that ThinLTO retained the actual bounded-drain entry point as well.
+"$TC/llvm-nm" "$DXVK_LIB" | grep -F '_ZN4dxvk10DxvkDevice16waitForWarmCacheEm' >/dev/null || {
+    echo "DXVK ThinLTO dropped the warm-cache drain entry point" >&2
+    exit 1
+}
 DXVK_STRINGS=$($TC/llvm-strings "$DXVK_LIB")
 printf '%s\n' "$DXVK_STRINGS" | grep -E 'libSDL|vkCreateAndroidSurface|SDL2 WSI' || true
 printf '%s\n' "$DXVK_STRINGS" | grep -Fx 'libSDL2.so' >/dev/null || {
@@ -201,6 +217,13 @@ for marker in \
     'DXVK: Using Vulkan 1.2 KHR/EXT compatibility path' \
     'DXVK: Capping ARM compiler threads at 2' \
     'DXVK pipeline timing:' \
+    'DXVK pipeline outcome:' \
+    'DXVK pipeline timing final (' \
+    'DXVK D3D9 timing:' \
+    'DXVK warm-cache drain:' \
+    'DXVK warm-cache snapshot:' \
+    'PROTODROID_D3D9_TIMING' \
+    'PROTODROID_WARM_CACHE_TRACE' \
     'PROTODROID_PIPELINE_TIMING' \
     'DXVK_LOG_TIMESTAMPS' \
     'prototypeenginef.dll'; do

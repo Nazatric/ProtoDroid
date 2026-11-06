@@ -4,7 +4,7 @@
 #                                libmain.so for the APK (android/build-apk.sh), against the libraries from
 #                                android/build-deps.sh
 PLATFORM ?= linux
-# Generated for the rebased engine: recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native (see guest.h)
+# Generated for the rebased engine: recomp.py --functions all --base 0x7c000000 --trace-functions re/loading_boundary_trace.txt --split 400 --out build/recomp/native (see guest.h)
 RECOMP_DIR ?= ../../build/recomp/native
 LUA_DIR := ../../third_party/lua-5.4.8
 DXVK ?= $(HOME)/protodroid-data/deps/dxvk
@@ -15,11 +15,32 @@ SOURCE_REVISION ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unk
 # Qualcomm's GPU driver use.
 COMMON_FLAGS := -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -fsigned-char -I../recomp \
                 -DPROTODROID_SOURCE_REVISION=\"$(SOURCE_REVISION)\"
+# Ordinary builds contain no generated guest-probe calls. Investigators must deliberately rebuild all native and
+# generated objects with GUEST_FUNCTION_TRACE=1 before guest_function_trace=1 can record the selected functions.
+GUEST_FUNCTION_TRACE ?= 0
+ifeq ($(GUEST_FUNCTION_TRACE),1)
+COMMON_FLAGS += -DPROTODROID_GUEST_FUNCTION_TRACE=1
+endif
 # Generated code: flat memory turns G() into plain pointers. -O1 on the desktop keeps rebuilds quick; Android gets
 # -O2, matching the upstream port and avoiding the code-size/register-pressure regression of globally optimizing the
 # recompiled engine at -O3. Keep the established TSO ordering flags unchanged.
 RECOMP_OPT ?= -O1
-RECOMP_CFLAGS = -std=c11 $(RECOMP_OPT) $(RECOMP_EXTRA) -g0 -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -w $(COMMON_FLAGS) \
+# Android links libmain with -Bsymbolic, so generated guest functions are bound locally even though they remain exported
+# for dispatch/crash symbols. ThinLTO can therefore inline ordinary calls across the 192 generated parts while keeping
+# every out-of-line entry point. Native C++ remains non-LTO; RECOMP_LTO=0 provides an independently revertible baseline.
+RECOMP_LTO ?= $(if $(filter android,$(PLATFORM)),thin,0)
+ifeq ($(RECOMP_LTO),thin)
+RECOMP_LTO_FLAGS := -flto=thin -fno-semantic-interposition
+RECOMP_LTO_LINK_FLAGS := -flto=thin -Wl,--thinlto-jobs=1
+else ifneq ($(RECOMP_LTO),0)
+$(error RECOMP_LTO must be 0 or thin)
+endif
+ifneq ($(PLATFORM),android)
+ifneq ($(RECOMP_LTO),0)
+$(error RECOMP_LTO=thin requires the Android Clang build)
+endif
+endif
+RECOMP_CFLAGS = -std=c11 $(RECOMP_OPT) $(RECOMP_EXTRA) $(RECOMP_LTO_FLAGS) -g0 -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -w $(COMMON_FLAGS) \
                 $(TARGET_FLAGS)
 CXXFLAGS = -std=c++17 -O2 -g -Wall -Wextra -Wno-unused-parameter $(COMMON_FLAGS) $(TARGET_FLAGS) \
            -I$(DXVK)/include/native/directx -I$(DXVK)/include/native/windows -I$(DXVK)/include/native/wsi \
@@ -49,7 +70,7 @@ DEP_INCLUDES := -I$(DEPS)/include
 FFMPEG_LIBS := -Wl,--start-group $(DEPS)/lib/libavformat.a $(DEPS)/lib/libavcodec.a \
                $(DEPS)/lib/libswresample.a $(DEPS)/lib/libavutil.a -Wl,--end-group -lz -lm
 # Keep symbol tables for crash stack traces (dladdr) even after strip: --export-dynamic preserves symbols in dynamic table
-LDFLAGS := -shared -Wl,-Bsymbolic -static-libstdc++ -Wl,--no-undefined -Wl,--export-dynamic -L$(DEPS)/lib \
+LDFLAGS := -shared -Wl,-Bsymbolic $(RECOMP_LTO_LINK_FLAGS) -static-libstdc++ -Wl,--no-undefined -Wl,--export-dynamic -L$(DEPS)/lib \
            $(DEPS)/lib/libdobby.a -ldxvk_d3d9 -lFAudio -lSDL2 $(FFMPEG_LIBS) -llog -landroid -ldl
 # Adreno: Turnip and libadrenotools from android/build-turnip.sh (arm64 only; built without them otherwise).
 TURNIP ?= $(HOME)/protodroid-data/android-turnip
@@ -81,7 +102,7 @@ endif
 
 SRCS := main.cpp diagnostic_tour.cpp diagnostics.cpp memory.cpp loader.cpp imports.cpp runtime.cpp thread.cpp path.cpp save_path.cpp kernel32.cpp msvcr80.cpp user32.cpp \
         advapi32.cpp misc.cpp d3d9.cpp d3d9_dxt.cpp input.cpp xaudio2.cpp bink.cpp bink_media.cpp bink_blit.cpp dinput.cpp gamepad.cpp config.cpp watchdog.cpp hot_audio.cpp hot_skin.cpp \
-        vulkan_driver.cpp perf_hint.cpp present_stats.cpp state_cache.cpp video_settings.cpp \
+        vulkan_driver.cpp perf_hint.cpp present_stats.cpp frame_limiter.cpp guest_function_trace.cpp state_cache.cpp video_settings.cpp \
         mod_platform.cpp mod_files.cpp mod_textures.cpp mod_hook.cpp mod_features.cpp mod_plugins.cpp mod_settings.cpp \
         mod_symbols.cpp mod_scripts.cpp
 LUA_SRCS := $(LUA_DIR)/lapi.c $(LUA_DIR)/lcode.c $(LUA_DIR)/lctype.c $(LUA_DIR)/ldebug.c $(LUA_DIR)/ldo.c \
@@ -117,6 +138,7 @@ $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/present_stats.o $(OUT)/diagnostics.o: present
 $(OUT)/main.o $(OUT)/d3d9.o $(OUT)/diagnostics.o: diagnostics.h
 $(OUT)/main.o $(OUT)/runtime.o $(OUT)/diagnostics.o $(OUT)/vulkan_driver.o $(OUT)/diagnostic_tour.o: diagnostic_tour.h
 $(OUT)/runtime.o: diagnostic_tour_probe.h
+$(OUT)/imports.o: import_caller_profile.h
 $(OUT)/main.o $(OUT)/kernel32.o $(OUT)/misc.o $(OUT)/bink.o: guest_time.h
 $(OUT)/kernel32.o: diagnostics.h
 $(OUT)/watchdog.o: diagnostic_tour.h

@@ -143,7 +143,7 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `decode_16bit` | On decoded DXT1 textures, `0` keeps full 32-bit color and `1` uses the lower-bandwidth 16-bit path. |
 | `max_anisotropy` | Texture anisotropy: 1, 2, 4, 8, or another supported value. |
 | `game_aa_level` | `-1` Game default, `0` Off, `1` 2x MSAA, `2` 4x MSAA, `3` FXAA. FXAA keeps GameDB/present MSAA at zero and applies on the next Play. |
-| `fps_limit` | Host frame limit: `0` disables it; positive values use the existing limiter. The UI offers 30–1000, without promising the resulting frame rate. |
+| `fps_limit` | `0` disables the host cap. Positive values pace successful D3D9 Presents against absolute nanosecond deadlines; the engine message loop is not throttled. The UI offers 30–1000, without promising that the workload/display can reach the target. |
 | `battery_saver` | Enables the battery-saving frame policy. |
 | `unlock_menu_fps` | `1` keeps menu movies responsive without blocking waits. Default: `1`. |
 | `audio_driver` | `aaudio` or `openslES`. |
@@ -156,7 +156,9 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `pipeline_timing` | Lightweight DXVK pipeline timing; follows `detailed_diagnostics` unless set separately. |
 | `pipeline_trace` | Expensive Mali pipeline tracing and shader dumps. Debugging only. |
 | `dxvk_config` | Extra DXVK options, separated by commas in this file. |
-| `import_profile` | `1` profiles guest and Win32/D3D9 wall time per thread every ten seconds. |
+| `import_profile` | `1` profiles guest and Win32/D3D9 wall time per thread every ten seconds, including bounded D3D9 callers and exact `memcpy`/`memmove`/`memset` call-size histograms. Not a steady-FPS benchmark mode. |
+| `guest_function_trace` | In a native target explicitly rebuilt with `GUEST_FUNCTION_TRACE=1`, `1` records bounded durations/raw entry arguments for generation-selected candidates. Ordinary builds compile the probes out; diagnostic only. |
+| `warm_cache_trace` | `1` samples existing feeder/pipeline queues every 250 ms with try-lock. Never drains; diagnostic only. |
 | `watchdog` | Enables hang diagnostics. |
 
 Android presentation is fixed to **FIFO, interval 1** for both device creation and reset. An explicit FPS cap uses the host limiter; unlimited mode leaves pacing to FIFO. Desktop builds retain the optional presentation-mode settings. DXVK’s official Prototype DF-format workaround is applied explicitly because the native host does not use the `prototypef.exe` process name; graphics-quality settings are unchanged.
@@ -196,6 +198,26 @@ import_profile = 1
 ```
 
 Detailed reports include frame and engine timing, worst events, texture and file I/O, CPU threads, memory, ADPF, and thermal information where Android provides it. Use profiling to find a problem—not as an FPS benchmark. Leave these options off for ordinary play.
+
+For a separate loading-boundary investigation, first rebuild the complete native target with `GUEST_FUNCTION_TRACE=1` (ordinary builds compile all generated probe calls away), then set `guest_function_trace = 1`. The instrumented build emits `guest-function-v1` records for only the three functions listed in `re/loading_boundary_trace.txt`. The records contain inclusive host-wall durations and raw `ecx`/caller/stack dwords; those dwords are not assigned a signature unless disassembly independently establishes it. Per-thread fixed buffers defer log flushing until the outermost selected call exits, and the process log is capped with explicit truncation records. Do not compare an instrumented investigation build with an ordinary FPS baseline. Analyze a captured log with:
+
+```sh
+python3 tools/analyze_guest_function_trace.py proto-native.log --output guest-functions.json
+```
+
+The selected functions are investigation candidates, not proven loading-screen callbacks or warm-cache drain points. Active calls at a crash have no completion record, and this trace does not establish GPU time, visual correctness, or an FPS/loading improvement.
+
+To determine whether existing warm-cache work overlaps those candidate calls, enable `warm_cache_trace = 1` in the same run. DXVK writes timestamped queue snapshots from `Present` to its D3D9 log at most once per 250 ms while enabled; no `Present` calls means no samples. The reader uses try-lock and reports `state_known=0` instead of waiting; its feeder count is then unknown, not zero. Raw pipeline totals/completions are retained even if their relaxed sampling order is inconsistent. This option is independent of the diagnostic tour and never calls the dormant drain.
+
+Because guest and DXVK records occupy separate files, correlation requires an explicit assertion that both files came from the same run:
+
+```sh
+python3 tools/analyze_warm_cache_trace.py \
+  --pair proto-native.log app_process64_d3d9.log \
+  --output warm-cache.json
+```
+
+The analyzer preserves input hashes/raw counters and reports same-run before/after snapshot references at guest-function completion. Standalone inputs are never implicitly correlated, and clock-regressed guest completions are excluded but retained as anomalies. These are instantaneous queue samples, not continuous queue-lifetime history, proof of loading semantics, or evidence of a drain/FPS benefit.
 
 <details>
 <summary><strong>Shader-cache recovery and durability</strong></summary>

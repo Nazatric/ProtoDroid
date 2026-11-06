@@ -1,5 +1,6 @@
 // Host services for the recompiled code (runtime.h) in the native host: dispatch of computed calls, imports,
 // setjmp/longjmp, cpuid, traps.
+#include <atomic>
 #include <csetjmp>
 #include <cstdlib>
 #include <cstring>
@@ -32,37 +33,51 @@ struct HashSlot {
     uint32_t va;
     RecompFn fn;
 };
-HashSlot* g_hash = nullptr;
+std::atomic<HashSlot*> g_hash{nullptr};
+std::once_flag g_hash_once;
 
 uint32_t HashOf(uint32_t va) { return (va * 2654435761u) >> (32 - kHashBits); }
 
 void BuildHash() {
-    g_hash = static_cast<HashSlot*>(calloc(size_t(1) << kHashBits, sizeof(HashSlot)));
-    if (!g_hash) Fatal("cannot allocate the recompiled-function dispatch hash");
+    HashSlot* hash = static_cast<HashSlot*>(calloc(size_t(1) << kHashBits, sizeof(HashSlot)));
+    if (!hash) Fatal("cannot allocate the recompiled-function dispatch hash");
     for (uint32_t i = 0; i < g_recomp_count; ++i) {
         uint32_t h = HashOf(g_recomp_table[i].va);
-        while (g_hash[h].va) h = (h + 1) & ((1u << kHashBits) - 1);
-        g_hash[h] = {g_recomp_table[i].va, g_recomp_table[i].fn};
+        while (hash[h].va) h = (h + 1) & ((1u << kHashBits) - 1);
+        hash[h] = {g_recomp_table[i].va, g_recomp_table[i].fn};
     }
+    // Publish only a fully populated table. A concurrent fast-path reader must never observe partially filled slots.
+    g_hash.store(hash, std::memory_order_release);
 }
 
 }  // namespace
 
 // Ctx of the guest code that most recently called out to the host on this thread/fiber; host callbacks into guest
 // code continue below its stack pointer.
-thread_local Ctx* tl_ctx = nullptr;
+// A trivially zero-initialized pointer has no C++ TLS destructor. GNU TLS avoids redundant per-access TLS-init
+// wrappers on ELF/Android without forcing an initial-exec TLS model or changing thread lifetime semantics.
+__thread Ctx* tl_ctx;
 uint32_t g_engine_lo = 0, g_engine_hi = 0;
 
 }  // namespace native
 
 using namespace native;
 
+extern "C" void RecompInitializeDispatch() {
+    std::call_once(g_hash_once, BuildHash);
+}
+
 extern "C" RecompFn RecompLookup(uint32_t target) {
-    static std::once_flag once;
-    std::call_once(once, BuildHash);
+    HashSlot* hash = g_hash.load(std::memory_order_acquire);
+    if (!hash) {
+        // Native startup initializes this explicitly. Keep the fallback for unit fixtures and other embedders, with
+        // call_once synchronization and release publication covering concurrent first use.
+        RecompInitializeDispatch();
+        hash = g_hash.load(std::memory_order_acquire);
+    }
     for (uint32_t h = HashOf(target);; h = (h + 1) & ((1u << kHashBits) - 1)) {
-        if (g_hash[h].va == target) return g_hash[h].fn;
-        if (!g_hash[h].va) return nullptr;
+        if (hash[h].va == target) return hash[h].fn;
+        if (!hash[h].va) return nullptr;
     }
 }
 

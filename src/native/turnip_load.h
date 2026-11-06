@@ -161,8 +161,8 @@ inline bool ProbeRequiredDxvkFeatures(PFN_vkGetInstanceProcAddr gipa, VkInstance
         {"shaderDemoteToHelperInvocation", demote},
         {"synchronization2", synchronization2},
         {"dynamicRendering", dynamic_rendering},
-        // DXVK makes maintenance4 optional only on its explicit 1.2 compatibility path.
-        {"maintenance4", compatibility12 || maintenance4},
+        // maintenance4 is optional on Android: patched DXVK uses temporary buffer/image
+        // memory-requirement queries when it is absent, on both the 1.2 and 1.3 paths.
         // Extended dynamic state is a required extension/feature only on that 1.2 path.
         {"extendedDynamicState", !compatibility12 || extended12.extendedDynamicState},
     };

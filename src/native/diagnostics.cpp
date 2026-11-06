@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "diagnostic_tour.h"
+#include "frame_interval_trace.h"
 #include "guest.h"
 #include "present_stats.h"
 #include "proc_stats.h"
@@ -42,9 +43,8 @@ std::string TakeIoStats();
 std::string TakeIoEvents();
 std::string ArenaUsage();
 std::string TakeTextureTimingStats();
+std::string TakeLockTimingStats();
 TimingWindowSnapshot TakePresentTimingWindow();
-
-extern std::atomic<int> g_fps_limit;
 
 namespace {
 
@@ -54,10 +54,12 @@ std::mutex g_lifecycle_mutex;
 std::condition_variable g_wake;
 std::thread g_thread;
 int g_interval_seconds = 5;
+bool g_frame_interval_trace = false;
 
 std::mutex g_engine_mutex;
 TimingWindow g_service_timing{65536}, g_pump_timing{65536}, g_focus_timing{65536};
-TimingWindow g_limiter_timing;
+TimingWindow g_limiter_timing, g_limiter_oversleep;
+uint64_t g_limiter_calls = 0, g_limiter_sleeps = 0, g_limiter_resets = 0, g_limiter_late_resets = 0;
 
 std::string ReadText(const std::string& path, size_t maximum = 262144) {
     std::ifstream input(path, std::ios::binary);
@@ -66,6 +68,11 @@ std::string ReadText(const std::string& path, size_t maximum = 262144) {
     input.read(text.data(), std::streamsize(maximum));
     text.resize(size_t(input.gcount()));
     return text;
+}
+
+std::string FrameIntervalTracePath() {
+    const char* directory = getenv("DXVK_LOG_PATH");
+    return std::string(directory && *directory ? directory : ".") + "/proto-frame-intervals.csv";
 }
 
 uint64_t NamedKb(const std::string& text, const std::string& key) {
@@ -452,12 +459,21 @@ std::string WorstEvents(const TimingWindowSnapshot& snapshot, size_t maximum = 4
 }
 
 struct EngineSnapshot {
-    TimingWindowSnapshot service, pump, limiter, focus;
+    TimingWindowSnapshot service, pump, focus;
+    TimingWindowSnapshot limiter, limiter_oversleep;
+    uint64_t limiter_calls = 0, limiter_sleeps = 0, limiter_resets = 0, limiter_late_resets = 0;
 };
 
 EngineSnapshot TakeEngineSnapshot() {
     std::lock_guard<std::mutex> lock(g_engine_mutex);
-    return {g_service_timing.Take(), g_pump_timing.Take(), g_limiter_timing.Take(), g_focus_timing.Take()};
+    EngineSnapshot out{g_service_timing.Take(), g_pump_timing.Take(), g_focus_timing.Take(),
+                       g_limiter_timing.Take(), g_limiter_oversleep.Take()};
+    out.limiter_calls = g_limiter_calls;
+    out.limiter_sleeps = g_limiter_sleeps;
+    out.limiter_resets = g_limiter_resets;
+    out.limiter_late_resets = g_limiter_late_resets;
+    g_limiter_calls = g_limiter_sleeps = g_limiter_resets = g_limiter_late_resets = 0;
+    return out;
 }
 
 struct RunSummary {
@@ -489,8 +505,27 @@ void LogRunSummary(const RunSummary& run) {
         (unsigned long long)run.over[4], (unsigned long long)run.over[5], (unsigned long long)run.over[6]);
 }
 
+void WriteFrameIntervals(FrameIntervalTrace& frame_trace, const TimingWindowSnapshot& present) {
+    const bool was_capped = frame_trace.capped();
+    const std::string previous_trace_error = frame_trace.error();
+    frame_trace.Write(present);
+    if (!was_capped && frame_trace.capped())
+        Log("diagnostics: frame interval trace reached its byte cap after %llu rows; valid prefix retained at %s",
+            (unsigned long long)frame_trace.rows(), frame_trace.path().c_str());
+    if (previous_trace_error != frame_trace.error())
+        Log("diagnostics: frame interval trace stopped after %llu rows: %s",
+            (unsigned long long)frame_trace.rows(), frame_trace.error().c_str());
+}
+
+void CloseFrameIntervals(FrameIntervalTrace& frame_trace) {
+    frame_trace.Close("final");
+    Log("diagnostics: frame interval trace final rows=%llu bytes=%llu capped=%d error=%s",
+        (unsigned long long)frame_trace.rows(), (unsigned long long)frame_trace.bytes(),
+        frame_trace.capped() ? 1 : 0, frame_trace.error().empty() ? "none" : frame_trace.error().c_str());
+}
+
 void EmitWindow(HealthProbe& health, CpuMonitor& cpu, RunSummary& run, int& last_thermal, int64_t& last_emit_ns,
-                bool final) {
+                FrameIntervalTrace& frame_trace, bool final) {
     const int64_t now = MonotonicNanos();
     const double window_seconds = last_emit_ns ? double(now - last_emit_ns) / 1e9 : 0.0;
     last_emit_ns = now;
@@ -498,20 +533,27 @@ void EmitWindow(HealthProbe& health, CpuMonitor& cpu, RunSummary& run, int& last
     auto present = TakePresentDetailedStats();
     auto present_wall = TakePresentTimingWindow();
     EngineSnapshot engine = TakeEngineSnapshot();
+    // Persist chronological samples before TimingSummary's percentile selection reorders its sample vector.
+    WriteFrameIntervals(frame_trace, present);
     run.Add(present);
 
     Log("diag%s: window=%.3fs loops=%llu rate=%.2f/s fps_limit=%d; present_fps=%.3f intervals %s",
         final ? " final" : "", window_seconds, (unsigned long long)engine.service.count,
-        window_seconds > 0 ? double(engine.service.count) / window_seconds : 0.0, g_fps_limit.load(),
+        window_seconds > 0 ? double(engine.service.count) / window_seconds : 0.0, FrameLimitTarget(),
         present.Frequency(), TimingSummary(present).c_str());
     if (present.count) Log("diag: present worst: %s", WorstEvents(present).c_str());
     Log("diag: EngineService %s; worst: %s", TimingSummary(engine.service).c_str(),
         WorstEvents(engine.service, 2).c_str());
-    Log("diag: event pump %s; limiter wait %s; focus %s", TimingBasic(engine.pump).c_str(),
-        TimingBasic(engine.limiter).c_str(), TimingBasic(engine.focus).c_str());
+    Log("diag: event pump %s; focus %s", TimingBasic(engine.pump).c_str(), TimingBasic(engine.focus).c_str());
+    Log("diag: present limiter calls=%llu sleeps=%llu resets=%llu late_resets=%llu; wait %s; oversleep %s",
+        (unsigned long long)engine.limiter_calls, (unsigned long long)engine.limiter_sleeps,
+        (unsigned long long)engine.limiter_resets, (unsigned long long)engine.limiter_late_resets,
+        TimingBasic(engine.limiter).c_str(), TimingBasic(engine.limiter_oversleep).c_str());
     Log("diag: Present wall (includes FIFO/vsync, not GPU time) %s; worst: %s", TimingSummary(present_wall).c_str(),
         WorstEvents(present_wall, 2).c_str());
     Log("diag: texture %s", TakeTextureTimingStats().c_str());
+    // Host UnlockRect remains the existing texture upload timer. Rect wait counts mutex acquisitions, not calls.
+    Log("diag: rect locks %s", TakeLockTimingStats().c_str());
     Log("diag: io %s", TakeIoStats().c_str());
     const std::string io_events = TakeIoEvents();
     if (!io_events.empty()) Log("diag: slow io: %s", io_events.c_str());
@@ -542,10 +584,11 @@ void EmitWindow(HealthProbe& health, CpuMonitor& cpu, RunSummary& run, int& last
 
     const PerfHintSnapshot hint = GetPerfHintStats();
     Log("diag: adpf session=%s target=%.3fms threads=%zu reports_total=%llu report_errors_total=%llu "
-        "target_updates_total=%llu target_errors_total=%llu",
+        "target_updates_total=%llu target_errors_total=%llu dynamic_thread_updates_total=%llu dynamic_thread_errors_total=%llu",
         hint.session ? "yes" : "no", double(hint.target_ns) / 1e6, hint.threads, (unsigned long long)hint.reports,
         (unsigned long long)hint.report_errors, (unsigned long long)hint.target_updates,
-        (unsigned long long)hint.target_errors);
+        (unsigned long long)hint.target_errors, (unsigned long long)hint.thread_updates,
+        (unsigned long long)hint.thread_update_errors);
 }
 
 void DiagnosticsWorker() {
@@ -555,17 +598,30 @@ void DiagnosticsWorker() {
     int last_thermal = -2;
     int64_t last_emit_ns = MonotonicNanos();
     const bool detailed = g_detailed.load(std::memory_order_acquire);
+    FrameIntervalTrace frame_trace(g_frame_interval_trace, FrameIntervalTracePath());
+    if (g_frame_interval_trace) {
+        if (frame_trace.enabled())
+            Log("diagnostics: raw Present intervals -> %s; worker-only CSV I/O, 64 MiB cap",
+                frame_trace.path().c_str());
+        else
+            Log("diagnostics: raw Present interval trace could not open %s: %s",
+                frame_trace.path().c_str(), frame_trace.error().c_str());
+    }
     if (detailed) Log("diagnostics health APIs: %s", health.Capabilities().c_str());
 
     std::unique_lock<std::mutex> lock(g_lifecycle_mutex);
-    auto next_emit = detailed ? std::chrono::steady_clock::now() + std::chrono::seconds(1)
-                              : std::chrono::steady_clock::time_point::max();
+    auto next_emit = (detailed || g_frame_interval_trace)
+                         ? std::chrono::steady_clock::now() + std::chrono::seconds(detailed ? 1 : g_interval_seconds)
+                         : std::chrono::steady_clock::time_point::max();
     auto next_mirror = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     while (g_active.load(std::memory_order_acquire)) {
         const auto now = std::chrono::steady_clock::now();
         if (now >= next_emit) {
             lock.unlock();
-            EmitWindow(health, cpu, run, last_thermal, last_emit_ns, false);
+            if (detailed)
+                EmitWindow(health, cpu, run, last_thermal, last_emit_ns, frame_trace, false);
+            else
+                WriteFrameIntervals(frame_trace, TakePresentDetailedStats());
             lock.lock();
             next_emit = std::chrono::steady_clock::now() + std::chrono::seconds(g_interval_seconds);
         }
@@ -579,10 +635,12 @@ void DiagnosticsWorker() {
         g_wake.wait_until(lock, wake, [] { return !g_active.load(std::memory_order_acquire); });
     }
     lock.unlock();
-    if (detailed) {
-        EmitWindow(health, cpu, run, last_thermal, last_emit_ns, true);
-        LogRunSummary(run);
-    }
+    if (detailed)
+        EmitWindow(health, cpu, run, last_thermal, last_emit_ns, frame_trace, true);
+    else if (g_frame_interval_trace)
+        WriteFrameIntervals(frame_trace, TakePresentDetailedStats());
+    if (g_frame_interval_trace) CloseFrameIntervals(frame_trace);
+    if (detailed) LogRunSummary(run);
 }
 
 void RunDiagnosticsWorker() noexcept {
@@ -597,6 +655,7 @@ void RunDiagnosticsWorker() noexcept {
     g_active.store(false, std::memory_order_release);
     g_detailed.store(false, std::memory_order_release);
     SetPresentDetailedEnabled(false);
+    g_frame_interval_trace = false;
 }
 
 }  // namespace
@@ -605,29 +664,49 @@ bool DetailedDiagnosticsEnabled() {
     return g_active.load(std::memory_order_relaxed) && g_detailed.load(std::memory_order_relaxed);
 }
 
-void RecordEngineLoop(int64_t at_ns, int64_t service_ns, int64_t event_pump_ns, int64_t limiter_ns, int64_t focus_ns) {
+void RecordEngineLoop(int64_t at_ns, int64_t service_ns, int64_t event_pump_ns, int64_t focus_ns) {
     if (!DetailedDiagnosticsEnabled()) return;
     thread_local const int tid = int(gettid());
     std::lock_guard<std::mutex> lock(g_engine_mutex);
     g_service_timing.Add(at_ns, service_ns, tid);
     g_pump_timing.Add(at_ns, event_pump_ns, tid);
-    if (limiter_ns >= 0) g_limiter_timing.Add(at_ns, limiter_ns, tid);
     g_focus_timing.Add(at_ns, focus_ns, tid);
+}
+
+void RecordPresentLimiter(const FrameLimitResult& result) {
+    if (result.target_fps <= 0 || !DetailedDiagnosticsEnabled()) return;
+    thread_local const int tid = int(gettid());
+    std::lock_guard<std::mutex> lock(g_engine_mutex);
+    ++g_limiter_calls;
+    g_limiter_timing.Add(result.present_ns, result.wait_ns, tid);
+    if (result.requested_wait_ns > 0) {
+        ++g_limiter_sleeps;
+        g_limiter_oversleep.Add(result.present_ns, result.oversleep_ns, tid);
+    }
+    if (result.schedule_reset) ++g_limiter_resets;
+    if (result.late_reset) ++g_limiter_late_resets;
 }
 
 void DiagnosticsStart() {
     std::lock_guard<std::mutex> lock(g_lifecycle_mutex);
     if (g_thread.joinable() || g_active.load()) return;
     const bool tour = DiagnosticTourEnabled();
+    const bool frame_trace = tour || SettingInt("frame_interval_trace", 0) != 0;
     const bool detailed = tour || SettingInt("detailed_diagnostics", kDetailedDiagnosticsDefault) != 0;
+    g_frame_interval_trace = frame_trace;
     g_detailed.store(detailed, std::memory_order_release);
-    SetPresentDetailedEnabled(detailed);
-    g_interval_seconds = detailed ? (tour ? 1 : std::clamp(SettingInt("detailed_diagnostics_interval", 5), 1, 60)) : 0;
+    SetPresentDetailedEnabled(detailed || frame_trace);
+    g_interval_seconds = (detailed || frame_trace)
+                             ? (tour ? 1 : std::clamp(SettingInt("detailed_diagnostics_interval", 5), 1, 60))
+                             : 0;
+    if (detailed || frame_trace) LogDeviceInfo();
     if (detailed) {
-        LogDeviceInfo();
         Log("diagnostics: enabled; window=%ds; native/DXVK timestamps are monotonic seconds with thread IDs; "
             "Present wall is not GPU time",
             g_interval_seconds);
+    } else if (frame_trace) {
+        Log("diagnostics: raw Present intervals enabled; detailed native and Present-wall metrics remain disabled; "
+            "window=%ds", g_interval_seconds);
     } else {
         Log("diagnostics: detailed metrics disabled; shared log mirroring remains active");
     }
@@ -649,6 +728,7 @@ void DiagnosticsStop() {
             g_active.store(false, std::memory_order_release);
             g_detailed.store(false, std::memory_order_release);
             SetPresentDetailedEnabled(false);
+            g_frame_interval_trace = false;
             return;
         }
         g_active.store(false, std::memory_order_release);
@@ -657,6 +737,7 @@ void DiagnosticsStop() {
     g_thread.join();
     g_detailed.store(false, std::memory_order_release);
     SetPresentDetailedEnabled(false);
+    g_frame_interval_trace = false;
 }
 
 }  // namespace native

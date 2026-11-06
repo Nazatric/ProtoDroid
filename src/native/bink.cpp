@@ -259,7 +259,9 @@ uint32_t g_custom_io_open = 0;
 bool g_simulate = false;
 
 struct AudioOutput {
-    std::once_flag once;
+    // A failed open is recoverable: a later movie/sound-system request may retry after the platform
+    // output becomes available. Once a valid stream exists, retain it for the process lifetime.
+    std::mutex init_mutex;
     SDL_AudioDeviceID device = 0;
     SDL_AudioSpec spec {};
     std::vector<float> mix;
@@ -335,38 +337,40 @@ void SDLCALL AudioCallback(void*, Uint8* stream, int length) {
 }
 
 void EnsureAudioOutput() {
-    std::call_once(g_audio.once, [] {
-        if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
-            Log("[bink] SDL audio unavailable: %s; using monotonic video timing\n", SDL_GetError());
-            return;
-        }
-        SDL_AudioSpec want {};
-        want.freq = kAudioRate;
-        want.format = AUDIO_F32SYS;
-        want.channels = 2;
-        want.samples = 1024;
-        want.callback = AudioCallback;
-        g_audio.device = SDL_OpenAudioDevice(nullptr, 0, &want, &g_audio.spec, SDL_AUDIO_ALLOW_SAMPLES_CHANGE);
-        if (!g_audio.device) {
-            Log("[bink] SDL_OpenAudioDevice failed: %s; using monotonic video timing\n", SDL_GetError());
-            return;
-        }
-        if (g_audio.spec.format != AUDIO_F32SYS || g_audio.spec.channels != 2) {
-            Log("[bink] unexpected SDL audio format; disabling movie mixing\n");
-            SDL_CloseAudioDevice(g_audio.device);
-            g_audio.device = 0;
-            return;
-        }
-        if (g_audio.spec.freq <= 0 || g_audio.spec.freq > 768000) {
-            Log("[bink] SDL granted an invalid audio rate %d Hz; disabling movie audio\n", g_audio.spec.freq);
-            SDL_CloseAudioDevice(g_audio.device);
-            g_audio.device = 0;
-            return;
-        }
-        g_output_rate.store(static_cast<uint32_t>(g_audio.spec.freq), std::memory_order_relaxed);
-        Log("[bink] SDL movie audio: %d Hz, stereo float\n", g_audio.spec.freq);
-        SDL_PauseAudioDevice(g_audio.device, 1);
-    });
+    std::lock_guard<std::mutex> init_lock(g_audio.init_mutex);
+    if (g_audio.device) return;
+    // Do not repeatedly call SDL after a successful initialization, but do not let one transient
+    // failure permanently disable audio for every later movie.
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
+        Log("[bink] SDL audio unavailable: %s; using monotonic video timing\n", SDL_GetError());
+        return;
+    }
+    SDL_AudioSpec want {};
+    want.freq = kAudioRate;
+    want.format = AUDIO_F32SYS;
+    want.channels = 2;
+    want.samples = 1024;
+    want.callback = AudioCallback;
+    g_audio.device = SDL_OpenAudioDevice(nullptr, 0, &want, &g_audio.spec, SDL_AUDIO_ALLOW_SAMPLES_CHANGE);
+    if (!g_audio.device) {
+        Log("[bink] SDL_OpenAudioDevice failed: %s; using monotonic video timing\n", SDL_GetError());
+        return;
+    }
+    if (g_audio.spec.format != AUDIO_F32SYS || g_audio.spec.channels != 2) {
+        Log("[bink] unexpected SDL audio format; disabling movie mixing\n");
+        SDL_CloseAudioDevice(g_audio.device);
+        g_audio.device = 0;
+        return;
+    }
+    if (g_audio.spec.freq <= 0 || g_audio.spec.freq > 768000) {
+        Log("[bink] SDL granted an invalid audio rate %d Hz; disabling movie audio\n", g_audio.spec.freq);
+        SDL_CloseAudioDevice(g_audio.device);
+        g_audio.device = 0;
+        return;
+    }
+    g_output_rate.store(static_cast<uint32_t>(g_audio.spec.freq), std::memory_order_relaxed);
+    Log("[bink] SDL movie audio: %d Hz, stereo float\n", g_audio.spec.freq);
+    SDL_PauseAudioDevice(g_audio.device, 1);
 }
 
 std::shared_ptr<Movie> FindMovie(uint32_t handle) {

@@ -747,8 +747,9 @@ final class DriverView extends View implements DriverManager.Observer {
     }
 
     private float drawRecovery(Canvas canvas, float left, float top, float width, float u) {
-        String recovery = "If a driver causes trouble, choose Automatic or Phone driver. A failed custom probe uses "
-                + "System and records the reason. Packages are private to ProtoDroid and never replace the phone's global driver.";
+        String recovery = "If a driver causes trouble, choose Automatic or Phone driver. Reselecting a driver explicitly "
+                + "retries it and clears its previous startup-failure guard. A failed custom probe uses System and records "
+                + "the reason. Packages are private to ProtoDroid and never replace the phone's global driver.";
         StaticLayout recoveryLayout = paragraph(recovery, width - 28f * u, 12f, 500, DIM, u);
         float height = recoveryLayout.getHeight() + 43f * u;
         RectF card = rect(left, top, left + width, top + height);
@@ -908,6 +909,7 @@ final class DriverView extends View implements DriverManager.Observer {
             int mode = action - ACTION_MODE;
             removeArmedId = "";
             detailsId = "";
+            manager.clearFailureMarkers();
             settings.setDriverMode(mode);
             if (mode == 3) {
                 showPackages = true;

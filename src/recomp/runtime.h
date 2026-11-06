@@ -48,6 +48,23 @@ void RecompVideoSettingRead(Ctx* c);
 /* Native Android optional policy: nonzero removes only the 15 ms simulation skip. Other embedders return zero. */
 int RecompRemoveTickRateLimit(void);
 
+/* Native host investigation: emitted only for generation-time-selected functions (--trace-functions). Ordinary
+ * builds compile those calls away completely; an out-of-line disabled check is still overhead in a small/hot guest
+ * function. Build the entire native target with GUEST_FUNCTION_TRACE=1 to retain probes and enable the INI setting.
+ * RVAs are relative to the original DLL image base. Keep the generated call text stable for differential checks. */
+void RecompGuestFunctionEnterRuntime(Ctx* context, uint32_t rva);
+void RecompGuestFunctionExitRuntime(Ctx* context, uint32_t rva);
+#ifdef PROTODROID_GUEST_FUNCTION_TRACE
+#define RecompGuestFunctionEnter(context, rva) RecompGuestFunctionEnterRuntime((context), (rva))
+#define RecompGuestFunctionExit(context, rva) RecompGuestFunctionExitRuntime((context), (rva))
+#else
+#define RecompGuestFunctionEnter(context, rva) ((void)0)
+#define RecompGuestFunctionExit(context, rva) ((void)0)
+#endif
+
+/* Builds the immutable dispatch table during native startup. RecompLookup retains a thread-safe lazy fallback for
+ * tests and early embedders; after publication its fast path does not call pthread_once on every computed call. */
+void RecompInitializeDispatch(void);
 /* Looks up the recompiled implementation of a guest function entry, or null. */
 RecompFn RecompLookup(uint32_t target);
 

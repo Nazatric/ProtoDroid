@@ -1,0 +1,232 @@
+diff --git a/src/d3d9/d3d9_device.cpp b/src/d3d9/d3d9_device.cpp
+index eab3310..34370d7 100644
+--- a/src/d3d9/d3d9_device.cpp
++++ b/src/d3d9/d3d9_device.cpp
+@@ -12,6 +12,7 @@
+ #include "d3d9_shader.h"
+ #include "d3d9_query.h"
+ #include "d3d9_timing.h"
++#include "d3d9_warm_cache_trace.h"
+ #include "d3d9_stateblock.h"
+ #include "d3d9_monitor.h"
+ #include "d3d9_spec_constants.h"
+@@ -4162,6 +4163,18 @@ namespace dxvk {
+       dwFlags);
+ #ifdef __ANDROID__
+     D3D9Timing::MaybeLog();
++    static D3D9WarmCacheTrace::State warmCacheTraceState;
++    D3D9WarmCacheTrace::MaybeLog(warmCacheTraceState, D3D9WarmCacheTrace::Enabled(),
++      [] { return D3D9WarmCacheTrace::Now(); },
++      [this] { return m_dxvkDevice->getWarmCacheSnapshot(); },
++      [] (const DxvkWarmCacheSnapshot& snapshot, int64_t atNs) {
++        Logger::info(str::format("DXVK warm-cache snapshot: at_ns=", atNs,
++          " state_known=", snapshot.stateCacheKnown ? 1 : 0,
++          " state_pending=", snapshot.stats.stateCachePending,
++          " pipeline_total=", snapshot.stats.pipelineTasksTotal,
++          " pipeline_completed=", snapshot.stats.pipelineTasksCompleted,
++          " pipeline_pending=", snapshot.stats.pipelinePending()));
++      });
+ #endif
+     return result;
+   }
+diff --git a/src/d3d9/d3d9_warm_cache_trace.h b/src/d3d9/d3d9_warm_cache_trace.h
+new file mode 100644
+index 0000000..23a72ca
+--- /dev/null
++++ b/src/d3d9/d3d9_warm_cache_trace.h
+@@ -0,0 +1,61 @@
++#pragma once
++
++#ifdef __ANDROID__
++
++#include <atomic>
++#include <chrono>
++#include <cstdint>
++#include <limits>
++
++#include "../util/util_env.h"
++
++namespace dxvk {
++
++  // Opt-in periodic warm-cache observation. The caller supplies a try-lock snapshot reader: this scheduler never
++  // waits for feeder/pipeline work and never calls the drain. Disabled polls do not read the clock, queue state, or
++  // scheduler atomics. Snapshots are instantaneous samples, not a continuous history or GPU-time measurement.
++  class D3D9WarmCacheTrace {
++  public:
++
++    static constexpr int64_t kIntervalNs = 250000000ll;
++
++    struct State {
++      std::atomic<int64_t> nextLogNs = { 0 };
++    };
++
++    static bool Enabled() {
++      static const bool enabled = env::getEnvVar("PROTODROID_WARM_CACHE_TRACE") == "1";
++      return enabled;
++    }
++
++    static int64_t Now() {
++      return std::chrono::duration_cast<std::chrono::nanoseconds>(
++        std::chrono::steady_clock::now().time_since_epoch()).count();
++    }
++
++    static int64_t NextDue(int64_t now) {
++      return now > std::numeric_limits<int64_t>::max() - kIntervalNs
++        ? std::numeric_limits<int64_t>::max() : now + kIntervalNs;
++    }
++
++    template<typename Clock, typename ReadSnapshot, typename Emit>
++    static void MaybeLog(State& state, bool enabled, Clock&& clock,
++                         ReadSnapshot&& readSnapshot, Emit&& emit) {
++      if (!enabled)
++        return;
++      const int64_t now = clock();
++      int64_t next = state.nextLogNs.load(std::memory_order_relaxed);
++      while (now >= next) {
++        if (state.nextLogNs.compare_exchange_weak(next, NextDue(now), std::memory_order_relaxed)) {
++          // Only the thread that claims the due window reads queue state. Other Present calls return immediately.
++          emit(readSnapshot(), now);
++          break;
++        }
++      }
++    }
++
++  };
++
++}
++
++#endif
+diff --git a/src/dxvk/dxvk_device.cpp b/src/dxvk/dxvk_device.cpp
+index 0118fc2..e000848 100644
+--- a/src/dxvk/dxvk_device.cpp
++++ b/src/dxvk/dxvk_device.cpp
+@@ -415,6 +415,11 @@ namespace dxvk {
+   }
+ 
+ 
++  DxvkWarmCacheSnapshot DxvkDevice::getWarmCacheSnapshot() {
++    return m_objects.pipelineManager().getWarmCacheSnapshot();
++  }
++
++
+   void DxvkDevice::waitForIdle() {
+     m_submissionQueue.waitForIdle();
+     m_submissionQueue.lockDeviceQueue();
+diff --git a/src/dxvk/dxvk_device.h b/src/dxvk/dxvk_device.h
+index c5afe7d..a2123f4 100644
+--- a/src/dxvk/dxvk_device.h
++++ b/src/dxvk/dxvk_device.h
+@@ -582,6 +582,11 @@ namespace dxvk {
+      * The caller must not hold the D3D9 device lock. No automatic production call is installed.
+      */
+     DxvkPipelineDrainResult waitForWarmCache(uint64_t timeoutNs);
++
++    /**
++     * \brief Nonblocking warm-cache observation; never waits for queued work
++     */
++    DxvkWarmCacheSnapshot getWarmCacheSnapshot();
+     
+     /**
+      * \brief Waits until the device becomes idle
+diff --git a/src/dxvk/dxvk_pipeline_drain.h b/src/dxvk/dxvk_pipeline_drain.h
+index f165220..5d39276 100644
+--- a/src/dxvk/dxvk_pipeline_drain.h
++++ b/src/dxvk/dxvk_pipeline_drain.h
+@@ -23,6 +23,13 @@ namespace dxvk {
+     }
+   };
+ 
++  // Nonblocking diagnostic snapshot. A false stateCacheKnown means its numeric stateCachePending field is unknown,
++  // not zero; pipeline worker counters remain raw relaxed samples and are not a transactional pair with the feeder.
++  struct DxvkWarmCacheSnapshot {
++    DxvkPipelineDrainStats stats;
++    bool stateCacheKnown = false;
++  };
++
+   struct DxvkPipelineDrainResult {
+     DxvkPipelineDrainStats stats;
+     uint64_t waitNs = 0;
+diff --git a/src/dxvk/dxvk_pipemanager.cpp b/src/dxvk/dxvk_pipemanager.cpp
+index e5b0170..499506f 100644
+--- a/src/dxvk/dxvk_pipemanager.cpp
++++ b/src/dxvk/dxvk_pipemanager.cpp
+@@ -395,6 +395,16 @@ namespace dxvk {
+   }
+ 
+ 
++  DxvkWarmCacheSnapshot DxvkPipelineManager::getWarmCacheSnapshot() {
++    DxvkWarmCacheSnapshot result;
++    result.stateCacheKnown = m_stateCache.tryGetWorkerPending(result.stats.stateCachePending);
++    const DxvkPipelineWorkerStats workers = m_workers.getStats();
++    result.stats.pipelineTasksTotal = workers.tasksTotal;
++    result.stats.pipelineTasksCompleted = workers.tasksCompleted;
++    return result;
++  }
++
++
+   DxvkPipelineDrainResult DxvkPipelineManager::waitForWarmCache(uint64_t timeoutNs) {
+     auto result = DxvkPipelineDrain::Wait<std::chrono::steady_clock>(timeoutNs,
+       [] (std::chrono::nanoseconds delay) { std::this_thread::sleep_for(delay); },
+diff --git a/src/dxvk/dxvk_pipemanager.h b/src/dxvk/dxvk_pipemanager.h
+index b1e128f..ca7606d 100644
+--- a/src/dxvk/dxvk_pipemanager.h
++++ b/src/dxvk/dxvk_pipemanager.h
+@@ -265,6 +265,11 @@ namespace dxvk {
+      */
+     DxvkPipelineDrainStats getWarmCacheStats();
+ 
++    /**
++     * \brief Returns a nonblocking diagnostic snapshot with explicit feeder unknowns
++     */
++    DxvkWarmCacheSnapshot getWarmCacheSnapshot();
++
+     /**
+      * \brief Bounded wait for already queued warm-cache work
+      *
+diff --git a/src/dxvk/dxvk_state_cache.cpp b/src/dxvk/dxvk_state_cache.cpp
+index ba56847..2ab8640 100644
+--- a/src/dxvk/dxvk_state_cache.cpp
++++ b/src/dxvk/dxvk_state_cache.cpp
+@@ -3,6 +3,8 @@
+ #include "dxvk_state_cache.h"
+ #include "dxvk_state_cache_io.h"
+ 
++#include <mutex>
++
+ namespace dxvk {
+ 
+   static const Sha1Hash       g_nullHash      = Sha1Hash::compute(nullptr, 0);
+@@ -392,6 +394,15 @@ namespace dxvk {
+   }
+ 
+ 
++  bool DxvkStateCache::tryGetWorkerPending(uint64_t& pending) {
++    std::unique_lock<dxvk::mutex> lock(m_workerLock, std::try_to_lock);
++    if (!lock.owns_lock())
++      return false;
++    pending = uint64_t(m_workerQueue.size()) + (m_workerActive ? 1u : 0u);
++    return true;
++  }
++
++
+   void DxvkStateCache::stopWorkers() {
+     { std::lock_guard<dxvk::mutex> workerLock(m_workerLock);
+       std::lock_guard<dxvk::mutex> writerLock(m_writerLock);
+diff --git a/src/dxvk/dxvk_state_cache.h b/src/dxvk/dxvk_state_cache.h
+index 65f8434..308d006 100644
+--- a/src/dxvk/dxvk_state_cache.h
++++ b/src/dxvk/dxvk_state_cache.h
+@@ -76,6 +76,13 @@ namespace dxvk {
+      */
+     uint64_t getWorkerPending();
+ 
++    /**
++     * \brief Attempts to read queued plus active feeder work without waiting
++     *
++     * Returns false and leaves the output unchanged when the feeder mutex is contended.
++     */
++    bool tryGetWorkerPending(uint64_t& pending);
++
+     /**
+      * \brief Explicitly stops worker threads
+      */

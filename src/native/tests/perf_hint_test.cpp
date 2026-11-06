@@ -17,11 +17,67 @@ void Check(bool condition, const char* message) {
 
 struct FakeSession {};
 
+void TestDxvkFrameThreadSelection() {
+    using native::detail::IsDxvkFrameThreadComm;
+    Check(IsDxvkFrameThreadComm("dxvk-cs"), "DXVK CS thread must join the frame session");
+    Check(IsDxvkFrameThreadComm("dxvk-submit\n"), "submission thread comm newline handling");
+    Check(IsDxvkFrameThreadComm("dxvk-cs\r\n"), "submission comm CRLF handling");
+    Check(!IsDxvkFrameThreadComm("dxvk-worker"), "pipeline workers are not per-frame submitters");
+    Check(!IsDxvkFrameThreadComm("mali-compiler"), "driver compiler threads must stay excluded");
+    Check(!IsDxvkFrameThreadComm("dxvk-cs-extra"), "near-name matches must stay excluded");
+    Check(!IsDxvkFrameThreadComm("dxvk-submit-extra"), "submission prefix matches must stay excluded");
+    Check(!IsDxvkFrameThreadComm(""), "empty comm is not a frame thread");
+}
+
 void TestLiveThreadPruning() {
-    Threads threads = native::detail::LiveHintThreads({10, 11, 12, 11, -1}, 20, [](int32_t tid) {
+    auto alive = [](int32_t tid) {
         return tid == 10 || tid == 11;  // 12 exited; invalid and duplicate entries are discarded too
-    });
+    };
+    Threads existing = native::detail::ExistingLiveHintThreads({10, 11, 12, 11, -1}, alive);
+    Check(existing == Threads({10, 11}), "dynamic pruning must not invent a new current thread");
+    Threads threads = native::detail::LiveHintThreads({10, 11, 12, 11, -1}, 20, alive);
     Check(threads == Threads({10, 11, 20}), "stale, duplicate, and current thread handling");
+}
+
+void TestDynamicRosterRefresh() {
+    auto alive = [](int32_t tid) { return tid == 10 || tid == 11 || tid == 13; };
+    Threads threads{10, 11, 12, 13};
+    size_t pruned = 0;
+    int calls = 0;
+    auto accept = [&](const Threads& live) {
+        ++calls;
+        Check(live == Threads({10, 11, 13}), "Android must receive the pruned dynamic roster");
+        return 0;
+    };
+    Check(native::detail::RefreshHintSessionThreads(threads, 13, alive, accept, pruned) == 0,
+          "successful dynamic update status");
+    Check(calls == 1 && pruned == 1 && threads == Threads({10, 11, 13}),
+          "successful dynamic update retains the new thread and removes stale workers");
+
+    threads = {10, 11, 12, 13};
+    pruned = 0;
+    auto reject = [&](const Threads& live) {
+        ++calls;
+        Check(live == Threads({10, 11, 13}), "rejected update must also attempt the live roster first");
+        return -22;
+    };
+    Check(native::detail::RefreshHintSessionThreads(threads, 13, alive, reject, pruned) == -22,
+          "Android rejection status must reach production evidence");
+    Check(calls == 2 && pruned == 1 && threads == Threads({10, 11}),
+          "rejected new thread is retryable while previous live workers remain registered");
+
+    threads = {10, 11, 12, 13};
+    pruned = 0;
+    auto exited = [](int32_t tid) { return tid == 10 || tid == 11; };
+    auto accept_old = [&](const Threads& live) {
+        ++calls;
+        Check(live == Threads({10, 11}), "a thread that exits during registration must not reach Android");
+        return 0;
+    };
+    Check(native::detail::RefreshHintSessionThreads(threads, 13, exited, accept_old, pruned) == 0,
+          "new-thread exit refresh status");
+    Check(calls == 3 && pruned == 2 && threads == Threads({10, 11}),
+          "new-thread exit and an older stale worker are pruned together");
 }
 
 void TestInitialSession() {
@@ -96,7 +152,9 @@ void TestRejectedSessions() {
 }  // namespace
 
 int main() {
+    TestDxvkFrameThreadSelection();
     TestLiveThreadPruning();
+    TestDynamicRosterRefresh();
     TestInitialSession();
     TestFallbackAndRestore();
     TestFallbackWithoutWorkerUpdate();

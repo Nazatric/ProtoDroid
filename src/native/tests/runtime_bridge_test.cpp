@@ -16,7 +16,7 @@
 #include "../guest.h"
 
 namespace native {
-extern thread_local Ctx* tl_ctx;
+extern __thread Ctx* tl_ctx;
 }
 
 namespace {
@@ -24,6 +24,7 @@ namespace {
 std::vector<uint8_t> g_memory(2u << 20);
 uint32_t g_next_page = 0x1000;
 uint32_t g_import_calls = 0;
+std::atomic<int> g_thread_import_calls{0};
 uint32_t g_recompiled_calls = 0;
 
 void Check(bool condition, const char* message) {
@@ -41,6 +42,38 @@ void ImportProbe(Ctx* c) {
     Check(ArgD(c, 2) == -12.75, "four-byte-aligned double argument changed");
     ++g_import_calls;
     Return(c, 0x89abcdefu, 4);
+}
+
+void ThreadImportProbe(Ctx* c) {
+    Check(native::tl_ctx == c, "concurrent import received another thread's guest context");
+    g_thread_import_calls.fetch_add(1, std::memory_order_relaxed);
+}
+
+void CheckConcurrentImportIsolation(uint32_t target) {
+    constexpr int kThreads = 8;
+    constexpr int kCalls = 2000;
+    std::atomic<int> ready = 0;
+    std::atomic<bool> go = false;
+    std::atomic<int> failures = 0;
+    std::vector<std::thread> threads;
+    for (int t = 0; t < kThreads; ++t) {
+        threads.emplace_back([&] {
+            Ctx ctx = {};
+            Ctx outer = {};
+            native::tl_ctx = &outer;
+            ++ready;
+            while (!go.load(std::memory_order_acquire)) std::this_thread::yield();
+            for (int i = 0; i < kCalls; ++i) {
+                if (!native::DispatchImport(&ctx, target) || native::tl_ctx != &outer)
+                    failures.fetch_add(1, std::memory_order_relaxed);
+            }
+        });
+    }
+    while (ready.load(std::memory_order_acquire) != kThreads) std::this_thread::yield();
+    go.store(true, std::memory_order_release);
+    for (auto& thread : threads) thread.join();
+    Check(failures.load() == 0, "concurrent import context isolation or restoration failed");
+    Check(g_thread_import_calls.load() == kThreads * kCalls, "concurrent import call count changed");
 }
 
 void RecompiledProbe(Ctx* c) {
@@ -304,7 +337,12 @@ GuestThread* CurrentThread() {
     return &thread;
 }
 
-int SettingInt(const char*, int fallback) { return fallback; }
+int SettingInt(const char* key, int fallback) {
+    if (std::strcmp(key, "import_profile") == 0) {
+        if (const char* value = std::getenv("PROTODROID_IMPORT_PROFILE")) return std::atoi(value);
+    }
+    return fallback;
+}
 void DiagnosticTourGameplayObserved(uint32_t) {}
 
 // misc.cpp's production import table references these factory hooks and path helper. The selected OLEAUT32 and
@@ -315,17 +353,47 @@ std::string HostPath(const char*) { return {}; }
 
 }  // namespace native
 
+void CheckAlignedAndUnalignedOrderedAccesses() {
+    // The aligned-first layout must preserve every width, including the fenced unaligned fallbacks and their exact
+    // store bounds. These cases execute on both the x86-64 UBSan runner and native AArch64 CI.
+    for (uint32_t offset = 0; offset < 8; ++offset) {
+        const uint32_t a16 = 0x9000 + offset, a32 = 0x9100 + offset, a64 = 0x9200 + offset;
+        G(a16 - 1)[0] = 0x51;
+        G(a16 + 2)[0] = 0x52;
+        W16(a16, uint16_t(0xabc0 + offset));
+        Check(R16(a16) == uint16_t(0xabc0 + offset), "16-bit ordered access changed");
+        Check(G(a16 - 1)[0] == 0x51 && G(a16 + 2)[0] == 0x52, "16-bit store crossed its bounds");
+
+        G(a32 - 1)[0] = 0x53;
+        G(a32 + 4)[0] = 0x54;
+        W32(a32, 0x12345670u + offset);
+        Check(R32(a32) == 0x12345670u + offset, "32-bit ordered access changed");
+        Check(G(a32 - 1)[0] == 0x53 && G(a32 + 4)[0] == 0x54, "32-bit store crossed its bounds");
+
+        G(a64 - 1)[0] = 0x55;
+        G(a64 + 8)[0] = 0x56;
+        W64(a64, 0x0123456789abcdefull + offset);
+        Check(R64(a64) == 0x0123456789abcdefull + offset, "64-bit ordered access changed");
+        Check(G(a64 - 1)[0] == 0x55 && G(a64 + 8)[0] == 0x56, "64-bit store crossed its bounds");
+    }
+}
+
 int main() {
     using namespace native;
     RecompMemoryBase = g_memory.data();
+    CheckAlignedAndUnalignedOrderedAccesses();
     g_engine_lo = 0x110000;
     g_engine_hi = 0x111000;
 
-    const ImportDef defs[] = {{"test.dll", "Probe", ImportProbe}};
-    RegisterImports(defs, 1);
+    const ImportDef defs[] = {{"test.dll", "Probe", ImportProbe}, {"test.dll", "ThreadProbe", ThreadImportProbe}};
+    RegisterImports(defs, 2);
     const uint32_t import = ImportThunk("test.dll", "Probe");
+    const uint32_t thread_import = ImportThunk("test.dll", "ThreadProbe");
     Check(import == 0x1000u, "unexpected import thunk address");
     Check(ImportThunk("test.dll", "Probe") == import, "import thunk identity changed");
+
+    // This is deliberately the first dispatched import: it races lazy profiling initialization as well as TLS state.
+    CheckConcurrentImportIsolation(thread_import);
 
     Ctx ctx;
     Ctx outer;

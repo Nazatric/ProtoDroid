@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <new>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -13,6 +15,52 @@ namespace {
 
 uint32_t ReadLe32(const unsigned char* p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
+}
+
+StateCacheFileIdentity FileIdentity(const struct stat& st) {
+    // Device/inode detect replacement; size and nanosecond mtime/ctime detect appends, rewrites, and in-place edits.
+    return {uint64_t(st.st_dev), uint64_t(st.st_ino), uint64_t(st.st_size),
+            uint64_t(st.st_mtim.tv_sec), uint64_t(st.st_mtim.tv_nsec),
+            uint64_t(st.st_ctim.tv_sec), uint64_t(st.st_ctim.tv_nsec)};
+}
+
+bool ReadFileIdentity(const std::string& path, StateCacheFileIdentity& identity) {
+    struct stat st;
+    if (stat(path.c_str(), &st) != 0) return false;
+    identity = FileIdentity(st);
+    return true;
+}
+
+bool FilesEqual(const std::string& source, const std::string& target) {
+    // The mirror can also be requested by the crash reporter on an arbitrary thread. Keep the comparison buffers
+    // off its stack; an allocation failure simply falls back to the legacy complete copy.
+    constexpr size_t kBufferSize = 16384;
+    std::unique_ptr<unsigned char[]> storage(new (std::nothrow) unsigned char[2 * kBufferSize]);
+    if (!storage) return false;
+    unsigned char* source_buffer = storage.get();
+    unsigned char* target_buffer = source_buffer + kBufferSize;
+
+    FILE* in = fopen(source.c_str(), "rb");
+    FILE* backup = fopen(target.c_str(), "rb");
+    if (!in || !backup) {
+        if (in) fclose(in);
+        if (backup) fclose(backup);
+        return false;
+    }
+    bool equal = true;
+    while (equal) {
+        size_t source_count = fread(source_buffer, 1, kBufferSize, in);
+        size_t target_count = fread(target_buffer, 1, kBufferSize, backup);
+        if (source_count != target_count || ferror(in) || ferror(backup) ||
+            (source_count && memcmp(source_buffer, target_buffer, source_count) != 0)) {
+            equal = false;
+            break;
+        }
+        if (source_count < kBufferSize) break;
+    }
+    if (fclose(in) != 0) equal = false;
+    if (fclose(backup) != 0) equal = false;
+    return equal;
 }
 
 bool CopyAtomically(const std::string& source, const std::string& target, bool durable) {
@@ -58,6 +106,16 @@ bool CopyAtomically(const std::string& source, const std::string& target, bool d
 std::string StateCacheFile(const std::string& directory, const std::string& filename) {
     if (directory.empty() || directory.back() == '/') return directory + filename;
     return directory + '/' + filename;
+}
+
+const char* StateCacheStatusName(StateCacheStatus status) {
+    switch (status) {
+        case StateCacheStatus::Missing: return "missing";
+        case StateCacheStatus::Invalid: return "invalid";
+        case StateCacheStatus::Empty: return "empty";
+        case StateCacheStatus::Populated: return "populated";
+    }
+    return "unknown";
 }
 
 StateCacheStatus InspectStateCache(const std::string& path) {
@@ -117,11 +175,50 @@ StateCacheMigrationResult MigrateStateCache(const StateCacheMigration& migration
                                                                      : StateCacheMigrationResult::Failed;
 }
 
-bool BackupStateCache(const std::string& source, const std::string& target) {
+bool BackupStateCache(const std::string& source, const std::string& target, StateCacheBackupState* state) {
+    StateCacheFileIdentity source_now{}, target_now{};
+    bool have_source_now = false;
+    if (state) {
+        if (state->valid && state->source_path == source && state->target_path == target) {
+            have_source_now = ReadFileIdentity(source, source_now);
+            if (have_source_now && source_now == state->source_identity &&
+                ReadFileIdentity(target, target_now) && target_now == state->target_identity &&
+                FilesEqual(source, target)) {
+                // Metadata avoids copying after ordinary changes, but byte comparison is still required: a coarse
+                // timestamp filesystem can preserve every identity field across a rapid same-size in-place edit.
+                return true;
+            }
+        }
+        // Any non-match invalidates the fast path until another complete, stable copy succeeds.
+        state->valid = false;
+    }
+
+    StateCacheFileIdentity before{};
+    bool have_before = false;
+    if (state) {
+        // Reuse a successful fast-path source probe. Changed sources avoid both a redundant target probe and a
+        // second source stat before the full copy; before/after stability validation remains unchanged.
+        before = source_now;
+        have_before = have_source_now || ReadFileIdentity(source, before);
+    }
     if (InspectStateCache(source) != StateCacheStatus::Populated) return false;
-    // Periodic backups run on the engine thread. Atomic replacement protects the last good backup from process
-    // interruption without adding an fsync stall to gameplay; startup migration above remains durable.
-    return CopyAtomically(source, target, false);
+    // Atomic replacement protects the last good backup from process interruption without adding an fsync stall to
+    // gameplay; startup migration above remains durable. The ordinary mirror serializes its tracker and copies.
+    if (!CopyAtomically(source, target, false)) return false;
+    if (!state) return true;
+
+    StateCacheFileIdentity after{}, written{};
+    const bool have_after = ReadFileIdentity(source, after);
+    const bool have_written = ReadFileIdentity(target, written);
+    if (have_before && have_after && have_written && before == after) {
+        state->source_path = source;
+        state->target_path = target;
+        state->source_identity = after;
+        state->target_identity = written;
+        state->valid = true;
+    }
+    // If the source changed before/during the copy, or either identity cannot be read, the next call must copy again.
+    return true;
 }
 
 }  // namespace native

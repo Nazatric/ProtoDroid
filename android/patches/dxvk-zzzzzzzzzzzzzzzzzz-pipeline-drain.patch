@@ -1,0 +1,214 @@
+--- /dev/null
++++ b/src/dxvk/dxvk_pipeline_drain.h
+@@ -0,0 +1,66 @@
++#pragma once
++
++#include <algorithm>
++#include <chrono>
++#include <cstdint>
++
++namespace dxvk {
++
++  // Snapshot of the two asynchronous stages involved in warm-cache reconstruction. The state-cache feeder can pop
++  // its last item before it enqueues pipeline tasks, so pipeline tasksTotal/tasksCompleted alone are not a drain gate.
++  struct DxvkPipelineDrainStats {
++    uint64_t stateCachePending = 0;
++    uint64_t pipelineTasksTotal = 0;
++    uint64_t pipelineTasksCompleted = 0;
++
++    uint64_t pipelinePending() const {
++      return pipelineTasksTotal > pipelineTasksCompleted
++        ? pipelineTasksTotal - pipelineTasksCompleted : 0;
++    }
++
++    bool idle() const {
++      return stateCachePending == 0 && pipelinePending() == 0;
++    }
++  };
++
++  struct DxvkPipelineDrainResult {
++    DxvkPipelineDrainStats stats;
++    uint64_t waitNs = 0;
++    uint32_t iterations = 0;
++    bool drained = false;
++  };
++
++  // Bounded polling wait for an explicit future loading boundary. This header has no device/Vulkan dependency and
++  // the production caller supplies a sleep outside every device, state-cache and pipeline-worker mutex. There is no
++  // unbounded wait, pipeline creation, shader-variant invention, or implicit call from Present/device destruction.
++  class DxvkPipelineDrain {
++  public:
++    static constexpr uint64_t kMaximumWaitNs = 30000000000ull;
++    static constexpr uint64_t kPollIntervalNs = 1000000ull;
++
++    template<typename Clock, typename Sleep, typename ReadStats>
++    static DxvkPipelineDrainResult Wait(uint64_t timeoutNs, Sleep&& sleep, ReadStats&& readStats) {
++      const uint64_t boundedTimeout = std::min(timeoutNs, kMaximumWaitNs);
++      const auto start = Clock::now();
++      const auto deadline = start + std::chrono::nanoseconds(boundedTimeout);
++      DxvkPipelineDrainResult result;
++
++      while (true) {
++        result.stats = readStats();
++        result.iterations += 1;
++        const auto now = Clock::now();
++        result.waitNs = uint64_t(std::max<int64_t>(0,
++          std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count()));
++        result.drained = result.stats.idle();
++        if (result.drained || now >= deadline)
++          return result;
++
++        const auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(deadline - now);
++        const auto delay = std::min<std::chrono::nanoseconds>(remaining,
++          std::chrono::nanoseconds(kPollIntervalNs));
++        sleep(delay);
++      }
++    }
++  };
++
++}
+--- a/src/dxvk/dxvk_device.cpp
++++ b/src/dxvk/dxvk_device.cpp
+@@ -410,6 +410,11 @@
+   }
+   
+   
++  DxvkPipelineDrainResult DxvkDevice::waitForWarmCache(uint64_t timeoutNs) {
++    return m_objects.pipelineManager().waitForWarmCache(timeoutNs);
++  }
++
++
+   void DxvkDevice::waitForIdle() {
+     m_submissionQueue.waitForIdle();
+     m_submissionQueue.lockDeviceQueue();
+--- a/src/dxvk/dxvk_device.h
++++ b/src/dxvk/dxvk_device.h
+@@ -575,6 +575,13 @@
+      * \param [in] access Access mode to check
+      */
+     void waitForResource(const DxvkPagedResource& resource, DxvkAccess access);
++
++    /**
++     * \brief Bounded wait for queued warm-cache compilation, not GPU execution
++     *
++     * The caller must not hold the D3D9 device lock. No automatic production call is installed.
++     */
++    DxvkPipelineDrainResult waitForWarmCache(uint64_t timeoutNs);
+     
+     /**
+      * \brief Waits until the device becomes idle
+--- a/src/dxvk/dxvk_pipemanager.cpp
++++ b/src/dxvk/dxvk_pipemanager.cpp
+@@ -1,4 +1,5 @@
+ #include <optional>
++#include <thread>
+ 
+ #include "dxvk_device.h"
+ #include "dxvk_pipemanager.h"
+@@ -387,6 +388,23 @@
+     return result;
+   }
+ 
++
++  DxvkPipelineDrainStats DxvkPipelineManager::getWarmCacheStats() {
++    const DxvkPipelineWorkerStats workers = m_workers.getStats();
++    return { m_stateCache.getWorkerPending(), workers.tasksTotal, workers.tasksCompleted };
++  }
++
++
++  DxvkPipelineDrainResult DxvkPipelineManager::waitForWarmCache(uint64_t timeoutNs) {
++    auto result = DxvkPipelineDrain::Wait<std::chrono::steady_clock>(timeoutNs,
++      [] (std::chrono::nanoseconds delay) { std::this_thread::sleep_for(delay); },
++      [this] () { return getWarmCacheStats(); });
++    Logger::info(str::format("DXVK warm-cache drain: ", result.drained ? "drained" : "timeout",
++      " wait=", double(result.waitNs) / 1.0e6, "ms state_pending=", result.stats.stateCachePending,
++      " pipeline_pending=", result.stats.pipelinePending(), " iterations=", result.iterations));
++    return result;
++  }
++
+ 
+   void DxvkPipelineManager::stopWorkerThreads() {
+     m_workers.stopWorkers();
+--- a/src/dxvk/dxvk_pipemanager.h
++++ b/src/dxvk/dxvk_pipemanager.h
+@@ -7,6 +7,7 @@
+ 
+ #include "dxvk_compute.h"
+ #include "dxvk_graphics.h"
++#include "dxvk_pipeline_drain.h"
+ #include "dxvk_state_cache.h"
+ 
+ namespace dxvk {
+@@ -260,6 +261,19 @@
+     }
+ 
+     /**
++     * \brief Returns pending state-cache feeder and pipeline-worker work
++     */
++    DxvkPipelineDrainStats getWarmCacheStats();
++
++    /**
++     * \brief Bounded wait for already queued warm-cache work
++     *
++     * The caller must not hold the D3D9 device lock. This does not create work or wait for GPU submission.
++     * No production caller is installed until a real loading-screen boundary is established.
++     */
++    DxvkPipelineDrainResult waitForWarmCache(uint64_t timeoutNs);
++
++    /**
+      * \brief Stops async compiler threads
+      */
+     void stopWorkerThreads();
+--- a/src/dxvk/dxvk_state_cache.cpp
++++ b/src/dxvk/dxvk_state_cache.cpp
+@@ -386,6 +386,12 @@
+   }
+ 
+ 
++  uint64_t DxvkStateCache::getWorkerPending() {
++    std::lock_guard<dxvk::mutex> lock(m_workerLock);
++    return uint64_t(m_workerQueue.size()) + (m_workerActive ? 1u : 0u);
++  }
++
++
+   void DxvkStateCache::stopWorkers() {
+     { std::lock_guard<dxvk::mutex> workerLock(m_workerLock);
+       std::lock_guard<dxvk::mutex> writerLock(m_writerLock);
+@@ -788,9 +794,13 @@
+         
+         item = m_workerQueue.front();
+         m_workerQueue.pop();
++        m_workerActive = true;
+       }
+ 
+       compilePipelines(item);
++      { std::lock_guard<dxvk::mutex> lock(m_workerLock);
++        m_workerActive = false;
++      }
+     }
+   }
+ 
+--- a/src/dxvk/dxvk_state_cache.h
++++ b/src/dxvk/dxvk_state_cache.h
+@@ -70,6 +70,13 @@
+       const Rc<DxvkShader>&                 shader);
+ 
+     /**
++     * \brief Returns queued plus active warm-cache feeder work
++     *
++     * The active item is included because it may not have enqueued its pipeline tasks yet.
++     */
++    uint64_t getWorkerPending();
++
++    /**
+      * \brief Explicitly stops worker threads
+      */
+     void stopWorkers();
+@@ -107,6 +114,7 @@
+     dxvk::mutex                       m_workerLock;
+     dxvk::condition_variable          m_workerCond;
+     std::queue<WorkerItem>            m_workerQueue;
++    bool                              m_workerActive = false;  // Protected by m_workerLock.
+     dxvk::thread                      m_workerThread;
+ 
+     dxvk::mutex                       m_writerLock;
