@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decode/runtime tests for selective XMM/SSE register localization."""
+"""Decode/runtime tests for XMM entry-copy elision (local registers keep register residency)."""
 from __future__ import annotations
 
 import importlib.util
@@ -31,8 +31,8 @@ class SyntheticPE:
 
 
 class BaselineCompiler(recomp.FunctionCompiler):
-    def use_local_xmm(self, body, decoded):
-        return True
+    def xmm_entry_copies(self, decoded):
+        return frozenset()
 
 
 def generate(hex_code: str, compiler_class=recomp.FunctionCompiler):
@@ -48,15 +48,15 @@ def require(condition: bool, message: str) -> None:
 
 def runtime_differential() -> None:
     cases = [
-        "0f28c1 c3",  # movaps xmm0, xmm1: direct full-register bit movement
-        "0f58c1 c3",  # addps xmm0, xmm1: direct arithmetic on every lane
-        "f30f10c1 c3",  # movss xmm0, xmm1: direct scalar/lane behavior
-        "0f28c1 0f28c1 0f28c1 0f28c1 c3",  # four operations stay direct
-        "0f28c1 0f28c1 0f28c1 0f28c1 0f28c1 c3",  # five operations retain locals
-        "0f28c1 49 75fa c3",  # one operation in a backward loop retains locals
-        "0f28c1 e8 f80f0000 0f28c1 c3",  # callee changes all XMM state
-        "d9e1 0f28c1 0f28c1 0f28c1 0f28c1 0f28c1 c3",  # direct x87 + local XMM
-        "d9e8 dec1 d9e8 dec1 d9e8 dec1 0f28c1 c3",  # local x87 + direct XMM
+        "0f2805 00000000 0f58c1 c3",  # full 128-bit load: entry copy is dead, later add uses the local
+        "0f28c1 c3",  # movaps xmm0, xmm1: destination is overwritten, source keeps its copy
+        "f30f100500000000 c3",  # movss from memory preserves upper lanes: entry copy stays
+        "0f580500000000 c3",  # addps reads its destination: entry copy stays
+        "0f2805 00000000 0f5805 00000000 c3",  # dead write then read-modify-write
+        "0f58c1 49 75fa c3",  # a backward loop that reads first keeps every copy
+        "0f28c1 e8 f80f0000 0f28c1 c3",  # callee redefines all XMM state
+        "d9e1 0f2805 00000000 0f58c1 c3",  # local x87 with an elided XMM copy
+        "d9e8 dec1 d9e8 dec1 d9e8 dec1 0f2805 00000000 0f58c1 c3",  # local x87 + dead XMM entry
     ]
     functions = []
     for index, code in enumerate(cases):
@@ -154,38 +154,49 @@ int main(void) {
 
 
 def main() -> int:
+    output, _ = generate("0f2805 00000000 0f58c1 c3")
+    require("XmmValue r_xmm0;" in output and "XmmValue r_xmm0 = c->xmm[0];" not in output,
+            "a from-scratch 128-bit load still copied the dead incoming value")
+    require("r_xmm0 = RecompLoad128" in output and "XmmValue r_xmm1 = c->xmm[1];" in output,
+            "eliding a dead copy changed the live register's copy or the load itself")
+
     output, _ = generate("0f28c1 c3")
-    require("XmmValue r_xmm" not in output and "c->xmm[0] = c->xmm[1]" in output,
-            "one-instruction SSE helper did not use direct XMM state")
+    require("XmmValue r_xmm0;" in output and "XmmValue r_xmm1 = c->xmm[1];" in output,
+            "movaps did not treat the destination as overwritten but the source as live")
+    require("r_xmm0 = r_xmm1" in output, "register-to-register move stopped using local registers")
 
-    output, _ = generate("0f28c1 0f28c1 0f28c1 0f28c1 c3")
-    require("XmmValue r_xmm" not in output and output.count("c->xmm[0] = c->xmm[1]") == 4,
-            "four-operation straight-line SSE helper was needlessly localized")
+    output, _ = generate("f30f100500000000 c3")
+    require("XmmValue r_xmm0 = c->xmm[0];" in output,
+            "a partial movss load lost the entry copy its upper lanes need")
 
-    output, _ = generate("0f28c1 0f28c1 0f28c1 0f28c1 0f28c1 c3")
-    require("XmmValue r_xmm0" in output and "r_xmm0 = r_xmm1" in output,
-            "longer SSE sequence lost the baseline localization path")
+    output, _ = generate("0f580500000000 c3")
+    require("XmmValue r_xmm0 = c->xmm[0];" in output,
+            "a read-modify-write addps lost its entry copy")
 
-    output, _ = generate("0f28c1 49 75fa c3")
-    require("XmmValue r_xmm0" in output and "r_xmm0 = r_xmm1" in output,
-            "a backward loop did not retain XMM localization")
+    output, _ = generate("0f2805 00000000 0f5805 00000000 c3")
+    require("XmmValue r_xmm0;" in output and output.count("r_xmm0") >= 3,
+            "a dead write followed by a read-modify-write lost the local register")
 
-    output, _ = generate("0f28c1 e8 f80f0000 0f28c1 c3")
-    require("XmmValue r_xmm" not in output and "RecompDispatch" in output and
-            output.count("c->xmm[0] = c->xmm[1]") == 2,
-            "short SSE helper with a call retained stale-prone local XMM state")
+    output, _ = generate("0f58c1 49 75fa c3")
+    require("XmmValue r_xmm0 = c->xmm[0];" in output and "XmmValue r_xmm1 = c->xmm[1];" in output,
+            "a loop that reads before writing elided a live entry copy")
 
-    output, _ = generate("d9e1 0f28c1 0f28c1 0f28c1 0f28c1 0f28c1 c3")
-    require("double r_st[8]" not in output and "X87(c, 0)" in output and "XmmValue r_xmm0" in output,
-            "independent direct-x87/local-XMM policy was not preserved")
+    output, _ = generate("0f58c1 e8 f80f0000 0f28c1 c3")
+    require("RecompDispatch" in output and "XmmValue r_xmm0 = c->xmm[0];" in output and
+            "XmmValue r_xmm1 = c->xmm[1];" in output,
+            "a read before a wrapped call elided a live entry copy")
 
-    output, _ = generate("d9e8 dec1 d9e8 dec1 d9e8 dec1 0f28c1 c3")
-    require("double r_st[8]" in output and "X87PushL" in output and "XmmValue r_xmm" not in output and
-            "c->xmm[0] = c->xmm[1]" in output,
-            "independent local-x87/direct-XMM policy was not preserved")
+    output, _ = generate("0f2805 00000000 e8 f80f0000 0f58c1 c3")
+    require("RecompDispatch" in output and "XmmValue r_xmm0;" in output and
+            "c->xmm[0] = r_xmm0" in output and "r_xmm0 = c->xmm[0]" in output,
+            "a dead copy before a wrapped call did not stay elided, or lost its spill/reload")
+
+    output, _ = generate("d9e8 dec1 d9e8 dec1 d9e8 dec1 0f2805 00000000 0f58c1 c3")
+    require("double r_st[8]" in output and "X87PushL" in output and "XmmValue r_xmm0;" in output,
+            "local x87 and elided XMM entry copies did not coexist")
 
     runtime_differential()
-    print("Selective XMM localization tests passed (7 decode cases, 9 runtime cases)")
+    print("XMM entry-copy elision tests passed (7 decode cases, 9 runtime cases)")
     return 0
 
 

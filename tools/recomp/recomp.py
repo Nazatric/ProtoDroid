@@ -383,17 +383,49 @@ _X87_BODY_KEYS = ("X87(c, ", "X87Push(c, ", "X87Pop(c)", "X87StatusWord(c)", "c-
 # Local x87 state costs a 64-byte entry copy and dirty spills. Keep it for longer sequences and loops, but not for
 # short straight-line helpers. Both paths execute identical operations and precision/control-word semantics.
 _X87_LOCALIZE_MIN_OPS = 5
-# A local XMM register costs a 16-byte entry copy plus dirty spills/reloads. Retain that strategy for longer
-# sequences and loops; short straight-line helpers can operate directly on Ctx without changing SSE semantics.
-_XMM_LOCALIZE_MIN_OPS = 5
+# A local XMM register costs a 16-byte entry copy plus dirty spills/reloads. The copy is dead when the function
+# overwrites the whole register from scratch before any path can read it; such registers only get a declaration.
+_XMM_FULL_WRITE = frozenset({"movaps", "movapd", "movups", "movupd", "movdqa", "movdqu", "lddqu"})
 
 
-def vector_state(body, localize_x87=True, localize_xmm=True):
+def xmm_full_write(ins):
+    """Index of the XMM register this instruction overwrites completely from scratch, or None.
+
+    Only 128-bit moves qualify: narrower forms (movss/movsd/movd/movq/...) preserve the untouched lanes, and
+    arithmetic or compare forms read the destination, so all of those keep reading the incoming value.
+    """
+    ops = ins.operands
+    if len(ops) < 2 or ops[0].type != X.X86_OP_REG or ins.mnemonic not in _XMM_FULL_WRITE:
+        return None
+    name = ins.reg_name(ops[0].reg)
+    if not name.startswith("xmm") or (ops[1].type == X.X86_OP_REG and ins.reg_name(ops[1].reg) == name):
+        return None
+    return int(name[3:])
+
+
+def xmm_reads(ins):
+    """Registers whose incoming value an instruction can observe, treated conservatively."""
+    written = xmm_full_write(ins)
+    read = set()
+    for op in ins.operands:
+        if op.type == X.X86_OP_REG:
+            name = ins.reg_name(op.reg)
+            if name.startswith("xmm") and int(name[3:]) != written:
+                read.add(int(name[3:]))
+    return read
+
+
+def vector_state(body, dead_entry=(), localize_x87=True, localize_xmm=True):
     """Eligible XMM registers and x87 state get local copies, spilled/reloaded with the general registers.
-    Short helpers instead keep the corresponding state in Ctx, avoiding fixed copies on every invocation."""
+
+    `dead_entry` lists XMM registers the function overwrites before reading, so no entry copy is emitted for
+    them. They stay local, which keeps every operation in a register: this removes work, it never moves an
+    operation back into Ctx memory.
+    """
     xmms = sorted(set(_XMM_RE.findall(body))) if localize_xmm else []
     x87 = localize_x87 and any(k in body for k in _X87_BODY_KEYS)
-    decl = [f"XmmValue r_xmm{n} = c->xmm[{n}];" for n in xmms]
+    decl = [f"XmmValue r_xmm{n};" if int(n) in dead_entry else f"XmmValue r_xmm{n} = c->xmm[{n}];"
+            for n in xmms]
     spill = [f"c->xmm[{n}] = r_xmm{n}" for n in xmms]
     reload = [f"r_xmm{n} = c->xmm[{n}]" for n in xmms]
     if x87:
@@ -1413,12 +1445,47 @@ class FunctionCompiler:
             return True
         return any(target <= ins.address for ins in self.ins for target in self.successors(ins, decoded))
 
-    def use_local_xmm(self, body, decoded):
-        """Whether XMM operations amortize their local copies. Calls and precision behavior are unchanged."""
-        operations = sum(bool(_XMM_RE.search(line)) for line in body.splitlines())
-        if operations >= _XMM_LOCALIZE_MIN_OPS:
-            return True
-        return any(target <= ins.address for ins in self.ins for target in self.successors(ins, decoded))
+    def xmm_entry_copies(self, decoded):
+        """XMM registers whose incoming value the function overwrites before it can read it.
+
+        Must-analysis over the function CFG: a register only escapes the entry copy when every path from the
+        entry reaches a from-scratch 128-bit write before any instruction observes it. Instructions this
+        recompiler maps to read-modify-write forms, narrower moves and compares all count as readers, and an
+        unreached predecessor contributes no guarantees, so the result stays conservative.
+        """
+        entry = self.va
+        successors = {i.address: self.successors(i, decoded) for i in self.ins}
+        instructions = {i.address: i for i in self.ins}
+        written = {entry: frozenset()}
+        pending = [entry]
+        while pending:
+            address = pending.pop()
+            if address not in instructions:  # decoded but not part of this body (overlapping entry)
+                continue
+            out = set(written[address])
+            full = xmm_full_write(instructions[address])
+            if full is not None:
+                out.add(full)
+            for target in successors[address]:
+                if target not in instructions:
+                    continue
+                previous = written.get(target)
+                current = frozenset(out) if previous is None else previous & out
+                if current != previous:
+                    written[target] = current
+                    pending.append(target)
+        observed = set()
+        for address, state in written.items():
+            if address in instructions:
+                observed |= xmm_reads(instructions[address]) - state
+        used = set()
+        for ins in self.ins:
+            for op in ins.operands:
+                if op.type == X.X86_OP_REG:
+                    name = ins.reg_name(op.reg)
+                    if name.startswith("xmm"):
+                        used.add(int(name[3:]))
+        return frozenset(used - observed)
 
     def liveness(self, decoded):
         """Flags live after each instruction. Calls clobber the flags (MSVC never reads flags across a call);
@@ -1499,13 +1566,15 @@ class FunctionCompiler:
             out.append(f'    RecompUnimplemented(c, 0x{self.va:08x}u, "no decodable instruction"); return;')
         if LOCALIZE:
             vector_body = "\n".join(out[2:])
-            localize_xmm = self.use_local_xmm(vector_body, decoded)
+            localize_xmm = bool(_XMM_RE.search(vector_body))
             decl, spill, reload, x87 = vector_state(
-                vector_body, self.use_local_x87(vector_body, decoded), localize_xmm)
+                vector_body, self.xmm_entry_copies(decoded), self.use_local_x87(vector_body, decoded),
+                localize_xmm)
             out = out[:2] + ["    " + d for d in decl] + \
                 [localize(l, x87, localize_xmm) if not l.startswith("L_") else l for l in out[2:]]
-            xmms = sorted(set(_XMM_RE.findall("\n".join(out))))  # (already renamed: read the declarations)
-            xmms = [d.split("r_xmm")[1].split(" ")[0] for d in decl if d.startswith("XmmValue r_xmm")]
+            # (already renamed: read the register indices back out of the declarations, initialised or not)
+            xmms = [d.split("r_xmm")[1].split(";")[0].split(" ")[0] for d in decl
+                    if d.startswith("XmmValue r_xmm")]
             out = out[:1] + apply_spills(out[1:], xmms, x87, DIRTY_TRACKING)
         if self.trace:
             # Use original-image RVAs so the records join functions.csv and import-caller evidence directly. Entry

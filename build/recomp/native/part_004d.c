@@ -369,7 +369,7 @@ void f_7c864330(Ctx* c);
 void f_7c872840(Ctx* c);
 void f_7c4d06e0(Ctx* c) {
     RLOCALS;
-    XmmValue r_xmm0 = c->xmm[0];
+    XmmValue r_xmm0;
     XmmValue r_xmm1 = c->xmm[1];
     XmmValue r_xmm2 = c->xmm[2];
     XmmValue r_xmm3 = c->xmm[3];
@@ -3985,9 +3985,10 @@ void f_7c4d3f00(Ctx* c) {
 
 void f_7c4d3f10(Ctx* c) {
     RLOCALS;
-    { XmmValue bv = c->xmm[0]; XmmValue* av = &c->xmm[0]; for (int k = 0; k < 2; ++k) { uint64_t a = av->u64[k], b = bv.u64[k]; av->u64[k] = a ^ b; } }  /* 7c4d3f10: xorps xmm0, xmm0 */
-    WF32((uint32_t)(r_ecx + 0x5cu), c->xmm[0].f[0]);  /* 7c4d3f13: movss dword ptr [ecx + 0x5c], xmm0 */
-    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->esp = r_esp); return; }  /* 7c4d3f18: ret  */
+    XmmValue r_xmm0 = c->xmm[0];
+    { XmmValue bv = r_xmm0; XmmValue* av = &r_xmm0; for (int k = 0; k < 2; ++k) { uint64_t a = av->u64[k], b = bv.u64[k]; av->u64[k] = a ^ b; } }  /* 7c4d3f10: xorps xmm0, xmm0 */
+    WF32((uint32_t)(r_ecx + 0x5cu), r_xmm0.f[0]);  /* 7c4d3f13: movss dword ptr [ecx + 0x5c], xmm0 */
+    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->esp = r_esp, c->xmm[0] = r_xmm0); return; }  /* 7c4d3f18: ret  */
 }
 
 void f_7c03a521(Ctx* c);
@@ -5624,18 +5625,19 @@ void f_7c4d58b0(Ctx* c) {
 
 void f_7c4d58d0(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     r_eax = (uint32_t)(R32((uint32_t)(0x7d09aec0u)));  /* 7c4d58d0: mov eax, dword ptr [0x7d09aec0] */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7cd94ff8u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d58d5: movss xmm0, dword ptr [0x7cd94ff8] */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd94ff8u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d58d5: movss xmm0, dword ptr [0x7cd94ff8] */
     W32((uint32_t)(r_ecx + 0x8u), (uint32_t)(r_eax));  /* 7c4d58dd: mov dword ptr [ecx + 8], eax */
-    WF32((uint32_t)(r_ecx + 0xcu), c->xmm[0].f[0]);  /* 7c4d58e0: movss dword ptr [ecx + 0xc], xmm0 */
-    WF32((uint32_t)(r_ecx + 0x10u), c->xmm[0].f[0]);  /* 7c4d58e5: movss dword ptr [ecx + 0x10], xmm0 */
-    WF32((uint32_t)(r_ecx + 0x14u), c->xmm[0].f[0]);  /* 7c4d58ea: movss dword ptr [ecx + 0x14], xmm0 */
+    WF32((uint32_t)(r_ecx + 0xcu), r_xmm0.f[0]);  /* 7c4d58e0: movss dword ptr [ecx + 0xc], xmm0 */
+    WF32((uint32_t)(r_ecx + 0x10u), r_xmm0.f[0]);  /* 7c4d58e5: movss dword ptr [ecx + 0x10], xmm0 */
+    WF32((uint32_t)(r_ecx + 0x14u), r_xmm0.f[0]);  /* 7c4d58ea: movss dword ptr [ecx + 0x14], xmm0 */
     W32((uint32_t)(r_ecx + 0x18u), (uint32_t)(0x4u));  /* 7c4d58ef: mov dword ptr [ecx + 0x18], 4 */
     W32((uint32_t)(r_ecx + 0x1cu), (uint32_t)(0x26u));  /* 7c4d58f6: mov dword ptr [ecx + 0x1c], 0x26 */
     W32((uint32_t)(r_ecx + 0x20u), (uint32_t)(0xffu));  /* 7c4d58fd: mov dword ptr [ecx + 0x20], 0xff */
     W32((uint32_t)(r_ecx + 0x24u), (uint32_t)(0x7u));  /* 7c4d5904: mov dword ptr [ecx + 0x24], 7 */
     W8((uint32_t)(r_ecx + 0x28u), (uint8_t)(0x0u));  /* 7c4d590b: mov byte ptr [ecx + 0x28], 0 */
-    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->eax = r_eax, c->esp = r_esp); return; }  /* 7c4d590f: ret  */
+    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->eax = r_eax, c->esp = r_esp, c->xmm[0] = r_xmm0); return; }  /* 7c4d590f: ret  */
 }
 
 void f_7c4d5920(Ctx* c) {
@@ -6087,11 +6089,12 @@ L_7c4d5f04:;
 void f_7c7e0c00(Ctx* c);
 void f_7c4d5f70(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d5f70: push ecx */
     r_eax = (uint32_t)(R16((uint32_t)(r_ecx + 0x30u)));  /* 7c4d5f71: movzx eax, word ptr [ecx + 0x30] */
     (void)SubFlagsL(&rf, (r_eax & 0xffffu), 0xffffu, 0, 16);  /* 7c4d5f75: cmp ax, 0xffff */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d5f79: movss xmm0, dword ptr [0x7cd946e0] */
-    SWF32((uint32_t)(r_esp), c->xmm[0].f[0]);  /* 7c4d5f81: movss dword ptr [esp], xmm0 */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d5f79: movss xmm0, dword ptr [0x7cd946e0] */
+    SWF32((uint32_t)(r_esp), r_xmm0.f[0]);  /* 7c4d5f81: movss dword ptr [esp], xmm0 */
     if (rf.zf) { goto L_7c4d5fa2; }  /* 7c4d5f86: je 0x7c4d5fa2 */
     r_edx = (uint32_t)(R32((uint32_t)(0x7d28348cu)));  /* 7c4d5f88: mov edx, dword ptr [0x7d28348c] */
     r_eax = (uint32_t)((r_eax & 0xffffu));  /* 7c4d5f8e: movzx eax, ax */
@@ -6106,17 +6109,17 @@ L_7c4d5fa2:;
 L_7c4d5fa4:;
     LPush32(&r_esp, 0x7d256238u);  /* 7c4d5fa4: push 0x7d256238 */
     r_ecx = (uint32_t)(r_eax);  /* 7c4d5fa9: mov ecx, eax */
-    LPush32(&r_esp, 0x7c4d5fb0u); if (RecompDirect(0x7c7e0c00u)) ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c7e0c00(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c7e0c00u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d5fab: call 0x7c7e0c00 */
+    LPush32(&r_esp, 0x7c4d5fb0u); if (RecompDirect(0x7c7e0c00u)) ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c7e0c00(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7e0c00u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d5fab: call 0x7c7e0c00 */
     { uint32_t r = (r_eax & r_eax) & 0xffffffffu; RECOMP_FLAGS_LOGIC(&rf, r, 32); }  /* 7c4d5fb0: test eax, eax */
     if (rf.zf) { goto L_7c4d5fc2; }  /* 7c4d5fb2: je 0x7c4d5fc2 */
     { uint32_t r = AddFlagsL(&rf, r_eax, 0x4u, 0, 32); r_eax = (uint32_t)(r); }  /* 7c4d5fb4: add eax, 4 */
     if (rf.zf) { goto L_7c4d5fc2; }  /* 7c4d5fb7: je 0x7c4d5fc2 */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(r_eax)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d5fb9: movss xmm0, dword ptr [eax] */
-    SWF32((uint32_t)(r_esp), c->xmm[0].f[0]);  /* 7c4d5fbd: movss dword ptr [esp], xmm0 */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(r_eax)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d5fb9: movss xmm0, dword ptr [eax] */
+    SWF32((uint32_t)(r_esp), r_xmm0.f[0]);  /* 7c4d5fbd: movss dword ptr [esp], xmm0 */
 L_7c4d5fc2:;
     X87Push(c, (double)SRF32((uint32_t)(r_esp)));  /* 7c4d5fc2: fld dword ptr [esp] */
     { uint32_t v = LPop32(&r_esp); r_ecx = (uint32_t)(v); }  /* 7c4d5fc5: pop ecx */
-    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp); return; }  /* 7c4d5fc6: ret  */
+    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0); return; }  /* 7c4d5fc6: ret  */
 }
 
 void f_7c00e1ec(Ctx* c);
@@ -6361,14 +6364,14 @@ void f_7c4d62a0(Ctx* c) {
     XmmValue r_xmm3 = c->xmm[3];
     XmmValue r_xmm4 = c->xmm[4];
     XmmValue r_xmm5 = c->xmm[5];
-    XmmValue r_xmm6 = c->xmm[6];
+    XmmValue r_xmm6;
     double r_st[8]; memcpy(r_st, c->st, sizeof r_st); uint32_t r_top = c->st_top; uint16_t r_cw = c->fpu_cw;
     r_esp = (uint32_t)((r_esp - 0x8cu - 0));  /* 7c4d62a0: sub esp, 0x8c */
     { uint32_t v = r_ebx; LPush32(&r_esp, v); }  /* 7c4d62a6: push ebx */
     { uint32_t v = r_esi; LPush32(&r_esp, v); }  /* 7c4d62a7: push esi */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c4d62a8: push edi */
     r_esi = (uint32_t)(r_ecx);  /* 7c4d62a9: mov esi, ecx */
-    LPush32(&r_esp, 0x7c4d62b0u); if (RecompDirect(0x7c0111adu)) ((c->esp = r_esp, c->esi = r_esi, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, c->xmm[3] = r_xmm3, c->xmm[4] = r_xmm4, c->xmm[5] = r_xmm5, c->xmm[6] = r_xmm6, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), f_7c0111ad(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], r_xmm4 = c->xmm[4], r_xmm5 = c->xmm[5], r_xmm6 = c->xmm[6], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw)); else ((c->esp = r_esp, c->esi = r_esi, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, c->xmm[3] = r_xmm3, c->xmm[4] = r_xmm4, c->xmm[5] = r_xmm5, c->xmm[6] = r_xmm6, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), RecompDispatch(c, 0x7c0111adu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], r_xmm4 = c->xmm[4], r_xmm5 = c->xmm[5], r_xmm6 = c->xmm[6], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw));  /* 7c4d62ab: call 0x7c0111ad */
+    LPush32(&r_esp, 0x7c4d62b0u); if (RecompDirect(0x7c0111adu)) ((c->esp = r_esp, c->esi = r_esi, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, c->xmm[3] = r_xmm3, c->xmm[4] = r_xmm4, c->xmm[5] = r_xmm5, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), f_7c0111ad(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], r_xmm4 = c->xmm[4], r_xmm5 = c->xmm[5], r_xmm6 = c->xmm[6], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw)); else ((c->esp = r_esp, c->esi = r_esi, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, c->xmm[3] = r_xmm3, c->xmm[4] = r_xmm4, c->xmm[5] = r_xmm5, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), RecompDispatch(c, 0x7c0111adu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], r_xmm4 = c->xmm[4], r_xmm5 = c->xmm[5], r_xmm6 = c->xmm[6], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw));  /* 7c4d62ab: call 0x7c0111ad */
     r_ecx = (uint32_t)(r_eax);  /* 7c4d62b0: mov ecx, eax */
     LPush32(&r_esp, 0x7c4d62b7u); if (RecompDirect(0x7c004156u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c004156(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], r_xmm4 = c->xmm[4], r_xmm5 = c->xmm[5], r_xmm6 = c->xmm[6], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c004156u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], r_xmm4 = c->xmm[4], r_xmm5 = c->xmm[5], r_xmm6 = c->xmm[6], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw));  /* 7c4d62b2: call 0x7c004156 */
     r_edi = (uint32_t)(r_eax);  /* 7c4d62b7: mov edi, eax */
@@ -6926,19 +6929,20 @@ L_7c4d6be9:;
 void f_7c018c28(Ctx* c);
 void f_7c4d6c10(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     { uint32_t v = r_esi; LPush32(&r_esp, v); }  /* 7c4d6c10: push esi */
     r_esi = (uint32_t)(r_ecx);  /* 7c4d6c11: mov esi, ecx */
-    LPush32(&r_esp, 0x7c4d6c18u); if (RecompDirect(0x7c018c28u)) ((c->esp = r_esp, c->esi = r_esi), f_7c018c28(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->esp = r_esp, c->esi = r_esi), RecompDispatch(c, 0x7c018c28u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d6c13: call 0x7c018c28 */
-    { XmmValue bv = c->xmm[0]; XmmValue* av = &c->xmm[0]; for (int k = 0; k < 2; ++k) { uint64_t a = av->u64[k], b = bv.u64[k]; av->u64[k] = a ^ b; } }  /* 7c4d6c18: xorps xmm0, xmm0 */
+    LPush32(&r_esp, 0x7c4d6c18u); if (RecompDirect(0x7c018c28u)) ((c->esp = r_esp, c->esi = r_esi, c->xmm[0] = r_xmm0), f_7c018c28(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->esp = r_esp, c->esi = r_esi, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c018c28u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d6c13: call 0x7c018c28 */
+    { XmmValue bv = r_xmm0; XmmValue* av = &r_xmm0; for (int k = 0; k < 2; ++k) { uint64_t a = av->u64[k], b = bv.u64[k]; av->u64[k] = a ^ b; } }  /* 7c4d6c18: xorps xmm0, xmm0 */
     W16((uint32_t)(r_esi + 0x30u), (uint16_t)(0xffffu));  /* 7c4d6c1b: mov word ptr [esi + 0x30], 0xffff */
     r_eax = (uint32_t)((r_eax ^ r_eax));  /* 7c4d6c21: xor eax, eax */
     W16((uint32_t)(r_esi + 0x32u), (uint16_t)((r_eax & 0xffffu)));  /* 7c4d6c23: mov word ptr [esi + 0x32], ax */
-    WF32((uint32_t)(r_esi + 0x2cu), c->xmm[0].f[0]);  /* 7c4d6c27: movss dword ptr [esi + 0x2c], xmm0 */
-    WF32((uint32_t)(r_esi + 0x28u), c->xmm[0].f[0]);  /* 7c4d6c2c: movss dword ptr [esi + 0x28], xmm0 */
-    WF32((uint32_t)(r_esi + 0x24u), c->xmm[0].f[0]);  /* 7c4d6c31: movss dword ptr [esi + 0x24], xmm0 */
+    WF32((uint32_t)(r_esi + 0x2cu), r_xmm0.f[0]);  /* 7c4d6c27: movss dword ptr [esi + 0x2c], xmm0 */
+    WF32((uint32_t)(r_esi + 0x28u), r_xmm0.f[0]);  /* 7c4d6c2c: movss dword ptr [esi + 0x28], xmm0 */
+    WF32((uint32_t)(r_esi + 0x24u), r_xmm0.f[0]);  /* 7c4d6c31: movss dword ptr [esi + 0x24], xmm0 */
     W32((uint32_t)(r_esi + 0x38u), (uint32_t)(r_eax));  /* 7c4d6c36: mov dword ptr [esi + 0x38], eax */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c4d6c39: pop esi */
-    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->eax = r_eax, c->esp = r_esp, c->esi = r_esi); return; }  /* 7c4d6c3a: ret  */
+    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->eax = r_eax, c->esp = r_esp, c->esi = r_esi, c->xmm[0] = r_xmm0); return; }  /* 7c4d6c3a: ret  */
 }
 
 void f_7c011509(Ctx* c);
@@ -9452,7 +9456,7 @@ void f_7c4d8190(Ctx* c) {
     XmmValue r_xmm0 = c->xmm[0];
     XmmValue r_xmm1 = c->xmm[1];
     XmmValue r_xmm2 = c->xmm[2];
-    XmmValue r_xmm3 = c->xmm[3];
+    XmmValue r_xmm3;
     double r_st[8]; memcpy(r_st, c->st, sizeof r_st); uint32_t r_top = c->st_top; uint16_t r_cw = c->fpu_cw;
     r_eax = (uint32_t)(R32((uint32_t)(r_ecx)));  /* 7c4d8190: mov eax, dword ptr [ecx] */
     r_esp = (uint32_t)((r_esp - 0x10u - 0));  /* 7c4d8192: sub esp, 0x10 */
@@ -9460,7 +9464,7 @@ void f_7c4d8190(Ctx* c) {
     if (rf.zf) { goto L_7c4d8232; }  /* 7c4d8197: je 0x7c4d8232 */
     r_edx = (uint32_t)(R32((uint32_t)(r_eax + 0xcu)));  /* 7c4d819d: mov edx, dword ptr [eax + 0xc] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d81a0: push edx */
-    LPush32(&r_esp, 0x7c4d81a6u); if (RecompDirect(0x7c0469d4u)) ((c->eax = r_eax, c->edx = r_edx, c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, c->xmm[3] = r_xmm3, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), f_7c0469d4(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw)); else ((c->eax = r_eax, c->edx = r_edx, c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, c->xmm[3] = r_xmm3, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), RecompDispatch(c, 0x7c0469d4u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw));  /* 7c4d81a1: call 0x7c0469d4 */
+    LPush32(&r_esp, 0x7c4d81a6u); if (RecompDirect(0x7c0469d4u)) ((c->eax = r_eax, c->edx = r_edx, c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), f_7c0469d4(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw)); else ((c->eax = r_eax, c->edx = r_edx, c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), RecompDispatch(c, 0x7c0469d4u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw));  /* 7c4d81a1: call 0x7c0469d4 */
     SWF32((uint32_t)(r_esp + 0x4u), (float)X87L(0)); X87PopL(&r_top);  /* 7c4d81a6: fstp dword ptr [esp + 4] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d81aa: push edx */
     LPush32(&r_esp, 0x7c4d81b0u); if (RecompDirect(0x7c004a11u)) ((c->esp = r_esp, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), f_7c004a11(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw)); else ((c->esp = r_esp, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), RecompDispatch(c, 0x7c004a11u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw));  /* 7c4d81ab: call 0x7c004a11 */
@@ -9503,7 +9507,7 @@ L_7c4d820f:;
     LPush32(&r_esp, 0x7c4d8232u); if (RecompDirect(0x7c03e518u)) ((c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, c->xmm[3] = r_xmm3, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), f_7c03e518(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw)); else ((c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, c->xmm[3] = r_xmm3, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top), RecompDispatch(c, 0x7c03e518u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3], memcpy(r_st, c->st, sizeof r_st), r_top = c->st_top, r_cw = c->fpu_cw));  /* 7c4d822d: call 0x7c03e518 */
 L_7c4d8232:;
     r_esp = (uint32_t)((r_esp + 0x10u + 0));  /* 7c4d8232: add esp, 0x10 */
-    c->ret_target = LPop32(&r_esp); r_esp += 4u; { (c->eax = r_eax, c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, c->xmm[3] = r_xmm3, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top); return; }  /* 7c4d8235: ret 4 */
+    c->ret_target = LPop32(&r_esp); r_esp += 4u; { (c->eax = r_eax, c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top); return; }  /* 7c4d8235: ret 4 */
 }
 
 void f_7c00ef57(Ctx* c);
@@ -9511,7 +9515,7 @@ void f_7c616120(Ctx* c);
 void f_7c4d8270(Ctx* c) {
     RLOCALS;
     XmmValue r_xmm0 = c->xmm[0];
-    XmmValue r_xmm1 = c->xmm[1];
+    XmmValue r_xmm1;
     XmmValue r_xmm2 = c->xmm[2];
     r_esp = (uint32_t)((r_esp - 0x3cu - 0));  /* 7c4d8270: sub esp, 0x3c */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c4d8273: push edi */
@@ -9523,7 +9527,7 @@ void f_7c4d8270(Ctx* c) {
     { uint32_t v = r_esi; LPush32(&r_esp, v); }  /* 7c4d828b: push esi */
     SW32((uint32_t)(r_esp + 0x40u), (uint32_t)(0x7u));  /* 7c4d828c: mov dword ptr [esp + 0x40], 7 */
     SWF32((uint32_t)(r_esp + 0x2cu), r_xmm0.f[0]);  /* 7c4d8294: movss dword ptr [esp + 0x2c], xmm0 */
-    LPush32(&r_esp, 0x7c4d829fu); if (RecompDirect(0x7c616120u)) ((c->ecx = r_ecx, c->esp = r_esp, c->edi = r_edi, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2), f_7c616120(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2])); else ((c->ecx = r_ecx, c->esp = r_esp, c->edi = r_edi, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2), RecompDispatch(c, 0x7c616120u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2]));  /* 7c4d829a: call 0x7c616120 */
+    LPush32(&r_esp, 0x7c4d829fu); if (RecompDirect(0x7c616120u)) ((c->ecx = r_ecx, c->esp = r_esp, c->edi = r_edi, c->xmm[0] = r_xmm0, c->xmm[2] = r_xmm2), f_7c616120(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2])); else ((c->ecx = r_ecx, c->esp = r_esp, c->edi = r_edi, c->xmm[0] = r_xmm0, c->xmm[2] = r_xmm2), RecompDispatch(c, 0x7c616120u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2]));  /* 7c4d829a: call 0x7c616120 */
     { XmmValue* x = &r_xmm2; x->f[0] = RF32((uint32_t)(0x7ce16f78u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d829f: movss xmm2, dword ptr [0x7ce16f78] */
     r_xmm2.f[0] = r_xmm2.f[0] - SRF32((uint32_t)(r_esp + 0x4cu));  /* 7c4d82a7: subss xmm2, dword ptr [esp + 0x4c] */
     r_xmm0.f[0] = (float)(int32_t)r_eax;  /* 7c4d82ad: cvtsi2ss xmm0, eax */
@@ -9589,7 +9593,7 @@ L_7c4d839e:;
 L_7c4d83ab:;
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4d83ab: pop edi */
     r_esp = (uint32_t)((r_esp + 0x3cu + 0));  /* 7c4d83ac: add esp, 0x3c */
-    c->ret_target = LPop32(&r_esp); r_esp += 12u; { (c->esp = r_esp, c->edi = r_edi, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2); return; }  /* 7c4d83af: ret 0xc */
+    c->ret_target = LPop32(&r_esp); r_esp += 12u; { (c->esp = r_esp, c->edi = r_edi, c->xmm[0] = r_xmm0, c->xmm[2] = r_xmm2); return; }  /* 7c4d83af: ret 0xc */
 }
 
 void f_7c00ef57(Ctx* c);
@@ -10238,6 +10242,7 @@ void f_7c036ca5(Ctx* c);
 void f_7c7e0810(Ctx* c);
 void f_7c4d8fc0(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     { uint32_t v = r_ebp; LPush32(&r_esp, v); }  /* 7c4d8fc0: push ebp */
     r_ebp = (uint32_t)(r_esp);  /* 7c4d8fc1: mov ebp, esp */
     r_esp = (uint32_t)((r_esp & 0xfffffff8u));  /* 7c4d8fc3: and esp, 0xfffffff8 */
@@ -10261,16 +10266,16 @@ void f_7c4d8fc0(Ctx* c) {
     r_edi = (uint32_t)(SR32((uint32_t)(r_ebp + 0x8u)));  /* 7c4d9003: mov edi, dword ptr [ebp + 8] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x18u));  /* 7c4d9006: lea ecx, [esp + 0x18] */
     W32((uint32_t)(r_esi + 0x4u), (uint32_t)(r_edi));  /* 7c4d900a: mov dword ptr [esi + 4], edi */
-    LPush32(&r_esp, 0x7c4d9012u); if (RecompDirect(0x7c026459u)) ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->ebp = r_ebp, c->esi = r_esi, c->edi = r_edi), f_7c026459(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->ebp = r_ebp, c->esi = r_esi, c->edi = r_edi), RecompDispatch(c, 0x7c026459u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d900d: call 0x7c026459 */
+    LPush32(&r_esp, 0x7c4d9012u); if (RecompDirect(0x7c026459u)) ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->ebp = r_ebp, c->esi = r_esi, c->edi = r_edi, c->xmm[0] = r_xmm0), f_7c026459(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->ebp = r_ebp, c->esi = r_esi, c->edi = r_edi, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c026459u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d900d: call 0x7c026459 */
     (void)SubFlagsL(&rf, r_edi, 0x25u, 0, 32);  /* 7c4d9012: cmp edi, 0x25 */
     if ((!rf.cf && !rf.zf)) { goto L_7c4d923c; }  /* 7c4d9015: ja 0x7c4d923c */
     r_eax = (uint32_t)(R8((uint32_t)(r_edi + 0x7c4d9294u)));  /* 7c4d901b: movzx eax, byte ptr [edi + 0x7c4d9294] */
-    { uint32_t t = R32((uint32_t)(r_eax * 4u + 0x7c4d9250u)); switch (t) { case 0x7c4d9029u: goto L_7c4d9029; case 0x7c4d9043u: goto L_7c4d9043; case 0x7c4d905du: goto L_7c4d905d; case 0x7c4d9069u: goto L_7c4d9069; case 0x7c4d9083u: goto L_7c4d9083; case 0x7c4d909du: goto L_7c4d909d; case 0x7c4d90a9u: goto L_7c4d90a9; case 0x7c4d90c3u: goto L_7c4d90c3; case 0x7c4d9112u: goto L_7c4d9112; case 0x7c4d912cu: goto L_7c4d912c; case 0x7c4d9135u: goto L_7c4d9135; case 0x7c4d914cu: goto L_7c4d914c; case 0x7c4d9163u: goto L_7c4d9163; case 0x7c4d916cu: goto L_7c4d916c; case 0x7c4d9183u: goto L_7c4d9183; case 0x7c4d919au: goto L_7c4d919a; case 0x7c4d923cu: goto L_7c4d923c; default: ((c->eax = r_eax), RecompDispatch(c, t), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); { (c->eax = r_eax); return; } } }  /* 7c4d9022: jmp dword ptr [eax*4 + 0x7c4d9250] */
+    { uint32_t t = R32((uint32_t)(r_eax * 4u + 0x7c4d9250u)); switch (t) { case 0x7c4d9029u: goto L_7c4d9029; case 0x7c4d9043u: goto L_7c4d9043; case 0x7c4d905du: goto L_7c4d905d; case 0x7c4d9069u: goto L_7c4d9069; case 0x7c4d9083u: goto L_7c4d9083; case 0x7c4d909du: goto L_7c4d909d; case 0x7c4d90a9u: goto L_7c4d90a9; case 0x7c4d90c3u: goto L_7c4d90c3; case 0x7c4d9112u: goto L_7c4d9112; case 0x7c4d912cu: goto L_7c4d912c; case 0x7c4d9135u: goto L_7c4d9135; case 0x7c4d914cu: goto L_7c4d914c; case 0x7c4d9163u: goto L_7c4d9163; case 0x7c4d916cu: goto L_7c4d916c; case 0x7c4d9183u: goto L_7c4d9183; case 0x7c4d919au: goto L_7c4d919a; case 0x7c4d923cu: goto L_7c4d923c; default: ((c->eax = r_eax), RecompDispatch(c, t), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); { (c->eax = r_eax); return; } } }  /* 7c4d9022: jmp dword ptr [eax*4 + 0x7c4d9250] */
 L_7c4d9029:;
     LPush32(&r_esp, 0x1u);  /* 7c4d9029: push 1 */
     LPush32(&r_esp, 0x7ce173f4u);  /* 7c4d902b: push 0x7ce173f4 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d9030: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d9039u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9034: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9039u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9034: call 0x7c02355b */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9039: lea ecx, [esp + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d903d: push ecx */
     goto L_7c4d91af;  /* 7c4d903e: jmp 0x7c4d91af */
@@ -10278,7 +10283,7 @@ L_7c4d9043:;
     LPush32(&r_esp, 0x1u);  /* 7c4d9043: push 1 */
     LPush32(&r_esp, 0x7ce173f0u);  /* 7c4d9045: push 0x7ce173f0 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d904a: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d9053u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d904e: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9053u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d904e: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9053: lea edx, [esp + 8] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d9057: push edx */
     goto L_7c4d91af;  /* 7c4d9058: jmp 0x7c4d91af */
@@ -10290,7 +10295,7 @@ L_7c4d9069:;
     LPush32(&r_esp, 0x1u);  /* 7c4d9069: push 1 */
     LPush32(&r_esp, 0x7ce173e8u);  /* 7c4d906b: push 0x7ce173e8 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d9070: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d9079u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9074: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9079u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9074: call 0x7c02355b */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9079: lea ecx, [esp + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d907d: push ecx */
     goto L_7c4d91af;  /* 7c4d907e: jmp 0x7c4d91af */
@@ -10298,7 +10303,7 @@ L_7c4d9083:;
     LPush32(&r_esp, 0x1u);  /* 7c4d9083: push 1 */
     LPush32(&r_esp, 0x7ce173e4u);  /* 7c4d9085: push 0x7ce173e4 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d908a: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d9093u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d908e: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9093u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d908e: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9093: lea edx, [esp + 8] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d9097: push edx */
     goto L_7c4d91af;  /* 7c4d9098: jmp 0x7c4d91af */
@@ -10310,7 +10315,7 @@ L_7c4d90a9:;
     LPush32(&r_esp, 0x1u);  /* 7c4d90a9: push 1 */
     LPush32(&r_esp, 0x7ce173dcu);  /* 7c4d90ab: push 0x7ce173dc */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d90b0: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d90b9u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d90b4: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d90b9u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d90b4: call 0x7c02355b */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d90b9: lea ecx, [esp + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d90bd: push ecx */
     goto L_7c4d91af;  /* 7c4d90be: jmp 0x7c4d91af */
@@ -10319,9 +10324,9 @@ L_7c4d90c3:;
     r_edx = (uint32_t)((uint32_t)(r_esp + 0xcu));  /* 7c4d90c8: lea edx, [esp + 0xc] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d90cc: push edx */
     r_ecx = (uint32_t)((uint32_t)(r_esi + 0x8u));  /* 7c4d90cd: lea ecx, [esi + 8] */
-    LPush32(&r_esp, 0x7c4d90d5u); if (RecompDirect(0x7c018d22u)) ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c018d22(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c018d22u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d90d0: call 0x7c018d22 */
+    LPush32(&r_esp, 0x7c4d90d5u); if (RecompDirect(0x7c018d22u)) ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c018d22(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c018d22u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d90d0: call 0x7c018d22 */
     r_ecx = (uint32_t)(r_eax);  /* 7c4d90d5: mov ecx, eax */
-    LPush32(&r_esp, 0x7c4d90dcu); if (RecompDirect(0x7c013291u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c013291(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c013291u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d90d7: call 0x7c013291 */
+    LPush32(&r_esp, 0x7c4d90dcu); if (RecompDirect(0x7c013291u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c013291(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c013291u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d90d7: call 0x7c013291 */
     r_eax = (uint32_t)(SR32((uint32_t)(r_esp + 0x8u)));  /* 7c4d90dc: mov eax, dword ptr [esp + 8] */
     { uint32_t r = (r_eax & r_eax) & 0xffffffffu; RECOMP_FLAGS_LOGIC(&rf, r, 32); }  /* 7c4d90e0: test eax, eax */
     if (rf.zf) { goto L_7c4d90f8; }  /* 7c4d90e2: je 0x7c4d90f8 */
@@ -10336,7 +10341,7 @@ L_7c4d90f8:;
     LPush32(&r_esp, 0x1u);  /* 7c4d90f8: push 1 */
     LPush32(&r_esp, 0x7ce173d4u);  /* 7c4d90fa: push 0x7ce173d4 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d90ff: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d9108u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9103: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9108u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9103: call 0x7c02355b */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9108: lea ecx, [esp + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d910c: push ecx */
     goto L_7c4d91af;  /* 7c4d910d: jmp 0x7c4d91af */
@@ -10344,7 +10349,7 @@ L_7c4d9112:;
     LPush32(&r_esp, 0x1u);  /* 7c4d9112: push 1 */
     LPush32(&r_esp, 0x7ce173d0u);  /* 7c4d9114: push 0x7ce173d0 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d9119: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d9122u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d911d: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9122u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d911d: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9122: lea edx, [esp + 8] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d9126: push edx */
     goto L_7c4d91af;  /* 7c4d9127: jmp 0x7c4d91af */
@@ -10356,7 +10361,7 @@ L_7c4d9135:;
     LPush32(&r_esp, 0x1u);  /* 7c4d9135: push 1 */
     LPush32(&r_esp, 0x7ce173c8u);  /* 7c4d9137: push 0x7ce173c8 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d913c: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d9145u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9140: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9145u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9140: call 0x7c02355b */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9145: lea ecx, [esp + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d9149: push ecx */
     goto L_7c4d91af;  /* 7c4d914a: jmp 0x7c4d91af */
@@ -10364,7 +10369,7 @@ L_7c4d914c:;
     LPush32(&r_esp, 0x1u);  /* 7c4d914c: push 1 */
     LPush32(&r_esp, 0x7ce173c4u);  /* 7c4d914e: push 0x7ce173c4 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d9153: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d915cu); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9157: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d915cu); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9157: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d915c: lea edx, [esp + 8] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d9160: push edx */
     goto L_7c4d91af;  /* 7c4d9161: jmp 0x7c4d91af */
@@ -10376,7 +10381,7 @@ L_7c4d916c:;
     LPush32(&r_esp, 0x1u);  /* 7c4d916c: push 1 */
     LPush32(&r_esp, 0x7ce173bcu);  /* 7c4d916e: push 0x7ce173bc */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d9173: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d917cu); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9177: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d917cu); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9177: call 0x7c02355b */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d917c: lea ecx, [esp + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d9180: push ecx */
     goto L_7c4d91af;  /* 7c4d9181: jmp 0x7c4d91af */
@@ -10384,7 +10389,7 @@ L_7c4d9183:;
     LPush32(&r_esp, 0x1u);  /* 7c4d9183: push 1 */
     LPush32(&r_esp, 0x7ce173b8u);  /* 7c4d9185: push 0x7ce173b8 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d918a: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d9193u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d918e: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9193u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d918e: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9193: lea edx, [esp + 8] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d9197: push edx */
     goto L_7c4d91af;  /* 7c4d9198: jmp 0x7c4d91af */
@@ -10393,21 +10398,21 @@ L_7c4d919a:;
     LPush32(&r_esp, 0x7ce173b4u);  /* 7c4d919c: push 0x7ce173b4 */
 L_7c4d91a1:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91a1: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91aau); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91a5: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91aau); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91a5: call 0x7c02355b */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d91aa: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d91ae: push eax */
 L_7c4d91af:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x1cu));  /* 7c4d91af: lea ecx, [esp + 0x1c] */
-    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91b3: call 0x7c0278b3 */
+    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91b3: call 0x7c0278b3 */
     r_ecx = (uint32_t)(R32((uint32_t)(r_esi + 0x8u)));  /* 7c4d91b8: mov ecx, dword ptr [esi + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d91bb: push ecx */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c4d91bc: push edi */
     r_ecx = (uint32_t)(r_esi);  /* 7c4d91bd: mov ecx, esi */
-    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91bf: call 0x7c03486f */
+    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91bf: call 0x7c03486f */
     LPush32(&r_esp, 0x1u);  /* 7c4d91c4: push 1 */
     LPush32(&r_esp, 0x7ce173acu);  /* 7c4d91c6: push 0x7ce173ac */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91cb: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91cf: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91cf: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x18u));  /* 7c4d91d4: lea edx, [esp + 0x18] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d91d8: push edx */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x34u));  /* 7c4d91d9: lea ecx, [esp + 0x34] */
@@ -10415,19 +10420,19 @@ L_7c4d91af:;
     SW16((uint32_t)(r_esp + 0x2cu), (uint16_t)(0x3u));  /* 7c4d91e5: mov word ptr [esp + 0x2c], 3 */
     SW16((uint32_t)(r_esp + 0x2eu), (uint16_t)(0x0u));  /* 7c4d91ec: mov word ptr [esp + 0x2e], 0 */
     SW32((uint32_t)(r_esp + 0x24u), (uint32_t)(0x7cda0bb8u));  /* 7c4d91f3: mov dword ptr [esp + 0x24], 0x7cda0bb8 */
-    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91fb: call 0x7c036ca5 */
+    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91fb: call 0x7c036ca5 */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9200: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d9204: push eax */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x3cu));  /* 7c4d9205: lea ecx, [esp + 0x3c] */
-    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9209: call 0x7c036ca5 */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
+    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9209: call 0x7c036ca5 */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x20u));  /* 7c4d9216: lea ecx, [esp + 0x20] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d921a: push ecx */
     r_ecx = (uint32_t)(SR32((uint32_t)(r_esp + 0x18u)));  /* 7c4d921b: mov ecx, dword ptr [esp + 0x18] */
     SW8((uint32_t)(r_esp + 0x44u), (uint8_t)(0x0u));  /* 7c4d921f: mov byte ptr [esp + 0x44], 0 */
     SW8((uint32_t)(r_esp + 0x45u), (uint8_t)(0x0u));  /* 7c4d9224: mov byte ptr [esp + 0x45], 0 */
-    SWF32((uint32_t)(r_esp + 0x48u), c->xmm[0].f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
-    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d922f: call 0x7c7e0810 */
+    SWF32((uint32_t)(r_esp + 0x48u), r_xmm0.f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
+    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d922f: call 0x7c7e0810 */
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4d9234: pop edi */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c4d9235: pop esi */
     r_esp = (uint32_t)(r_ebp);  /* 7c4d9236: mov esp, ebp */
@@ -10436,13 +10441,13 @@ L_7c4d91af:;
 L_7c4d923c:;
     LPush32(&r_esp, 0x0u);  /* 7c4d923c: push 0 */
     r_ecx = (uint32_t)(r_esi);  /* 7c4d923e: mov ecx, esi */
-    LPush32(&r_esp, 0x7c4d9245u); if (RecompDirect(0x7c02223cu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02223c(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02223cu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9240: call 0x7c02223c */
+    LPush32(&r_esp, 0x7c4d9245u); if (RecompDirect(0x7c02223cu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02223c(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02223cu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9240: call 0x7c02223c */
 L_7c4d9245:;
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4d9245: pop edi */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c4d9246: pop esi */
     r_esp = (uint32_t)(r_ebp);  /* 7c4d9247: mov esp, ebp */
     { uint32_t v = LPop32(&r_esp); r_ebp = (uint32_t)(v); }  /* 7c4d9249: pop ebp */
-    c->ret_target = LPop32(&r_esp); r_esp += 4u; { (c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->ebp = r_ebp, c->esi = r_esi, c->edi = r_edi); return; }  /* 7c4d924a: ret 4 */
+    c->ret_target = LPop32(&r_esp); r_esp += 4u; { (c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->ebp = r_ebp, c->esi = r_esi, c->edi = r_edi, c->xmm[0] = r_xmm0); return; }  /* 7c4d924a: ret 4 */
 }
 
 void f_7c02355b(Ctx* c);
@@ -10452,23 +10457,24 @@ void f_7c036ca5(Ctx* c);
 void f_7c7e0810(Ctx* c);
 void f_7c4d908d(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     r_eax = (r_eax & 0xffffff00u) | ((uint32_t)(((r_eax & 0xffu) + ((r_ecx >> 8) & 0xffu) + rf.cf)) & 0xffu);  /* 7c4d908d: adc al, ch */
-    ((c->eax = r_eax), RecompUnimplemented(c, 0x7c4d908fu, "enter -0x4b5c, -1"), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); { (c->eax = r_eax); return; }  /* 7c4d908f: enter -0x4b5c, -1 */
+    ((c->eax = r_eax, c->xmm[0] = r_xmm0), RecompUnimplemented(c, 0x7c4d908fu, "enter -0x4b5c, -1"), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); { (c->eax = r_eax, c->xmm[0] = r_xmm0); return; }  /* 7c4d908f: enter -0x4b5c, -1 */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9093: lea edx, [esp + 8] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d9097: push edx */
     goto L_7c4d91af;  /* 7c4d9098: jmp 0x7c4d91af */
 L_7c4d91af:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x1cu));  /* 7c4d91af: lea ecx, [esp + 0x1c] */
-    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91b3: call 0x7c0278b3 */
+    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91b3: call 0x7c0278b3 */
     r_ecx = (uint32_t)(R32((uint32_t)(r_esi + 0x8u)));  /* 7c4d91b8: mov ecx, dword ptr [esi + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d91bb: push ecx */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c4d91bc: push edi */
     r_ecx = (uint32_t)(r_esi);  /* 7c4d91bd: mov ecx, esi */
-    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91bf: call 0x7c03486f */
+    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91bf: call 0x7c03486f */
     LPush32(&r_esp, 0x1u);  /* 7c4d91c4: push 1 */
     LPush32(&r_esp, 0x7ce173acu);  /* 7c4d91c6: push 0x7ce173ac */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91cb: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91cf: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91cf: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x18u));  /* 7c4d91d4: lea edx, [esp + 0x18] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d91d8: push edx */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x34u));  /* 7c4d91d9: lea ecx, [esp + 0x34] */
@@ -10476,19 +10482,19 @@ L_7c4d91af:;
     SW16((uint32_t)(r_esp + 0x2cu), (uint16_t)(0x3u));  /* 7c4d91e5: mov word ptr [esp + 0x2c], 3 */
     SW16((uint32_t)(r_esp + 0x2eu), (uint16_t)(0x0u));  /* 7c4d91ec: mov word ptr [esp + 0x2e], 0 */
     SW32((uint32_t)(r_esp + 0x24u), (uint32_t)(0x7cda0bb8u));  /* 7c4d91f3: mov dword ptr [esp + 0x24], 0x7cda0bb8 */
-    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91fb: call 0x7c036ca5 */
+    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91fb: call 0x7c036ca5 */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9200: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d9204: push eax */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x3cu));  /* 7c4d9205: lea ecx, [esp + 0x3c] */
-    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9209: call 0x7c036ca5 */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
+    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9209: call 0x7c036ca5 */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x20u));  /* 7c4d9216: lea ecx, [esp + 0x20] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d921a: push ecx */
     r_ecx = (uint32_t)(SR32((uint32_t)(r_esp + 0x18u)));  /* 7c4d921b: mov ecx, dword ptr [esp + 0x18] */
     SW8((uint32_t)(r_esp + 0x44u), (uint8_t)(0x0u));  /* 7c4d921f: mov byte ptr [esp + 0x44], 0 */
     SW8((uint32_t)(r_esp + 0x45u), (uint8_t)(0x0u));  /* 7c4d9224: mov byte ptr [esp + 0x45], 0 */
-    SWF32((uint32_t)(r_esp + 0x48u), c->xmm[0].f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
-    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d922f: call 0x7c7e0810 */
+    SWF32((uint32_t)(r_esp + 0x48u), r_xmm0.f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
+    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d922f: call 0x7c7e0810 */
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4d9234: pop edi */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c4d9235: pop esi */
     r_esp = (uint32_t)(r_ebp);  /* 7c4d9236: mov esp, ebp */
@@ -10503,26 +10509,27 @@ void f_7c036ca5(Ctx* c);
 void f_7c7e0810(Ctx* c);
 void f_7c4d90a7(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     W8((uint32_t)(r_eax), (uint8_t)((R8((uint32_t)(r_eax)) + (r_eax & 0xffu) + 0)));  /* 7c4d90a7: add byte ptr [eax], al */
     LPush32(&r_esp, 0x1u);  /* 7c4d90a9: push 1 */
     LPush32(&r_esp, 0x7ce173dcu);  /* 7c4d90ab: push 0x7ce173dc */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d90b0: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d90b9u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d90b4: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d90b9u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d90b4: call 0x7c02355b */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d90b9: lea ecx, [esp + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d90bd: push ecx */
     goto L_7c4d91af;  /* 7c4d90be: jmp 0x7c4d91af */
 L_7c4d91af:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x1cu));  /* 7c4d91af: lea ecx, [esp + 0x1c] */
-    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91b3: call 0x7c0278b3 */
+    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91b3: call 0x7c0278b3 */
     r_ecx = (uint32_t)(R32((uint32_t)(r_esi + 0x8u)));  /* 7c4d91b8: mov ecx, dword ptr [esi + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d91bb: push ecx */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c4d91bc: push edi */
     r_ecx = (uint32_t)(r_esi);  /* 7c4d91bd: mov ecx, esi */
-    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91bf: call 0x7c03486f */
+    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91bf: call 0x7c03486f */
     LPush32(&r_esp, 0x1u);  /* 7c4d91c4: push 1 */
     LPush32(&r_esp, 0x7ce173acu);  /* 7c4d91c6: push 0x7ce173ac */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91cb: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91cf: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91cf: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x18u));  /* 7c4d91d4: lea edx, [esp + 0x18] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d91d8: push edx */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x34u));  /* 7c4d91d9: lea ecx, [esp + 0x34] */
@@ -10530,19 +10537,19 @@ L_7c4d91af:;
     SW16((uint32_t)(r_esp + 0x2cu), (uint16_t)(0x3u));  /* 7c4d91e5: mov word ptr [esp + 0x2c], 3 */
     SW16((uint32_t)(r_esp + 0x2eu), (uint16_t)(0x0u));  /* 7c4d91ec: mov word ptr [esp + 0x2e], 0 */
     SW32((uint32_t)(r_esp + 0x24u), (uint32_t)(0x7cda0bb8u));  /* 7c4d91f3: mov dword ptr [esp + 0x24], 0x7cda0bb8 */
-    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91fb: call 0x7c036ca5 */
+    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91fb: call 0x7c036ca5 */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9200: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d9204: push eax */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x3cu));  /* 7c4d9205: lea ecx, [esp + 0x3c] */
-    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9209: call 0x7c036ca5 */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
+    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9209: call 0x7c036ca5 */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x20u));  /* 7c4d9216: lea ecx, [esp + 0x20] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d921a: push ecx */
     r_ecx = (uint32_t)(SR32((uint32_t)(r_esp + 0x18u)));  /* 7c4d921b: mov ecx, dword ptr [esp + 0x18] */
     SW8((uint32_t)(r_esp + 0x44u), (uint8_t)(0x0u));  /* 7c4d921f: mov byte ptr [esp + 0x44], 0 */
     SW8((uint32_t)(r_esp + 0x45u), (uint8_t)(0x0u));  /* 7c4d9224: mov byte ptr [esp + 0x45], 0 */
-    SWF32((uint32_t)(r_esp + 0x48u), c->xmm[0].f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
-    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d922f: call 0x7c7e0810 */
+    SWF32((uint32_t)(r_esp + 0x48u), r_xmm0.f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
+    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d922f: call 0x7c7e0810 */
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4d9234: pop edi */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c4d9235: pop esi */
     r_esp = (uint32_t)(r_ebp);  /* 7c4d9236: mov esp, ebp */
@@ -10558,9 +10565,10 @@ void f_7c036ca5(Ctx* c);
 void f_7c7e0810(Ctx* c);
 void f_7c4d90d3(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     r_ebx = (r_ebx & 0xffffff00u) | ((uint32_t)(0xffu) & 0xffu);  /* 7c4d90d3: mov bl, 0xff */
     r_ecx = (uint32_t)(r_eax);  /* 7c4d90d5: mov ecx, eax */
-    LPush32(&r_esp, 0x7c4d90dcu); if (RecompDirect(0x7c013291u)) ((c->ecx = r_ecx, c->ebx = r_ebx, c->esp = r_esp), f_7c013291(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->ebx = r_ebx, c->esp = r_esp), RecompDispatch(c, 0x7c013291u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d90d7: call 0x7c013291 */
+    LPush32(&r_esp, 0x7c4d90dcu); if (RecompDirect(0x7c013291u)) ((c->ecx = r_ecx, c->ebx = r_ebx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c013291(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->ebx = r_ebx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c013291u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d90d7: call 0x7c013291 */
     r_eax = (uint32_t)(SR32((uint32_t)(r_esp + 0x8u)));  /* 7c4d90dc: mov eax, dword ptr [esp + 8] */
     { uint32_t r = (r_eax & r_eax) & 0xffffffffu; RECOMP_FLAGS_LOGIC(&rf, r, 32); }  /* 7c4d90e0: test eax, eax */
     if (rf.zf) { goto L_7c4d90f8; }  /* 7c4d90e2: je 0x7c4d90f8 */
@@ -10575,27 +10583,27 @@ L_7c4d90f8:;
     LPush32(&r_esp, 0x1u);  /* 7c4d90f8: push 1 */
     LPush32(&r_esp, 0x7ce173d4u);  /* 7c4d90fa: push 0x7ce173d4 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d90ff: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d9108u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9103: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9108u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9103: call 0x7c02355b */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9108: lea ecx, [esp + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d910c: push ecx */
     goto L_7c4d91af;  /* 7c4d910d: jmp 0x7c4d91af */
 L_7c4d91a1:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91a1: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91aau); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91a5: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91aau); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91a5: call 0x7c02355b */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d91aa: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d91ae: push eax */
 L_7c4d91af:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x1cu));  /* 7c4d91af: lea ecx, [esp + 0x1c] */
-    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91b3: call 0x7c0278b3 */
+    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91b3: call 0x7c0278b3 */
     r_ecx = (uint32_t)(R32((uint32_t)(r_esi + 0x8u)));  /* 7c4d91b8: mov ecx, dword ptr [esi + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d91bb: push ecx */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c4d91bc: push edi */
     r_ecx = (uint32_t)(r_esi);  /* 7c4d91bd: mov ecx, esi */
-    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91bf: call 0x7c03486f */
+    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91bf: call 0x7c03486f */
     LPush32(&r_esp, 0x1u);  /* 7c4d91c4: push 1 */
     LPush32(&r_esp, 0x7ce173acu);  /* 7c4d91c6: push 0x7ce173ac */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91cb: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91cf: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91cf: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x18u));  /* 7c4d91d4: lea edx, [esp + 0x18] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d91d8: push edx */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x34u));  /* 7c4d91d9: lea ecx, [esp + 0x34] */
@@ -10603,19 +10611,19 @@ L_7c4d91af:;
     SW16((uint32_t)(r_esp + 0x2cu), (uint16_t)(0x3u));  /* 7c4d91e5: mov word ptr [esp + 0x2c], 3 */
     SW16((uint32_t)(r_esp + 0x2eu), (uint16_t)(0x0u));  /* 7c4d91ec: mov word ptr [esp + 0x2e], 0 */
     SW32((uint32_t)(r_esp + 0x24u), (uint32_t)(0x7cda0bb8u));  /* 7c4d91f3: mov dword ptr [esp + 0x24], 0x7cda0bb8 */
-    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91fb: call 0x7c036ca5 */
+    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91fb: call 0x7c036ca5 */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9200: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d9204: push eax */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x3cu));  /* 7c4d9205: lea ecx, [esp + 0x3c] */
-    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9209: call 0x7c036ca5 */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
+    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9209: call 0x7c036ca5 */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x20u));  /* 7c4d9216: lea ecx, [esp + 0x20] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d921a: push ecx */
     r_ecx = (uint32_t)(SR32((uint32_t)(r_esp + 0x18u)));  /* 7c4d921b: mov ecx, dword ptr [esp + 0x18] */
     SW8((uint32_t)(r_esp + 0x44u), (uint8_t)(0x0u));  /* 7c4d921f: mov byte ptr [esp + 0x44], 0 */
     SW8((uint32_t)(r_esp + 0x45u), (uint8_t)(0x0u));  /* 7c4d9224: mov byte ptr [esp + 0x45], 0 */
-    SWF32((uint32_t)(r_esp + 0x48u), c->xmm[0].f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
-    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d922f: call 0x7c7e0810 */
+    SWF32((uint32_t)(r_esp + 0x48u), r_xmm0.f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
+    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d922f: call 0x7c7e0810 */
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4d9234: pop edi */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c4d9235: pop esi */
     r_esp = (uint32_t)(r_ebp);  /* 7c4d9236: mov esp, ebp */
@@ -10630,6 +10638,7 @@ void f_7c036ca5(Ctx* c);
 void f_7c7e0810(Ctx* c);
 void f_7c4d90dd(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     r_esp = (uint32_t)((r_esp + 1u));  /* 7c4d90dd: inc esp */
     r_eax = (r_eax & 0xffffff00u) | ((uint32_t)(((r_eax & 0xffu) & 0x8u)) & 0xffu);  /* 7c4d90de: and al, 8 */
     { uint32_t r = (r_eax & r_eax) & 0xffffffffu; RECOMP_FLAGS_LOGIC(&rf, r, 32); }  /* 7c4d90e0: test eax, eax */
@@ -10645,27 +10654,27 @@ L_7c4d90f8:;
     LPush32(&r_esp, 0x1u);  /* 7c4d90f8: push 1 */
     LPush32(&r_esp, 0x7ce173d4u);  /* 7c4d90fa: push 0x7ce173d4 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d90ff: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d9108u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9103: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9108u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9103: call 0x7c02355b */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9108: lea ecx, [esp + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d910c: push ecx */
     goto L_7c4d91af;  /* 7c4d910d: jmp 0x7c4d91af */
 L_7c4d91a1:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91a1: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91aau); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91a5: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91aau); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91a5: call 0x7c02355b */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d91aa: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d91ae: push eax */
 L_7c4d91af:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x1cu));  /* 7c4d91af: lea ecx, [esp + 0x1c] */
-    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91b3: call 0x7c0278b3 */
+    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91b3: call 0x7c0278b3 */
     r_ecx = (uint32_t)(R32((uint32_t)(r_esi + 0x8u)));  /* 7c4d91b8: mov ecx, dword ptr [esi + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d91bb: push ecx */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c4d91bc: push edi */
     r_ecx = (uint32_t)(r_esi);  /* 7c4d91bd: mov ecx, esi */
-    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91bf: call 0x7c03486f */
+    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91bf: call 0x7c03486f */
     LPush32(&r_esp, 0x1u);  /* 7c4d91c4: push 1 */
     LPush32(&r_esp, 0x7ce173acu);  /* 7c4d91c6: push 0x7ce173ac */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91cb: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91cf: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91cf: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x18u));  /* 7c4d91d4: lea edx, [esp + 0x18] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d91d8: push edx */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x34u));  /* 7c4d91d9: lea ecx, [esp + 0x34] */
@@ -10673,19 +10682,19 @@ L_7c4d91af:;
     SW16((uint32_t)(r_esp + 0x2cu), (uint16_t)(0x3u));  /* 7c4d91e5: mov word ptr [esp + 0x2c], 3 */
     SW16((uint32_t)(r_esp + 0x2eu), (uint16_t)(0x0u));  /* 7c4d91ec: mov word ptr [esp + 0x2e], 0 */
     SW32((uint32_t)(r_esp + 0x24u), (uint32_t)(0x7cda0bb8u));  /* 7c4d91f3: mov dword ptr [esp + 0x24], 0x7cda0bb8 */
-    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91fb: call 0x7c036ca5 */
+    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91fb: call 0x7c036ca5 */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9200: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d9204: push eax */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x3cu));  /* 7c4d9205: lea ecx, [esp + 0x3c] */
-    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9209: call 0x7c036ca5 */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
+    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9209: call 0x7c036ca5 */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x20u));  /* 7c4d9216: lea ecx, [esp + 0x20] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d921a: push ecx */
     r_ecx = (uint32_t)(SR32((uint32_t)(r_esp + 0x18u)));  /* 7c4d921b: mov ecx, dword ptr [esp + 0x18] */
     SW8((uint32_t)(r_esp + 0x44u), (uint8_t)(0x0u));  /* 7c4d921f: mov byte ptr [esp + 0x44], 0 */
     SW8((uint32_t)(r_esp + 0x45u), (uint8_t)(0x0u));  /* 7c4d9224: mov byte ptr [esp + 0x45], 0 */
-    SWF32((uint32_t)(r_esp + 0x48u), c->xmm[0].f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
-    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d922f: call 0x7c7e0810 */
+    SWF32((uint32_t)(r_esp + 0x48u), r_xmm0.f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
+    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d922f: call 0x7c7e0810 */
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4d9234: pop edi */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c4d9235: pop esi */
     r_esp = (uint32_t)(r_ebp);  /* 7c4d9236: mov esp, ebp */
@@ -10765,27 +10774,28 @@ void f_7c036ca5(Ctx* c);
 void f_7c7e0810(Ctx* c);
 void f_7c4d90f9(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     { uint32_t r = AddFlagsL(&rf, R32((uint32_t)(r_eax + 0xffffffd4u)), r_ebp, 0, 32); W32((uint32_t)(r_eax + 0xffffffd4u), (uint32_t)(r)); }  /* 7c4d90f9: add dword ptr [eax - 0x2c], ebp */
-    if (!rf.cf) { (((void)0), RecompDispatch(c, 0x7c4d90dfu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); { ((void)0); return; } }  /* 7c4d90fc: jae 0x7c4d90df */
-    if ((rf.sf != rf.of)) { (((void)0), RecompDispatch(c, 0x7c4d908du), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); { ((void)0); return; } }  /* 7c4d90fe: jl 0x7c4d908d */
+    if (!rf.cf) { ((c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c4d90dfu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); { (c->xmm[0] = r_xmm0); return; } }  /* 7c4d90fc: jae 0x7c4d90df */
+    if ((rf.sf != rf.of)) { ((c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c4d908du), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); { (c->xmm[0] = r_xmm0); return; } }  /* 7c4d90fe: jl 0x7c4d908d */
     r_esp = (uint32_t)((r_esp - 1u));  /* 7c4d9100: dec esp */
     r_eax = (r_eax & 0xffffff00u) | ((uint32_t)(((r_eax & 0xffu) & 0x10u)) & 0xffu);  /* 7c4d9101: and al, 0x10 */
-    LPush32(&r_esp, 0x7c4d9108u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9103: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9108u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9103: call 0x7c02355b */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9108: lea ecx, [esp + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d910c: push ecx */
     goto L_7c4d91af;  /* 7c4d910d: jmp 0x7c4d91af */
 L_7c4d91af:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x1cu));  /* 7c4d91af: lea ecx, [esp + 0x1c] */
-    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91b3: call 0x7c0278b3 */
+    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91b3: call 0x7c0278b3 */
     r_ecx = (uint32_t)(R32((uint32_t)(r_esi + 0x8u)));  /* 7c4d91b8: mov ecx, dword ptr [esi + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d91bb: push ecx */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c4d91bc: push edi */
     r_ecx = (uint32_t)(r_esi);  /* 7c4d91bd: mov ecx, esi */
-    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91bf: call 0x7c03486f */
+    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91bf: call 0x7c03486f */
     LPush32(&r_esp, 0x1u);  /* 7c4d91c4: push 1 */
     LPush32(&r_esp, 0x7ce173acu);  /* 7c4d91c6: push 0x7ce173ac */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91cb: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91cf: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91cf: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x18u));  /* 7c4d91d4: lea edx, [esp + 0x18] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d91d8: push edx */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x34u));  /* 7c4d91d9: lea ecx, [esp + 0x34] */
@@ -10793,19 +10803,19 @@ L_7c4d91af:;
     SW16((uint32_t)(r_esp + 0x2cu), (uint16_t)(0x3u));  /* 7c4d91e5: mov word ptr [esp + 0x2c], 3 */
     SW16((uint32_t)(r_esp + 0x2eu), (uint16_t)(0x0u));  /* 7c4d91ec: mov word ptr [esp + 0x2e], 0 */
     SW32((uint32_t)(r_esp + 0x24u), (uint32_t)(0x7cda0bb8u));  /* 7c4d91f3: mov dword ptr [esp + 0x24], 0x7cda0bb8 */
-    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91fb: call 0x7c036ca5 */
+    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91fb: call 0x7c036ca5 */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9200: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d9204: push eax */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x3cu));  /* 7c4d9205: lea ecx, [esp + 0x3c] */
-    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9209: call 0x7c036ca5 */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
+    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9209: call 0x7c036ca5 */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x20u));  /* 7c4d9216: lea ecx, [esp + 0x20] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d921a: push ecx */
     r_ecx = (uint32_t)(SR32((uint32_t)(r_esp + 0x18u)));  /* 7c4d921b: mov ecx, dword ptr [esp + 0x18] */
     SW8((uint32_t)(r_esp + 0x44u), (uint8_t)(0x0u));  /* 7c4d921f: mov byte ptr [esp + 0x44], 0 */
     SW8((uint32_t)(r_esp + 0x45u), (uint8_t)(0x0u));  /* 7c4d9224: mov byte ptr [esp + 0x45], 0 */
-    SWF32((uint32_t)(r_esp + 0x48u), c->xmm[0].f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
-    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d922f: call 0x7c7e0810 */
+    SWF32((uint32_t)(r_esp + 0x48u), r_xmm0.f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
+    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d922f: call 0x7c7e0810 */
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4d9234: pop edi */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c4d9235: pop esi */
     r_esp = (uint32_t)(r_ebp);  /* 7c4d9236: mov esp, ebp */
@@ -10820,27 +10830,28 @@ void f_7c036ca5(Ctx* c);
 void f_7c7e0810(Ctx* c);
 void f_7c4d9113(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     { uint32_t r = AddFlagsL(&rf, R32((uint32_t)(r_eax + 0xffffffd0u)), r_ebp, 0, 32); W32((uint32_t)(r_eax + 0xffffffd0u), (uint32_t)(r)); }  /* 7c4d9113: add dword ptr [eax - 0x30], ebp */
-    if (!rf.cf) { (((void)0), RecompDispatch(c, 0x7c4d90f9u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); { ((void)0); return; } }  /* 7c4d9116: jae 0x7c4d90f9 */
-    if ((rf.sf != rf.of)) { (((void)0), RecompDispatch(c, 0x7c4d90a7u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); { ((void)0); return; } }  /* 7c4d9118: jl 0x7c4d90a7 */
+    if (!rf.cf) { ((c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c4d90f9u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); { (c->xmm[0] = r_xmm0); return; } }  /* 7c4d9116: jae 0x7c4d90f9 */
+    if ((rf.sf != rf.of)) { ((c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c4d90a7u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); { (c->xmm[0] = r_xmm0); return; } }  /* 7c4d9118: jl 0x7c4d90a7 */
     r_esp = (uint32_t)((r_esp - 1u));  /* 7c4d911a: dec esp */
     r_eax = (r_eax & 0xffffff00u) | ((uint32_t)(((r_eax & 0xffu) & 0x10u)) & 0xffu);  /* 7c4d911b: and al, 0x10 */
-    LPush32(&r_esp, 0x7c4d9122u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d911d: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9122u); if (RecompDirect(0x7c02355bu)) ((c->eax = r_eax, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d911d: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9122: lea edx, [esp + 8] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d9126: push edx */
     goto L_7c4d91af;  /* 7c4d9127: jmp 0x7c4d91af */
 L_7c4d91af:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x1cu));  /* 7c4d91af: lea ecx, [esp + 0x1c] */
-    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91b3: call 0x7c0278b3 */
+    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91b3: call 0x7c0278b3 */
     r_ecx = (uint32_t)(R32((uint32_t)(r_esi + 0x8u)));  /* 7c4d91b8: mov ecx, dword ptr [esi + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d91bb: push ecx */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c4d91bc: push edi */
     r_ecx = (uint32_t)(r_esi);  /* 7c4d91bd: mov ecx, esi */
-    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91bf: call 0x7c03486f */
+    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91bf: call 0x7c03486f */
     LPush32(&r_esp, 0x1u);  /* 7c4d91c4: push 1 */
     LPush32(&r_esp, 0x7ce173acu);  /* 7c4d91c6: push 0x7ce173ac */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91cb: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91cf: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91cf: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x18u));  /* 7c4d91d4: lea edx, [esp + 0x18] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d91d8: push edx */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x34u));  /* 7c4d91d9: lea ecx, [esp + 0x34] */
@@ -10848,19 +10859,19 @@ L_7c4d91af:;
     SW16((uint32_t)(r_esp + 0x2cu), (uint16_t)(0x3u));  /* 7c4d91e5: mov word ptr [esp + 0x2c], 3 */
     SW16((uint32_t)(r_esp + 0x2eu), (uint16_t)(0x0u));  /* 7c4d91ec: mov word ptr [esp + 0x2e], 0 */
     SW32((uint32_t)(r_esp + 0x24u), (uint32_t)(0x7cda0bb8u));  /* 7c4d91f3: mov dword ptr [esp + 0x24], 0x7cda0bb8 */
-    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91fb: call 0x7c036ca5 */
+    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91fb: call 0x7c036ca5 */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9200: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d9204: push eax */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x3cu));  /* 7c4d9205: lea ecx, [esp + 0x3c] */
-    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9209: call 0x7c036ca5 */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
+    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9209: call 0x7c036ca5 */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x20u));  /* 7c4d9216: lea ecx, [esp + 0x20] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d921a: push ecx */
     r_ecx = (uint32_t)(SR32((uint32_t)(r_esp + 0x18u)));  /* 7c4d921b: mov ecx, dword ptr [esp + 0x18] */
     SW8((uint32_t)(r_esp + 0x44u), (uint8_t)(0x0u));  /* 7c4d921f: mov byte ptr [esp + 0x44], 0 */
     SW8((uint32_t)(r_esp + 0x45u), (uint8_t)(0x0u));  /* 7c4d9224: mov byte ptr [esp + 0x45], 0 */
-    SWF32((uint32_t)(r_esp + 0x48u), c->xmm[0].f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
-    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d922f: call 0x7c7e0810 */
+    SWF32((uint32_t)(r_esp + 0x48u), r_xmm0.f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
+    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d922f: call 0x7c7e0810 */
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4d9234: pop edi */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c4d9235: pop esi */
     r_esp = (uint32_t)(r_ebp);  /* 7c4d9236: mov esp, ebp */
@@ -10875,6 +10886,7 @@ void f_7c036ca5(Ctx* c);
 void f_7c7e0810(Ctx* c);
 void f_7c4d911f(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     W8(r_edi, R8(r_esi)); r_esi += (rf.df ? -1 : 1); r_edi += (rf.df ? -1 : 1);  /* 7c4d911f: movsb byte ptr es:[edi], byte ptr [esi] */
     r_eax = (r_eax & 0xffff00ffu) | (((uint32_t)(0xffu) & 0xffu) << 8);  /* 7c4d9120: mov ah, 0xff */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9122: lea edx, [esp + 8] */
@@ -10882,16 +10894,16 @@ void f_7c4d911f(Ctx* c) {
     goto L_7c4d91af;  /* 7c4d9127: jmp 0x7c4d91af */
 L_7c4d91af:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x1cu));  /* 7c4d91af: lea ecx, [esp + 0x1c] */
-    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->esi = r_esi, c->edi = r_edi), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->esi = r_esi, c->edi = r_edi), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91b3: call 0x7c0278b3 */
+    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->esi = r_esi, c->edi = r_edi, c->xmm[0] = r_xmm0), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp, c->esi = r_esi, c->edi = r_edi, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91b3: call 0x7c0278b3 */
     r_ecx = (uint32_t)(R32((uint32_t)(r_esi + 0x8u)));  /* 7c4d91b8: mov ecx, dword ptr [esi + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d91bb: push ecx */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c4d91bc: push edi */
     r_ecx = (uint32_t)(r_esi);  /* 7c4d91bd: mov ecx, esi */
-    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91bf: call 0x7c03486f */
+    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91bf: call 0x7c03486f */
     LPush32(&r_esp, 0x1u);  /* 7c4d91c4: push 1 */
     LPush32(&r_esp, 0x7ce173acu);  /* 7c4d91c6: push 0x7ce173ac */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91cb: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91cf: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91cf: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x18u));  /* 7c4d91d4: lea edx, [esp + 0x18] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d91d8: push edx */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x34u));  /* 7c4d91d9: lea ecx, [esp + 0x34] */
@@ -10899,19 +10911,19 @@ L_7c4d91af:;
     SW16((uint32_t)(r_esp + 0x2cu), (uint16_t)(0x3u));  /* 7c4d91e5: mov word ptr [esp + 0x2c], 3 */
     SW16((uint32_t)(r_esp + 0x2eu), (uint16_t)(0x0u));  /* 7c4d91ec: mov word ptr [esp + 0x2e], 0 */
     SW32((uint32_t)(r_esp + 0x24u), (uint32_t)(0x7cda0bb8u));  /* 7c4d91f3: mov dword ptr [esp + 0x24], 0x7cda0bb8 */
-    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91fb: call 0x7c036ca5 */
+    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91fb: call 0x7c036ca5 */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9200: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d9204: push eax */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x3cu));  /* 7c4d9205: lea ecx, [esp + 0x3c] */
-    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9209: call 0x7c036ca5 */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
+    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9209: call 0x7c036ca5 */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x20u));  /* 7c4d9216: lea ecx, [esp + 0x20] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d921a: push ecx */
     r_ecx = (uint32_t)(SR32((uint32_t)(r_esp + 0x18u)));  /* 7c4d921b: mov ecx, dword ptr [esp + 0x18] */
     SW8((uint32_t)(r_esp + 0x44u), (uint8_t)(0x0u));  /* 7c4d921f: mov byte ptr [esp + 0x44], 0 */
     SW8((uint32_t)(r_esp + 0x45u), (uint8_t)(0x0u));  /* 7c4d9224: mov byte ptr [esp + 0x45], 0 */
-    SWF32((uint32_t)(r_esp + 0x48u), c->xmm[0].f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
-    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d922f: call 0x7c7e0810 */
+    SWF32((uint32_t)(r_esp + 0x48u), r_xmm0.f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
+    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d922f: call 0x7c7e0810 */
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4d9234: pop edi */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c4d9235: pop esi */
     r_esp = (uint32_t)(r_ebp);  /* 7c4d9236: mov esp, ebp */
@@ -10926,28 +10938,29 @@ void f_7c036ca5(Ctx* c);
 void f_7c7e0810(Ctx* c);
 void f_7c4d9130(Ctx* c) {
     RLOCALS;
-    if (!rf.cf) { (((void)0), RecompDispatch(c, 0x7c4d9113u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); { ((void)0); return; } }  /* 7c4d9130: jae 0x7c4d9113 */
-    if ((rf.sf != rf.of)) { (((void)0), RecompDispatch(c, 0x7c4d911fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); { ((void)0); return; } }  /* 7c4d9132: jl 0x7c4d911f */
-    (((void)0), RecompUnimplemented(c, 0x7c4d9134u, "insb byte ptr es:[edi], dx"), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); { ((void)0); return; }  /* 7c4d9134: insb byte ptr es:[edi], dx */
+    XmmValue r_xmm0 = c->xmm[0];
+    if (!rf.cf) { ((c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c4d9113u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); { (c->xmm[0] = r_xmm0); return; } }  /* 7c4d9130: jae 0x7c4d9113 */
+    if ((rf.sf != rf.of)) { ((c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c4d911fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); { (c->xmm[0] = r_xmm0); return; } }  /* 7c4d9132: jl 0x7c4d911f */
+    ((c->xmm[0] = r_xmm0), RecompUnimplemented(c, 0x7c4d9134u, "insb byte ptr es:[edi], dx"), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); { (c->xmm[0] = r_xmm0); return; }  /* 7c4d9134: insb byte ptr es:[edi], dx */
     LPush32(&r_esp, 0x1u);  /* 7c4d9135: push 1 */
     LPush32(&r_esp, 0x7ce173c8u);  /* 7c4d9137: push 0x7ce173c8 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d913c: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d9145u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9140: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d9145u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9140: call 0x7c02355b */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9145: lea ecx, [esp + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d9149: push ecx */
     goto L_7c4d91af;  /* 7c4d914a: jmp 0x7c4d91af */
 L_7c4d91af:;
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x1cu));  /* 7c4d91af: lea ecx, [esp + 0x1c] */
-    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91b3: call 0x7c0278b3 */
+    LPush32(&r_esp, 0x7c4d91b8u); if (RecompDirect(0x7c0278b3u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c0278b3(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c0278b3u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91b3: call 0x7c0278b3 */
     r_ecx = (uint32_t)(R32((uint32_t)(r_esi + 0x8u)));  /* 7c4d91b8: mov ecx, dword ptr [esi + 8] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d91bb: push ecx */
     { uint32_t v = r_edi; LPush32(&r_esp, v); }  /* 7c4d91bc: push edi */
     r_ecx = (uint32_t)(r_esi);  /* 7c4d91bd: mov ecx, esi */
-    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91bf: call 0x7c03486f */
+    LPush32(&r_esp, 0x7c4d91c4u); if (RecompDirect(0x7c03486fu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c03486f(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c03486fu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91bf: call 0x7c03486f */
     LPush32(&r_esp, 0x1u);  /* 7c4d91c4: push 1 */
     LPush32(&r_esp, 0x7ce173acu);  /* 7c4d91c6: push 0x7ce173ac */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x10u));  /* 7c4d91cb: lea ecx, [esp + 0x10] */
-    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91cf: call 0x7c02355b */
+    LPush32(&r_esp, 0x7c4d91d4u); if (RecompDirect(0x7c02355bu)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c02355b(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c02355bu), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91cf: call 0x7c02355b */
     r_edx = (uint32_t)((uint32_t)(r_esp + 0x18u));  /* 7c4d91d4: lea edx, [esp + 0x18] */
     { uint32_t v = r_edx; LPush32(&r_esp, v); }  /* 7c4d91d8: push edx */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x34u));  /* 7c4d91d9: lea ecx, [esp + 0x34] */
@@ -10955,19 +10968,19 @@ L_7c4d91af:;
     SW16((uint32_t)(r_esp + 0x2cu), (uint16_t)(0x3u));  /* 7c4d91e5: mov word ptr [esp + 0x2c], 3 */
     SW16((uint32_t)(r_esp + 0x2eu), (uint16_t)(0x0u));  /* 7c4d91ec: mov word ptr [esp + 0x2e], 0 */
     SW32((uint32_t)(r_esp + 0x24u), (uint32_t)(0x7cda0bb8u));  /* 7c4d91f3: mov dword ptr [esp + 0x24], 0x7cda0bb8 */
-    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d91fb: call 0x7c036ca5 */
+    LPush32(&r_esp, 0x7c4d9200u); if (RecompDirect(0x7c036ca5u)) ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->edx = r_edx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d91fb: call 0x7c036ca5 */
     r_eax = (uint32_t)((uint32_t)(r_esp + 0x8u));  /* 7c4d9200: lea eax, [esp + 8] */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c4d9204: push eax */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x3cu));  /* 7c4d9205: lea ecx, [esp + 0x3c] */
-    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d9209: call 0x7c036ca5 */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
+    LPush32(&r_esp, 0x7c4d920eu); if (RecompDirect(0x7c036ca5u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), f_7c036ca5(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c036ca5u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d9209: call 0x7c036ca5 */
+    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd946e0u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d920e: movss xmm0, dword ptr [0x7cd946e0] */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x20u));  /* 7c4d9216: lea ecx, [esp + 0x20] */
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c4d921a: push ecx */
     r_ecx = (uint32_t)(SR32((uint32_t)(r_esp + 0x18u)));  /* 7c4d921b: mov ecx, dword ptr [esp + 0x18] */
     SW8((uint32_t)(r_esp + 0x44u), (uint8_t)(0x0u));  /* 7c4d921f: mov byte ptr [esp + 0x44], 0 */
     SW8((uint32_t)(r_esp + 0x45u), (uint8_t)(0x0u));  /* 7c4d9224: mov byte ptr [esp + 0x45], 0 */
-    SWF32((uint32_t)(r_esp + 0x48u), c->xmm[0].f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
-    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4d922f: call 0x7c7e0810 */
+    SWF32((uint32_t)(r_esp + 0x48u), r_xmm0.f[0]);  /* 7c4d9229: movss dword ptr [esp + 0x48], xmm0 */
+    LPush32(&r_esp, 0x7c4d9234u); if (RecompDirect(0x7c7e0810u)) ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c7e0810(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7e0810u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4d922f: call 0x7c7e0810 */
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4d9234: pop edi */
     { uint32_t v = LPop32(&r_esp); r_esi = (uint32_t)(v); }  /* 7c4d9235: pop esi */
     r_esp = (uint32_t)(r_ebp);  /* 7c4d9236: mov esp, ebp */
@@ -11564,11 +11577,12 @@ void f_7c4d9980(Ctx* c) {
 
 void f_7c4d9990(Ctx* c) {
     RLOCALS;
-    { XmmValue* x = &c->xmm[0]; x->f[0] = SRF32((uint32_t)(r_esp + 0x4u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d9990: movss xmm0, dword ptr [esp + 4] */
-    WF32((uint32_t)(r_ecx + 0x13a0u), c->xmm[0].f[0]);  /* 7c4d9996: movss dword ptr [ecx + 0x13a0], xmm0 */
-    { XmmValue* x = &c->xmm[0]; x->f[0] = SRF32((uint32_t)(r_esp + 0x8u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d999e: movss xmm0, dword ptr [esp + 8] */
-    WF32((uint32_t)(r_ecx + 0x13acu), c->xmm[0].f[0]);  /* 7c4d99a4: movss dword ptr [ecx + 0x13ac], xmm0 */
-    c->ret_target = LPop32(&r_esp); r_esp += 8u; { (c->esp = r_esp); return; }  /* 7c4d99ac: ret 8 */
+    XmmValue r_xmm0 = c->xmm[0];
+    { XmmValue* x = &r_xmm0; x->f[0] = SRF32((uint32_t)(r_esp + 0x4u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d9990: movss xmm0, dword ptr [esp + 4] */
+    WF32((uint32_t)(r_ecx + 0x13a0u), r_xmm0.f[0]);  /* 7c4d9996: movss dword ptr [ecx + 0x13a0], xmm0 */
+    { XmmValue* x = &r_xmm0; x->f[0] = SRF32((uint32_t)(r_esp + 0x8u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4d999e: movss xmm0, dword ptr [esp + 8] */
+    WF32((uint32_t)(r_ecx + 0x13acu), r_xmm0.f[0]);  /* 7c4d99a4: movss dword ptr [ecx + 0x13ac], xmm0 */
+    c->ret_target = LPop32(&r_esp); r_esp += 8u; { (c->esp = r_esp, c->xmm[0] = r_xmm0); return; }  /* 7c4d99ac: ret 8 */
 }
 
 void f_7c034397(Ctx* c);
@@ -12773,6 +12787,7 @@ void f_7c4daf60(Ctx* c) {
 void f_7c7ee330(Ctx* c);
 void f_7c4daf80(Ctx* c) {
     RLOCALS;
+    XmmValue r_xmm0 = c->xmm[0];
     r_eax = (uint32_t)(SR32((uint32_t)(r_esp + 0x4u)));  /* 7c4daf80: mov eax, dword ptr [esp + 4] */
     { uint32_t v = r_esi; LPush32(&r_esp, v); }  /* 7c4daf84: push esi */
     r_esi = (uint32_t)(r_ecx);  /* 7c4daf85: mov esi, ecx */
@@ -12780,12 +12795,12 @@ void f_7c4daf80(Ctx* c) {
     r_edi = (uint32_t)((uint32_t)(r_esi + 0x4u));  /* 7c4daf88: lea edi, [esi + 4] */
     r_ecx = (uint32_t)(r_edi);  /* 7c4daf8b: mov ecx, edi */
     W32((uint32_t)(r_esi), (uint32_t)(r_eax));  /* 7c4daf8d: mov dword ptr [esi], eax */
-    LPush32(&r_esp, 0x7c4daf94u); if (RecompDirect(0x7c7ee330u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp, c->esi = r_esi, c->edi = r_edi), f_7c7ee330(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp, c->esi = r_esi, c->edi = r_edi), RecompDispatch(c, 0x7c7ee330u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4daf8f: call 0x7c7ee330 */
-    { XmmValue bv = c->xmm[0]; XmmValue* av = &c->xmm[0]; for (int k = 0; k < 2; ++k) { uint64_t a = av->u64[k], b = bv.u64[k]; av->u64[k] = a ^ b; } }  /* 7c4daf94: xorps xmm0, xmm0 */
+    LPush32(&r_esp, 0x7c4daf94u); if (RecompDirect(0x7c7ee330u)) ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp, c->esi = r_esi, c->edi = r_edi, c->xmm[0] = r_xmm0), f_7c7ee330(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->eax = r_eax, c->ecx = r_ecx, c->esp = r_esp, c->esi = r_esi, c->edi = r_edi, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7ee330u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4daf8f: call 0x7c7ee330 */
+    { XmmValue bv = r_xmm0; XmmValue* av = &r_xmm0; for (int k = 0; k < 2; ++k) { uint64_t a = av->u64[k], b = bv.u64[k]; av->u64[k] = a ^ b; } }  /* 7c4daf94: xorps xmm0, xmm0 */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0xcu));  /* 7c4daf97: lea ecx, [esp + 0xc] */
     W8((uint32_t)(r_esi + 0x8u), (uint8_t)(0x0u));  /* 7c4daf9b: mov byte ptr [esi + 8], 0 */
-    WF32((uint32_t)(r_esi + 0xcu), c->xmm[0].f[0]);  /* 7c4daf9f: movss dword ptr [esi + 0xc], xmm0 */
-    LPush32(&r_esp, 0x7c4dafa9u); if (RecompDirect(0x7c7ee330u)) ((c->ecx = r_ecx, c->esp = r_esp), f_7c7ee330(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi)); else ((c->ecx = r_ecx, c->esp = r_esp), RecompDispatch(c, 0x7c7ee330u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi));  /* 7c4dafa4: call 0x7c7ee330 */
+    WF32((uint32_t)(r_esi + 0xcu), r_xmm0.f[0]);  /* 7c4daf9f: movss dword ptr [esi + 0xc], xmm0 */
+    LPush32(&r_esp, 0x7c4dafa9u); if (RecompDirect(0x7c7ee330u)) ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), f_7c7ee330(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0])); else ((c->ecx = r_ecx, c->esp = r_esp, c->xmm[0] = r_xmm0), RecompDispatch(c, 0x7c7ee330u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0]));  /* 7c4dafa4: call 0x7c7ee330 */
     r_ecx = (uint32_t)(SR32((uint32_t)(r_esp + 0xcu)));  /* 7c4dafa9: mov ecx, dword ptr [esp + 0xc] */
     W32((uint32_t)(r_edi), (uint32_t)(r_ecx));  /* 7c4dafad: mov dword ptr [edi], ecx */
     { uint32_t v = LPop32(&r_esp); r_edi = (uint32_t)(v); }  /* 7c4dafaf: pop edi */
@@ -14140,11 +14155,11 @@ void f_7c4dc2e0(Ctx* c) {
     XmmValue r_xmm0 = c->xmm[0];
     XmmValue r_xmm1 = c->xmm[1];
     XmmValue r_xmm2 = c->xmm[2];
-    XmmValue r_xmm3 = c->xmm[3];
+    XmmValue r_xmm3;
     r_esp = (uint32_t)((r_esp - 0x8u - 0));  /* 7c4dc2e0: sub esp, 8 */
     { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7cd946e4u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7c4dc2e3: movss xmm0, dword ptr [0x7cd946e4] */
     SWF32((uint32_t)(r_esp), r_xmm0.f[0]);  /* 7c4dc2eb: movss dword ptr [esp], xmm0 */
-    LPush32(&r_esp, 0x7c4dc2f5u); if (RecompDirect(0x7c7df530u)) ((c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, c->xmm[3] = r_xmm3), f_7c7df530(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3])); else ((c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2, c->xmm[3] = r_xmm3), RecompDispatch(c, 0x7c7df530u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3]));  /* 7c4dc2f0: call 0x7c7df530 */
+    LPush32(&r_esp, 0x7c4dc2f5u); if (RecompDirect(0x7c7df530u)) ((c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2), f_7c7df530(c), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3])); else ((c->esp = r_esp, c->xmm[0] = r_xmm0, c->xmm[1] = r_xmm1, c->xmm[2] = r_xmm2), RecompDispatch(c, 0x7c7df530u), (r_eax = c->eax, r_ecx = c->ecx, r_edx = c->edx, r_ebx = c->ebx, r_esp = c->esp, r_ebp = c->ebp, r_esi = c->esi, r_edi = c->edi, r_xmm0 = c->xmm[0], r_xmm1 = c->xmm[1], r_xmm2 = c->xmm[2], r_xmm3 = c->xmm[3]));  /* 7c4dc2f0: call 0x7c7df530 */
     (void)SubFlagsL(&rf, R32((uint32_t)(r_eax + 0x14u)), 0x0u, 0, 32);  /* 7c4dc2f5: cmp dword ptr [eax + 0x14], 0 */
     if ((!rf.zf && rf.sf == rf.of)) { goto L_7c4dc30a; }  /* 7c4dc2f9: jg 0x7c4dc30a */
     r_ecx = (uint32_t)((uint32_t)(r_esp + 0x4u));  /* 7c4dc2fb: lea ecx, [esp + 4] */
