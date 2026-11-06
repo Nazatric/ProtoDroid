@@ -378,14 +378,18 @@ _STACK_ACCESS_RE = re.compile(r"\b(R8|R16|R32|R64|RF32|RF64|W8|W16|W32|W64|WF32|
 _X87_CALLS = [("X87Precision(c, ", "X87PrecisionCW(r_cw, "), ("c->fpu_cw = ", "r_cw = c->fpu_cw = "),
               ("X87(c, ", "X87L("), ("X87Push(c, ", "X87PushL(r_st, &r_top, "), ("X87Pop(c)", "X87PopL(&r_top)"),
               ("X87StatusWord(c)", "X87StatusWordL(c, r_top)"), ("c->st_top", "r_top"), ("c->st[", "r_st[")]
+_X87_BODY_KEYS = ("X87(c, ", "X87Push(c, ", "X87Pop(c)", "X87StatusWord(c)", "c->st_top", "c->st[",
+                  "X87Precision(c, ", "c->fpu_cw = ")
+# Local x87 state costs a 64-byte entry copy and dirty spills. Keep it for longer sequences and loops, but not for
+# short straight-line helpers. Both paths execute identical operations and precision/control-word semantics.
+_X87_LOCALIZE_MIN_OPS = 5
 
 
-def vector_state(body):
-    """XMM registers and x87 use of a function body: they get local copies too, spilled and reloaded with the
-    general registers. Returns (declarations, spill expressions, reload expressions)."""
+def vector_state(body, localize_x87=True):
+    """XMM registers and eligible x87 state get local copies, spilled and reloaded with the general registers.
+    Short x87 helpers instead keep their state in Ctx, avoiding a whole-stack copy on every invocation."""
     xmms = sorted(set(_XMM_RE.findall(body)))
-    x87 = any(k in body for k in ("X87(c, ", "X87Push(c, ", "X87Pop(c)", "X87StatusWord(c)", "c->st_top", "c->st[",
-                                  "X87Precision(c, ", "c->fpu_cw = "))
+    x87 = localize_x87 and any(k in body for k in _X87_BODY_KEYS)
     decl = [f"XmmValue r_xmm{n} = c->xmm[{n}];" for n in xmms]
     spill = [f"c->xmm[{n}] = r_xmm{n}" for n in xmms]
     reload = [f"r_xmm{n} = c->xmm[{n}]" for n in xmms]
@@ -1394,6 +1398,17 @@ class FunctionCompiler:
                     self.ebp_stack_sites += count
         return line
 
+    def use_local_x87(self, body, decoded):
+        """Whether local x87 state is worth its fixed copy/spill cost for this function.
+
+        This is a code-generation cost decision, not a floating-point shortcut. Any backward CFG edge retains
+        localization because a small static loop body can execute enough operations to amortize the entry copy.
+        """
+        operations = sum(any(key in line for key in _X87_BODY_KEYS) for line in body.splitlines())
+        if operations >= _X87_LOCALIZE_MIN_OPS:
+            return True
+        return any(target <= ins.address for ins in self.ins for target in self.successors(ins, decoded))
+
     def liveness(self, decoded):
         """Flags live after each instruction. Calls clobber the flags (MSVC never reads flags across a call);
         nothing is live after leaving the function."""
@@ -1472,7 +1487,8 @@ class FunctionCompiler:
         if not self.ins:
             out.append(f'    RecompUnimplemented(c, 0x{self.va:08x}u, "no decodable instruction"); return;')
         if LOCALIZE:
-            decl, spill, reload, x87 = vector_state("\n".join(out[2:]))
+            vector_body = "\n".join(out[2:])
+            decl, spill, reload, x87 = vector_state(vector_body, self.use_local_x87(vector_body, decoded))
             out = out[:2] + ["    " + d for d in decl] + \
                 [localize(l, x87) if not l.startswith("L_") else l for l in out[2:]]
             xmms = sorted(set(_XMM_RE.findall("\n".join(out))))  # (already renamed: read the declarations)
