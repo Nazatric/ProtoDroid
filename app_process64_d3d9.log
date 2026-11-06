@@ -1,247 +1,372 @@
-info:  Game: app_process64
-info:  DXVK: v2.5.3+
-info:  Build: aarch64 clang 21.0.0
-info:  Found config env: d3d9.presentInterval = 1;d3d9.samplerAnisotropy = 2;d3d9.supportDFFormats = False
-info:  Effective configuration:
-info:    d3d9.samplerAnisotropy = 2
-info:    d3d9.supportDFFormats = False
-info:    d3d9.presentInterval = 1
-info:  Vulkan: Found vkGetInstanceProcAddr in libvulkan.so @ 0x7f88ca0d00
-info:  Built-in extension providers:
-info:    Platform WSI
-info:  Enabled instance extensions:
-info:    VK_EXT_surface_maintenance1
-info:    VK_KHR_android_surface
-info:    VK_KHR_get_surface_capabilities2
-info:    VK_KHR_surface
-info:  DXVK: Negotiated Vulkan 1.3 instance (1.3 preferred; 1.2 uses KHR/EXT compatibility paths)
-info:  D3D9: VK_FORMAT_D16_UNORM_S8_UINT -> VK_FORMAT_D24_UNORM_S8_UINT
-info:  Mali-G720 MC7:
-info:    Driver : Mali-G720 MC7 49.1.0
-info:    Memory Heap[0]: 
-info:      Size: 11260 MiB
-info:      Flags: 0x1
-info:      Memory Type[0]: Property Flags = 0x7
-info:      Memory Type[1]: Property Flags = 0xb
-info:      Memory Type[2]: Property Flags = 0x11
-info:    Memory Heap[1]: 
-info:      Size: 100 MiB
-info:      Flags: 0x1
-info:      Memory Type[3]: Property Flags = 0x21
-info:  DXVK: Disabling maintenance5, EDS3, line/conservative rasterization, depth-clip and custom-border-color on ARM
-info:  Device properties:
-info:    Device : Mali-G720 MC7
-info:    Driver : Mali-G720 MC7 49.1.0
-info:  Enabled device extensions:
-info:    VK_EXT_hdr_metadata
-info:    VK_EXT_swapchain_maintenance1
-info:    VK_KHR_swapchain
-info:  Device features:
-info:    robustBufferAccess                     : 1
-info:    fullDrawIndexUint32                    : 1
-info:    imageCubeArray                         : 1
-info:    independentBlend                       : 1
-info:    geometryShader                         : 1
-info:    tessellationShader                     : 0
-info:    sampleRateShading                      : 1
-info:    dualSrcBlend                           : 0
-info:    logicOp                                : 0
-info:    multiDrawIndirect                      : 1
-info:    drawIndirectFirstInstance              : 0
-info:    depthClamp                             : 1
-info:    depthBiasClamp                         : 1
-info:    fillModeNonSolid                       : 1
-info:    depthBounds                            : 0
-info:    wideLines                              : 1
-info:    multiViewport                          : 1
-info:    samplerAnisotropy                      : 1
-info:    textureCompressionBC                   : 0
-info:    occlusionQueryPrecise                  : 1
-info:    pipelineStatisticsQuery                : 0
-info:    vertexPipelineStoresAndAtomics         : 0
-info:    fragmentStoresAndAtomics               : 0
-info:    shaderImageGatherExtended              : 0
-info:    shaderClipDistance                     : 0
-info:    shaderCullDistance                     : 0
-info:    shaderFloat64                          : 0
-info:    shaderInt64                            : 0
-info:    variableMultisampleRate                : 0
-info:    shaderResourceResidency                : 0
-info:    shaderResourceMinLod                   : 0
-info:    sparseBinding                          : 0
-info:    sparseResidencyBuffer                  : 0
-info:    sparseResidencyImage2D                 : 0
-info:    sparseResidencyImage3D                 : 0
-info:    sparseResidency2Samples                : 0
-info:    sparseResidency4Samples                : 0
-info:    sparseResidency8Samples                : 0
-info:    sparseResidency16Samples               : 0
-info:    sparseResidencyAliased                 : 0
-info:  Vulkan 1.1
-info:    shaderDrawParameters                   : 1
-info:  Vulkan 1.2
-info:    samplerMirrorClampToEdge               : 1
-info:    drawIndirectCount                      : 1
-info:    samplerFilterMinmax                    : 0
-info:    hostQueryReset                         : 1
-info:    timelineSemaphore                      : 1
-info:    bufferDeviceAddress                    : 0
-info:    shaderOutputViewportIndex              : 1
-info:    shaderOutputLayer                      : 1
-info:    vulkanMemoryModel                      : 1
-info:  Vulkan 1.3
-info:    robustImageAccess                      : 1
-info:    pipelineCreationCacheControl           : 1
-info:    shaderDemoteToHelperInvocation         : 0
-info:    shaderZeroInitializeWorkgroupMemory    : 0
-info:    synchronization2                       : 1
-info:    dynamicRendering                       : 1
-info:  VK_AMD_shader_fragment_mask
-info:    extension supported                    : 0
-info:  VK_EXT_attachment_feedback_loop_layout
-info:    attachmentFeedbackLoopLayout           : 0
-info:  VK_EXT_conservative_rasterization
-info:    extension supported                    : 0
-info:  VK_EXT_custom_border_color
-info:    customBorderColors                     : 0
-info:    customBorderColorWithoutFormat         : 0
-info:  VK_EXT_depth_clip_enable
-info:    depthClipEnable                        : 0
-info:  VK_EXT_depth_bias_control
-info:    depthBiasControl                       : 0
-info:    leastRepresentableValueForceUnormRepresentation : 0
-info:    floatRepresentation                    : 0
-info:    depthBiasExact                         : 0
-info:  VK_EXT_extended_dynamic_state3
-info:    extDynamicState3AlphaToCoverageEnable  : 0
-info:    extDynamicState3DepthClipEnable        : 0
-info:    extDynamicState3RasterizationSamples   : 0
-info:    extDynamicState3SampleMask             : 0
-info:    extDynamicState3LineRasterizationMode  : 0
-info:  VK_EXT_fragment_shader_interlock
-info:    fragmentShaderSampleInterlock          : 0
-info:    fragmentShaderPixelInterlock           : 0
-info:  VK_EXT_full_screen_exclusive
-info:    extension supported                    : 0
-info:  VK_EXT_graphics_pipeline_library
-info:    graphicsPipelineLibrary                : 0
-info:  VK_EXT_line_rasterization
-info:    rectangularLines                       : 0
-info:    smoothLines                            : 0
-info:  VK_EXT_memory_budget
-info:    extension supported                    : 0
-info:  VK_EXT_memory_priority
-info:    memoryPriority                         : 0
-info:  VK_EXT_non_seamless_cube_map
-info:    nonSeamlessCubeMap                     : 0
-info:  VK_EXT_pageable_device_local_memory
-info:    pageableDeviceLocalMemory              : 0
-info:  VK_EXT_robustness2
-info:    robustBufferAccess2                    : 0
-info:    robustImageAccess2                     : 0
-info:    nullDescriptor                         : 0
-info:  VK_EXT_shader_module_identifier
-info:    shaderModuleIdentifier                 : 0
-info:  VK_EXT_shader_stencil_export
-info:    extension supported                    : 0
-info:  VK_EXT_swapchain_colorspace
-info:    extension supported                    : 0
-info:  VK_EXT_swapchain_maintenance1
-info:    swapchainMaintenance1                  : 1
-info:  VK_EXT_hdr_metadata
-info:    extension supported                    : 1
-info:  VK_EXT_transform_feedback
-info:    transformFeedback                      : 0
-info:    geometryStreams                        : 0
-info:  VK_EXT_vertex_attribute_divisor
-info:    vertexAttributeInstanceRateDivisor     : 0
-info:    vertexAttributeInstanceRateZeroDivisor : 0
-info:  VK_KHR_external_memory_win32
-info:    extension supported                    : 0
-info:  VK_KHR_external_semaphore_win32
-info:    extension supported                    : 0
-info:  VK_KHR_maintenance5
-info:    maintenance5                           : 0
-info:  VK_KHR_present_id
-info:    presentId                              : 0
-info:  VK_KHR_present_wait
-info:    presentWait                            : 0
-info:  VK_NV_descriptor_pool_overallocation
-info:    descriptorPoolOverallocation           : 0
-info:  VK_NV_raw_access_chains
-info:    shaderRawAccessChains                  : 0
-info:  VK_NVX_binary_import
-info:    extension supported                    : 0
-info:  VK_NVX_image_view_handle
-info:    extension supported                    : 0
-info:  VK_KHR_win32_keyed_mutex
-info:    extension supported                    : 0
-info:  Queue families:
-info:    Graphics : 0
-info:    Transfer : 0
-info:    Sparse   : n/a
-info:  DXVK: Serializing Vulkan pipeline compilation on ARM
-info:  DXVK: ARM pipeline trace disabled; set PROTODROID_PIPELINE_TRACE=1 or pipeline_trace = 1 to enable
-info:  Memory type mask for buffer resources: 0x3, usage: 0x1b7
-info:  DXVK: Read 683 valid state cache entries
-info:  DXVK: Graphics pipeline libraries not supported
-info:  DxvkUnboundResources: pre-created dummy sampler, buffer, and all 14 image views
-info:  DxvkUnboundResources: dummy image GPU initialization complete
-warn:  D3D9DeviceEx::SetupFPU: not supported on this arch.
-info:  D3D9DeviceEx::ResetSwapChain:
-info:    Requested Presentation Parameters
-info:      - Width:              2400
-info:      - Height:             1080
-info:      - Format:             D3D9Format::X8R8G8B8
-info:      - Auto Depth Stencil: true
-info:                  ^ Format: D3D9Format::D24S8
-info:      - Windowed:           true
-info:      - Swap effect:        1
-info:  Presenter: Actual swap chain properties:
-info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
-info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
-info:    Buffer size:  2712x1220
-info:    Image count:  6
-info:  DXVK: Capping ARM compiler threads at 2
-info:  DXVK: Using 2 compiler threads
-info:  Presenter: Actual swap chain properties:
-info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
-info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
-info:    Buffer size:  2712x1220
-info:    Image count:  6
-info:  Device reset
-warn:  D3D9Cursor::ResetCursor: Not supported on current platform.
-info:  D3D9DeviceEx::ResetSwapChain:
-info:    Requested Presentation Parameters
-info:      - Width:              2400
-info:      - Height:             1080
-info:      - Format:             D3D9Format::X8R8G8B8
-info:      - Auto Depth Stencil: true
-info:                  ^ Format: D3D9Format::D24S8
-info:      - Windowed:           true
-info:      - Swap effect:        1
-info:  Presenter: Actual swap chain properties:
-info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
-info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
-info:    Buffer size:  2712x1220
-info:    Image count:  6
-info:  Device reset
-warn:  D3D9Cursor::ResetCursor: Not supported on current platform.
-info:  D3D9DeviceEx::ResetSwapChain:
-info:    Requested Presentation Parameters
-info:      - Width:              2400
-info:      - Height:             1080
-info:      - Format:             D3D9Format::X8R8G8B8
-info:      - Auto Depth Stencil: true
-info:                  ^ Format: D3D9Format::D24S8
-info:      - Windowed:           true
-info:      - Swap effect:        1
-info:  Presenter: Actual swap chain properties:
-info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
-info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
-info:    Buffer size:  2712x1220
-info:    Image count:  6
+[mono=103354.963 tid=19068] info:  Game: app_process64
+[mono=103354.963 tid=19068] info:  DXVK: v2.5.3+
+[mono=103354.963 tid=19068] info:  Build: aarch64 clang 21.0.0
+[mono=103354.964 tid=19068] info:  Found config env: d3d9.presentInterval = 1;d3d9.samplerAnisotropy = 2;d3d9.supportDFFormats = False
+[mono=103354.965 tid=19068] info:  Effective configuration:
+[mono=103354.965 tid=19068] info:    d3d9.samplerAnisotropy = 2
+[mono=103354.965 tid=19068] info:    d3d9.supportDFFormats = False
+[mono=103354.965 tid=19068] info:    d3d9.presentInterval = 1
+[mono=103354.965 tid=19068] info:  Vulkan: Found vkGetInstanceProcAddr in libvulkan.so @ 0x7f88ca0d00
+[mono=103354.966 tid=19068] info:  Built-in extension providers:
+[mono=103354.966 tid=19068] info:    Platform WSI
+[mono=103354.966 tid=19068] info:  Enabled instance extensions:
+[mono=103354.966 tid=19068] info:    VK_EXT_surface_maintenance1
+[mono=103354.966 tid=19068] info:    VK_KHR_android_surface
+[mono=103354.966 tid=19068] info:    VK_KHR_get_surface_capabilities2
+[mono=103354.966 tid=19068] info:    VK_KHR_surface
+[mono=103354.966 tid=19068] info:  DXVK: Negotiated Vulkan 1.3 instance (1.3 preferred; 1.2 uses KHR/EXT compatibility paths)
+[mono=103354.967 tid=19068] info:  D3D9: VK_FORMAT_D16_UNORM_S8_UINT -> VK_FORMAT_D24_UNORM_S8_UINT
+[mono=103354.967 tid=19068] info:  Mali-G720 MC7:
+[mono=103354.967 tid=19068] info:    Driver : Mali-G720 MC7 49.1.0
+[mono=103354.967 tid=19068] info:    Memory Heap[0]: 
+[mono=103354.967 tid=19068] info:      Size: 11260 MiB
+[mono=103354.967 tid=19068] info:      Flags: 0x1
+[mono=103354.967 tid=19068] info:      Memory Type[0]: Property Flags = 0x7
+[mono=103354.967 tid=19068] info:      Memory Type[1]: Property Flags = 0xb
+[mono=103354.967 tid=19068] info:      Memory Type[2]: Property Flags = 0x11
+[mono=103354.967 tid=19068] info:    Memory Heap[1]: 
+[mono=103354.967 tid=19068] info:      Size: 100 MiB
+[mono=103354.967 tid=19068] info:      Flags: 0x1
+[mono=103354.967 tid=19068] info:      Memory Type[3]: Property Flags = 0x21
+[mono=103354.967 tid=19068] info:  DXVK: Disabling maintenance5, EDS3, line/conservative rasterization, depth-clip and custom-border-color on ARM
+[mono=103354.967 tid=19068] info:  Device properties:
+[mono=103354.967 tid=19068] info:    Device : Mali-G720 MC7
+[mono=103354.967 tid=19068] info:    Driver : Mali-G720 MC7 49.1.0
+[mono=103354.967 tid=19068] info:  Enabled device extensions:
+[mono=103354.967 tid=19068] info:    VK_EXT_hdr_metadata
+[mono=103354.967 tid=19068] info:    VK_EXT_swapchain_maintenance1
+[mono=103354.967 tid=19068] info:    VK_KHR_swapchain
+[mono=103354.967 tid=19068] info:  Device features:
+[mono=103354.967 tid=19068] info:    robustBufferAccess                     : 1
+[mono=103354.967 tid=19068] info:    fullDrawIndexUint32                    : 1
+[mono=103354.967 tid=19068] info:    imageCubeArray                         : 1
+[mono=103354.967 tid=19068] info:    independentBlend                       : 1
+[mono=103354.967 tid=19068] info:    geometryShader                         : 1
+[mono=103354.967 tid=19068] info:    tessellationShader                     : 0
+[mono=103354.967 tid=19068] info:    sampleRateShading                      : 1
+[mono=103354.967 tid=19068] info:    dualSrcBlend                           : 0
+[mono=103354.967 tid=19068] info:    logicOp                                : 0
+[mono=103354.967 tid=19068] info:    multiDrawIndirect                      : 1
+[mono=103354.967 tid=19068] info:    drawIndirectFirstInstance              : 0
+[mono=103354.967 tid=19068] info:    depthClamp                             : 1
+[mono=103354.967 tid=19068] info:    depthBiasClamp                         : 1
+[mono=103354.967 tid=19068] info:    fillModeNonSolid                       : 1
+[mono=103354.967 tid=19068] info:    depthBounds                            : 0
+[mono=103354.967 tid=19068] info:    wideLines                              : 1
+[mono=103354.967 tid=19068] info:    multiViewport                          : 1
+[mono=103354.967 tid=19068] info:    samplerAnisotropy                      : 1
+[mono=103354.967 tid=19068] info:    textureCompressionBC                   : 0
+[mono=103354.967 tid=19068] info:    occlusionQueryPrecise                  : 1
+[mono=103354.967 tid=19068] info:    pipelineStatisticsQuery                : 0
+[mono=103354.967 tid=19068] info:    vertexPipelineStoresAndAtomics         : 0
+[mono=103354.967 tid=19068] info:    fragmentStoresAndAtomics               : 0
+[mono=103354.967 tid=19068] info:    shaderImageGatherExtended              : 0
+[mono=103354.967 tid=19068] info:    shaderClipDistance                     : 0
+[mono=103354.967 tid=19068] info:    shaderCullDistance                     : 0
+[mono=103354.967 tid=19068] info:    shaderFloat64                          : 0
+[mono=103354.967 tid=19068] info:    shaderInt64                            : 0
+[mono=103354.967 tid=19068] info:    variableMultisampleRate                : 0
+[mono=103354.967 tid=19068] info:    shaderResourceResidency                : 0
+[mono=103354.967 tid=19068] info:    shaderResourceMinLod                   : 0
+[mono=103354.967 tid=19068] info:    sparseBinding                          : 0
+[mono=103354.967 tid=19068] info:    sparseResidencyBuffer                  : 0
+[mono=103354.967 tid=19068] info:    sparseResidencyImage2D                 : 0
+[mono=103354.967 tid=19068] info:    sparseResidencyImage3D                 : 0
+[mono=103354.967 tid=19068] info:    sparseResidency2Samples                : 0
+[mono=103354.967 tid=19068] info:    sparseResidency4Samples                : 0
+[mono=103354.967 tid=19068] info:    sparseResidency8Samples                : 0
+[mono=103354.967 tid=19068] info:    sparseResidency16Samples               : 0
+[mono=103354.967 tid=19068] info:    sparseResidencyAliased                 : 0
+[mono=103354.967 tid=19068] info:  Vulkan 1.1
+[mono=103354.967 tid=19068] info:    shaderDrawParameters                   : 1
+[mono=103354.967 tid=19068] info:  Vulkan 1.2
+[mono=103354.967 tid=19068] info:    samplerMirrorClampToEdge               : 1
+[mono=103354.967 tid=19068] info:    drawIndirectCount                      : 1
+[mono=103354.967 tid=19068] info:    samplerFilterMinmax                    : 0
+[mono=103354.967 tid=19068] info:    hostQueryReset                         : 1
+[mono=103354.967 tid=19068] info:    timelineSemaphore                      : 1
+[mono=103354.967 tid=19068] info:    bufferDeviceAddress                    : 0
+[mono=103354.967 tid=19068] info:    shaderOutputViewportIndex              : 1
+[mono=103354.967 tid=19068] info:    shaderOutputLayer                      : 1
+[mono=103354.967 tid=19068] info:    vulkanMemoryModel                      : 1
+[mono=103354.967 tid=19068] info:  Vulkan 1.3
+[mono=103354.967 tid=19068] info:    robustImageAccess                      : 1
+[mono=103354.967 tid=19068] info:    pipelineCreationCacheControl           : 1
+[mono=103354.967 tid=19068] info:    shaderDemoteToHelperInvocation         : 0
+[mono=103354.967 tid=19068] info:    shaderZeroInitializeWorkgroupMemory    : 0
+[mono=103354.967 tid=19068] info:    synchronization2                       : 1
+[mono=103354.967 tid=19068] info:    dynamicRendering                       : 1
+[mono=103354.967 tid=19068] info:  VK_AMD_shader_fragment_mask
+[mono=103354.967 tid=19068] info:    extension supported                    : 0
+[mono=103354.967 tid=19068] info:  VK_EXT_attachment_feedback_loop_layout
+[mono=103354.967 tid=19068] info:    attachmentFeedbackLoopLayout           : 0
+[mono=103354.967 tid=19068] info:  VK_EXT_conservative_rasterization
+[mono=103354.967 tid=19068] info:    extension supported                    : 0
+[mono=103354.967 tid=19068] info:  VK_EXT_custom_border_color
+[mono=103354.967 tid=19068] info:    customBorderColors                     : 0
+[mono=103354.967 tid=19068] info:    customBorderColorWithoutFormat         : 0
+[mono=103354.967 tid=19068] info:  VK_EXT_depth_clip_enable
+[mono=103354.967 tid=19068] info:    depthClipEnable                        : 0
+[mono=103354.967 tid=19068] info:  VK_EXT_depth_bias_control
+[mono=103354.967 tid=19068] info:    depthBiasControl                       : 0
+[mono=103354.967 tid=19068] info:    leastRepresentableValueForceUnormRepresentation : 0
+[mono=103354.967 tid=19068] info:    floatRepresentation                    : 0
+[mono=103354.967 tid=19068] info:    depthBiasExact                         : 0
+[mono=103354.967 tid=19068] info:  VK_EXT_extended_dynamic_state3
+[mono=103354.967 tid=19068] info:    extDynamicState3AlphaToCoverageEnable  : 0
+[mono=103354.967 tid=19068] info:    extDynamicState3DepthClipEnable        : 0
+[mono=103354.968 tid=19068] info:    extDynamicState3RasterizationSamples   : 0
+[mono=103354.968 tid=19068] info:    extDynamicState3SampleMask             : 0
+[mono=103354.968 tid=19068] info:    extDynamicState3LineRasterizationMode  : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_fragment_shader_interlock
+[mono=103354.968 tid=19068] info:    fragmentShaderSampleInterlock          : 0
+[mono=103354.968 tid=19068] info:    fragmentShaderPixelInterlock           : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_full_screen_exclusive
+[mono=103354.968 tid=19068] info:    extension supported                    : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_graphics_pipeline_library
+[mono=103354.968 tid=19068] info:    graphicsPipelineLibrary                : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_line_rasterization
+[mono=103354.968 tid=19068] info:    rectangularLines                       : 0
+[mono=103354.968 tid=19068] info:    smoothLines                            : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_memory_budget
+[mono=103354.968 tid=19068] info:    extension supported                    : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_memory_priority
+[mono=103354.968 tid=19068] info:    memoryPriority                         : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_non_seamless_cube_map
+[mono=103354.968 tid=19068] info:    nonSeamlessCubeMap                     : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_pageable_device_local_memory
+[mono=103354.968 tid=19068] info:    pageableDeviceLocalMemory              : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_robustness2
+[mono=103354.968 tid=19068] info:    robustBufferAccess2                    : 0
+[mono=103354.968 tid=19068] info:    robustImageAccess2                     : 0
+[mono=103354.968 tid=19068] info:    nullDescriptor                         : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_shader_module_identifier
+[mono=103354.968 tid=19068] info:    shaderModuleIdentifier                 : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_shader_stencil_export
+[mono=103354.968 tid=19068] info:    extension supported                    : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_swapchain_colorspace
+[mono=103354.968 tid=19068] info:    extension supported                    : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_swapchain_maintenance1
+[mono=103354.968 tid=19068] info:    swapchainMaintenance1                  : 1
+[mono=103354.968 tid=19068] info:  VK_EXT_hdr_metadata
+[mono=103354.968 tid=19068] info:    extension supported                    : 1
+[mono=103354.968 tid=19068] info:  VK_EXT_transform_feedback
+[mono=103354.968 tid=19068] info:    transformFeedback                      : 0
+[mono=103354.968 tid=19068] info:    geometryStreams                        : 0
+[mono=103354.968 tid=19068] info:  VK_EXT_vertex_attribute_divisor
+[mono=103354.968 tid=19068] info:    vertexAttributeInstanceRateDivisor     : 0
+[mono=103354.968 tid=19068] info:    vertexAttributeInstanceRateZeroDivisor : 0
+[mono=103354.968 tid=19068] info:  VK_KHR_external_memory_win32
+[mono=103354.968 tid=19068] info:    extension supported                    : 0
+[mono=103354.968 tid=19068] info:  VK_KHR_external_semaphore_win32
+[mono=103354.968 tid=19068] info:    extension supported                    : 0
+[mono=103354.968 tid=19068] info:  VK_KHR_maintenance5
+[mono=103354.968 tid=19068] info:    maintenance5                           : 0
+[mono=103354.968 tid=19068] info:  VK_KHR_present_id
+[mono=103354.968 tid=19068] info:    presentId                              : 0
+[mono=103354.968 tid=19068] info:  VK_KHR_present_wait
+[mono=103354.968 tid=19068] info:    presentWait                            : 0
+[mono=103354.968 tid=19068] info:  VK_NV_descriptor_pool_overallocation
+[mono=103354.968 tid=19068] info:    descriptorPoolOverallocation           : 0
+[mono=103354.968 tid=19068] info:  VK_NV_raw_access_chains
+[mono=103354.968 tid=19068] info:    shaderRawAccessChains                  : 0
+[mono=103354.968 tid=19068] info:  VK_NVX_binary_import
+[mono=103354.968 tid=19068] info:    extension supported                    : 0
+[mono=103354.968 tid=19068] info:  VK_NVX_image_view_handle
+[mono=103354.968 tid=19068] info:    extension supported                    : 0
+[mono=103354.968 tid=19068] info:  VK_KHR_win32_keyed_mutex
+[mono=103354.968 tid=19068] info:    extension supported                    : 0
+[mono=103354.968 tid=19068] info:  Queue families:
+[mono=103354.968 tid=19068] info:    Graphics : 0
+[mono=103354.968 tid=19068] info:    Transfer : 0
+[mono=103354.968 tid=19068] info:    Sparse   : n/a
+[mono=103354.972 tid=19068] info:  DXVK: Serializing Vulkan pipeline compilation on ARM
+[mono=103354.972 tid=19068] info:  DXVK: ARM pipeline trace: /storage/emulated/0/Prototype/logs/pipeline_trace.log
+[mono=103354.972 tid=19068] info:  DXVK: Lightweight pipeline timing enabled; serialization=on
+[mono=103354.972 tid=19068] info:  Memory type mask for buffer resources: 0x3, usage: 0x1b7
+[mono=103354.972 tid=19068] warn:  DXVK: No state cache file found
+[mono=103354.972 tid=19068] info:  DXVK: Graphics pipeline libraries not supported
+[mono=103354.975 tid=19068] info:  DxvkUnboundResources: pre-created dummy sampler, buffer, and all 14 image views
+[mono=103354.978 tid=19068] info:  DxvkUnboundResources: dummy image GPU initialization complete
+[mono=103354.990 tid=19068] info:  DXVK pipeline timing: graphics calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms; compute calls=1 requested=1 errors=0 begun=1 in_flight=0 success=1 compile_required=0 wait_avg=7.7e-05 wait_max=7.7e-05 trace_avg=0 trace_max=0 driver_avg=12.1834 driver_max=12.1834 ms
+[mono=103355.029 tid=19068] warn:  D3D9DeviceEx::SetupFPU: not supported on this arch.
+[mono=103355.029 tid=19068] info:  D3D9DeviceEx::ResetSwapChain:
+[mono=103355.029 tid=19068] info:    Requested Presentation Parameters
+[mono=103355.029 tid=19068] info:      - Width:              2400
+[mono=103355.029 tid=19068] info:      - Height:             1080
+[mono=103355.029 tid=19068] info:      - Format:             D3D9Format::X8R8G8B8
+[mono=103355.029 tid=19068] info:      - Auto Depth Stencil: true
+[mono=103355.029 tid=19068] info:                  ^ Format: D3D9Format::D24S8
+[mono=103355.029 tid=19068] info:      - Windowed:           true
+[mono=103355.029 tid=19068] info:      - Swap effect:        1
+[mono=103355.031 tid=19068] info:  Presenter: Actual swap chain properties:
+[mono=103355.031 tid=19068] info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
+[mono=103355.031 tid=19068] info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+[mono=103355.031 tid=19068] info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
+[mono=103355.031 tid=19068] info:    Buffer size:  2712x1220
+[mono=103355.031 tid=19068] info:    Image count:  6
+[mono=103355.125 tid=19068] info:  Presenter: Actual swap chain properties:
+[mono=103355.125 tid=19068] info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
+[mono=103355.125 tid=19068] info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+[mono=103355.125 tid=19068] info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
+[mono=103355.125 tid=19068] info:    Buffer size:  2712x1220
+[mono=103355.125 tid=19068] info:    Image count:  6
+[mono=103355.138 tid=19068] info:  DXVK: D3D9 method timing enabled; inclusive nested phases are non-additive, and these records are not GPU time
+[mono=103355.138 tid=19068] info:  DXVK D3D9 timing: stream_lock n=16 ok=16 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=769 max_ns=231 avg=0.000 max=0.000ms; stream_total n=16 ok=16 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=2230 max_ns=231 avg=0.000 max=0.000ms; indices_lock n=2 ok=2 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=77 max_ns=77 avg=0.000 max=0.000ms; indices_total n=2 ok=2 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=307 max_ns=230 avg=0.000 max=0.000ms; texture_lock n=81 ok=81 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=4771 max_ns=231 avg=0.000 max=0.000ms; texture_total n=81 ok=81 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=10155 max_ns=538 avg=0.000 max=0.001ms
+[mono=103355.534 tid=19068] info:  Device reset
+[mono=103355.534 tid=19068] warn:  D3D9Cursor::ResetCursor: Not supported on current platform.
+[mono=103355.534 tid=19068] info:  D3D9DeviceEx::ResetSwapChain:
+[mono=103355.534 tid=19068] info:    Requested Presentation Parameters
+[mono=103355.534 tid=19068] info:      - Width:              2400
+[mono=103355.534 tid=19068] info:      - Height:             1080
+[mono=103355.534 tid=19068] info:      - Format:             D3D9Format::X8R8G8B8
+[mono=103355.534 tid=19068] info:      - Auto Depth Stencil: true
+[mono=103355.534 tid=19068] info:                  ^ Format: D3D9Format::D24S8
+[mono=103355.534 tid=19068] info:      - Windowed:           true
+[mono=103355.534 tid=19068] info:      - Swap effect:        1
+[mono=103355.535 tid=19068] info:  Presenter: Actual swap chain properties:
+[mono=103355.535 tid=19068] info:    Format:       VK_FORMAT_R8G8B8A8_UNORM
+[mono=103355.535 tid=19068] info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+[mono=103355.535 tid=19068] info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
+[mono=103355.535 tid=19068] info:    Buffer size:  2712x1220
+[mono=103355.535 tid=19068] info:    Image count:  6
+[mono=103355.600 tid=19102] warn:  DXVK: Creating new state cache file
+[mono=103360.147 tid=19090] info:  DXVK D3D9 timing: draw_lock n=9642 ok=9642 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=665227 max_ns=3076 avg=0.000 max=0.003ms; draw_total n=9642 ok=9642 false=0 errors=0 changed=0 flagged=0 units=161414 total_ns=58013025 max_ns=2340616 avg=0.006 max=2.341ms; draw_upload n=9642 ok=9642 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=796545 max_ns=25539 avg=0.000 max=0.026ms; prepare_draw n=10116 ok=10116 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=57494619 max_ns=2320615 avg=0.006 max=2.321ms; draw_emit n=9642 ok=9642 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=908920 max_ns=6538 avg=0.000 max=0.007ms; stream_lock n=3167 ok=3167 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=257772 max_ns=9231 avg=0.000 max=0.009ms; stream_total n=3167 ok=3167 false=0 errors=0 changed=2681 flagged=0 units=0 total_ns=1191372 max_ns=45846 avg=0.000 max=0.046ms; indices_lock n=16660 ok=16660 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=1338781 max_ns=148924 avg=0.000 max=0.149ms; indices_total n=16660 ok=16660 false=0 errors=0 changed=16658 flagged=0 units=0 total_ns=3435282 max_ns=149539 avg=0.000 max=0.150ms; texture_lock n=25601 ok=25601 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=1817550 max_ns=68385 avg=0.000 max=0.068ms; texture_total n=25601 ok=25601 false=0 errors=0 changed=8341 flagged=0 units=0 total_ns=9705031 max_ns=1058385 avg=0.000 max=1.058ms; query_lock n=4 ok=4 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=462 max_ns=231 avg=0.000 max=0.000ms; query_occlusion n=4 ok=4 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=4539 max_ns=1462 avg=0.001 max=0.001ms
+[mono=103360.608 tid=19088] info:  DXVK pipeline timing: graphics calls=12 requested=12 errors=0 begun=12 in_flight=0 success=12 compile_required=0 wait_avg=0.000102583 wait_max=0.000308 trace_avg=13.6517 trace_max=30.0821 driver_avg=7.69256 driver_max=18.72 ms; compute calls=7 requested=7 errors=0 begun=7 in_flight=0 success=7 compile_required=0 wait_avg=6.6e-05 wait_max=0.000308 trace_avg=4.4e-05 trace_max=0.000231 driver_avg=5.44685 driver_max=9.84831 ms
+[mono=103365.622 tid=19088] info:  DXVK pipeline timing: graphics calls=29 requested=29 errors=0 begun=29 in_flight=0 success=29 compile_required=0 wait_avg=0.000106034 wait_max=0.000308 trace_avg=16.1614 trace_max=30.9914 driver_avg=12.5877 driver_max=31.2499 ms; compute calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms
+[mono=103365.674 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=17.8203 driver=33.8865 total=51.7068 ms
+[mono=103365.813 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=18.36 driver=37.9538 total=56.3141 ms
+[mono=103365.963 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=21.1295 driver=36.3877 total=57.5172 ms
+[mono=103366.061 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000307 trace=23.6591 driver=39.6216 total=63.281 ms
+[mono=103366.135 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000308 trace=29.9526 driver=41.6892 total=71.6422 ms
+[mono=103366.204 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=34.7391 driver=32.5237 total=67.2628 ms
+[mono=103366.263 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000308 trace=32.0682 driver=26.9524 total=59.0209 ms
+[mono=103366.405 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=18.1292 driver=32.8683 total=50.9975 ms
+[mono=103366.597 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=27.1413 driver=26.8311 total=53.9724 ms
+[mono=103366.662 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=30.7922 driver=33.4828 total=64.2751 ms
+[mono=103366.726 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=25.5684 driver=38.1729 total=63.7415 ms
+[mono=103366.803 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=47.8621 driver=28.2752 total=76.1373 ms
+[mono=103366.870 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=16.999 driver=48.8569 total=65.856 ms
+[mono=103366.930 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000692 trace=19.5098 driver=39.0415 total=58.552 ms
+[mono=103366.992 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=25.9385 driver=35.5769 total=61.5154 ms
+[mono=103367.053 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=27.6344 driver=32.2404 total=59.8748 ms
+[mono=103367.115 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.00023 trace=23.7696 driver=37.7384 total=61.5082 ms
+[mono=103367.170 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=24.8365 driver=29.5905 total=54.4271 ms
+[mono=103367.230 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=23.5862 driver=35.2353 total=58.8218 ms
+[mono=103367.284 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=31.3828 driver=22.3104 total=53.6932 ms
+[mono=103367.336 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=17.2945 driver=34.6166 total=51.9112 ms
+[mono=103367.391 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=23.2649 driver=30.9342 total=54.1993 ms
+[mono=103367.822 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=20.6852 driver=38.0695 total=58.7547 ms
+[mono=103367.885 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=30.3292 driver=32.4475 total=62.7767 ms
+[mono=103367.942 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=29.4718 driver=26.9615 total=56.4333 ms
+[mono=103368.012 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=30.1865 driver=39.828 total=70.0147 ms
+[mono=103368.047 tid=19090] info:  DXVK D3D9 timing: draw_lock n=11356 ok=11356 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=769090 max_ns=10539 avg=0.000 max=0.011ms; draw_total n=11356 ok=11356 false=0 errors=0 changed=0 flagged=0 units=1024397 total_ns=3151009584 max_ns=937025769 avg=0.277 max=937.026ms; draw_upload n=11356 ok=11356 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=873845 max_ns=10692 avg=0.000 max=0.011ms; prepare_draw n=13307 ok=13307 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=3149137078 max_ns=937025000 avg=0.237 max=937.025ms; draw_emit n=11356 ok=11356 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=3595826 max_ns=606231 avg=0.000 max=0.606ms; stream_lock n=6754 ok=6754 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=576668 max_ns=114231 avg=0.000 max=0.114ms; stream_total n=6754 ok=6754 false=0 errors=0 changed=6336 flagged=0 units=0 total_ns=4454297 max_ns=137000 avg=0.001 max=0.137ms; indices_lock n=16044 ok=16044 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=1130754 max_ns=45231 avg=0.000 max=0.045ms; indices_total n=16044 ok=16044 false=0 errors=0 changed=16025 flagged=0 units=0 total_ns=5184800 max_ns=86462 avg=0.000 max=0.086ms; texture_lock n=24411 ok=24411 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=1790114 max_ns=105846 avg=0.000 max=0.106ms; texture_total n=24411 ok=24411 false=0 errors=0 changed=11846 flagged=0 units=0 total_ns=10047619 max_ns=287692 avg=0.000 max=0.288ms
+[mono=103368.112 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=29.0542 driver=21.9602 total=51.0147 ms
+[mono=103368.163 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.00023 trace=23.8604 driver=26.4947 total=50.3553 ms
+[mono=103368.257 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=24.0425 driver=26.855 total=50.8978 ms
+[mono=103368.308 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.00023 trace=25.5262 driver=24.7895 total=50.316 ms
+[mono=103368.544 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=28.3431 driver=32.9655 total=61.3088 ms
+[mono=103368.623 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=20.4339 driver=29.9972 total=50.4313 ms
+[mono=103368.769 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.00023 trace=22.4566 driver=28.3388 total=50.7957 ms
+[mono=103368.825 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=22.9948 driver=32.4637 total=55.4585 ms
+[mono=103368.972 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=25.792 driver=31.7049 total=57.497 ms
+[mono=103369.072 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=25.9412 driver=24.7562 total=50.6975 ms
+[mono=103369.127 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=24.1105 driver=30.3385 total=54.449 ms
+[mono=103369.497 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=29.5139 driver=29.2302 total=58.7441 ms
+[mono=103369.858 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=21.788 driver=32.8151 total=54.6032 ms
+[mono=103369.914 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=13.3948 driver=40.5802 total=53.975 ms
+[mono=103370.276 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=17.0991 driver=34.9588 total=52.0582 ms
+[mono=103373.063 tid=19090] info:  DXVK D3D9 timing: draw_lock n=316006 ok=316006 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=23239847 max_ns=2043077 avg=0.000 max=2.043ms; draw_total n=316006 ok=316006 false=0 errors=0 changed=0 flagged=0 units=96648385 total_ns=334412997 max_ns=4508385 avg=0.001 max=4.508ms; draw_upload n=316006 ok=316006 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=17250159 max_ns=865153 avg=0.000 max=0.865ms; prepare_draw n=317044 ok=317044 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=178911908 max_ns=4508000 avg=0.001 max=4.508ms; draw_emit n=316006 ok=316006 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=31987969 max_ns=1606154 avg=0.000 max=1.606ms; stream_lock n=303769 ok=303769 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=23208815 max_ns=678230 avg=0.000 max=0.678ms; stream_total n=303769 ok=303769 false=0 errors=0 changed=296217 flagged=0 units=0 total_ns=186498286 max_ns=4291077 avg=0.001 max=4.291ms; indices_lock n=295210 ok=295210 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=23448028 max_ns=1868616 avg=0.000 max=1.869ms; indices_total n=295210 ok=295210 false=0 errors=0 changed=291820 flagged=0 units=0 total_ns=176066581 max_ns=3609230 avg=0.001 max=3.609ms; texture_lock n=181268 ok=181268 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=11690836 max_ns=452307 avg=0.000 max=0.452ms; texture_total n=181268 ok=181268 false=0 errors=0 changed=177610 flagged=0 units=0 total_ns=55969997 max_ns=919923 avg=0.000 max=0.920ms; query_lock n=14782 ok=14782 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=838289 max_ns=7384 avg=0.000 max=0.007ms; query_occlusion n=14782 ok=117 false=14665 errors=0 changed=0 flagged=14665 units=0 total_ns=12487483 max_ns=249538 avg=0.001 max=0.250ms
+[mono=103375.125 tid=19088] info:  DXVK pipeline timing: graphics calls=91 requested=91 errors=0 begun=91 in_flight=0 success=91 compile_required=0 wait_avg=0.000118352 wait_max=0.000692 trace_avg=22.2871 trace_max=47.8621 driver_avg=26.1191 driver_max=48.8569 ms; compute calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms
+[mono=103376.097 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000308 trace=21.4671 driver=35.7364 total=57.2038 ms
+[mono=103377.481 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000616 trace=20.5711 driver=33.5212 total=54.0929 ms
+[mono=103378.080 tid=19090] info:  DXVK D3D9 timing: draw_lock n=455670 ok=455670 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=33301053 max_ns=1035462 avg=0.000 max=1.035ms; draw_total n=455670 ok=455670 false=0 errors=0 changed=0 flagged=0 units=138537669 total_ns=529309130 max_ns=3945461 avg=0.001 max=3.945ms; draw_upload n=455670 ok=455670 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=27812948 max_ns=1438769 avg=0.000 max=1.439ms; prepare_draw n=457238 ok=457238 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=282917975 max_ns=3347154 avg=0.001 max=3.347ms; draw_emit n=455670 ok=455670 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=58412004 max_ns=3942769 avg=0.000 max=3.943ms; stream_lock n=439676 ok=439676 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=33497864 max_ns=3605231 avg=0.000 max=3.605ms; stream_total n=439676 ok=439676 false=0 errors=0 changed=428988 flagged=0 units=0 total_ns=274954143 max_ns=3747077 avg=0.001 max=3.747ms; indices_lock n=425182 ok=425182 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=35408225 max_ns=3047770 avg=0.000 max=3.048ms; indices_total n=425182 ok=425182 false=0 errors=0 changed=419889 flagged=0 units=0 total_ns=230362589 max_ns=3049000 avg=0.001 max=3.049ms; texture_lock n=264315 ok=264315 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=23431024 max_ns=3380923 avg=0.000 max=3.381ms; texture_total n=264315 ok=264315 false=0 errors=0 changed=259138 flagged=0 units=0 total_ns=91877093 max_ns=3433615 avg=0.000 max=3.434ms; query_lock n=16078 ok=16078 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=981819 max_ns=69770 avg=0.000 max=0.070ms; query_occlusion n=16078 ok=167 false=15911 errors=0 changed=0 flagged=15911 units=0 total_ns=14776624 max_ns=301154 avg=0.001 max=0.301ms
+[mono=103380.006 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000384 trace=17.6883 driver=37.7249 total=55.4136 ms
+[mono=103380.960 tid=19088] info:  DXVK pipeline timing: graphics calls=11 requested=11 errors=0 begun=11 in_flight=0 success=11 compile_required=0 wait_avg=0.000265727 wait_max=0.000616 trace_avg=19.0738 trace_max=25.2235 driver_avg=22.1518 driver_max=37.7249 ms; compute calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms
+[mono=103383.091 tid=19090] info:  DXVK D3D9 timing: draw_lock n=458048 ok=458048 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=42488194 max_ns=3022769 avg=0.000 max=3.023ms; draw_total n=458048 ok=458048 false=0 errors=0 changed=0 flagged=0 units=145239039 total_ns=518259030 max_ns=6291385 avg=0.001 max=6.291ms; draw_upload n=458048 ok=458048 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=26790895 max_ns=1208000 avg=0.000 max=1.208ms; prepare_draw n=459866 ok=459866 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=267074298 max_ns=6291000 avg=0.001 max=6.291ms; draw_emit n=458048 ok=458048 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=58838466 max_ns=2649231 avg=0.000 max=2.649ms; stream_lock n=440227 ok=440227 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=40188827 max_ns=3161231 avg=0.000 max=3.161ms; stream_total n=440227 ok=440227 false=0 errors=0 changed=429667 flagged=0 units=0 total_ns=263763805 max_ns=3163692 avg=0.001 max=3.164ms; indices_lock n=416878 ok=416878 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=35910734 max_ns=1697538 avg=0.000 max=1.698ms; indices_total n=416878 ok=416878 false=0 errors=0 changed=411450 flagged=0 units=0 total_ns=230617038 max_ns=4118154 avg=0.001 max=4.118ms; texture_lock n=246756 ok=246756 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=15787221 max_ns=749154 avg=0.000 max=0.749ms; texture_total n=246756 ok=246756 false=0 errors=0 changed=241641 flagged=0 units=0 total_ns=76711104 max_ns=2392000 avg=0.000 max=2.392ms; query_lock n=1383 ok=1383 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=266094 max_ns=128615 avg=0.000 max=0.129ms; query_occlusion n=1383 ok=165 false=1218 errors=0 changed=0 flagged=1218 units=0 total_ns=3941304 max_ns=260615 avg=0.003 max=0.261ms
+[mono=103388.102 tid=19090] info:  DXVK D3D9 timing: draw_lock n=475647 ok=475647 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=41066758 max_ns=4450692 avg=0.000 max=4.451ms; draw_total n=475647 ok=475647 false=0 errors=0 changed=0 flagged=0 units=151564281 total_ns=526690183 max_ns=4454692 avg=0.001 max=4.455ms; draw_upload n=475647 ok=475647 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=26090905 max_ns=598231 avg=0.000 max=0.598ms; prepare_draw n=477360 ok=477360 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=269858918 max_ns=2102769 avg=0.001 max=2.103ms; draw_emit n=475647 ok=475647 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=60779477 max_ns=1874077 avg=0.000 max=1.874ms; stream_lock n=452879 ok=452879 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=32621872 max_ns=910154 avg=0.000 max=0.910ms; stream_total n=452879 ok=452879 false=0 errors=0 changed=441423 flagged=0 units=0 total_ns=264320078 max_ns=4448077 avg=0.001 max=4.448ms; indices_lock n=430572 ok=430572 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=32763649 max_ns=943384 avg=0.000 max=0.943ms; indices_total n=430572 ok=430572 false=0 errors=0 changed=426268 flagged=0 units=0 total_ns=215381911 max_ns=2859307 avg=0.001 max=2.859ms; texture_lock n=243054 ok=243054 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=19472555 max_ns=1726077 avg=0.000 max=1.726ms; texture_total n=243054 ok=243054 false=0 errors=0 changed=237505 flagged=0 units=0 total_ns=83675289 max_ns=2946770 avg=0.000 max=2.947ms; query_lock n=179 ok=179 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=48613 max_ns=1923 avg=0.000 max=0.002ms; query_occlusion n=179 ok=179 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=2303690 max_ns=631385 avg=0.013 max=0.631ms
+[mono=103388.464 tid=19088] info:  DXVK pipeline timing: graphics calls=2 requested=2 errors=0 begun=2 in_flight=0 success=2 compile_required=0 wait_avg=0.000308 wait_max=0.000308 trace_avg=14.671 trace_max=15.0244 driver_avg=18.599 driver_max=27.7027 ms; compute calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms
+[mono=103393.128 tid=19090] info:  DXVK D3D9 timing: draw_lock n=435748 ok=435748 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=33300208 max_ns=2130384 avg=0.000 max=2.130ms; draw_total n=435748 ok=435748 false=0 errors=0 changed=0 flagged=0 units=133905238 total_ns=512570577 max_ns=4259076 avg=0.001 max=4.259ms; draw_upload n=435748 ok=435748 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=33952462 max_ns=2999076 avg=0.000 max=2.999ms; prepare_draw n=437328 ok=437328 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=277210088 max_ns=3600000 avg=0.001 max=3.600ms; draw_emit n=435748 ok=435748 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=50741724 max_ns=3995384 avg=0.000 max=3.995ms; stream_lock n=416504 ok=416504 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=42627243 max_ns=3006231 avg=0.000 max=3.006ms; stream_total n=416504 ok=416504 false=0 errors=0 changed=405761 flagged=0 units=0 total_ns=234287572 max_ns=3008385 avg=0.001 max=3.008ms; indices_lock n=397293 ok=397293 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=29392263 max_ns=1181769 avg=0.000 max=1.182ms; indices_total n=397293 ok=397293 false=0 errors=0 changed=393687 flagged=0 units=0 total_ns=201061899 max_ns=3764923 avg=0.001 max=3.765ms; texture_lock n=219502 ok=219502 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=17401720 max_ns=1358692 avg=0.000 max=1.359ms; texture_total n=219502 ok=219502 false=0 errors=0 changed=214294 flagged=0 units=0 total_ns=75461503 max_ns=3468615 avg=0.000 max=3.469ms; query_lock n=19323 ok=19323 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=1432223 max_ns=71076 avg=0.000 max=0.071ms; query_occlusion n=19323 ok=168 false=19155 errors=0 changed=0 flagged=19155 units=0 total_ns=16532171 max_ns=164616 avg=0.001 max=0.165ms
+[mono=103394.298 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=19.6022 driver=43.2908 total=62.8932 ms
+[mono=103394.298 tid=19088] info:  DXVK pipeline timing: graphics calls=9 requested=9 errors=0 begun=9 in_flight=0 success=9 compile_required=0 wait_avg=0.000247778 wait_max=0.000308 trace_avg=16.71 trace_max=23.5748 driver_avg=25.5415 driver_max=43.2908 ms; compute calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms
+[mono=103394.434 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000693 trace=15.9821 driver=40.5619 total=56.5447 ms
+[mono=103396.141 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=15.3945 driver=38.2951 total=53.6898 ms
+[mono=103397.825 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000308 trace=14.9805 driver=36.1121 total=51.0929 ms
+[mono=103398.069 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000539 trace=22.1025 driver=32.0973 total=54.2003 ms
+[mono=103398.140 tid=19090] info:  DXVK D3D9 timing: draw_lock n=448761 ok=448761 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=32948649 max_ns=856615 avg=0.000 max=0.857ms; draw_total n=448761 ok=448761 false=0 errors=0 changed=0 flagged=0 units=134064057 total_ns=520428216 max_ns=4998230 avg=0.001 max=4.998ms; draw_upload n=448761 ok=448761 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=26962098 max_ns=1219693 avg=0.000 max=1.220ms; prepare_draw n=450413 ok=450413 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=285150424 max_ns=4997539 avg=0.001 max=4.998ms; draw_emit n=448761 ok=448761 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=57187428 max_ns=3253231 avg=0.000 max=3.253ms; stream_lock n=413473 ok=413473 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=37976192 max_ns=3453539 avg=0.000 max=3.454ms; stream_total n=413473 ok=413473 false=0 errors=0 changed=403489 flagged=0 units=0 total_ns=232127739 max_ns=3454462 avg=0.001 max=3.454ms; indices_lock n=397680 ok=397680 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=30269362 max_ns=1472615 avg=0.000 max=1.473ms; indices_total n=397680 ok=397680 false=0 errors=0 changed=394203 flagged=0 units=0 total_ns=198155718 max_ns=2672385 avg=0.000 max=2.672ms; texture_lock n=231140 ok=231140 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=14507538 max_ns=502769 avg=0.000 max=0.503ms; texture_total n=231140 ok=231140 false=0 errors=0 changed=226304 flagged=0 units=0 total_ns=73359218 max_ns=2224308 avg=0.000 max=2.224ms; query_lock n=6473 ok=6473 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=458892 max_ns=1923 avg=0.000 max=0.002ms; query_occlusion n=6473 ok=156 false=6317 errors=0 changed=0 flagged=6317 units=0 total_ns=7393936 max_ns=189000 avg=0.001 max=0.189ms
+[mono=103399.497 tid=19088] info:  DXVK pipeline timing: graphics calls=8 requested=8 errors=0 begun=8 in_flight=0 success=8 compile_required=0 wait_avg=0.000308 wait_max=0.000693 trace_avg=17.6442 trace_max=22.1025 driver_avg=26.7222 driver_max=40.5619 ms; compute calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms
+[mono=103399.551 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000307 trace=16.0138 driver=34.2975 total=50.3117 ms
+[mono=103399.627 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000308 trace=20.3098 driver=33.4631 total=53.7732 ms
+[mono=103403.145 tid=19090] info:  DXVK D3D9 timing: draw_lock n=465295 ok=465295 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=33454474 max_ns=1050462 avg=0.000 max=1.050ms; draw_total n=465295 ok=465295 false=0 errors=0 changed=0 flagged=0 units=142222986 total_ns=474995187 max_ns=3826770 avg=0.001 max=3.827ms; draw_upload n=465295 ok=465295 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=26936950 max_ns=1806461 avg=0.000 max=1.806ms; prepare_draw n=467821 ok=467821 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=238092693 max_ns=3061846 avg=0.001 max=3.062ms; draw_emit n=465295 ok=465295 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=52432280 max_ns=3547077 avg=0.000 max=3.547ms; stream_lock n=440136 ok=440136 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=39662506 max_ns=2758153 avg=0.000 max=2.758ms; stream_total n=440136 ok=440136 false=0 errors=0 changed=427566 flagged=0 units=0 total_ns=254259119 max_ns=3638231 avg=0.001 max=3.638ms; indices_lock n=426722 ok=426722 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=34895084 max_ns=1146462 avg=0.000 max=1.146ms; indices_total n=426722 ok=426722 false=0 errors=0 changed=422434 flagged=0 units=0 total_ns=222187699 max_ns=3324692 avg=0.001 max=3.325ms; texture_lock n=248582 ok=248582 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=14479343 max_ns=97846 avg=0.000 max=0.098ms; texture_total n=248582 ok=248582 false=0 errors=0 changed=242723 flagged=0 units=0 total_ns=73786071 max_ns=2192616 avg=0.000 max=2.193ms; query_lock n=29198 ok=29198 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=2858017 max_ns=553615 avg=0.000 max=0.554ms; query_occlusion n=29198 ok=189 false=29009 errors=0 changed=0 flagged=29009 units=0 total_ns=31033499 max_ns=4143769 avg=0.001 max=4.144ms
+[mono=103406.299 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=17.707 driver=34.8111 total=52.5182 ms
+[mono=103406.299 tid=19088] info:  DXVK pipeline timing: graphics calls=9 requested=9 errors=0 begun=9 in_flight=0 success=9 compile_required=0 wait_avg=0.000239333 wait_max=0.000384 trace_avg=16.7484 trace_max=24.2582 driver_avg=23.0233 driver_max=34.8111 ms; compute calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms
+[mono=103407.211 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=16.5375 driver=35.465 total=52.0025 ms
+[mono=103408.148 tid=19090] info:  DXVK D3D9 timing: draw_lock n=475317 ok=475317 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=35752590 max_ns=2455462 avg=0.000 max=2.455ms; draw_total n=475317 ok=475317 false=0 errors=0 changed=0 flagged=0 units=142915675 total_ns=478038335 max_ns=3728230 avg=0.001 max=3.728ms; draw_upload n=475317 ok=475317 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=25666147 max_ns=934693 avg=0.000 max=0.935ms; prepare_draw n=477700 ok=477700 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=249170927 max_ns=3727693 avg=0.001 max=3.728ms; draw_emit n=475317 ok=475317 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=51579345 max_ns=1084384 avg=0.000 max=1.084ms; stream_lock n=441997 ok=441997 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=29659020 max_ns=740384 avg=0.000 max=0.740ms; stream_total n=441997 ok=441997 false=0 errors=0 changed=428290 flagged=0 units=0 total_ns=245714156 max_ns=3113846 avg=0.001 max=3.114ms; indices_lock n=446113 ok=446113 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=28757268 max_ns=648923 avg=0.000 max=0.649ms; indices_total n=446113 ok=446113 false=0 errors=0 changed=440777 flagged=0 units=0 total_ns=243854320 max_ns=5185230 avg=0.001 max=5.185ms; texture_lock n=240946 ok=240946 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=15889189 max_ns=701539 avg=0.000 max=0.702ms; texture_total n=240946 ok=240946 false=0 errors=0 changed=234188 flagged=0 units=0 total_ns=73065513 max_ns=1178462 avg=0.000 max=1.178ms; query_lock n=21350 ok=21350 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=1392451 max_ns=1461 avg=0.000 max=0.001ms; query_occlusion n=21350 ok=218 false=21132 errors=0 changed=0 flagged=21132 units=0 total_ns=17282406 max_ns=1236000 avg=0.001 max=1.236ms
+[mono=103413.172 tid=19090] info:  DXVK D3D9 timing: draw_lock n=532967 ok=532967 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=34767356 max_ns=1339692 avg=0.000 max=1.340ms; draw_total n=532967 ok=532967 false=0 errors=0 changed=0 flagged=0 units=158519350 total_ns=550757550 max_ns=4136846 avg=0.001 max=4.137ms; draw_upload n=532967 ok=532967 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=29340409 max_ns=1274769 avg=0.000 max=1.275ms; prepare_draw n=535139 ok=535139 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=296388482 max_ns=4134231 avg=0.001 max=4.134ms; draw_emit n=532967 ok=532967 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=56411421 max_ns=1618077 avg=0.000 max=1.618ms; stream_lock n=494713 ok=494713 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=31706846 max_ns=915615 avg=0.000 max=0.916ms; stream_total n=494713 ok=494713 false=0 errors=0 changed=483263 flagged=0 units=0 total_ns=289970532 max_ns=5259384 avg=0.001 max=5.259ms; indices_lock n=495454 ok=495454 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=35955738 max_ns=1452846 avg=0.000 max=1.453ms; indices_total n=495454 ok=495454 false=0 errors=0 changed=490011 flagged=0 units=0 total_ns=261554029 max_ns=3475154 avg=0.001 max=3.475ms; texture_lock n=274142 ok=274142 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=19273637 max_ns=1853231 avg=0.000 max=1.853ms; texture_total n=274142 ok=274142 false=0 errors=0 changed=268529 flagged=0 units=0 total_ns=78826516 max_ns=2331000 avg=0.000 max=2.331ms; query_lock n=6580 ok=6580 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=484449 max_ns=43384 avg=0.000 max=0.043ms; query_occlusion n=6580 ok=181 false=6399 errors=0 changed=0 flagged=6399 units=0 total_ns=6576221 max_ns=279692 avg=0.001 max=0.280ms
+[mono=103414.927 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=17.9795 driver=38.6978 total=56.6775 ms
+[mono=103414.927 tid=19088] info:  DXVK pipeline timing: graphics calls=7 requested=7 errors=0 begun=7 in_flight=0 success=7 compile_required=0 wait_avg=0.000329429 wait_max=0.000615 trace_avg=14.567 trace_max=21.2587 driver_avg=23.9427 driver_max=38.6978 ms; compute calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms
+[mono=103415.181 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000308 trace=13.4846 driver=40.4237 total=53.9086 ms
+[mono=103418.180 tid=19090] info:  DXVK D3D9 timing: draw_lock n=450400 ok=450400 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=27764716 max_ns=615692 avg=0.000 max=0.616ms; draw_total n=450400 ok=450400 false=0 errors=0 changed=0 flagged=0 units=141276318 total_ns=466226898 max_ns=3533154 avg=0.001 max=3.533ms; draw_upload n=450400 ok=450400 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=24692590 max_ns=793846 avg=0.000 max=0.794ms; prepare_draw n=452765 ok=452765 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=240514176 max_ns=2743077 avg=0.001 max=2.743ms; draw_emit n=450400 ok=450400 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=53562180 max_ns=2862385 avg=0.000 max=2.862ms; stream_lock n=430538 ok=430538 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=30447422 max_ns=993538 avg=0.000 max=0.994ms; stream_total n=430538 ok=430538 false=0 errors=0 changed=418434 flagged=0 units=0 total_ns=236018206 max_ns=2897231 avg=0.001 max=2.897ms; indices_lock n=422795 ok=422795 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=29276356 max_ns=1077846 avg=0.000 max=1.078ms; indices_total n=422795 ok=422795 false=0 errors=0 changed=418526 flagged=0 units=0 total_ns=234277911 max_ns=4037616 avg=0.001 max=4.038ms; texture_lock n=229878 ok=229878 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=13443513 max_ns=161846 avg=0.000 max=0.162ms; texture_total n=229878 ok=229878 false=0 errors=0 changed=224081 flagged=0 units=0 total_ns=69405867 max_ns=1760923 avg=0.000 max=1.761ms; query_lock n=14521 ok=14521 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=1460755 max_ns=224846 avg=0.000 max=0.225ms; query_occlusion n=14521 ok=187 false=14334 errors=0 changed=0 flagged=14334 units=0 total_ns=13216753 max_ns=950769 avg=0.001 max=0.951ms
+[mono=103419.940 tid=19088] info:  DXVK pipeline timing: graphics calls=8 requested=8 errors=0 begun=8 in_flight=0 success=8 compile_required=0 wait_avg=0.000221125 wait_max=0.000308 trace_avg=18.8203 trace_max=29.9526 driver_avg=19.0451 driver_max=40.4237 ms; compute calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms
+[mono=103423.199 tid=19090] info:  DXVK D3D9 timing: draw_lock n=560518 ok=560518 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=38231902 max_ns=2887384 avg=0.000 max=2.887ms; draw_total n=560518 ok=560518 false=0 errors=0 changed=0 flagged=0 units=171260626 total_ns=569194643 max_ns=5685308 avg=0.001 max=5.685ms; draw_upload n=560518 ok=560518 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=29178918 max_ns=326692 avg=0.000 max=0.327ms; prepare_draw n=562787 ok=562787 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=304732528 max_ns=5423385 avg=0.001 max=5.423ms; draw_emit n=560518 ok=560518 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=58830709 max_ns=1105462 avg=0.000 max=1.105ms; stream_lock n=523382 ok=523382 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=35576957 max_ns=1265461 avg=0.000 max=1.265ms; stream_total n=523382 ok=523382 false=0 errors=0 changed=510362 flagged=0 units=0 total_ns=278172465 max_ns=4177462 avg=0.001 max=4.177ms; indices_lock n=526986 ok=526986 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=35739212 max_ns=1337847 avg=0.000 max=1.338ms; indices_total n=526986 ok=526986 false=0 errors=0 changed=522722 flagged=0 units=0 total_ns=264458878 max_ns=3745847 avg=0.001 max=3.746ms; texture_lock n=267591 ok=267591 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=16924246 max_ns=606077 avg=0.000 max=0.606ms; texture_total n=267591 ok=267591 false=0 errors=0 changed=261267 flagged=0 units=0 total_ns=78401640 max_ns=1548307 avg=0.000 max=1.548ms; query_lock n=9490 ok=9490 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=624067 max_ns=1231 avg=0.000 max=0.001ms; query_occlusion n=9490 ok=204 false=9286 errors=0 changed=0 flagged=9286 units=0 total_ns=8176349 max_ns=164000 avg=0.001 max=0.164ms
+[mono=103424.105 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000692 trace=15.0064 driver=42.7689 total=57.776 ms
+[mono=103426.224 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000308 trace=20.0052 driver=30.0536 total=50.0592 ms
+[mono=103426.224 tid=19088] info:  DXVK pipeline timing: graphics calls=3 requested=3 errors=0 begun=3 in_flight=0 success=3 compile_required=0 wait_avg=0.000436 wait_max=0.000692 trace_avg=17.5538 trace_max=20.0052 driver_avg=29.61 driver_max=42.7689 ms; compute calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms
+[mono=103427.189 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.00023 trace=22.2487 driver=36.1405 total=58.3895 ms
+[mono=103427.303 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=21.4338 driver=41.4184 total=62.8523 ms
+[mono=103427.365 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=24.1582 driver=37.4898 total=61.6479 ms
+[mono=103427.423 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=27.031 driver=29.9868 total=57.0179 ms
+[mono=103427.530 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000308 trace=24.8271 driver=35.8852 total=60.7126 ms
+[mono=103427.633 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=24.6428 driver=28.5818 total=53.2246 ms
+[mono=103427.697 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.00023 trace=23.4967 driver=40.7382 total=64.2351 ms
+[mono=103427.799 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000307 trace=24.8036 driver=33.4945 total=58.2984 ms
+[mono=103427.859 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=22.2966 driver=37.0529 total=59.3498 ms
+[mono=103427.941 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=31.0679 driver=50.4458 total=81.5138 ms
+[mono=103428.015 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=25.8573 driver=47.9307 total=73.788 ms
+[mono=103428.085 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=31.4713 driver=38.3432 total=69.8145 ms
+[mono=103428.198 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=27.9815 driver=40.8782 total=68.8598 ms
+[mono=103428.263 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.00023 trace=21.0804 driver=43.8366 total=64.9172 ms
+[mono=103428.320 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=21.2861 driver=34.793 total=56.0791 ms
+[mono=103428.382 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.00023 trace=22.3945 driver=39.2045 total=61.5993 ms
+[mono=103428.446 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=24.4079 driver=38.9566 total=63.3645 ms
+[mono=103428.548 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=20.7665 driver=33.6465 total=54.4129 ms
+[mono=103428.697 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=28.6412 driver=27.7403 total=56.3816 ms
+[mono=103428.751 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=19.3757 driver=35.0448 total=54.4206 ms
+[mono=103428.818 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000616 trace=27.8908 driver=37.2572 total=65.1485 ms
+[mono=103428.871 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=21.1215 driver=32.0807 total=53.2022 ms
+[mono=103428.929 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=23.6993 driver=33.2378 total=56.9372 ms
+[mono=103428.990 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=27.0236 driver=34.0406 total=61.0642 ms
+[mono=103429.051 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=28.1382 driver=31.9402 total=60.0785 ms
+[mono=103429.103 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=23.564 driver=27.8428 total=51.4068 ms
+[mono=103429.163 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=25.9718 driver=34.0455 total=60.0172 ms
+[mono=103429.219 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=22.7575 driver=31.7228 total=54.4803 ms
+[mono=103429.281 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.00023 trace=20.0594 driver=41.7065 total=61.7661 ms
+[mono=103429.338 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=25.9188 driver=30.6443 total=56.5632 ms
+[mono=103429.393 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=16.0478 driver=37.8738 total=53.9218 ms
+[mono=103429.456 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=20.4197 driver=42.8994 total=63.3192 ms
+[mono=103429.517 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=14.0428 driver=46.3954 total=60.4385 ms
+[mono=103429.574 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.00023 trace=20.2578 driver=36.1293 total=56.3874 ms
+[mono=103429.634 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=29.4559 driver=29.3558 total=58.8117 ms
+[mono=103429.638 tid=19090] info:  DXVK D3D9 timing: draw_lock n=360849 ok=360849 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=26710282 max_ns=2179000 avg=0.000 max=2.179ms; draw_total n=360849 ok=360849 false=0 errors=0 changed=0 flagged=0 units=111795939 total_ns=386051574 max_ns=4483077 avg=0.001 max=4.483ms; draw_upload n=360849 ok=360849 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=21463554 max_ns=1575693 avg=0.000 max=1.576ms; prepare_draw n=362569 ok=362569 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=214669005 max_ns=4482692 avg=0.001 max=4.483ms; draw_emit n=360849 ok=360849 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=35079014 max_ns=2031000 avg=0.000 max=2.031ms; stream_lock n=365102 ok=365102 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=36363058 max_ns=5138154 avg=0.000 max=5.138ms; stream_total n=365102 ok=365102 false=0 errors=0 changed=356147 flagged=0 units=0 total_ns=221661465 max_ns=5139154 avg=0.001 max=5.139ms; indices_lock n=348779 ok=348779 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=29407317 max_ns=1238462 avg=0.000 max=1.238ms; indices_total n=348779 ok=348779 false=0 errors=0 changed=345712 flagged=0 units=0 total_ns=175558795 max_ns=3377923 avg=0.001 max=3.378ms; texture_lock n=177374 ok=177374 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=12402769 max_ns=1407385 avg=0.000 max=1.407ms; texture_total n=177374 ok=177374 false=0 errors=0 changed=173034 flagged=0 units=0 total_ns=60944482 max_ns=2906846 avg=0.000 max=2.907ms; query_lock n=6344 ok=6344 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=500971 max_ns=1000 avg=0.000 max=0.001ms; query_occlusion n=6344 ok=140 false=6204 errors=0 changed=0 flagged=6204 units=0 total_ns=6391092 max_ns=291308 avg=0.001 max=0.291ms
+[mono=103429.788 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=19.9338 driver=33.0763 total=53.0104 ms
+[mono=103429.878 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=13.8926 driver=45.22 total=59.1128 ms
+[mono=103430.918 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=25.3172 driver=37.8237 total=63.1412 ms
+[mono=103431.211 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000924 trace=17.7523 driver=37.7995 total=55.5527 ms
+[mono=103431.272 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=19.9766 driver=39.0828 total=59.0597 ms
+[mono=103431.273 tid=19088] info:  DXVK pipeline timing: graphics calls=53 requested=53 errors=0 begun=53 in_flight=0 success=53 compile_required=0 wait_avg=0.000142208 wait_max=0.000924 trace_avg=21.5551 trace_max=31.4713 driver_avg=34.1536 driver_max=50.4458 ms; compute calls=0 requested=0 errors=0 begun=0 in_flight=0 success=0 compile_required=0 wait_avg=0 wait_max=0 trace_avg=0 trace_max=0 driver_avg=0 driver_max=0 ms
+[mono=103431.389 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000308 trace=21.3548 driver=42.8215 total=64.1766 ms
+[mono=103431.459 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000615 trace=33.9627 driver=34.2579 total=68.2212 ms
+[mono=103431.518 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=19.1806 driver=39.6584 total=58.8391 ms
+[mono=103431.576 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=20.6056 driver=36.888 total=57.4936 ms
+[mono=103431.658 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.00023 trace=19.7665 driver=33.7744 total=53.5412 ms
+[mono=103431.809 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000308 trace=23.1558 driver=32.8295 total=55.9856 ms
+[mono=103431.864 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=15.7901 driver=38.7234 total=54.5135 ms
+[mono=103431.931 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=28.4548 driver=37.9912 total=66.4462 ms
+[mono=103432.003 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=26.6812 driver=45.0009 total=71.6822 ms
+[mono=103433.429 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=28.2366 driver=35.0582 total=63.2948 ms
+[mono=103434.643 tid=19090] info:  DXVK D3D9 timing: draw_lock n=418938 ok=418938 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=24747825 max_ns=327615 avg=0.000 max=0.328ms; draw_total n=418938 ok=418938 false=0 errors=0 changed=0 flagged=0 units=124257170 total_ns=412475344 max_ns=3656692 avg=0.001 max=3.657ms; draw_upload n=418938 ok=418938 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=23869918 max_ns=1232538 avg=0.000 max=1.233ms; prepare_draw n=421038 ok=421038 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=214789999 max_ns=3293231 avg=0.001 max=3.293ms; draw_emit n=418938 ok=418938 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=45775073 max_ns=1770384 avg=0.000 max=1.770ms; stream_lock n=406302 ok=406302 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=28788010 max_ns=1832000 avg=0.000 max=1.832ms; stream_total n=406302 ok=406302 false=0 errors=0 changed=395456 flagged=0 units=0 total_ns=215342754 max_ns=3883692 avg=0.001 max=3.884ms; indices_lock n=403763 ok=403763 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=25513842 max_ns=1237154 avg=0.000 max=1.237ms; indices_total n=403763 ok=403763 false=0 errors=0 changed=400900 flagged=0 units=0 total_ns=200440513 max_ns=3155692 avg=0.000 max=3.156ms; texture_lock n=182382 ok=182382 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=13368874 max_ns=1628000 avg=0.000 max=1.628ms; texture_total n=182382 ok=182382 false=0 errors=0 changed=177112 flagged=0 units=0 total_ns=59934633 max_ns=1630385 avg=0.000 max=1.630ms; query_lock n=78183 ok=78183 false=0 errors=0 changed=0 flagged=0 units=0 total_ns=4747223 max_ns=5770 avg=0.000 max=0.006ms; query_occlusion n=78183 ok=170 false=78013 errors=0 changed=0 flagged=78013 units=0 total_ns=57538098 max_ns=2863462 avg=0.001 max=2.863ms
+[mono=103435.097 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000308 trace=16.5313 driver=49.925 total=66.4566 ms
+[mono=103435.165 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0 trace=24.6102 driver=42.5447 total=67.1548 ms
+[mono=103435.389 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000539 trace=24.3373 driver=34.7723 total=59.1102 ms
+[mono=103435.466 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=7.7e-05 trace=22.8215 driver=30.4071 total=53.2286 ms
+[mono=103435.847 tid=19088] info:  DXVK pipeline outcome: kind=graphics result=0 requested=1 wait=0.000231 trace=15.8803 driver=38.6145 total=54.495 ms
