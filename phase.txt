@@ -1,5 +1,7 @@
-phase=wall_grab_climb
-index=10
-status=requested
-present=3037
-coverage=wall-grab, strafe and charged-jump requests during climbing; grab/contact results unverified
+phase=complete
+status=complete
+reason=all requested phases reached a recorded tested or skipped outcome
+present=11040
+gameplay_dispatches=21036
+actions_executed=509
+wall_ms=233217.045
