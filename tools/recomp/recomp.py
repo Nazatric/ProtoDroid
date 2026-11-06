@@ -383,12 +383,15 @@ _X87_BODY_KEYS = ("X87(c, ", "X87Push(c, ", "X87Pop(c)", "X87StatusWord(c)", "c-
 # Local x87 state costs a 64-byte entry copy and dirty spills. Keep it for longer sequences and loops, but not for
 # short straight-line helpers. Both paths execute identical operations and precision/control-word semantics.
 _X87_LOCALIZE_MIN_OPS = 5
+# A local XMM register costs a 16-byte entry copy plus dirty spills/reloads. Retain that strategy for longer
+# sequences and loops; short straight-line helpers can operate directly on Ctx without changing SSE semantics.
+_XMM_LOCALIZE_MIN_OPS = 5
 
 
-def vector_state(body, localize_x87=True):
-    """XMM registers and eligible x87 state get local copies, spilled and reloaded with the general registers.
-    Short x87 helpers instead keep their state in Ctx, avoiding a whole-stack copy on every invocation."""
-    xmms = sorted(set(_XMM_RE.findall(body)))
+def vector_state(body, localize_x87=True, localize_xmm=True):
+    """Eligible XMM registers and x87 state get local copies, spilled/reloaded with the general registers.
+    Short helpers instead keep the corresponding state in Ctx, avoiding fixed copies on every invocation."""
+    xmms = sorted(set(_XMM_RE.findall(body))) if localize_xmm else []
     x87 = localize_x87 and any(k in body for k in _X87_BODY_KEYS)
     decl = [f"XmmValue r_xmm{n} = c->xmm[{n}];" for n in xmms]
     spill = [f"c->xmm[{n}] = r_xmm{n}" for n in xmms]
@@ -401,7 +404,7 @@ def vector_state(body, localize_x87=True):
     return decl, spill, reload, x87
 
 
-def localize(line, x87=False):
+def localize(line, x87=False, xmm=True):
     if "setjmp(" in line:
         # setjmp: the context must be current when the jmp_buf is prepared; after a longjmp the locals are stale and
         # RecompSetjmpResume has restored the context, so reload from it.
@@ -411,7 +414,8 @@ def localize(line, x87=False):
         return line
     line = _REG_RE.sub(r"r_\1", line)
     line = _FLAG_RE.sub(r"rf.\1", line)
-    line = _XMM_RE.sub(r"r_xmm\1", line)
+    if xmm:
+        line = _XMM_RE.sub(r"r_xmm\1", line)
     if x87:
         for old, new in _X87_CALLS:
             line = line.replace(old, new)
@@ -1409,6 +1413,13 @@ class FunctionCompiler:
             return True
         return any(target <= ins.address for ins in self.ins for target in self.successors(ins, decoded))
 
+    def use_local_xmm(self, body, decoded):
+        """Whether XMM operations amortize their local copies. Calls and precision behavior are unchanged."""
+        operations = sum(bool(_XMM_RE.search(line)) for line in body.splitlines())
+        if operations >= _XMM_LOCALIZE_MIN_OPS:
+            return True
+        return any(target <= ins.address for ins in self.ins for target in self.successors(ins, decoded))
+
     def liveness(self, decoded):
         """Flags live after each instruction. Calls clobber the flags (MSVC never reads flags across a call);
         nothing is live after leaving the function."""
@@ -1488,9 +1499,11 @@ class FunctionCompiler:
             out.append(f'    RecompUnimplemented(c, 0x{self.va:08x}u, "no decodable instruction"); return;')
         if LOCALIZE:
             vector_body = "\n".join(out[2:])
-            decl, spill, reload, x87 = vector_state(vector_body, self.use_local_x87(vector_body, decoded))
+            localize_xmm = self.use_local_xmm(vector_body, decoded)
+            decl, spill, reload, x87 = vector_state(
+                vector_body, self.use_local_x87(vector_body, decoded), localize_xmm)
             out = out[:2] + ["    " + d for d in decl] + \
-                [localize(l, x87) if not l.startswith("L_") else l for l in out[2:]]
+                [localize(l, x87, localize_xmm) if not l.startswith("L_") else l for l in out[2:]]
             xmms = sorted(set(_XMM_RE.findall("\n".join(out))))  # (already renamed: read the declarations)
             xmms = [d.split("r_xmm")[1].split(" ")[0] for d in decl if d.startswith("XmmValue r_xmm")]
             out = out[:1] + apply_spills(out[1:], xmms, x87, DIRTY_TRACKING)

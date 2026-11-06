@@ -16946,11 +16946,10 @@ void f_7cd5f710(Ctx* c) {
 
 void f_7cd5f880(Ctx* c) {
     RLOCALS;
-    XmmValue r_xmm0 = c->xmm[0];
-    { XmmValue* x = &r_xmm0; x->f[0] = RF32((uint32_t)(0x7ce116a4u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7cd5f880: movss xmm0, dword ptr [0x7ce116a4] */
-    r_xmm0.f[0] = r_xmm0.f[0] / RF32((uint32_t)(0x7d097d80u));  /* 7cd5f888: divss xmm0, dword ptr [0x7d097d80] */
-    WF32((uint32_t)(0x7d26d390u), r_xmm0.f[0]);  /* 7cd5f890: movss dword ptr [0x7d26d390], xmm0 */
-    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->esp = r_esp, c->xmm[0] = r_xmm0); return; }  /* 7cd5f898: ret  */
+    { XmmValue* x = &c->xmm[0]; x->f[0] = RF32((uint32_t)(0x7ce116a4u)); x->u32[1] = x->u32[2] = x->u32[3] = 0; }  /* 7cd5f880: movss xmm0, dword ptr [0x7ce116a4] */
+    c->xmm[0].f[0] = c->xmm[0].f[0] / RF32((uint32_t)(0x7d097d80u));  /* 7cd5f888: divss xmm0, dword ptr [0x7d097d80] */
+    WF32((uint32_t)(0x7d26d390u), c->xmm[0].f[0]);  /* 7cd5f890: movss dword ptr [0x7d26d390], xmm0 */
+    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->esp = r_esp); return; }  /* 7cd5f898: ret  */
 }
 
 void f_7c02355b(Ctx* c);

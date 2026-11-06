@@ -1021,6 +1021,7 @@ jobs:
           export PROTODROID_ENGINE=/tmp/protodroid-hot-engine.dll
           python3 tools/test_ebp_stack.py
           python3 tools/test_x87_localization.py
+          python3 tools/test_xmm_localization.py
           src/native/tests/run_hot_test.sh 2>&1 | tee /tmp/protodroid-arm-hot-test.log
 
       - name: Test and measure generated ThinLTO on native ARM64
@@ -1221,10 +1222,11 @@ jobs:
             sudo ln -sf $ANDROID_SDK_ROOT/platforms/android-34 $ANDROID_SDK_ROOT/platforms/android-35 || true
           fi
 
-      - name: Test proven stack and selective x87 generation
+      - name: Test proven stack and selective x87/XMM generation
         run: |
           python3 tools/test_ebp_stack.py
           python3 tools/test_x87_localization.py
+          python3 tools/test_xmm_localization.py
 
       - name: Download deps artifacts
         uses: actions/download-artifact@v4
