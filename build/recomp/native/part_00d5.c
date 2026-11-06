@@ -4796,11 +4796,10 @@ void f_7cd54a30(Ctx* c) {
 
 void f_7cd54a60(Ctx* c) {
     RLOCALS;
-    double r_st[8]; memcpy(r_st, c->st, sizeof r_st); uint32_t r_top = c->st_top; uint16_t r_cw = c->fpu_cw;
-    X87PushL(r_st, &r_top, (double)RF32((uint32_t)(0x7d07cab8u)));  /* 7cd54a60: fld dword ptr [0x7d07cab8] */
-    { double v = X87L(0); X87L(0) = X87PrecisionCW(r_cw, sin(v)); }  /* 7cd54a66: fsin  */
-    WF32((uint32_t)(0x7d263154u), (float)X87L(0)); X87PopL(&r_top);  /* 7cd54a68: fstp dword ptr [0x7d263154] */
-    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->esp = r_esp, memcpy(c->st, r_st, sizeof r_st), c->st_top = r_top); return; }  /* 7cd54a6e: ret  */
+    X87Push(c, (double)RF32((uint32_t)(0x7d07cab8u)));  /* 7cd54a60: fld dword ptr [0x7d07cab8] */
+    { double v = X87(c, 0); X87(c, 0) = X87Precision(c, sin(v)); }  /* 7cd54a66: fsin  */
+    WF32((uint32_t)(0x7d263154u), (float)X87(c, 0)); X87Pop(c);  /* 7cd54a68: fstp dword ptr [0x7d263154] */
+    c->ret_target = LPop32(&r_esp); r_esp += 0u; { (c->esp = r_esp); return; }  /* 7cd54a6e: ret  */
 }
 
 void f_7c02355b(Ctx* c);

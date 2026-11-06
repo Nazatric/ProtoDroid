@@ -34,6 +34,9 @@ class BaselineCompiler(recomp.FunctionCompiler):
     def relax_ebp_stack(self, ins, line):
         return line
 
+    def relax_derived_stack(self, ins, line):
+        return line
+
 
 def generate(hex_code: str, compiler_class=recomp.FunctionCompiler):
     code = bytes.fromhex(hex_code)
@@ -63,6 +66,17 @@ def runtime_differential() -> None:
         "f3 0f 11 4d f8 8b 45 f8 8b e5 5d c3",
         # After pop ebp, [ebp+8] is caller-selected memory, not the current frame.
         "55 8b ec 8b e5 5d 8b 45 08 c3",
+        # Direct ESP-derived LEA, including a stack write.
+        "8d 44 24 08 8b 08 89 50 04 c3",
+        # A plain copy retains the pointer proof in a callee-saved register.
+        "89 e0 89 c3 8b 0b c3",
+        # The pointer fact survives a loop backedge.
+        "89 e0 8b 10 49 75 fb c3",
+        # One join arm reloads EAX from an argument. It remains runtime-equal here,
+        # but is not statically proven and therefore stays on the ordered helper.
+        "89 e0 85 c9 74 04 8b 44 24 04 8b 08 c3",
+        # A callee-saved EBX pointer survives a real simulated callee return.
+        "89 e3 e8 f9 0f 00 00 8b 0b c3",
     ]
     functions = []
     for index, code in enumerate(cases):
@@ -83,6 +97,11 @@ static uint32_t next_random(void) {
 static void store32(uint8_t* memory, uint32_t address, uint32_t value) {
     memcpy(memory + address, &value, sizeof value);
 }
+void RecompDispatch(Ctx* c, uint32_t target) {
+    if (target != 0x10001000u) abort();
+    c->eax ^= 0xa5a5a5a5u; c->ecx ^= 0x5a5a5a5au; c->edx ^= 0x3c3c3c3cu;
+    c->ret_target = Pop32(c);  /* ordinary callee ret; EBX/ESI/EDI stay preserved */
+}
 typedef void (*Function)(Ctx*);
 static int run_case(int index, Function baseline, Function candidate) {
     uint8_t* a_memory = malloc(MEMORY_SIZE), *b_memory = malloc(MEMORY_SIZE);
@@ -90,14 +109,16 @@ static int run_case(int index, Function baseline, Function candidate) {
     for (int trial = 0; trial < 128; ++trial) {
         for (int i = 0; i < MEMORY_SIZE; ++i) a_memory[i] = (uint8_t)next_random();
         memcpy(b_memory, a_memory, MEMORY_SIZE);
-        uint32_t argument = index == 1 ? (uint32_t)(trial % 8 + 1) : next_random();
+        uint32_t argument = index == 1 ? (uint32_t)(trial % 8 + 1) :
+                            index == 7 ? 0x8000u : next_random();
         store32(a_memory, 0x8000, 0xdead0000u + (uint32_t)index);
         store32(a_memory, 0x8004, argument);
         store32(a_memory, 0x9008, next_random());
         memcpy(b_memory, a_memory, MEMORY_SIZE);
         Ctx a = {0}, b = {0};
         a.esp = b.esp = 0x8000; a.ebp = b.ebp = 0x9000;
-        a.ebx = b.ebx = 0x9100; a.ecx = b.ecx = (uint32_t)trial;
+        a.ebx = b.ebx = 0x9100;
+        a.ecx = b.ecx = index == 6 ? (uint32_t)(trial % 8 + 1) : (uint32_t)trial;
         a.fpu_cw = b.fpu_cw = 0x027f;
         RecompMemoryBase = a_memory; baseline(&a);
         RecompMemoryBase = b_memory; candidate(&b);
@@ -115,7 +136,7 @@ int main(void) {
     for index in range(len(cases)):
         harness += f"    int result_{index} = run_case({index}, baseline_{index}, candidate_{index});\n"
         harness += f"    if (result_{index}) return result_{index};\n"
-    harness += '    puts("EBP runtime differential: 4 cases x 128 trials match");\n    return 0;\n}\n'
+    harness += f'    puts("Stack runtime differential: {len(cases)} cases x 128 trials match");\n    return 0;\n}}\n'
     with tempfile.TemporaryDirectory(prefix="protodroid-ebp-runtime-") as temporary:
         root = Path(temporary)
         source = root / "differential.c"
@@ -193,8 +214,58 @@ def main() -> int:
     require(ordered_ebp(output) and compiler.ebp_stack_sites == 0,
             "setjmp-containing function was not conservatively excluded")
 
+    # ESP-derived register pointers use the same private-stack helpers, including RMW.
+    output, compiler = generate("8d 44 24 08 8b 08 89 50 04 c3")
+    require("SR32((uint32_t)(r_eax))" in output and
+            "SW32((uint32_t)(r_eax + 0x4u)" in output and
+            compiler.derived_stack_sites == 2,
+            "direct ESP-derived LEA accesses were not converted")
+
+    output, compiler = generate("89 e0 89 c3 8b 0b c3")
+    require("SR32((uint32_t)(r_ebx))" in output and compiler.derived_stack_sites == 1,
+            "a plain register copy lost the stack-pointer proof")
+
+    output, compiler = generate("89 e0 31 c0 8b 08 c3")
+    require("SR32((uint32_t)(r_eax))" not in output and compiler.derived_stack_sites == 0,
+            "an EAX overwrite retained its old pointer proof")
+
+    output, compiler = generate("89 e0 66 31 c0 8b 08 c3")
+    require("SR32((uint32_t)(r_eax))" not in output and compiler.derived_stack_sites == 0,
+            "a 16-bit AX write failed to invalidate EAX")
+
+    output, compiler = generate("89 e0 85 c9 74 02 89 d0 8b 18 c3")
+    require("SR32((uint32_t)(r_eax))" not in output and compiler.derived_stack_sites == 0,
+            "a branch join used OR rather than must/AND pointer facts")
+
+    output, compiler = generate("89 e0 8b 10 49 75 fb c3")
+    require(output.count("SR32((uint32_t)(r_eax))") == 1 and
+            compiler.derived_stack_sites == 1,
+            "a stack-pointer fact did not survive the loop backedge")
+
+    # Calls clobber caller-saved EAX but preserve ABI callee-saved EBX.
+    output, compiler = generate("89 e0 ff d0 8b 08 c3")
+    require("SR32((uint32_t)(r_eax))" not in output and compiler.derived_stack_sites == 0,
+            "an indirect call failed to invalidate caller-saved EAX")
+    output, compiler = generate("89 e3 ff d3 8b 0b c3")
+    require("SR32((uint32_t)(r_ebx))" in output and compiler.derived_stack_sites == 1,
+            "an ordinary call incorrectly invalidated callee-saved EBX")
+
+    output, compiler = generate("89 e0 8b 0c 00 c3")
+    require("SR32" not in output and compiler.derived_stack_sites == 0,
+            "indexed derived-register addressing was assumed to be stack storage")
+
+    output, compiler = generate("89 e0 64 8b 08 c3")
+    require("R32((uint32_t)(c->fs_base + r_eax))" in output and
+            "SR32" not in output and compiler.derived_stack_sites == 0,
+            "FS-relative derived-register addressing was treated as stack storage")
+
+    # The access reads the old pointer but also writes its base; stay conservative.
+    output, compiler = generate("89 e0 8b 00 c3")
+    require("SR32" not in output and compiler.derived_stack_sites == 0,
+            "an instruction writing its own address base was relaxed")
+
     runtime_differential()
-    print("EBP frame stack tests passed (12 positive/negative cases)")
+    print("EBP/derived stack tests passed (23 positive/negative decode cases)")
     return 0
 
 

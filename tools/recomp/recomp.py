@@ -378,14 +378,19 @@ _STACK_ACCESS_RE = re.compile(r"\b(R8|R16|R32|R64|RF32|RF64|W8|W16|W32|W64|WF32|
 _X87_CALLS = [("X87Precision(c, ", "X87PrecisionCW(r_cw, "), ("c->fpu_cw = ", "r_cw = c->fpu_cw = "),
               ("X87(c, ", "X87L("), ("X87Push(c, ", "X87PushL(r_st, &r_top, "), ("X87Pop(c)", "X87PopL(&r_top)"),
               ("X87StatusWord(c)", "X87StatusWordL(c, r_top)"), ("c->st_top", "r_top"), ("c->st[", "r_st[")]
+_X87_BODY_KEYS = ("X87(c, ", "X87Push(c, ", "X87Pop(c)", "X87StatusWord(c)", "c->st_top", "c->st[",
+                  "X87Precision(c, ", "c->fpu_cw = ")
+# A local x87 stack costs a 64-byte copy at entry and another whenever dirty state is spilled. Keep it for longer
+# sequences and loops, where register-resident top/control state can pay that cost, but not for short straight-line
+# helpers. The cutoff is deliberately conservative: synthetic differentials also favor direct access well past it.
+_X87_LOCALIZE_MIN_OPS = 5
 
 
-def vector_state(body):
-    """XMM registers and x87 use of a function body: they get local copies too, spilled and reloaded with the
-    general registers. Returns (declarations, spill expressions, reload expressions)."""
+def vector_state(body, localize_x87=True):
+    """XMM registers and eligible x87 state get local copies, spilled and reloaded with the general registers.
+    Short x87 helpers instead keep their state in Ctx, avoiding a whole-stack copy on every invocation."""
     xmms = sorted(set(_XMM_RE.findall(body)))
-    x87 = any(k in body for k in ("X87(c, ", "X87Push(c, ", "X87Pop(c)", "X87StatusWord(c)", "c->st_top", "c->st[",
-                                  "X87Precision(c, ", "c->fpu_cw = "))
+    x87 = localize_x87 and any(k in body for k in _X87_BODY_KEYS)
     decl = [f"XmmValue r_xmm{n} = c->xmm[{n}];" for n in xmms]
     spill = [f"c->xmm[{n}] = r_xmm{n}" for n in xmms]
     reload = [f"r_xmm{n} = c->xmm[{n}]" for n in xmms]
@@ -436,7 +441,9 @@ class FunctionCompiler:
         self.unknown_targets = set()  # direct call/jump targets that are no known function entry
         self.ins = self.decode()
         self.ebp_frame_in = {}
+        self.stack_register_in = {}
         self.ebp_stack_sites = 0
+        self.derived_stack_sites = 0
 
     # ---- operands ----
     def reg_get(self, name):
@@ -1394,6 +1401,130 @@ class FunctionCompiler:
                     self.ebp_stack_sites += count
         return line
 
+    _DERIVED_STACK_REGS = ('eax', 'ecx', 'edx', 'ebx', 'esi', 'edi')
+    _DERIVED_STACK_MASK = {reg: 1 << i for i, reg in enumerate(_DERIVED_STACK_REGS)}
+    _DERIVED_STACK_ALL = (1 << len(_DERIVED_STACK_REGS)) - 1
+    _GPR32_ALIASES = {
+        'eax': {'eax', 'ax', 'al', 'ah'},
+        'ecx': {'ecx', 'cx', 'cl', 'ch'},
+        'edx': {'edx', 'dx', 'dl', 'dh'},
+        'ebx': {'ebx', 'bx', 'bl', 'bh'},
+        'esp': {'esp', 'sp'},
+        'ebp': {'ebp', 'bp'},
+        'esi': {'esi', 'si'},
+        'edi': {'edi', 'di'},
+    }
+
+    def written_gprs(self, ins):
+        """Return canonical 32-bit GPR names written by an instruction."""
+        try:
+            _reads, written = ins.regs_access()
+        except (capstone.CsError, AttributeError):
+            written = ins.regs_write
+        names = {ins.reg_name(reg) for reg in written}
+        return {canonical for canonical, aliases in self._GPR32_ALIASES.items()
+                if names & aliases}
+
+    def derived_stack_states(self, decoded):
+        """Must-analysis for registers containing direct ESP-derived pointers.
+
+        Non-entry blocks begin optimistically and intersect at joins so loops reach
+        the greatest fixed point. Only MOV/LEA from ESP establishes a fact; any
+        other write kills it. Calls kill caller-saved registers, while ABI-preserved
+        callee-saved registers remain valid. The consumer never relaxes indexed or
+        non-flat accesses.
+        """
+        if any(self.has_setjmp(i) for i in self.ins):
+            return {a: 0 for a in decoded}
+        predecessors = {a: [] for a in decoded}
+        for ins in self.ins:
+            for target in self.successors(ins, decoded):
+                predecessors[target].append(ins.address)
+        caller_saved = sum(self._DERIVED_STACK_MASK[r] for r in ('eax', 'ecx', 'edx'))
+        frame_in = {a: self._DERIVED_STACK_ALL if a != self.va else 0 for a in decoded}
+        frame_out = {a: self._DERIVED_STACK_ALL for a in decoded}
+
+        def transfer(ins, incoming):
+            outgoing = incoming
+            for reg in self.written_gprs(ins):
+                outgoing &= ~self._DERIVED_STACK_MASK.get(reg, 0)
+            if ins.id == X.X86_INS_CALL:
+                outgoing &= ~caller_saved
+
+            # Kill the destination first, then establish from the incoming pointer.
+            # This also handles overlapping source/destination conservatively.
+            ops = ins.operands
+            establish = None
+            if (ins.id == X.X86_INS_LEA and len(ops) == 2
+                    and ops[0].type == X.X86_OP_REG and ops[1].type == X.X86_OP_MEM):
+                mem = ops[1].mem
+                if (ins.reg_name(mem.base) == 'esp' and mem.index == 0
+                        and mem.segment in (0, X.X86_REG_DS, X.X86_REG_SS,
+                                            X.X86_REG_ES, X.X86_REG_CS)):
+                    establish = ins.reg_name(ops[0].reg)
+            elif (ins.id == X.X86_INS_MOV and len(ops) == 2
+                    and ops[0].type == X.X86_OP_REG and ops[1].type == X.X86_OP_REG):
+                src = ins.reg_name(ops[1].reg)
+                if src == 'esp' or incoming & self._DERIVED_STACK_MASK.get(src, 0):
+                    establish = ins.reg_name(ops[0].reg)
+            outgoing |= self._DERIVED_STACK_MASK.get(establish, 0)
+            return outgoing
+
+        changed = True
+        while changed:
+            changed = False
+            for ins in self.ins:
+                a = ins.address
+                if a != self.va and predecessors[a]:
+                    incoming = self._DERIVED_STACK_ALL
+                    for source in predecessors[a]:
+                        incoming &= frame_out[source]
+                else:
+                    incoming = 0
+                outgoing = transfer(ins, incoming)
+                if incoming != frame_in[a] or outgoing != frame_out[a]:
+                    frame_in[a], frame_out[a] = incoming, outgoing
+                    changed = True
+        return frame_in
+
+    def relax_derived_stack(self, ins, line):
+        """Relax non-indexed memory through a proven direct ESP-derived register."""
+        incoming = self.stack_register_in.get(ins.address, 0)
+        if not incoming:
+            return line
+        written = self.written_gprs(ins)
+        for op in ins.operands:
+            if op.type != X.X86_OP_MEM:
+                continue
+            mem = op.mem
+            base = ins.reg_name(mem.base)
+            if (not incoming & self._DERIVED_STACK_MASK.get(base, 0)
+                    or mem.index != 0 or base in written
+                    or mem.segment not in (0, X.X86_REG_DS, X.X86_REG_SS,
+                                           X.X86_REG_ES, X.X86_REG_CS)):
+                continue
+            address = self.address(ins, op)
+            for helper in ('R8', 'R16', 'R32', 'R64', 'RF32', 'RF64',
+                           'W8', 'W16', 'W32', 'W64', 'WF32', 'WF64'):
+                needle = f'{helper}({address}'
+                count = line.count(needle)
+                if count:
+                    line = line.replace(needle, f'S{needle}')
+                    self.derived_stack_sites += count
+        return line
+
+    def use_local_x87(self, body, decoded):
+        """Whether the existing local x87 stack is worth its fixed copy/spill cost for this function.
+
+        This is a code-generation cost decision, not a floating-point shortcut: both paths execute the same x87
+        operations with the same precision and control-word semantics. Any backward CFG edge keeps localization,
+        since a small static loop body can execute enough operations to amortize the entry copy.
+        """
+        operations = sum(any(key in line for key in _X87_BODY_KEYS) for line in body.splitlines())
+        if operations >= _X87_LOCALIZE_MIN_OPS:
+            return True
+        return any(target <= ins.address for ins in self.ins for target in self.successors(ins, decoded))
+
     def liveness(self, decoded):
         """Flags live after each instruction. Calls clobber the flags (MSVC never reads flags across a call);
         nothing is live after leaving the function."""
@@ -1429,6 +1560,7 @@ class FunctionCompiler:
         decoded = {i.address for i in self.ins}
         self.liveness(decoded)
         self.ebp_frame_in = self.ebp_frame_states(decoded)
+        self.stack_register_in = self.derived_stack_states(decoded)
         body = []
         for i in self.ins:
             line = ""
@@ -1437,7 +1569,9 @@ class FunctionCompiler:
             except Unsupported as e:
                 self.unsupported[str(e)] += 1
                 line = f'RecompUnimplemented(c, 0x{i.address:08x}u, "{i.mnemonic} {i.op_str}"); return;'
-            body.append((i, self.relax_ebp_stack(i, line)))
+            line = self.relax_ebp_stack(i, line)
+            line = self.relax_derived_stack(i, line)
+            body.append((i, line))
         out = [f"void f_{self.va:08x}(Ctx* c) {{"]
         if LOCALIZE:
             out.append("    RLOCALS;")
@@ -1472,7 +1606,8 @@ class FunctionCompiler:
         if not self.ins:
             out.append(f'    RecompUnimplemented(c, 0x{self.va:08x}u, "no decodable instruction"); return;')
         if LOCALIZE:
-            decl, spill, reload, x87 = vector_state("\n".join(out[2:]))
+            vector_body = "\n".join(out[2:])
+            decl, spill, reload, x87 = vector_state(vector_body, self.use_local_x87(vector_body, decoded))
             out = out[:2] + ["    " + d for d in decl] + \
                 [localize(l, x87) if not l.startswith("L_") else l for l in out[2:]]
             xmms = sorted(set(_XMM_RE.findall("\n".join(out))))  # (already renamed: read the declarations)
@@ -1656,6 +1791,7 @@ def main():
     md.detail = True
     unsupported = collections.Counter()
     ebp_stack_sites = 0
+    derived_stack_sites = 0
     funcs = []
     patches = []
     compiled = {va for va in vas if va in sizes}
@@ -1678,6 +1814,7 @@ def main():
         fc = FunctionCompiler(md, pe, va, sizes[va], compiled, trace=va in trace_vas)
         funcs.append((va, fc.compile()))
         ebp_stack_sites += fc.ebp_stack_sites
+        derived_stack_sites += fc.derived_stack_sites
         for t in sorted(fc.unknown_targets):
             if text_lo <= t < text_hi and t not in compiled:
                 import bisect
@@ -1699,7 +1836,8 @@ def main():
         parts = write_split(args.out, funcs, patches, args.split)
         print(f"{len(funcs)} functions in {parts} files; {len(patches)} enterable from native code; "
               f"{sum(unsupported.values())} unsupported instructions; "
-              f"{ebp_stack_sites} proven EBP stack accesses")
+              f"{ebp_stack_sites} proven EBP stack accesses; "
+              f"{derived_stack_sites} proven derived-stack accesses")
         for k, v in unsupported.most_common(30):
             print(f"  {v:6d}  {k}")
         return
@@ -1718,7 +1856,8 @@ def main():
         f.write("};\nconst uint32_t g_recomp_count = sizeof(g_recomp_table) / sizeof(g_recomp_table[0]);\n")
     total = sum(unsupported.values())
     print(f"{len(funcs)} functions recompiled; {total} unsupported instructions; "
-          f"{ebp_stack_sites} proven EBP stack accesses")
+          f"{ebp_stack_sites} proven EBP stack accesses; "
+          f"{derived_stack_sites} proven derived-stack accesses")
     for k, v in unsupported.most_common(30):
         print(f"  {v:6d}  {k}")
 
