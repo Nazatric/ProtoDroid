@@ -51,6 +51,7 @@ Do not count frame generation, LSFG output, skipped frames, upscaling, reduced q
 
 - Batch substantive source changes, commit/push only to `arena/5eb1c06c-protodroid`, and monitor the exact run through source `libmain.so`, package/sign, and artifact creation.
 - Deliver only a new downloadable source-built APK with its exact run/artifact/source identity. State what was verified and what remains unmeasured.
+- **Current test candidate:** source `888a1673421f7e56303bd492b834ddf1626dc2e9`, run `42170984244`, `prototype-apk` artifact `13483441501`. Full CI/package gates passed; opening combat, p99, visuals, and device FPS remain unmeasured. The ARM64 raw timing artifact could not be reopened, so no ARM64 timing ratio is claimed.
 - After feedback, fetch the new Logs revision read-only and repeat the loop. Do not stop at a promising startup log, a smaller binary, or a generally improved FPS report while opening combat remains below target.
 
 ## Current non-completion statement
