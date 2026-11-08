@@ -258,3 +258,24 @@ Use **Dump original textures** in Setup to produce original-format DDS files and
 - Replacement reads are lazy: only the requested mip is read temporarily. This is not a rendering-speed guarantee.
 
 See `re/native-mod-platform.md` for texture and overlay internals. Host/CI tests do not prove every mod's behavior or appearance on a physical device.
+
+## In-game MODS panel and live settings
+
+Every enabled package's options are reachable while playing: the red **MODS** handle on the
+left edge opens a panel with all mod settings. Changes persist immediately (the same
+`protodroid-settings.ini` the launcher edits) and are pushed to the sandboxed runtime on the
+next engine frame — a script re-reads `pd.settings` after every change, and a
+`protodroid.settings_changed` event tells it when that happened. Toggles a script captured at
+load time (like an enable flag that decides whether a detour is installed) still apply on the
+next Play; sliders, choices, and anything the script re-reads apply live.
+
+## The minimap example (`modding/minimap-example`)
+
+`protodroid.example.minimap` moves the HUD minimap: four corner presets plus horizontal and
+vertical sliders, adjusted live from the MODS panel. It is also the reference for the
+discipline every layout-dependent mod must follow — a symbol name proves where code is, never
+where data sits inside a class. The mod detours `proto::FEHudMiniMap`'s element virtual,
+captures the instance, and (while its `rect_offset` option is 0) logs the screen-space float
+rectangles it finds inside the instance. Set `rect_offset` to the reported `+offset` of the
+minimap quad and the presets take effect. Build the package with
+`bash modding/minimap-example/build-package.sh`.

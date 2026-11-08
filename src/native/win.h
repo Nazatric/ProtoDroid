@@ -1,6 +1,7 @@
 // Shared pieces of the Win32 emulation layer of the native host: kernel object handles, paths, last error.
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
@@ -25,13 +26,20 @@ struct KObject {
     // Waitable objects: signaled state and the side effect of a successful wait (auto-reset, count, ownership).
     virtual bool Signaled(uint32_t /*thread_id*/) { return false; }
     virtual void Acquire(uint32_t /*thread_id*/) {}
+    // Kernel objects are immortal: CloseHandle detaches them from the handle table and calls
+    // this once, but the memory is never freed, so wait/signal fast paths can use the object
+    // after a bare atomic load with no lifetime protocol at all. File overrides this to close
+    // its fd (the one bounded resource); the discarded shell then just idles in the heap.
+    virtual void OnClose() {}
     // Wakes the threads waiting for this object; g_kernel_mutex is held.
     void Notify() {
         for (KWaiter* w : waiters) w->cv.notify_one();
     }
     KType type;
-    int refs = 1;
     std::vector<KWaiter*> waiters;  // under g_kernel_mutex
+    // Generic sleepers registered by WaitKernel; nonzero makes the lock-free signalers take
+    // g_kernel_mutex and forward a Notify so the generic path cannot miss a wake.
+    std::atomic<int> cv_waiters{0};
 };
 
 // All waitable state changes happen under this lock and Notify() the object (g_kernel_cv: thread resumption).

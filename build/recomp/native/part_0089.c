@@ -10517,7 +10517,7 @@ L_7c897be9:;
     { uint32_t r = (r_ecx & r_ecx) & 0xffffffffu; RECOMP_FLAGS_LOGIC(&rf, r, 32); }  /* 7c897bef: test ecx, ecx */
     if ((!rf.cf && !rf.zf)) { goto L_7c897bfa; }  /* 7c897bf1: ja 0x7c897bfa */
     (void)SubFlagsL(&rf, r_eax, 0x3a98u, 0, 32);  /* 7c897bf3: cmp eax, 0x3a98 */
-    if (rf.cf && !RecompRemoveTickRateLimit()) { goto L_7c897c5d; }  /* 7c897bf8: jb 0x7c897c5d */
+    if (rf.cf) { goto L_7c897c5d; }  /* 7c897bf8: jb 0x7c897c5d */
 L_7c897bfa:;
     { uint32_t v = r_ecx; LPush32(&r_esp, v); }  /* 7c897bfa: push ecx */
     { uint32_t v = r_eax; LPush32(&r_esp, v); }  /* 7c897bfb: push eax */

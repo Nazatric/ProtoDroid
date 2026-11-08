@@ -3,7 +3,7 @@
      copied by the user to /sdcard/Android/data/com.protodroid/files/game or /sdcard/Prototype (SetupActivity). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.protodroid"
-    android:versionCode="16"
+    android:versionCode="33"
     android:versionName="0.16"
     android:installLocation="auto">
 
@@ -89,6 +89,18 @@
             android:alwaysRetainTaskState="true"
             android:launchMode="singleInstance"
             android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:preferMinimalPostProcessing="true" />
+        <!-- The shader-precompile tour runs the engine in its own process so it can end itself
+             the moment its isolated run finishes (SDL allows one native main per process).
+             The launcher process stays alive behind it and owns the relaunch into normal Play. -->
+        <activity
+            android:name="com.protodroid.TourActivity"
+            android:label="Prototype"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:alwaysRetainTaskState="true"
+            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:process=":tour"
             android:preferMinimalPostProcessing="true" />
     </application>
 </manifest>

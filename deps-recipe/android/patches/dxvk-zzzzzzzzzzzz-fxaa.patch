@@ -1,0 +1,241 @@
+diff --git a/src/dxvk/dxvk_swapchain_blitter.cpp b/src/dxvk/dxvk_swapchain_blitter.cpp
+index 572395a..960001e 100644
+--- a/src/dxvk/dxvk_swapchain_blitter.cpp
++++ b/src/dxvk/dxvk_swapchain_blitter.cpp
+@@ -1,7 +1,10 @@
+ #include "dxvk_swapchain_blitter.h"
+ 
++#include "../util/util_env.h"
++
+ #include <dxvk_present_frag.h>
+ #include <dxvk_present_frag_blit.h>
++#include <dxvk_present_frag_fxaa.h>
+ #include <dxvk_present_frag_ms.h>
+ #include <dxvk_present_frag_ms_amd.h>
+ #include <dxvk_present_frag_ms_blit.h>
+@@ -13,6 +16,10 @@ namespace dxvk {
+   : m_device(device),
+     m_setLayout(createSetLayout()),
+     m_pipelineLayout(createPipelineLayout()) {
++    m_fxaa = env::getEnvVar("PROTODROID_FXAA") == "1";
++    if (m_fxaa)
++      Logger::info("DXVK present: FXAA requested for single-sample SDR game frames");
++
+     this->createSampler();
+     this->createShaders();
+   }
+@@ -27,6 +34,7 @@ namespace dxvk {
+     vk->vkDestroyShaderModule(vk->device(), m_shaderVsBlit.stageInfo.module, nullptr);
+     vk->vkDestroyShaderModule(vk->device(), m_shaderFsBlit.stageInfo.module, nullptr);
+     vk->vkDestroyShaderModule(vk->device(), m_shaderFsCopy.stageInfo.module, nullptr);
++    vk->vkDestroyShaderModule(vk->device(), m_shaderFsFxaa.stageInfo.module, nullptr);
+     vk->vkDestroyShaderModule(vk->device(), m_shaderFsMsBlit.stageInfo.module, nullptr);
+     vk->vkDestroyShaderModule(vk->device(), m_shaderFsMsResolve.stageInfo.module, nullptr);
+ 
+@@ -310,6 +318,21 @@ namespace dxvk {
+     key.needsGamma = m_gammaView != nullptr;
+     key.needsBlit = dstRect.extent != srcRect.extent;
+     key.needsBlending = enableBlending;
++    // FXAA is a replacement for the game's single-sample SDR presentation, not an extra filter for the software
++    // cursor, gamma ramps, HDR, or an existing MSAA resolve. Those cases retain the original shader and state.
++    key.needsFxaa = m_fxaa && !key.needsBlending && !key.needsGamma
++      && key.srcSamples == VK_SAMPLE_COUNT_1_BIT
++      && key.srcSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
++      && key.dstSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
++
++    if (key.needsFxaa && !m_fxaaActiveLogged) {
++      Logger::info("DXVK present: FXAA pipeline active");
++      m_fxaaActiveLogged = true;
++    } else if (m_fxaa && !key.needsBlending
++            && key.srcSamples != VK_SAMPLE_COUNT_1_BIT && !m_fxaaMsaaWarned) {
++      Logger::warn("DXVK present: FXAA bypassed by a multisampled game frame");
++      m_fxaaMsaaWarned = true;
++    }
+ 
+     VkPipeline pipeline = getPipeline(key);
+ 
+@@ -505,6 +528,10 @@ namespace dxvk {
+       sizeof(dxvk_present_frag_blit), dxvk_present_frag_blit);
+     createShaderModule(m_shaderFsCopy, VK_SHADER_STAGE_FRAGMENT_BIT,
+       sizeof(dxvk_present_frag), dxvk_present_frag);
++    if (m_fxaa) {
++      createShaderModule(m_shaderFsFxaa, VK_SHADER_STAGE_FRAGMENT_BIT,
++        sizeof(dxvk_present_frag_fxaa), dxvk_present_frag_fxaa);
++    }
+     createShaderModule(m_shaderFsMsBlit, VK_SHADER_STAGE_FRAGMENT_BIT,
+       sizeof(dxvk_present_frag_ms_blit), dxvk_present_frag_ms_blit);
+ 
+@@ -628,7 +655,9 @@ namespace dxvk {
+     std::array<VkPipelineShaderStageCreateInfo, 2> blitStages = { };
+     blitStages[0] = m_shaderVsBlit.stageInfo;
+ 
+-    if (key.srcSamples == VK_SAMPLE_COUNT_1_BIT)
++    if (key.needsFxaa)
++      blitStages[1] = m_shaderFsFxaa.stageInfo;
++    else if (key.srcSamples == VK_SAMPLE_COUNT_1_BIT)
+       blitStages[1] = key.needsBlit ? m_shaderFsBlit.stageInfo : m_shaderFsCopy.stageInfo;
+     else
+       blitStages[1] = key.needsBlit ? m_shaderFsMsBlit.stageInfo : m_shaderFsMsResolve.stageInfo;
+diff --git a/src/dxvk/dxvk_swapchain_blitter.h b/src/dxvk/dxvk_swapchain_blitter.h
+index 9db9bb6..4d845a3 100644
+--- a/src/dxvk/dxvk_swapchain_blitter.h
++++ b/src/dxvk/dxvk_swapchain_blitter.h
+@@ -45,6 +45,8 @@ namespace dxvk {
+     VkBool32 needsGamma = VK_FALSE;
+     /// Bit indicating whether alpha blending is required
+     VkBool32 needsBlending = VK_FALSE;
++    /// Bit indicating whether ProtoDroid's single-sample SDR FXAA pass is required
++    VkBool32 needsFxaa = VK_FALSE;
+ 
+     size_t hash() const {
+       DxvkHashState hash;
+@@ -56,6 +58,7 @@ namespace dxvk {
+       hash.add(uint32_t(needsBlit));
+       hash.add(uint32_t(needsGamma));
+       hash.add(uint32_t(needsBlending));
++      hash.add(uint32_t(needsFxaa));
+       return hash;
+     }
+ 
+@@ -67,7 +70,8 @@ namespace dxvk {
+           && dstFormat == other.dstFormat
+           && needsBlit == other.needsBlit
+           && needsGamma == other.needsGamma
+-          && needsBlending == other.needsBlending;
++          && needsBlending == other.needsBlending
++          && needsFxaa == other.needsFxaa;
+     }
+   };
+ 
+@@ -181,10 +185,14 @@ namespace dxvk {
+     };
+ 
+     Rc<DxvkDevice>      m_device;
++    bool                m_fxaa = false;
++    bool                m_fxaaActiveLogged = false;
++    bool                m_fxaaMsaaWarned = false;
+ 
+     ShaderModule        m_shaderVsBlit;
+     ShaderModule        m_shaderFsCopy;
+     ShaderModule        m_shaderFsBlit;
++    ShaderModule        m_shaderFsFxaa;
+     ShaderModule        m_shaderFsMsResolve;
+     ShaderModule        m_shaderFsMsBlit;
+ 
+diff --git a/src/dxvk/meson.build b/src/dxvk/meson.build
+index 44137f7..618c85a 100644
+--- a/src/dxvk/meson.build
++++ b/src/dxvk/meson.build
+@@ -39,6 +39,7 @@ dxvk_shaders = files([
+ 
+   'shaders/dxvk_present_frag.frag',
+   'shaders/dxvk_present_frag_blit.frag',
++  'shaders/dxvk_present_frag_fxaa.frag',
+   'shaders/dxvk_present_frag_ms.frag',
+   'shaders/dxvk_present_frag_ms_amd.frag',
+   'shaders/dxvk_present_frag_ms_blit.frag',
+diff --git a/src/dxvk/shaders/dxvk_present_frag_fxaa.frag b/src/dxvk/shaders/dxvk_present_frag_fxaa.frag
+new file mode 100644
+index 0000000..704d926
+--- /dev/null
++++ b/src/dxvk/shaders/dxvk_present_frag_fxaa.frag
+@@ -0,0 +1,99 @@
++#version 450
++
++#extension GL_GOOGLE_include_directive : enable
++
++#include "dxvk_present_common.glsl"
++
++// ProtoDroid compatibility AA for Prototype's single-sample SDR frame.
++// Luma-directed FXAA follows Timothy Lottes' display-referred, single-pass
++// approach: leave flat regions alone and blend only along detected edges.
++layout(location = 0) in  vec2 i_coord;
++layout(location = 0) out vec4 o_color;
++
++const float FXAA_REDUCE_MIN = 1.0f / 128.0f;
++const float FXAA_REDUCE_MUL = 1.0f / 8.0f;
++const float FXAA_SPAN_MAX   = 8.0f;
++const float FXAA_EDGE_MIN   = 1.0f / 24.0f;
++const float FXAA_EDGE_REL   = 1.0f / 8.0f;
++
++vec4 to_display(vec4 color) {
++  // Sampling an sRGB image returns linear values. FXAA luma and blends must
++  // instead use perceptual/display-referred values. UNORM input is unchanged.
++  if (c_src_is_srgb)
++    color.rgb = linear_to_srgb(color.rgb);
++  return color;
++}
++
++vec4 fetch_display(ivec2 pos) {
++  ivec2 lo = src_offset;
++  ivec2 hi = src_offset + src_extent - 1;
++  return to_display(texelFetch(s_image, clamp(pos, lo, hi), 0));
++}
++
++// Bilinear sample in source-pixel coordinates. Doing this explicitly keeps
++// sRGB interpolation in display space and clamps every tap to srcRect.
++vec4 sample_display(vec2 pos) {
++  vec2 p = pos - 0.5f;
++  ivec2 i = ivec2(floor(p));
++  vec2 f = p - vec2(i);
++
++  vec4 a = mix(fetch_display(i),               fetch_display(i + ivec2(1, 0)), f.x);
++  vec4 b = mix(fetch_display(i + ivec2(0, 1)), fetch_display(i + ivec2(1, 1)), f.x);
++  return mix(a, b, f.y);
++}
++
++float fxaa_luma(vec3 color) {
++  return dot(color, vec3(0.299f, 0.587f, 0.114f));
++}
++
++vec4 display_to_output(vec4 color) {
++  // Return to the source sample domain, then use DXVK's ordinary color-space
++  // conversion. This preserves UNORM/sRGB and source/destination conversions.
++  if (c_src_is_srgb)
++    color.rgb = srgb_to_linear(color.rgb);
++  return sc_rgb_to_output(input_to_sc_rgb(color));
++}
++
++void main() {
++  // The present sampler uses pixel coordinates. i_coord also handles scaled
++  // presents; at 1:1 this is the ordinary texel center.
++  vec2 center = vec2(src_offset) + vec2(src_extent) * i_coord;
++  ivec2 pos = ivec2(floor(center));
++
++  // Preserve the existing linear-filtered center sample and its alpha. Flat
++  // regions take no additional directional samples beyond edge detection.
++  vec4 colorM = to_display(textureLod(s_image, center, 0.0f));
++  float lumaM  = fxaa_luma(colorM.rgb);
++  float lumaNW = fxaa_luma(fetch_display(pos + ivec2(-1, -1)).rgb);
++  float lumaNE = fxaa_luma(fetch_display(pos + ivec2( 1, -1)).rgb);
++  float lumaSW = fxaa_luma(fetch_display(pos + ivec2(-1,  1)).rgb);
++  float lumaSE = fxaa_luma(fetch_display(pos + ivec2( 1,  1)).rgb);
++
++  float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
++  float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
++
++  if (lumaMax - lumaMin < max(FXAA_EDGE_MIN, lumaMax * FXAA_EDGE_REL)) {
++    o_color = display_to_output(colorM);
++    return;
++  }
++
++  vec2 dir = vec2(
++    -((lumaNW + lumaNE) - (lumaSW + lumaSE)),
++     ((lumaNW + lumaSW) - (lumaNE + lumaSE)));
++
++  float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE)
++    * 0.25f * FXAA_REDUCE_MUL, FXAA_REDUCE_MIN);
++  float rcpDirMin = 1.0f / (min(abs(dir.x), abs(dir.y)) + dirReduce);
++  dir = clamp(dir * rcpDirMin, vec2(-FXAA_SPAN_MAX), vec2(FXAA_SPAN_MAX));
++
++  vec3 rgbA = 0.5f * (
++    sample_display(center + dir * (1.0f / 3.0f - 0.5f)).rgb +
++    sample_display(center + dir * (2.0f / 3.0f - 0.5f)).rgb);
++  vec3 rgbB = rgbA * 0.5f + 0.25f * (
++    sample_display(center - dir * 0.5f).rgb +
++    sample_display(center + dir * 0.5f).rgb);
++
++  float lumaB = fxaa_luma(rgbB);
++  vec3 color = (lumaB < lumaMin || lumaB > lumaMax) ? rgbA : rgbB;
++  o_color = display_to_output(vec4(color, colorM.a));
++}

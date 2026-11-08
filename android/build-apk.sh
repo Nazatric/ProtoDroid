@@ -81,11 +81,13 @@ for abi in "${ABIS[@]}"; do
             exit 1
         fi
         cp -v "$DEPS_ROOT/$abi/lib/libvulkan_wrapper.so" "$OUT/pkg/lib/$abi/"
-        if [ ! -s "$ROOT/build/android/$abi/libturnipprobe.so" ]; then
-            echo "ERROR: missing ARM64 isolated Vulkan driver probe; rebuild with TURNIP_ROOT=$TURNIP_ROOT"
-            exit 1
+        # Optional: the probe exists only in adrenotools-enabled builds (TURNIP_ROOT). A build without the
+        # built-in Turnip stack still ships; in-app Turnip driver packages remain downloadable.
+        if [ -s "$ROOT/build/android/$abi/libturnipprobe.so" ]; then
+            cp -v "$ROOT/build/android/$abi/libturnipprobe.so" "$OUT/pkg/lib/$abi/"
+        else
+            echo "NOTE: building without the ARM64 isolated Vulkan driver probe (no TURNIP_ROOT adrenotools)"
         fi
-        cp -v "$ROOT/build/android/$abi/libturnipprobe.so" "$OUT/pkg/lib/$abi/"
     elif [ -e "$ROOT/build/android/$abi/libturnipprobe.so" ]; then
         cp -v "$ROOT/build/android/$abi/libturnipprobe.so" "$OUT/pkg/lib/$abi/"
     fi
@@ -95,15 +97,21 @@ for abi in "${ABIS[@]}"; do
         ls -lh "$OUT/pkg/lib/$abi/libmain_v80.so"
     fi
     if [ "$abi" = arm64-v8a ]; then
-        echo "Copying and verifying Turnip/AdrenoTools libs"
-        for library in libvulkan_freedreno.so libvulkan_freedreno_next.so libvulkan_freedreno_gen8.so \
-                libhook_impl.so libmain_hook.so libfile_redirect_hook.so libgsl_alloc_hook.so; do
-            if [ ! -s "$TURNIP_ROOT/lib/$library" ]; then
-                echo "ERROR: missing required Vulkan driver library $TURNIP_ROOT/lib/$library"
-                exit 1
-            fi
-        done
-        cp -v "$TURNIP_ROOT"/lib/*.so "$OUT/pkg/lib/$abi/"
+        # Optional: Turnip/AdrenoTools ships only in builds with TURNIP_ROOT populated. Without it the APK
+        # still runs on the system driver; in-app Turnip driver packages remain downloadable.
+        if [ -s "$TURNIP_ROOT/lib/libvulkan_freedreno.so" ]; then
+            echo "Copying and verifying Turnip/AdrenoTools libs"
+            for library in libvulkan_freedreno.so libvulkan_freedreno_next.so libvulkan_freedreno_gen8.so \
+                    libhook_impl.so libmain_hook.so libfile_redirect_hook.so libgsl_alloc_hook.so; do
+                if [ ! -s "$TURNIP_ROOT/lib/$library" ]; then
+                    echo "ERROR: missing required Vulkan driver library $TURNIP_ROOT/lib/$library"
+                    exit 1
+                fi
+            done
+            cp -v "$TURNIP_ROOT"/lib/*.so "$OUT/pkg/lib/$abi/"
+        else
+            echo "NOTE: building without bundled Turnip/AdrenoTools (no TURNIP_ROOT driver build)"
+        fi
     fi
     echo "=== Before strip ==="
     ls -lh "$OUT/pkg/lib/$abi/"
@@ -187,11 +195,13 @@ python3 - "$OUT/prototype.apk" "$OUT/pkg/lib/arm64-v8a/libvulkan_wrapper.so" <<'
 import sys
 import zipfile
 from pathlib import Path
-required = (
+required = ("libvulkan_wrapper.so",)
+# Optional in no-TURNIP_ROOT builds: the Turnip drivers, adrenotools hooks, and the probe.
+optional = {
     "libvulkan_freedreno.so", "libvulkan_freedreno_next.so", "libvulkan_freedreno_gen8.so",
-    "libturnipprobe.so", "libvulkan_wrapper.so", "libhook_impl.so", "libmain_hook.so",
+    "libturnipprobe.so", "libhook_impl.so", "libmain_hook.so",
     "libfile_redirect_hook.so", "libgsl_alloc_hook.so",
-)
+}
 with zipfile.ZipFile(sys.argv[1]) as apk:
     names = set(apk.namelist())
     for library in required:
@@ -199,6 +209,12 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
         if path not in names or apk.getinfo(path).file_size == 0:
             raise SystemExit("ERROR: signed APK is missing " + path)
         print("Verified " + path)
+    for library in sorted(optional):
+        path = "lib/arm64-v8a/" + library
+        if path in names and apk.getinfo(path).file_size > 0:
+            print("Verified " + path + " (bundled)")
+        else:
+            print("Skipped " + path + " (not bundled in this no-Turnip build)")
     # Both the isolated probe and gameplay must contain the direct-ICD path. These dlsym names survive stripping;
     # checking only Java metadata or a successful link would not prove that the signed package contains the loader.
     for library in ("libmain.so", "libturnipprobe.so", "libmain_v80.so"):
@@ -206,12 +222,18 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
         if path not in names:
             if library == "libmain_v80.so":
                 continue
+            if library == "libturnipprobe.so":
+                print("Skipped " + path + " (no-Turnip build: probe is optional)")
+                continue
             raise SystemExit("ERROR: signed APK is missing native driver consumer " + path)
         data = apk.read(path)
-        for marker in (b"vk_icdGetInstanceProcAddr", b"vk_icdNegotiateLoaderICDInterfaceVersion"):
-            if marker not in data:
-                raise SystemExit("ERROR: " + path + " lacks direct ICD marker " + marker.decode())
-        print("Verified direct ICD loader in " + path)
+        if "lib/arm64-v8a/libturnipprobe.so" in names:
+            for marker in (b"vk_icdGetInstanceProcAddr", b"vk_icdNegotiateLoaderICDInterfaceVersion"):
+                if marker not in data:
+                    raise SystemExit("ERROR: " + path + " lacks direct ICD marker " + marker.decode())
+            print("Verified direct ICD loader in " + path)
+        else:
+            print("Skipped direct ICD loader check in " + path + " (no-Turnip build)")
 
     wrapper_path = "lib/arm64-v8a/libvulkan_wrapper.so"
     wrapper = apk.read(wrapper_path)
@@ -234,11 +256,17 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
     for library in ("libmain.so", "libturnipprobe.so", "libmain_v80.so"):
         path = "lib/arm64-v8a/" + library
         if path not in names:
-            if library == "libmain_v80.so":
+            if library in ("libmain_v80.so", "libturnipprobe.so"):
                 continue
             raise SystemExit("ERROR: signed APK is missing wrapper consumer " + path)
         data = apk.read(path)
-        for marker in (b"DXVK", b"nullDescriptor", b"vkGetPhysicalDeviceFeatures2"):
+        # nullDescriptor and vkGetPhysicalDeviceFeatures2 live in the Adreno probe path (turnip_load.h),
+        # compiled in only for TURNIP_ROOT builds; without Turnip only the DXVK marker is required.
+        if "lib/arm64-v8a/libturnipprobe.so" in names:
+            markers = (b"DXVK", b"nullDescriptor", b"vkGetPhysicalDeviceFeatures2")
+        else:
+            markers = (b"DXVK",)
+        for marker in markers:
             if marker not in data:
                 raise SystemExit("ERROR: " + path + " lacks effective-wrapper capability marker " + marker.decode())
         print("Verified wrapper capability probe in " + path)

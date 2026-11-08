@@ -1,0 +1,57 @@
+name: Crash, freeze, or black screen
+description: Report a crash, ANR, freeze, restart, or graphics device loss
+title: "[Crash] "
+labels: ["bug", "crash"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: ProtoDroid version
+      description: Visible version and commit, if shown.
+      placeholder: 0.15
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone, chip, and Android version
+      placeholder: Phone model; SoC/GPU; Android version
+    validations:
+      required: true
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: Failure
+      options:
+        - Crash or restart
+        - Freeze or ANR
+        - Black or blank screen
+        - Graphics device loss
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: When does it happen?
+      description: Include the screen or gameplay moment and whether it is repeatable.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and extra context
+      description: Attach the failed run's logs and proto-native.prev.log if available. Do not upload game, cache, or save files.
+      render: text
+    validations:
+      required: true

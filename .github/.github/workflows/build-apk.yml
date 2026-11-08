@@ -1,0 +1,1467 @@
+name: build-apk
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+on:
+  push:
+    branches: [main, master, arena/**]
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish a new versioned GitHub release from main (explicit approval)
+        required: true
+        default: false
+        type: boolean
+      allow_ephemeral_release:
+        description: Explicitly allow a disposable-signed release (later updates may require uninstall)
+        required: true
+        default: false
+        type: boolean
+      allow_certificate_change:
+        description: Explicitly allow a different signing certificate (existing users must uninstall once)
+        required: true
+        default: false
+        type: boolean
+  repository_dispatch:
+    types: [publish-apk-release]
+
+jobs:
+  bink-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the original native launcher
+        run: |
+          python3 tools/test_native_launcher.py
+          REQUIRE_JAVA_COMPILER=1 python3 tools/test_native_diagnostics.py
+          python3 tools/test_sdl_version.py
+
+      - name: Install host test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zlib1g-dev python3-yaml glslang-tools
+
+      - name: Compile and run native input-lookup tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/input_lookup_test.cpp -o /tmp/input_lookup_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/input_lookup_test
+
+      - name: Compile and run graphics UBSAN tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/d3d9_dxt.cpp src/native/tests/graphics_test.cpp -o /tmp/graphics_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/graphics_test
+
+      - name: Compile and run runtime bridge and guest-memory tests
+        run: |
+          bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test
+          bash src/native/tests/run_memory_test.sh /tmp/memory_test
+
+      - name: Compile and run Prototype Fix policy tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_feature_policy_test.cpp -o /tmp/mod_feature_policy_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_feature_policy_test
+
+      - name: Compile and run keyed texture-mod tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_texture_test.cpp -o /tmp/mod_texture_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_texture_test
+
+      - name: Compile and run native detour-chain tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_hook_test.cpp -o /tmp/mod_hook_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_hook_test
+
+      - name: Compile and run real native plugin-loader tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-plugin-test
+          mkdir -p /tmp/protodroid-plugin-test/native/example /tmp/protodroid-plugin-test/native/custom \
+            /tmp/protodroid-plugin-test/native/legacy2
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include modding/example/plugin.c \
+            -o /tmp/protodroid-plugin-test/native/example/libexample.so
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin.c \
+            -o /tmp/protodroid-plugin-test/native/custom/libtest.so
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin_v2.c \
+            -o /tmp/protodroid-plugin-test/native/legacy2/libtest2.so
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_plugin_test.cpp -ldl -o /tmp/mod_plugin_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_plugin_test
+
+      - name: Compile and run native package dependency tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native -Isrc/recomp"
+          g++ $CXXFLAGS src/native/mod_platform.cpp src/native/tests/mod_platform_test.cpp -o /tmp/mod_platform_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_platform_test
+
+      - name: Compile and run sandboxed Lua runtime tests
+        run: bash tools/test_mod_script_runtime.sh /tmp/protodroid-script-host
+
+      - name: Run Lua runtime ASan/UBSan checks
+        run: PROTODROID_SCRIPT_ASAN=1 bash tools/test_mod_script_runtime.sh /tmp/protodroid-script-asan
+
+      - name: Compile and run loose-file overlay tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/mod_files.cpp \
+            src/native/tests/mod_files_test.cpp -o /tmp/mod_files_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_files_test
+
+      - name: Compile and run shared-save path tests
+        id: save
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/tests/save_path_test.cpp -o /tmp/save_path_test 2>&1 | tee /tmp/protodroid-save-test.log
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/save_path_test 2>&1 | tee -a /tmp/protodroid-save-test.log
+
+      - name: Report shared-save test failure
+        if: failure() && steps.save.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/6/comments \
+            --raw-field body="Shared-save test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-save-test.log 2>/dev/null || echo 'no save-test log')\n\`\`\`" || true
+
+      - name: Compile and run performance-hint session tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/perf_hint_test.cpp -o /tmp/perf_hint_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/perf_hint_test
+
+      - name: Compile and run CPU affinity tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/cpu_affinity_test.cpp -o /tmp/cpu_affinity_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/cpu_affinity_test
+
+      - name: Compile and run presented-frame statistics tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/present_stats.cpp src/native/tests/present_stats_test.cpp -o /tmp/present_stats_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/present_stats_test
+
+      - name: Compile and run diagnostic-tour plan and guest-clock tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostic_tour_plan_test.cpp -o /tmp/diagnostic_tour_plan_test
+          g++ $CXXFLAGS src/native/tests/guest_time_test.cpp -o /tmp/guest_time_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostic_tour_plan_test
+          /tmp/guest_time_test
+
+      - name: Test diagnostic-tour binary probe and isolated-exit policy
+        run: python3 tools/test_diagnostic_tour_runtime.py
+
+      - name: Compile and run detailed diagnostics tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostics_test.cpp -o /tmp/diagnostics_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostics_test
+
+      - name: Compile and run GPU profile and API negotiation tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/gpu_profile_test.cpp -o /tmp/gpu_profile_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/gpu_profile_test
+
+      - name: Compile and run driver recovery marker tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/driver_recovery_test.cpp -o /tmp/driver_recovery_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/driver_recovery_test
+
+      - name: Test DXVK memory selection and state-cache behavior
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/protodroid-dxvk-test
+          for patch in "$PWD"/android/patches/dxvk-*.patch; do
+            git -C /tmp/protodroid-dxvk-test apply --check "$patch"
+            git -C /tmp/protodroid-dxvk-test apply "$patch"
+          done
+          python3 tools/test_dxvk_unified_memory.py /tmp/protodroid-dxvk-test/src/dxvk/dxvk_memory.cpp
+          python3 tools/test_dxvk_depth_resolve.py /tmp/protodroid-dxvk-test/src/d3d9/d3d9_device.cpp
+          python3 tools/test_dxvk_fxaa.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_device_preflight.py /tmp/protodroid-dxvk-test
+          python3 tools/test_dxvk_bc_support.py /tmp/protodroid-dxvk-test
+          glslangValidator --quiet -V --target-env vulkan1.3 \
+            -I/tmp/protodroid-dxvk-test/src/dxvk/shaders \
+            /tmp/protodroid-dxvk-test/src/dxvk/shaders/dxvk_present_frag_fxaa.frag \
+            -o /tmp/protodroid-fxaa.spv
+          test -s /tmp/protodroid-fxaa.spv
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-test/src/dxvk"
+          g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/state_cache_test
+
+      - name: Compile and run GameDB video-setting tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/video_settings.cpp src/native/tests/video_settings_test.cpp -o /tmp/video_settings_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/video_settings_test
+
+      - name: Compile and run AA compatibility policy tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/aa_policy_test.cpp -o /tmp/aa_policy_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/aa_policy_test
+
+      - name: Test Android version increments
+        run: python3 tools/test_bump_version.py
+
+      - name: Validate GitHub issue forms
+        run: python3 tools/test_issue_templates.py
+
+      - name: Test release version and signing approvals
+        run: |
+          python3 tools/test_release_policy.py
+          python3 tools/test_release_workflow.py
+
+      - name: Test Drivers navigation touch cleanup
+        run: python3 tools/test_driver_screen_navigation.py
+
+      - name: Test launcher immersive startup compatibility
+        run: python3 tools/test_immersive_mode.py
+
+      - name: Test launcher update metadata and recovery policy
+        run: |
+          set -euo pipefail
+          python3 tools/test_launcher_update_action.py
+          git clone -q --depth 1 --branch 20240303 https://github.com/stleary/JSON-java.git /tmp/protodroid-json
+          rm -rf /tmp/protodroid-update-test
+          mkdir -p /tmp/protodroid-update-test
+          javac --release 11 -d /tmp/protodroid-update-test \
+            $(find /tmp/protodroid-json/src/main/java/org/json -name '*.java' -print) \
+            android/java/com/protodroid/UpdateRelease.java \
+            android/java/com/protodroid/UpdateDownloadPolicy.java \
+            android/tests/com/protodroid/UpdateReleaseTest.java \
+            android/tests/com/protodroid/UpdateDownloadPolicyTest.java
+          java -cp /tmp/protodroid-update-test com.protodroid.UpdateReleaseTest
+          java -cp /tmp/protodroid-update-test com.protodroid.UpdateDownloadPolicyTest
+
+      - name: Test required game-file detection
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-game-files-test
+          mkdir -p /tmp/protodroid-game-files-test
+          javac --release 11 -d /tmp/protodroid-game-files-test \
+            android/java/com/protodroid/GameFiles.java \
+            android/tests/com/protodroid/GameFilesTest.java
+          java -cp /tmp/protodroid-game-files-test com.protodroid.GameFilesTest
+
+      - name: Compile and run launcher real-log tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-launcher-log-test
+          mkdir -p /tmp/protodroid-launcher-log-test
+          javac --release 11 -d /tmp/protodroid-launcher-log-test \
+            android/java/com/protodroid/LauncherLog.java \
+            android/tests/com/protodroid/LauncherLogTest.java
+          java -cp /tmp/protodroid-launcher-log-test com.protodroid.LauncherLogTest
+
+      - name: Compile and run mod package and lifecycle tests
+        run: |
+          set -euo pipefail
+          ANDROID_JAR=$(find "$ANDROID_SDK_ROOT/platforms" -name android.jar | sort -V | tail -n 1)
+          test -s "$ANDROID_JAR"
+          rm -rf /tmp/protodroid-mod-test
+          mkdir -p /tmp/protodroid-mod-test
+          javac --release 11 -cp "$ANDROID_JAR" -d /tmp/protodroid-mod-test \
+            android/java/com/protodroid/ImmersiveMode.java \
+            android/java/com/protodroid/ModManifest.java \
+            android/java/com/protodroid/ModConfig.java \
+            android/java/com/protodroid/ModConfigActivity.java \
+            android/java/com/protodroid/ModManager.java \
+            android/java/com/protodroid/AaPolicy.java \
+            android/java/com/protodroid/GameSettings.java \
+            android/java/com/protodroid/LauncherMotion.java \
+            android/java/com/protodroid/ModsView.java \
+            android/java/com/protodroid/ModsActivity.java \
+            android/tests/com/protodroid/ModPlatformTest.java
+          java -cp "/tmp/protodroid-mod-test:$ANDROID_JAR" com.protodroid.ModPlatformTest
+
+      - name: Test native mod generated-source and default policies
+        run: |
+          python3 tools/test_native_mod_platform.py
+          python3 tools/generate_engine_symbols.py --check
+
+      - name: Test Vulkan wrapper negotiation policy
+        run: python3 tools/test_vulkan_wrapper_policy.py
+
+      - name: Test ordinary-play hot-path and failed-driver recovery policies
+        run: python3 tools/test_runtime_performance.py
+
+      - name: Test performance-evidence comparability guards
+        run: python3 tools/test_perf_evidence.py
+
+      - name: Test compatibility controls and graphics policies
+        run: python3 tools/test_compatibility_batch.py
+
+      - name: Test in-game keyboard and custom layout policies
+        run: |
+          set -euo pipefail
+          python3 tools/test_touch_controls.py
+          python3 tools/test_sdl_controls_patch.py
+
+      - name: Compile and run AA preset independence tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-aa-policy-test
+          mkdir -p /tmp/protodroid-aa-policy-test
+          javac --release 11 -d /tmp/protodroid-aa-policy-test \
+            android/java/com/protodroid/AaPolicy.java \
+            android/tests/com/protodroid/AaPolicyTest.java
+          java -cp /tmp/protodroid-aa-policy-test com.protodroid.AaPolicyTest
+
+      - name: Compile and run keyboard/custom-button model tests
+        run: |
+          set -euo pipefail
+          test -d /tmp/protodroid-json/src/main/java/org/json
+          rm -rf /tmp/protodroid-controls-model-test
+          mkdir -p /tmp/protodroid-controls-model-test
+          javac --release 11 -d /tmp/protodroid-controls-model-test \
+            $(find /tmp/protodroid-json/src/main/java/org/json -name '*.java' -print) \
+            android/java/com/protodroid/ControlKeys.java \
+            android/java/com/protodroid/CustomButtonStore.java \
+            android/java/com/protodroid/TouchKeyState.java \
+            android/tests/com/protodroid/ControlsModelTest.java
+          java -cp /tmp/protodroid-controls-model-test com.protodroid.ControlsModelTest
+
+      - name: Test diagnostic-tour launcher cheat code
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-tour-code-test
+          mkdir -p /tmp/protodroid-tour-code-test
+          javac --release 11 -d /tmp/protodroid-tour-code-test \
+            android/java/com/protodroid/DiagnosticTourCode.java \
+            android/tests/com/protodroid/DiagnosticTourCodeTest.java
+          java -cp /tmp/protodroid-tour-code-test com.protodroid.DiagnosticTourCodeTest
+
+      - name: Test APK signing configurations
+        run: android/test-signing.sh
+
+      - name: Build minimal host FFmpeg
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 --branch n7.1.1 https://github.com/FFmpeg/FFmpeg.git /tmp/bink-ffmpeg-src
+          mkdir -p /tmp/bink-ffmpeg-build
+          cd /tmp/bink-ffmpeg-build
+          /tmp/bink-ffmpeg-src/configure \
+            --prefix=/tmp/bink-ffmpeg --enable-static --disable-shared --disable-programs --disable-doc \
+            --disable-debug --disable-network --disable-autodetect --enable-pthreads --disable-w32threads \
+            --disable-os2threads --disable-x86asm --disable-avdevice --disable-avfilter --disable-swscale \
+            --disable-postproc --disable-everything --enable-avformat --enable-avcodec --enable-avutil \
+            --enable-swresample --enable-demuxer=bink --enable-decoder=bink,binkaudio_rdft,binkaudio_dct
+          make -j 2
+          make install
+
+      - name: Download external Bink test sample
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse \
+            https://github.com/dimhotepus/Bink-1-and-2-async-media-player.git /tmp/bink-test-sample-repo
+          git -C /tmp/bink-test-sample-repo sparse-checkout set --no-cone '/valve.bik'
+          cp /tmp/bink-test-sample-repo/valve.bik /tmp/bink-test-sample.bik
+          test "$(stat -c%s /tmp/bink-test-sample.bik)" = 15563652
+
+      - name: Compile and run production Bink harness
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bink-test-obj
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -Wno-unused-parameter \
+            -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_BINK_TEST -fsigned-char \
+            -fsanitize=undefined -fno-sanitize-recover=all -I. -Isrc/recomp -Isrc/native -I/tmp/bink-ffmpeg/include"
+          for src in src/native/bink_media.cpp src/native/bink_blit.cpp src/native/bink.cpp src/native/tests/bink_test.cpp; do
+            g++ $CXXFLAGS -c "$src" -o "/tmp/bink-test-obj/$(basename "${src%.cpp}").o"
+          done
+          g++ -fsanitize=undefined -pthread /tmp/bink-test-obj/bink_test.o /tmp/bink-test-obj/bink.o \
+            /tmp/bink-test-obj/bink_media.o /tmp/bink-test-obj/bink_blit.o \
+            -L/tmp/bink-ffmpeg/lib -lavformat -lavcodec -lswresample -lavutil -lz -lm -o /tmp/bink_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures
+          BINK_TEST_AUDIO_RATE=44100 /tmp/bink_test /tmp/bink-test-sample.bik /tmp/bink-test-fixtures-44100
+
+  arm64-graphics-tests:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile and run native ARM64 graphics UBSAN tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/d3d9_dxt.cpp src/native/tests/graphics_test.cpp -o /tmp/graphics_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/graphics_test_arm64
+
+      - name: Measure ARM64 BC1 decoder against the corrected baseline
+        run: |
+          set -euo pipefail
+          # Informational target-ISA A/B, not a timing gate or a physical-device FPS result. The fixed reference is
+          # the corrected native-restoration commit that immediately preceded this optimization batch.
+          git fetch -q --depth=1 origin 29654c7d0f904c158f424c9ea4ff13a4022d4da7
+          git show FETCH_HEAD:src/native/d3d9_dxt.cpp > /tmp/protodroid-dxt-before.cpp
+          FLAGS="-std=c++17 -O3 -DNDEBUG -fsigned-char -march=armv8.2-a+rcpc -mtune=cortex-a76 -Isrc/native"
+          g++ $FLAGS /tmp/protodroid-dxt-before.cpp src/native/tests/dxt_benchmark.cpp -o /tmp/dxt-before-arm64
+          g++ $FLAGS src/native/d3d9_dxt.cpp src/native/tests/dxt_benchmark.cpp -o /tmp/dxt-after-arm64
+          : > /tmp/arm64-dxt-benchmark.txt
+          for pass in 1 2; do
+            echo "=== before pass $pass ===" | tee -a /tmp/arm64-dxt-benchmark.txt
+            /tmp/dxt-before-arm64 200 | tee -a /tmp/arm64-dxt-benchmark.txt
+            echo "=== after pass $pass ===" | tee -a /tmp/arm64-dxt-benchmark.txt
+            /tmp/dxt-after-arm64 200 | tee -a /tmp/arm64-dxt-benchmark.txt
+          done
+
+      - name: Upload ARM64 BC1 benchmark
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-dxt-benchmark
+          path: /tmp/arm64-dxt-benchmark.txt
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Test and measure ARM64 DirectInput keyboard lookup
+        run: |
+          set -euo pipefail
+          FLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $FLAGS src/native/tests/input_lookup_test.cpp -o /tmp/input_lookup_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/input_lookup_test_arm64
+          FLAGS="-std=c++17 -O3 -DNDEBUG -fsigned-char -march=armv8.2-a+rcpc -mtune=cortex-a76 -Isrc/native"
+          g++ $FLAGS src/native/tests/input_lookup_benchmark.cpp -o /tmp/input_lookup_benchmark_arm64
+          /tmp/input_lookup_benchmark_arm64 20000 | tee /tmp/arm64-input-lookup-benchmark.txt
+
+      - name: Upload ARM64 input-lookup benchmark
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-input-lookup-benchmark
+          path: /tmp/arm64-input-lookup-benchmark.txt
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Compile and run native ARM64 runtime bridge and guest-memory tests
+        run: |
+          bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test_arm64
+          bash src/native/tests/run_memory_test.sh /tmp/memory_test_arm64
+
+      - name: Compile and run native ARM64 Prototype Fix policy tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_feature_policy_test.cpp -o /tmp/mod_feature_policy_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_feature_policy_test_arm64
+
+      - name: Compile and run native ARM64 keyed texture-mod tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_texture_test.cpp -o /tmp/mod_texture_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_texture_test_arm64
+
+      - name: Compile and run native ARM64 detour-chain tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_hook_test.cpp -o /tmp/mod_hook_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_hook_test_arm64
+
+      - name: Compile and run native ARM64 real plugin-loader tests
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-plugin-test
+          mkdir -p /tmp/protodroid-plugin-test/native/example /tmp/protodroid-plugin-test/native/custom \
+            /tmp/protodroid-plugin-test/native/legacy2
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include modding/example/plugin.c \
+            -o /tmp/protodroid-plugin-test/native/example/libexample.so
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin.c \
+            -o /tmp/protodroid-plugin-test/native/custom/libtest.so
+          gcc -std=c11 -O1 -fPIC -shared -Imodding/include src/native/tests/mod_test_plugin_v2.c \
+            -o /tmp/protodroid-plugin-test/native/legacy2/libtest2.so
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -DPROTODROID_DOBBY -Isrc/native/tests/fake_dobby -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/mod_plugin_test.cpp -ldl -o /tmp/mod_plugin_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_plugin_test_arm64
+
+      - name: Compile and run native ARM64 package dependency tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native -Isrc/recomp"
+          g++ $CXXFLAGS src/native/mod_platform.cpp src/native/tests/mod_platform_test.cpp -o /tmp/mod_platform_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_platform_test_arm64
+
+      - name: Compile and run native ARM64 sandboxed Lua runtime tests
+        run: bash tools/test_mod_script_runtime.sh /tmp/protodroid-script-arm64
+
+      - name: Compile and run native ARM64 loose-file overlay tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/mod_files.cpp \
+            src/native/tests/mod_files_test.cpp -o /tmp/mod_files_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/mod_files_test_arm64
+
+      - name: Compile and run native ARM64 GameDB video-setting tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/video_settings.cpp src/native/tests/video_settings_test.cpp -o /tmp/video_settings_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/video_settings_test_arm64
+
+      - name: Compile and run native ARM64 detailed diagnostics tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostics_test.cpp -o /tmp/diagnostics_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostics_test_arm64
+
+      - name: Compile and run native ARM64 diagnostic-tour tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/diagnostic_tour_plan_test.cpp -o /tmp/diagnostic_tour_plan_test_arm64
+          g++ $CXXFLAGS src/native/present_stats.cpp src/native/tests/present_stats_test.cpp -o /tmp/present_stats_test_arm64
+          g++ $CXXFLAGS src/native/tests/guest_time_test.cpp -o /tmp/guest_time_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/diagnostic_tour_plan_test_arm64
+          /tmp/present_stats_test_arm64
+          /tmp/guest_time_test_arm64
+
+      - name: Compile and run native ARM64 CPU affinity tests
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          g++ $CXXFLAGS src/native/tests/cpu_affinity_test.cpp -o /tmp/cpu_affinity_test_arm64
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/cpu_affinity_test_arm64
+
+      - name: Compile and run native ARM64 shared-save path tests
+        id: save
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -Isrc/native"
+          g++ $CXXFLAGS src/native/path.cpp src/native/save_path.cpp src/native/tests/save_path_test.cpp -o /tmp/save_path_test_arm64 2>&1 | tee /tmp/protodroid-save-test.log
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/save_path_test_arm64 2>&1 | tee -a /tmp/protodroid-save-test.log
+
+      - name: Report native ARM64 shared-save test failure
+        if: failure() && steps.save.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/6/comments \
+            --raw-field body="Native ARM64 shared-save test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-save-test.log 2>/dev/null || echo 'no save-test log')\n\`\`\`" || true
+
+      - name: Compile and run native ARM64 hot-replacement differential tests
+        id: hot
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin TestingFiles
+          git show FETCH_HEAD:prototypeenginef.dll > /tmp/protodroid-hot-engine.dll
+          test "$(stat -c%s /tmp/protodroid-hot-engine.dll)" = 20205568
+          python3 -m venv /tmp/protodroid-hot-venv
+          /tmp/protodroid-hot-venv/bin/pip install -q capstone pefile
+          export PATH=/tmp/protodroid-hot-venv/bin:$PATH
+          export PROTODROID_ENGINE=/tmp/protodroid-hot-engine.dll
+          src/native/tests/run_hot_test.sh 2>&1 | tee /tmp/protodroid-arm-hot-test.log
+
+      - name: Report native ARM64 hot-test failure
+        if: failure() && steps.hot.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/1/comments \
+            --raw-field body="ARM64 hot-test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-arm-hot-test.log 2>/dev/null || echo 'no hot-test log')\n\`\`\`" || true
+
+  build-deps:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        abi: [arm64-v8a]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache deps
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/deps-out/${{ matrix.abi }}
+          key: android-deps-vulkan-wrapper-v2-${{ matrix.abi }}-${{ hashFiles('android/build-deps.sh', 'android/build-vulkan-wrapper.sh', 'android/patches/**') }}
+
+      - name: Install build tools
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip 7zip bison flex
+          pip3 install --user --break-system-packages meson==1.5.2 mako pyyaml packaging
+          echo "NDK at $ANDROID_NDK_LATEST_HOME: $(ls $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt 2>&1 | head)"
+
+      - name: Build third-party deps (SDL2, FAudio, DXVK, Android Vulkan wrapper)
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        run: |
+          set -euo pipefail
+          export PATH=$HOME/.local/bin:$PATH
+          echo "NDK: $ANDROID_NDK_HOME"
+          ls -la android/patches/
+          android/build-deps.sh ${{ matrix.abi }} /tmp/deps-src deps-out/${{ matrix.abi }} 2>&1 | tee /tmp/build-deps.log
+
+      - name: Report dependency build failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tail -n 180 /tmp/build-deps.log || true
+          gh api repos/${{ github.repository }}/issues/1/comments \
+            --raw-field body="Dependency build failed for ${{ github.sha }}:\n\`\`\`\n$(tail -n 180 /tmp/build-deps.log 2>/dev/null || echo 'no dependency log')\n\`\`\`" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-deps-${{ matrix.abi }}
+          path: |
+            deps-out/${{ matrix.abi }}/lib/*.so
+            deps-out/${{ matrix.abi }}/lib/*.a
+            deps-out/${{ matrix.abi }}/lib/protodroid-sdl2-version.txt
+            deps-out/${{ matrix.abi }}/include
+          retention-days: 14
+
+  driver-package-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test staged driver imports, rollback, and pinned catalog packages
+        env:
+          DRIVER_CATALOG_ONLINE: '1'
+        run: android/test-driver-package.sh
+
+  build-turnip:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Turnip and AdrenoTools
+        id: cache-turnip
+        uses: actions/cache@v4
+        with:
+          path: turnip-out
+          key: android-turnip-gen8-v1-${{ hashFiles('android/build-turnip.sh', 'android/patches/turnip-gen8/**') }}
+
+      - name: Install Turnip build tools
+        if: steps.cache-turnip.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools bison flex python3-pip
+          pip3 install --user --break-system-packages meson==1.5.2 mako pyyaml packaging
+
+      - name: Build stable, next, and patched A825 Gen8 Turnip
+        if: steps.cache-turnip.outputs.cache-hit != 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        run: |
+          set -euo pipefail
+          export PATH=$HOME/.local/bin:$PATH
+          android/build-turnip.sh /tmp/protodroid-turnip-src turnip-out
+          for library in libvulkan_freedreno.so libvulkan_freedreno_next.so libvulkan_freedreno_gen8.so libadrenotools.a; do
+            test -s "turnip-out/lib/$library"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-turnip-arm64-v8a
+          path: |
+            turnip-out/lib
+            turnip-out/include
+          retention-days: 14
+
+  build-apk:
+    runs-on: ubuntu-24.04
+    needs: [build-deps, build-turnip, bink-tests, arm64-graphics-tests, driver-package-tests]
+    env:
+      SOURCE_REVISION: ${{ github.sha }}
+      PUBLISH_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release == true) }}
+      ALLOW_EPHEMERAL_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.allow_ephemeral_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_ephemeral_release == true) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip p7zip-full unzip
+          pip3 install --user --break-system-packages meson==1.5.2 capstone pefile
+          echo "SDK: $ANDROID_SDK_ROOT $ANDROID_HOME"
+          echo "NDK: $ANDROID_NDK_LATEST_HOME"
+          ls $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt 2>&1 | head
+          ls $ANDROID_SDK_ROOT/build-tools 2>&1 | head -n 20
+          ls $ANDROID_SDK_ROOT/platforms 2>&1 | head -n 20
+          # Ensure build-tools 35 is available; if 36 requested earlier but missing, use latest available
+          if [ ! -d \"$ANDROID_SDK_ROOT/build-tools/36.0.0\" ] && [ -d \"$ANDROID_SDK_ROOT/build-tools/35.0.0\" ]; then
+            echo \"build-tools 36.0.0 not found, using 35.0.0\"
+            sudo ln -sf $ANDROID_SDK_ROOT/build-tools/35.0.0 $ANDROID_SDK_ROOT/build-tools/36.0.0 || true
+          fi
+          if [ ! -f \"$ANDROID_SDK_ROOT/platforms/android-35/android.jar\" ] && [ -f \"$ANDROID_SDK_ROOT/platforms/android-34/android.jar\" ]; then
+            echo \"platform android-35 not found, using 34\"
+            sudo ln -sf $ANDROID_SDK_ROOT/platforms/android-34 $ANDROID_SDK_ROOT/platforms/android-35 || true
+          fi
+
+      - name: Download deps artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-deps-arm64-v8a
+          path: deps-out/arm64-v8a
+
+      - name: Download Turnip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-turnip-arm64-v8a
+          path: turnip-out
+
+      - name: Prepare deps layout
+        run: |
+          mkdir -p $HOME/protodroid-data/android-deps/arm64-v8a
+          cp -r deps-out/arm64-v8a/* $HOME/protodroid-data/android-deps/arm64-v8a/ || true
+          for archive in libavformat.a libavcodec.a libavutil.a libswresample.a; do
+            test -s "$HOME/protodroid-data/android-deps/arm64-v8a/lib/$archive"
+          done
+          test -s "$HOME/protodroid-data/android-deps/arm64-v8a/lib/protodroid-sdl2-version.txt"
+          mkdir -p $HOME/protodroid-data/android-turnip
+          cp -r turnip-out/* $HOME/protodroid-data/android-turnip/
+          for library in libvulkan_freedreno.so libvulkan_freedreno_next.so libvulkan_freedreno_gen8.so libadrenotools.a; do
+            test -s "$HOME/protodroid-data/android-turnip/lib/$library"
+          done
+          mkdir -p $HOME/protodroid-data/android-deps-src/SDL2
+          # SDL src was used in build-apk.sh for Java, we keep minimal
+          ls -R deps-out || true
+          ls -R $HOME/protodroid-data/android-deps || true
+
+      - name: Fetch SDL2 source for Java
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/deps-src
+          git clone --depth 1 --branch release-2.30.9 https://github.com/libsdl-org/SDL.git /tmp/deps-src/SDL2
+          mkdir -p $HOME/protodroid-data/android-deps-src
+          cp -r /tmp/deps-src/SDL2 $HOME/protodroid-data/android-deps-src/
+
+      - name: Compile Android Java sources early
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/protodroid-java-classes
+          mkdir -p /tmp/protodroid-java-classes
+          SDL2_VERSION=$(python3 tools/sdl_version.py pin android/build-deps.sh)
+          python3 tools/sdl_version.py source "$HOME/protodroid-data/android-deps-src/SDL2" "$SDL2_VERSION"
+          javac --release 11 -nowarn -cp "$ANDROID_SDK_ROOT/platforms/android-35/android.jar" \
+            -d /tmp/protodroid-java-classes \
+            "$HOME"/protodroid-data/android-deps-src/SDL2/android-project/app/src/main/java/org/libsdl/app/*.java \
+            android/java/com/protodroid/*.java
+          javap -classpath /tmp/protodroid-java-classes -private -verbose org.libsdl.app.SDLActivity \
+            > /tmp/protodroid-SDLActivity.javap
+          python3 tools/sdl_version.py verify-class /tmp/protodroid-SDLActivity.javap "$SDL2_VERSION"
+
+      - name: Discover binary assets and prepare libmain.so
+        id: discover
+        run: |
+          set -euo pipefail
+          ROOT=$(pwd)
+          echo "=== Checking for prototypeenginef.dll ==="
+          if [ -f "prototypeenginef.dll" ]; then
+            echo "Found prototypeenginef.dll in repo root: $(ls -lh prototypeenginef.dll)"
+            DLL_PATH="$ROOT/prototypeenginef.dll"
+          elif [ -f "prototypeenginef.zip" ]; then
+            echo "Found prototypeenginef.zip, extracting"
+            7z x prototypeenginef.zip -o/tmp
+            DLL_PATH=$(find /tmp -name "prototypeenginef.dll" | head -n1)
+          else
+            echo "No DLL in repo root, checking GitHub releases..."
+            if gh release list --repo ${{ github.repository }} 2>/dev/null | grep -q "prototype.apk"; then
+              echo "Found release with APK, downloading"
+              gh release download --repo ${{ github.repository }} --pattern "prototype.apk" --dir /tmp || true
+            fi
+            # Check split archives
+            if [ -f "prototype.zip.001" ]; then
+              echo "Found split archives prototype.zip.001, recombining"
+              cat prototype.zip.* > prototype.zip
+              7z x prototype.zip -o/tmp
+            fi
+            if [ -f "prototype.apk.001" ]; then
+              echo "Found split APK archives, recombining"
+              cat prototype.apk.* > prototype.apk
+            fi
+            if [ -f "/tmp/prototype.apk" ] || [ -f "prototype.apk" ]; then
+              APK=$(ls /tmp/prototype.apk 2>/dev/null || ls prototype.apk 2>/dev/null | head -n1)
+              echo "Extracting libmain.so from $APK"
+              mkdir -p /tmp/apk-extract
+              unzip -q "$APK" "lib/arm64-v8a/libmain.so" -d /tmp/apk-extract || true
+              if [ -f "/tmp/apk-extract/lib/arm64-v8a/libmain.so" ]; then
+                echo "Extracted libmain.so from APK, will reuse"
+                mkdir -p build/android/arm64-v8a
+                cp /tmp/apk-extract/lib/arm64-v8a/libmain.so build/android/arm64-v8a/libmain.so
+                # Also extract other libs for reference but we will rebuild dxvk etc.
+                echo "HAS_LIBMAIN_FROM_APK=1" >> $GITHUB_ENV
+              else
+                echo "Failed to extract libmain.so from APK"
+              fi
+            fi
+            # If still no DLL and no APK, fail
+            if [ ! -f "build/android/arm64-v8a/libmain.so" ]; then
+              echo "ERROR: No prototypeenginef.dll and no prebuilt APK found - cannot build libmain.so"
+              echo "Provide prototypeenginef.dll (or .zip) in repo root, or upload prototype.apk to releases, or split archives"
+              exit 1
+            fi
+            DLL_PATH=""
+          fi
+
+          if [ -n "${DLL_PATH:-}" ]; then
+            echo "DLL_PATH=$DLL_PATH" >> $GITHUB_ENV
+            echo "HAS_DLL=1" >> $GITHUB_ENV
+            # Verify DLL size (Steam build 19788432 = 19.26 MB)
+            ls -lh "$DLL_PATH"
+            echo "DLL found, will compile via recomp.py"
+          else
+            echo "Using prebuilt libmain.so from APK"
+            echo "HAS_DLL=0" >> $GITHUB_ENV
+          fi
+
+          # Also check for split archives in repo root for completeness
+          ls -lh *.dll *.zip *.apk 2>&1 | head -n 20 || true
+
+      - name: List recomp before cache
+        run: |
+          echo "=== before cache ==="
+          ls -lh build/recomp/native 2>&1 | head -n 40
+          echo "count $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          test -f build/recomp/native/table.c && echo "table.c exists" || echo "table.c MISSING"
+
+      - name: Cache recomp output
+        uses: actions/cache@v4
+        id: cache-recomp
+        with:
+          path: build/recomp/native
+          key: recomp-${{ hashFiles('re/functions.csv', 're/extra_functions.txt', 'tools/recomp/recomp.py', 'tools/recomp/data_entries.py', 'tools/patch_native_recomp.py') }}-${{ hashFiles('prototypeenginef.dll') }}
+
+      - name: List recomp after cache
+        run: |
+          echo "=== after cache ==="
+          ls -lh build/recomp/native 2>&1 | head -n 40
+          echo "count $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          test -f build/recomp/native/table.c && echo "table.c exists" || echo "table.c MISSING - will generate"
+
+      - name: Recompile engine (recomp.py) if DLL present
+        if: env.HAS_DLL == '1' && steps.cache-recomp.outputs.cache-hit != 'true' && hashFiles('build/recomp/native/table.c') == ''
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          export PATH=$HOME/.local/bin:$PATH
+          if [ -f build/recomp/native/table.c ]; then
+            echo "recomp output already present (committed), skipping generation"
+            ls -lh build/recomp/native | head -n 20
+            echo "files $(ls build/recomp/native/*.c | wc -l) bytes $(du -sh build/recomp/native | cut -f1)"
+            exit 0
+          fi
+          echo "Building recompiled sources from $DLL_PATH"
+          mkdir -p build/recomp/native
+          ls -lh re/functions.csv re/extra_functions.txt || true
+          python3 -c "import capstone, pefile; print('capstone', capstone.__version__)"
+          timeout 600 bash -c 'PROTODROID_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
+          cat /tmp/recomp.log | tail -n 100
+          test -f /tmp/recomp_exit && cat /tmp/recomp_exit
+          if [ "$(awk '{print $2}' /tmp/recomp_exit)" != "0" ]; then
+            echo "recomp failed, log:"
+            cat /tmp/recomp.log
+            exit 1
+          fi
+          ls -lh build/recomp/native | head -n 40
+          echo "Recompilation done, files $(ls build/recomp/native | wc -l) bytes $(du -sh build/recomp/native | cut -f1)"
+          df -h | head -n 20
+          free -h | head -n 20
+
+      - name: Verify recomp cache (fallback)
+        if: env.HAS_DLL == '1'
+        run: |
+          ls -lh build/recomp/native | head -n 20
+          echo "recomp files: $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          if [ ! -f build/recomp/native/table.c ]; then
+            echo "ERROR: table.c missing - recomp failed and no cache"
+            cat /tmp/recomp.log 2>&1 | tail -n 100 || true
+            exit 1
+          fi
+
+      - name: Apply optional native feature policies
+        if: env.HAS_DLL == '1'
+        run: python3 tools/patch_native_recomp.py build/recomp/native
+
+      - name: Verify generated video-setting hooks
+        if: env.HAS_DLL == '1'
+        run: python3 tools/recomp/verify_video_hooks.py build/recomp/native
+
+      - name: Build libmain.so from source (Android arm64-v8a)
+        if: env.HAS_DLL == '1'
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          DEPS: ${{ env.HOME }}/protodroid-data/android-deps/arm64-v8a
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          export PATH=$HOME/.local/bin:$PATH
+          if [ ! -d "/tmp/deps-src/dxvk/include/native/directx/d3d9.h" ]; then
+            echo "Cloning DXVK v2.5.3..."
+            rm -rf /tmp/deps-src/dxvk
+            mkdir -p /tmp/deps-src
+            git clone -q --depth 1 --branch v2.5.3 --recurse-submodules --shallow-submodules https://github.com/doitsujin/dxvk.git /tmp/deps-src/dxvk
+            echo "DXVK clone done"
+            ls -lh /tmp/deps-src/dxvk/include/native/directx/d3d9.h || (echo "DXVK headers still missing!" && exit 1)
+          fi
+          DXVK_SRC="/tmp/deps-src/dxvk"
+          echo "=== DXVK headers ==="
+          ls -la $DXVK_SRC/include/native/directx/d3d9.h 2>&1 | head || true
+          echo "=== NDK ==="
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "ANDROID_NDK_LATEST_HOME=$ANDROID_NDK_LATEST_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          env | grep -i ndk || true
+          ls -ld "$ANDROID_NDK_HOME" 2>&1 | head || true
+          ls -ld "$ANDROID_NDK_LATEST_HOME" 2>&1 | head || true
+          ls -ld "$ANDROID_HOME/ndk" 2>&1 | head || true
+          ls -ld "$HOME/Android" 2>&1 | head || true
+          ls "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" 2>&1 | head || true
+          ls "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" 2>&1 | head || true
+          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++ --version 2>&1 | head || true
+          $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++ --version 2>&1 | head || true
+          echo "Effective NDK for make: ${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
+          echo "=== DEPS ==="
+          ls -lh "$HOME/protodroid-data/android-deps/arm64-v8a/lib/" 2>&1 | head -n 20 || true
+          ls -lh "$HOME/protodroid-data/android-deps/arm64-v8a/include/SDL2/SDL.h" 2>&1 | head || true
+          echo "=== RECOMP ==="
+          ls -lh build/recomp/native/table.c 2>&1 | head || true
+          echo "recomp files: $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          du -sh build/recomp/native 2>&1 | head || true
+          free -h 2>&1 | head || true
+          df -h 2>&1 | head -n 10 || true
+          echo "=== main.cpp check ==="
+          git log --oneline -1 2>&1 | head || true
+          grep -n 'fscanf.*pages\|main thread pinned\|MirrorInit(base)' src/native/main.cpp 2>&1 | head -n 20 || true
+          echo "=== main.cpp hex check for 312 ==="
+          sed -n '312p' src/native/main.cpp 2>&1 | od -An -tx1 | head || true
+          EFFECTIVE_NDK="${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
+          if [ -z "$EFFECTIVE_NDK" ]; then EFFECTIVE_NDK="$ANDROID_HOME/ndk/28.2.13676358"; fi
+          echo "Using NDK=$EFFECTIVE_NDK for make"
+          ls -ld "$EFFECTIVE_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" 2>&1 | head || true
+          echo "::group::Make libmain.so (single job for memory)"
+          # Do not use pipefail for this block - capture exit code manually
+          set +e
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/protodroid-data/android-deps/arm64-v8a" -j1 V=1 > /tmp/make.log 2>&1
+          MAKE_EXIT=$?
+          set -e
+          echo "make exit $MAKE_EXIT"
+          cat /tmp/make.log | tail -n 200 || true
+          echo "=== Full make.log size $(wc -l /tmp/make.log 2>&1) ===" || true
+          ls -lh /tmp/make.log 2>&1 || true
+          cp /tmp/make.log ./make.log 2>&1 || true
+          ls -lh ./make.log 2>&1 || true
+          if [ "$MAKE_EXIT" != "0" ]; then
+            echo "::error::MAKE FAILED with $MAKE_EXIT - posting to issue 1"
+            # Log artifacts and issue posting may be unavailable to read-only consumers. Keep the actual compiler
+            # diagnostics in check annotations as well, rather than exposing only a generic make exit code.
+            python3 -c 'from pathlib import Path; lines = Path("/tmp/make.log").read_text(errors="replace").splitlines(); markers = ("error:", "fatal error:", "undefined reference", "No such file"); selected = [line for line in lines if any(marker in line for marker in markers)] or lines[-40:]; print("\n".join("::error::native build: " + line[:1800].replace("%", "%25").replace("\r", "%0D") for line in selected[-40:]))'
+            echo "GH_TOKEN len ${#GH_TOKEN}"
+            which gh 2>&1 | head || true
+            # Post via curl (more reliable than gh in this shell)
+            TAIL=$(tail -n 150 /tmp/make.log 2>&1 | head -c 7500 | sed 's/"/\\"/g' | tr -d '\r')
+            curl -s -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/Nazatric/ProtoDroid/issues/1/comments \
+              -d "{\"body\":\"🔍 **MAKE FAILED $MAKE_EXIT**\\n\\\`\\\`\\\`\\n$TAIL\\n\\\`\\\`\\\`\"}" 2>&1 | head || true
+            gh api repos/Nazatric/ProtoDroid/issues/1/comments -f body="🔍 MAKE FAILED $MAKE_EXIT tail 150:\n\`\`\`$(tail -n 150 /tmp/make.log 2>&1 | head -c 7000)\n\`\`\`" 2>&1 | head || true
+            echo "=== grep error ==="
+            grep -n "error:\|fatal error\|No such file" /tmp/make.log 2>&1 | head -n 100 || true
+            # post grep too
+            GREP=$(grep -n "error:" /tmp/make.log 2>&1 | head -n 50 | head -c 6000 | sed 's/"/\\"/g' | tr -d '\r')
+            curl -s -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/Nazatric/ProtoDroid/issues/1/comments -d "{\"body\":\"🔍 **GREP error**\n\`\`\`\n$GREP\n\`\`\`\"}" 2>&1 | head || true
+            exit $MAKE_EXIT
+          fi
+          echo "::endgroup::"
+          ls -lh build/android/arm64-v8a/libmain.so 2>&1 || echo "libmain.so MISSING after make!"
+          du -sh build/android/arm64-v8a/ 2>&1 || true
+          echo "=== check build output ==="
+          ls -lh build/android/ 2>&1 || true
+          ls -lh build/android/arm64-v8a/ 2>&1 || true
+          if [ ! -f build/android/arm64-v8a/libmain.so ]; then
+            echo "::error::libmain.so not created despite make exit 0 - dumping make.log"
+            cat /tmp/make.log 2>&1 | tail -n 500 || true
+            wc -l /tmp/make.log 2>&1 || true
+            # also check for OOM
+            dmesg 2>&1 | tail -n 50 || true
+            exit 1
+          fi
+          echo "::group::Make v80 variant"
+          set +e
+          make -C src/native PLATFORM=android ABI=arm64-v8a ARM_ARCH=armv8-a OUT=../../build/android/arm64-v8a-v80 RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/protodroid-data/android-deps/arm64-v8a" -j1 > /tmp/make_v80.log 2>&1
+          V80_EXIT=$?
+          set -e
+          echo "v80 make exit $V80_EXIT"
+          cat /tmp/make_v80.log | tail -n 50 || true
+          cp /tmp/make_v80.log ./make_v80.log || true
+          echo "::endgroup::"
+          ls -lh build/android/arm64-v8a*/libmain*.so || true
+          mkdir -p build/symbols
+          cp build/android/arm64-v8a/libmain.so build/symbols/libmain.so.unstripped || true
+          cp build/android/arm64-v8a-v80/libmain.so build/symbols/libmain_v80.so.unstripped || true
+          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libdxvk_d3d9.so build/symbols/libdxvk_d3d9.so.unstripped || true
+          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libSDL2.so build/symbols/libSDL2.so.unstripped || true
+          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/libFAudio.so build/symbols/libFAudio.so.unstripped || true
+          ls -lh build/symbols/
+          du -sh build/symbols/
+          for LIB in build/android/arm64-v8a/libmain.so build/android/arm64-v8a-v80/libmain.so; do
+            if ! grep -a -q "$SOURCE_REVISION" "$LIB"; then
+              echo "ERROR: $LIB does not contain the exact source revision $SOURCE_REVISION"
+              exit 1
+            fi
+          done
+          printf 'nativeBuild=compiled\nsourceRevision=%s\n' "$SOURCE_REVISION" > build/native-build.txt
+
+      - name: Build source ARM64 plugin and Lua examples
+        if: env.HAS_DLL == '1'
+        run: |
+          set -euo pipefail
+          modding/example/build-package.sh "$PWD/build/mod-example"
+          TOOLS="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "$TOOLS/llvm-readelf" -h build/mod-example/libprotodroid_example.so | grep -E 'Class:|Machine:|Type:'
+          "$TOOLS/llvm-readelf" -h build/mod-example/libprotodroid_example.so | grep -q 'AArch64'
+          "$TOOLS/llvm-nm" -D build/mod-example/libprotodroid_example.so | grep -q 'ProtoDroidPluginInit'
+          unzip -l build/protodroid-example-arm64.zip
+          modding/script-example/build-package.sh
+          unzip -l build/protodroid-script-example.zip
+
+      - name: Upload make logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: make-logs
+          path: |
+            /tmp/make.log
+            /tmp/make_v80.log
+            ./make.log
+            ./make_v80.log
+            /tmp/dxvk-addr2line.txt
+            /tmp/dxvk-nm.txt
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Post make log via github-script
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const log = fs.readFileSync('/tmp/make.log', 'utf8');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: 1,
+                body: "🔍 **Build libmain.so FAILED – tail 500**\n```\n" + log.slice(-9000) + "\n```"
+              });
+            } catch(e) {
+              console.log("No make.log: " + e);
+            }
+
+      - name: Prepare prebuilt libmain.so symbols if DLL not present
+        if: env.HAS_DLL == '0'
+        run: |
+          set -euo pipefail
+          mkdir -p build/symbols
+          cp build/android/arm64-v8a/libmain.so build/symbols/libmain.so.unstripped || true
+          # For DXVK etc, we already have deps-out symbols
+          cp $HOME/protodroid-data/android-deps/arm64-v8a/lib/*.so build/symbols/ || true
+          ls -lh build/symbols/
+          # Now rebuild libmain.so with patched DXVK? Actually we will still need to rebuild libdxvk_d3d9.so with patch
+          # But we already have deps built with patched DXVK (via build-deps)
+          echo "Using prebuilt libmain.so, but deps are rebuilt with Mali fix"
+          printf 'nativeBuild=prebuilt\nsourceRevision=unknown\n' > build/native-build.txt
+
+      - name: DXVK symbolization diagnostics
+        run: |
+          set -euo pipefail
+          TOOLS="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          LIB=build/symbols/libdxvk_d3d9.so.unstripped
+          test -s "$LIB"
+          echo "Symbolizing $LIB"
+          sha256sum "$LIB"
+          # Keep the offsets from the physical Mali report with the matching
+          # unstripped library in CI logs for post-mortem comparisons.
+          "$TOOLS/llvm-addr2line" -f -C -i -e "$LIB" \
+            0x237268 0x236bd4 0x143ac8 0x1d8bd4 0x1d8fcc | tee /tmp/dxvk-addr2line.txt
+          "$TOOLS/llvm-nm" -D "$LIB" | tee /tmp/dxvk-nm.txt
+
+      - name: Setup protected release signing identity
+        if: github.ref == 'refs/heads/main' && env.PUBLISH_RELEASE == 'true' && env.ALLOW_EPHEMERAL_RELEASE != 'true'
+        env:
+          KEYSTORE_B64: ${{ secrets.PROTODROID_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.PROTODROID_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.PROTODROID_ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.PROTODROID_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for value in "$KEYSTORE_B64" "$KEYSTORE_PASS" "$KEY_ALIAS" "$KEY_PASS"; do
+            if [ -z "$value" ]; then
+              echo "::error::A release requires all four protected PROTODROID_ANDROID_* signing secrets"
+              exit 1
+            fi
+          done
+          for value in "$KEYSTORE_PASS" "$KEY_ALIAS" "$KEY_PASS"; do
+            case "$value" in *$'\n'*|*$'\r'*)
+              echo "::error::Signing passwords and aliases must be single-line secrets"
+              exit 1
+            ;; esac
+          done
+          KEYSTORE=/tmp/protodroid-release.keystore
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$KEYSTORE"
+          test -s "$KEYSTORE"
+          chmod 600 "$KEYSTORE"
+          {
+            echo "KEYSTORE=$KEYSTORE"
+            echo "KEYSTORE_PASS=$KEYSTORE_PASS"
+            echo "KEY_ALIAS=$KEY_ALIAS"
+            echo "KEY_PASS=$KEY_PASS"
+            echo "SIGNING_IDENTITY=persistent"
+          } >> "$GITHUB_ENV"
+          echo "Using the protected persistent release signing identity"
+          ls -lh "$KEYSTORE"
+
+      - name: Setup disposable CI signing identity
+        if: github.ref != 'refs/heads/main' || env.PUBLISH_RELEASE != 'true' || env.ALLOW_EPHEMERAL_RELEASE == 'true'
+        run: |
+          set -euo pipefail
+          # Random non-default credentials exercise the generic apksigner path without making artifacts update-stable.
+          KEYSTORE=/tmp/protodroid-ci.keystore
+          STORE_PASS=$(openssl rand -hex 24)
+          KEY_PASS=$STORE_PASS
+          echo "::add-mask::$STORE_PASS"
+          echo "::add-mask::$KEY_PASS"
+          keytool -genkey -v -keystore "$KEYSTORE" -storepass "$STORE_PASS" -alias protodroid-ci \
+            -keypass "$KEY_PASS" -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=ProtoDroid CI,O=ProtoDroid,C=US"
+          chmod 600 "$KEYSTORE"
+          {
+            echo "KEYSTORE=$KEYSTORE"
+            echo "KEYSTORE_PASS=$STORE_PASS"
+            echo "KEY_ALIAS=protodroid-ci"
+            echo "KEY_PASS=$KEY_PASS"
+            echo "SIGNING_IDENTITY=ephemeral"
+          } >> "$GITHUB_ENV"
+          echo "Using a disposable CI signing identity; this artifact is not release-eligible"
+          ls -lh "$KEYSTORE"
+
+      - name: Build APK (package + sign)
+        id: package
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+          BUILD_TOOLS: ${{ env.ANDROID_SDK_ROOT }}/build-tools/36.0.0
+          PLATFORM_JAR: ${{ env.ANDROID_SDK_ROOT }}/platforms/android-35/android.jar
+        run: |
+          set -euo pipefail
+          echo "Building APK..."
+          # Ensure deps are in expected location for build-apk.sh
+          mkdir -p $HOME/protodroid-data/android-deps/arm64-v8a
+          # build-apk.sh expects DEPS_ROOT/$ABI/lib/*.so
+          # We already have deps-out/arm64-v8a -> copy to DEPS_ROOT if needed
+          if [ -d "deps-out/arm64-v8a" ]; then
+            mkdir -p $HOME/protodroid-data/android-deps/arm64-v8a/lib
+            cp deps-out/arm64-v8a/lib/*.so $HOME/protodroid-data/android-deps/arm64-v8a/lib/ || true
+          fi
+          ls -lh $HOME/protodroid-data/android-deps/arm64-v8a/lib/ || true
+          ls -lh build/android/arm64-v8a/libmain.so || true
+
+          # Use SDL src from earlier
+          export SDL_SRC=$HOME/protodroid-data/android-deps-src/SDL2
+          export DEPS_ROOT=$HOME/protodroid-data/android-deps
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export BUILD_TOOLS=$ANDROID_SDK_ROOT/build-tools/36.0.0
+          export PLATFORM_JAR=$ANDROID_SDK_ROOT/platforms/android-35/android.jar
+
+          bash android/build-apk.sh arm64-v8a 2>&1 | tee /tmp/protodroid-apk-build.log
+          ls -lh build/apk/prototype.apk
+          # Keep unstripped symbols before they were stripped for APK
+          mkdir -p build/apk/symbols
+          cp build/symbols/*.unstripped build/apk/symbols/ 2>/dev/null || true
+          cp build/android/arm64-v8a/libmain.so build/apk/symbols/libmain.so.stripped_for_apk || true
+          ls -lh build/apk/ build/apk/symbols/ || true
+
+      - name: Report APK packaging failure
+        if: failure() && steps.package.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const log = fs.readFileSync('/tmp/protodroid-apk-build.log', 'utf8');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: 1,
+                body: "APK packaging failed for `" + context.sha + "`:\n```text\n" + log.slice(-12000) + "\n```"
+              });
+            } catch(e) {
+              console.log("No APK packaging log: " + e);
+            }
+
+      - name: Verify APK and embedded Android DXVK
+        if: always()
+        run: |
+          set -euo pipefail
+          APK=build/apk/prototype.apk
+          test -s "$APK"
+          ls -lh "$APK"
+          unzip -l "$APK" | grep -E 'libSDL2|libFAudio|libdxvk|libmain'
+          TOOLS="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          rm -rf /tmp/protodroid-apk-check
+          mkdir -p /tmp/protodroid-apk-check
+          unzip -q "$APK" 'lib/arm64-v8a/libdxvk_d3d9.so' 'lib/arm64-v8a/libSDL2.so' 'lib/arm64-v8a/libmain.so' -d /tmp/protodroid-apk-check
+          DXVK=/tmp/protodroid-apk-check/lib/arm64-v8a/libdxvk_d3d9.so
+          SDL=/tmp/protodroid-apk-check/lib/arm64-v8a/libSDL2.so
+          MAIN=/tmp/protodroid-apk-check/lib/arm64-v8a/libmain.so
+          test "$(stat -c%s "$MAIN")" -gt 100000
+          source build/apk/native-build.txt
+          test "$nativeBuild" = compiled
+          test "$sourceRevision" = "$SOURCE_REVISION"
+          $TOOLS/llvm-readelf -d "$MAIN" | tee /tmp/libmain-dynamic.txt
+          ! grep -E 'libav(format|codec|util)|libswresample' /tmp/libmain-dynamic.txt
+          MAIN_STRINGS=$($TOOLS/llvm-strings "$MAIN")
+          printf '%s\n' "$MAIN_STRINGS" | grep -Fx "$SOURCE_REVISION"
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'vulkan: Adreno 825: trying the A8xx Turnip build'
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'DXVK found no compatible Vulkan GPU'
+          $TOOLS/llvm-nm -D "$MAIN" | grep -E ' [A-Za-z] protodroid_device_api_level$'
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'binkw32.dll'
+          printf '%s\n' "$MAIN_STRINGS" | grep -F 'unlock_menu_fps'
+          STRINGS=$($TOOLS/llvm-strings "$DXVK")
+          printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2.so'
+          ! printf '%s\n' "$STRINGS" | grep -Fx 'libSDL2-2.0.so.0'
+          printf '%s\n' "$STRINGS" | grep -F 'vkCreateAndroidSurfaceKHR'
+          for marker in \
+            '/storage/emulated/0/Prototype/logs' \
+            'pipeline_trace.log' \
+            'last_vs.spv' \
+            'last_fs.spv' \
+            'PROTODROID_PIPELINE_TRACE' \
+            'PROTODROID_PIPELINE_TRACE_DIR' \
+            'pre-created dummy sampler, buffer, and all 14 image views' \
+            'dummy image GPU initialization complete' \
+            'Disabling maintenance5, EDS3' \
+            'Unmapped descriptor binding' \
+            'prototypeenginef.dll'; do
+            printf '%s\n' "$STRINGS" | grep -F "$marker"
+          done
+          for sym in SDL_GetWindowWMInfo SDL_Vulkan_LoadLibrary SDL_Vulkan_GetInstanceExtensions SDL_Vulkan_CreateSurface SDL_GetError; do
+            $TOOLS/llvm-nm -D "$SDL" | grep -E " [A-Za-z] ${sym}$"
+          done
+          $ANDROID_SDK_ROOT/build-tools/36.0.0/aapt2 dump badging "$APK" > /tmp/protodroid-badging.txt
+          head -n 20 /tmp/protodroid-badging.txt
+          source build/apk/version.txt
+          source build/apk/package.txt
+          test "$apkBytes" = "$(stat -c%s "$APK")"
+          test "$apkSha256" = "$(sha256sum "$APK" | awk '{print $1}')"
+          grep -F "package: name='com.protodroid' versionCode='$versionCode' versionName='$versionName'" \
+            /tmp/protodroid-badging.txt
+          echo "Verified signed package: com.protodroid $versionName (versionCode $versionCode), $apkBytes bytes, SHA-256 $apkSha256"
+
+      - name: Upload source-built mod example
+        if: success() && env.HAS_DLL == '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: protodroid-mod-example
+          path: |
+            build/protodroid-example-arm64.zip
+            build/protodroid-script-example.zip
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload APK artifact
+        # Never upload a dummy, prebuilt, unverified, or wrong-revision APK after a failed build/verification step.
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prototype-apk
+          path: |
+            build/apk/prototype.apk
+            build/apk/version.txt
+            build/apk/signing.txt
+            build/apk/native-build.txt
+            build/apk/package.txt
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload debug symbols
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-symbols
+          path: |
+            build/symbols/*.unstripped
+            build/apk/symbols/*
+          retention-days: 30
+          if-no-files-found: warn
+
+  # Ordinary pushes (including log-only uploads to main) never publish. A release requires an explicitly approved
+  # dispatch on main after all host tests and the real ARM64 build have passed for this exact commit.
+  release:
+    runs-on: ubuntu-24.04
+    needs: build-apk
+    if: >
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
+      (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release == true))
+    steps:
+      - name: Check out release notes
+        uses: actions/checkout@v4
+
+      - name: Download verified APK
+        uses: actions/download-artifact@v4
+        with:
+          name: prototype-apk
+          path: release-apk
+
+      - name: Verify this is a new sequential release version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ALLOW_EPHEMERAL: ${{ (github.event_name == 'workflow_dispatch' && inputs.allow_ephemeral_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_ephemeral_release == true) }}
+          ALLOW_CERTIFICATE_CHANGE: ${{ (github.event_name == 'workflow_dispatch' && inputs.allow_certificate_change) || (github.event_name == 'repository_dispatch' && github.event.client_payload.allow_certificate_change == true) }}
+        run: |
+          set -euo pipefail
+          test -s release-apk/prototype.apk
+          source release-apk/version.txt
+          source release-apk/signing.txt
+          source release-apk/native-build.txt
+          if [ "$identity" != "persistent" ]; then
+            if [ "$ALLOW_EPHEMERAL" != "true" ] || [ "$identity" != "ephemeral" ]; then
+              echo "::error::Release APK is not signed with the protected persistent identity"
+              exit 1
+            fi
+            echo "::warning::Publishing with the explicitly approved disposable CI signing identity"
+          fi
+          if [ "$nativeBuild" != "compiled" ]; then
+            echo "::error::Release APK does not contain native code compiled from this exact commit"
+            exit 1
+          fi
+          if [ "${sourceRevision:-}" != "$GITHUB_SHA" ]; then
+            echo "::error::Release APK source revision ${sourceRevision:-missing} does not match $GITHUB_SHA"
+            exit 1
+          fi
+          if ! printf '%s' "$certificateSha256" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "::error::Release APK certificate digest is invalid"
+            exit 1
+          fi
+          python3 - "$versionName" "$versionCode" <<'PY'
+          import re
+          import sys
+          if not re.fullmatch(r"[0-9]+\.[0-9]+", sys.argv[1]) or int(sys.argv[2]) < 1:
+              raise SystemExit("invalid verified APK version metadata")
+          PY
+          TAG="protodroid-v$versionName"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists. Run python3 tools/bump_version.py before the next approved release."
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/protodroid-releases.json
+          python3 tools/release_policy.py "$versionName" "$versionCode" "$certificateSha256" /tmp/protodroid-releases.json "$identity"
+
+          {
+            echo "RELEASE_TAG=$TAG"
+            echo "RELEASE_VERSION=$versionName"
+            echo "RELEASE_CODE=$versionCode"
+            echo "RELEASE_CERTIFICATE=$certificateSha256"
+            echo "RELEASE_IDENTITY=$identity"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare changelog and verification notes
+        run: |
+          set -euo pipefail
+          APK_SHA256=$(sha256sum release-apk/prototype.apk | awk '{print $1}')
+          python3 tools/release_notes.py "$RELEASE_VERSION" > release-notes.md
+          {
+            echo
+            echo "## Verification"
+            echo
+            echo "Version $RELEASE_VERSION (versionCode $RELEASE_CODE), built from exact main commit $GITHUB_SHA."
+            echo "Real ARM64 compilation, APK signing, and packaged verification passed in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+            echo
+            echo "APK SHA-256: \`$APK_SHA256\`"
+            echo "Signing certificate SHA-256: \`$RELEASE_CERTIFICATE\`"
+            echo
+            if [ "$RELEASE_IDENTITY" = "ephemeral" ]; then
+              echo "This release uses an explicitly approved disposable CI signing identity. Installing a later build with a different certificate will require a one-time uninstall."
+            else
+              echo "In-place updates require the same signing certificate."
+            fi
+            echo "A differently signed older installation needs a one-time uninstall; shared saves under /storage/emulated/0/Prototype remain separate."
+            echo
+            echo "Use protodroid.ini for configuration. CI does not replace physical-device testing."
+          } >> release-notes.md
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "ProtoDroid v$RELEASE_VERSION" --notes-file release-notes.md release-apk/prototype.apk
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url,tagName,assets

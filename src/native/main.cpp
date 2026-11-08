@@ -40,6 +40,7 @@
 #include "input.h"
 #include "mod_platform.h"
 #include "present_stats.h"
+#include "prime_affinity.h"
 #include "timing_window.h"
 #include "save_path.h"
 #include "state_cache.h"
@@ -498,6 +499,23 @@ int main(int argc, char** argv) {
                                      nullptr);
             return 1;
         }
+        // Seed the tour's cache from the shared backup before DXVK opens it. The tour otherwise starts cold:
+        // every pipeline compiles live during the tour (slow, and serialized on Mali), and the cache it
+        // produces only lists what one scripted scenario reaches. Seeding makes the tour's cache a superset —
+        // the backup's entries plus whatever new material the tour exercises — and normal play migrates that
+        // superset, so the tour can only add coverage, never lose it.
+        {
+            std::vector<std::string> tour_cache_sources = {"/storage/emulated/0/Prototype/logs",
+                                                            "/storage/emulated/0/Prototype"};
+            native::StateCacheMigration tour_seed =
+                native::PlanStateCacheMigration(diagnostic_cache_dir, tour_cache_sources);
+            if (!tour_seed.source.empty()) {
+                if (native::MigrateStateCache(tour_seed) == native::StateCacheMigrationResult::Migrated)
+                    Log("tour cache seeded from %s", tour_seed.source.c_str());
+                else
+                    Log("tour cache seeding from %s failed: %s", tour_seed.source.c_str(), strerror(errno));
+            }
+        }
         const std::string private_logs = std::string(base) + "/diagnostic-tour-logs";
         if (!native::EnsureDir(private_logs)) {
             native::DiagnosticTourFail("startup", "app-private tour log directory is not writable");
@@ -521,12 +539,27 @@ int main(int argc, char** argv) {
     const char* cache_dir = diagnostic_tour ? diagnostic_cache_dir.c_str() : base;
     std::string state_cache = native::StateCacheFile(cache_dir, native::kStateCacheFilename);
     if (!diagnostic_tour) {
-        native::StateCacheMigration cache_migration = native::PlanStateCacheMigration(
-            base, {"/storage/emulated/0/Prototype/logs", "/storage/emulated/0/Prototype"});
+        // The diagnostic tour builds a populated state cache in its private directory (app files, same GPU and
+        // driver as normal play). Seeding ordinary play from it removes the first-minutes pipeline-compile stalls;
+        // sources earlier in the list keep priority, and the tour itself never migrates or is modified.
+        std::vector<std::string> cache_sources = {"/storage/emulated/0/Prototype/logs",
+                                                  "/storage/emulated/0/Prototype"};
+        if (!diagnostic_cache_dir.empty() && diagnostic_cache_dir != base)
+            cache_sources.push_back(diagnostic_cache_dir);
+        native::StateCacheMigration cache_migration = native::PlanStateCacheMigration(base, cache_sources);
         if (!cache_migration.source.empty()) {
             native::StateCacheMigrationResult migrated = native::MigrateStateCache(cache_migration);
-            if (migrated == native::StateCacheMigrationResult::Migrated)
+            if (migrated == native::StateCacheMigrationResult::Migrated) {
                 Log("DXVK state cache restored from %s", cache_migration.source.c_str());
+                // The precompile flow (SetupActivity dialog) runs the tour once and relaunches normal play;
+                // seeding from the tour cache is that event. Mark it so the dialog is never offered again.
+                if (!diagnostic_cache_dir.empty() &&
+                    cache_migration.source.rfind(diagnostic_cache_dir, 0) == 0) {
+                    FILE* marker = fopen((std::string(base) + "/shader-precompile.done").c_str(), "w");
+                    if (marker) { fputs("seeded from the diagnostic tour cache\n", marker); fclose(marker); }
+                    Log("shader precompile complete; marker written");
+                }
+            }
             else
                 Log("DXVK state cache migration from %s failed: %s", cache_migration.source.c_str(), strerror(errno));
         }
@@ -683,6 +716,8 @@ int main(int argc, char** argv) {
     std::string present_config = getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "";
     if (!present_config.empty()) present_config += ";";
     present_config += "d3d9.presentInterval = 1";
+    // Mali depth-path insurance: render D3D9 D24S8 depth with D32F_S8 (upstream useD32forD24).
+    present_config += ";d3d9.useD32forD24 = True";
     setenv("DXVK_CONFIG", present_config.c_str(), 1);
     setenv("PROTODROID_PRESENT_FIFO", "1", 1);
     Log("present mode: FIFO (vsync), interval 1 for CreateDevice and Reset");
@@ -742,11 +777,24 @@ int main(int argc, char** argv) {
 
     // Apply last so stale user configuration cannot undo the official Prototype workaround. DXVK keys its own
     // profile to prototypef.exe, which never matches this native host process (app_process64 on Android).
+    int fps_limit = SettingInt("fps_limit", 0);
+    if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
     std::string dxvk_config = PrototypeDxvkConfig(getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "");
     dxvk_config = AaDxvkConfig(SettingInt("game_aa_level", kAaGameDefault), dxvk_config);
+    // Latency 1 serializes the CPU of frame N+1 behind the GPU of frame N, so a combat frame pays CPU+GPU and
+    // misses the 16.6 ms vblank twice over on a 120 Hz panel (measured: combat sits at 30-40 FPS). Two frames in
+    // flight overlap them: the frame rate becomes max(CPU, GPU) instead of CPU+GPU, at the cost of ~one frame of
+    // extra latency. The 6-image FIFO swapchain already exists; this is the piece that kept it from helping.
+    int dxvk_max_frame_latency = SettingInt("dxvk_max_frame_latency", 2);
+    if (dxvk_max_frame_latency < 0) dxvk_max_frame_latency = 0;
+    if (dxvk_max_frame_latency > 16) dxvk_max_frame_latency = 16;
+    dxvk_config = FramePacingDxvkConfig(dxvk_config, dxvk_max_frame_latency, fps_limit);
+    dxvk_config = DynamicBuffersDxvkConfig(dxvk_config, SettingInt("dxvk_cached_dynamic_buffers", 1));
     setenv("DXVK_CONFIG", dxvk_config.c_str(), 1);
     if (fxaa) Log("AA policy: DXVK forced swapchain MSAA override pinned to 0");
     Log("game profile: Prototype DF formats disabled for dynamic shadows and effects");
+    if (dxvk_max_frame_latency > 0) Log("frame pacing: DXVK maxFrameLatency %d%s", dxvk_max_frame_latency,
+                                        fps_limit > 0 ? "" : "; limiter follows the display refresh rate");
 
     // The game window: DXVK's native WSI takes the SDL window as HWND.
 #ifdef __ANDROID__
@@ -833,10 +881,96 @@ int main(int argc, char** argv) {
     }
     static std::atomic<uint64_t> frames{0};
     StartWatchdog(&frames);
-    int fps_limit = SettingInt("fps_limit", 0);
-    if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
+    // fps_limit (with battery_saver policy) was resolved before the DXVK_CONFIG environment was assembled, so
+    // DXVK's maxFrameRate matches the host limiter exactly.
     g_fps_limit.store(fps_limit);
-    PerfHintStart(fps_limit);
+    ApplyGuestThreadAffinity(SettingInt("affinity_mode", 1));  // opt-in; see prime_affinity.h
+    // ADPF must chase the panel the same way the limiter does: with fps_limit=0 the swap interval governs, so a
+    // 120 Hz display needs an 8.33 ms hint instead of the 60 Hz fallback baked into PerfHintStart.
+    int adpf_target = fps_limit;
+    if (adpf_target <= 0 && g_sdl_window) {
+        SDL_DisplayMode mode{};
+        int display = SDL_GetWindowDisplayIndex(g_sdl_window);
+        if (display >= 0 && SDL_GetCurrentDisplayMode(display, &mode) == 0 && mode.refresh_rate > 1)
+            adpf_target = mode.refresh_rate;
+    }
+    PerfHintStart(adpf_target);
+    // ---- adaptive display pacing ----
+    // With FIFO vsync and no limit, a frame that misses a vblank waits for the next one: on a 120 Hz panel an
+    // engine hovering between 8.3 and 16.7 ms lands on 2 or 3 vblanks and the visible rate wobbles between
+    // 120/60/40 (the reported "60+ but drops to 45, inconsistent"). When the engine's median frame cannot hold
+    // the full refresh rate but comfortably fits half of it, pacing frame starts to every other vblank makes
+    // every frame hit the same cadence: a flat 60 instead of 60/45 oscillation. The mode re-evaluates with
+    // hysteresis; the tour opts out (its 4x guest clock deliberately stresses the engine) and an explicit
+    // fps_limit disables this entirely — the user's own limit always wins.
+    class AdaptivePacer {
+    public:
+        void Configure(int refresh_hz, bool enabled) {
+            if (refresh_hz > 1 && refresh_hz < 1000) {
+                hz_ = refresh_hz;
+                refresh_ns_ = 1000000000LL / refresh_hz;
+            }
+            enabled_ = enabled && refresh_ns_ > 0;
+        }
+        void ObserveService(int64_t service_ns) {
+            if (!enabled_ || service_ns <= 0) return;
+            window_[count_ % kWindow] = service_ns;
+            if (count_ < kWindow) ++count_;
+            else count_ = 1;  // wrap while keeping the window full
+        }
+        // Returns nanoseconds to sleep before this frame (0 = unpaced); *adpf_hz receives the
+        // new performance-hint target on a mode change, or 0 when nothing changed.
+        int64_t PacePeriod(std::chrono::steady_clock::time_point now,
+                           std::chrono::steady_clock::time_point last_frame_start, int64_t* adpf_hz) {
+            if (!enabled_ || refresh_ns_ <= 0) return 0;
+            if (now < next_eval_) return period_ns_ > 0 ? SleepTarget(last_frame_start, now) : 0;
+            next_eval_ = now + std::chrono::milliseconds(1500);
+            if (count_ < kWindow) return 0;  // not enough samples yet
+            int64_t sorted[kWindow];
+            std::copy(window_, window_ + kWindow, sorted);
+            std::sort(sorted, sorted + kWindow);
+            const int64_t p50 = sorted[kWindow / 2];
+            const int64_t full = refresh_ns_;
+            const int64_t half = refresh_ns_ * 2;
+            int want = 0;  // 0 = full/unpaced, 2 = half rate
+            if (p50 > full * 58 / 100 && p50 <= half * 92 / 100) want = 2;
+            if (want == pending_mode_) {
+                if (want != mode_ && --pending_confirm_ <= 0) {
+                    mode_ = want;
+                    Log("frame pacing: engine p50 %.2f ms; pacing to %s", double(p50) / 1e6,
+                        mode_ == 2 ? "every other vblank" : "the display rate");
+                    if (adpf_hz) *adpf_hz = mode_ == 2 ? hz_ / 2 : hz_;
+                }
+            } else {
+                pending_mode_ = want;
+                pending_confirm_ = 2;  // two consecutive evaluations before switching
+            }
+            period_ns_ = mode_ == 2 ? half : 0;
+            return period_ns_ > 0 ? SleepTarget(last_frame_start, now) : 0;
+        }
+
+    private:
+        int64_t SleepTarget(std::chrono::steady_clock::time_point last_frame_start,
+                            std::chrono::steady_clock::time_point now) const {
+            constexpr int64_t kWakeMarginNs = 700000;  // scheduler wake-up slack before the vblank
+            const auto due = last_frame_start + std::chrono::nanoseconds(period_ns_ - kWakeMarginNs);
+            if (now >= due) return 0;
+            return std::chrono::duration_cast<std::chrono::nanoseconds>(due - now).count();
+        }
+        enum : int { kWindow = 24 };
+        int64_t window_[kWindow] = {};
+        int count_ = 0;
+        int hz_ = 0;
+        int64_t refresh_ns_ = 0;
+        int64_t period_ns_ = 0;
+        std::chrono::steady_clock::time_point next_eval_{};
+        int mode_ = 0;
+        int pending_mode_ = -1;
+        int pending_confirm_ = 2;
+        bool enabled_ = false;
+    };
+    AdaptivePacer pacer;
+    pacer.Configure(adpf_target, !diagnostic_tour && fps_limit <= 0);
     using Clock = std::chrono::steady_clock;
     Clock::time_point frame_start = Clock::now();
     for (uint64_t frame = 0;; ++frame) {
@@ -851,6 +985,17 @@ int main(int argc, char** argv) {
             Clock::time_point due = frame_start + std::chrono::microseconds(1000000 / limit);
             if (now < due) {
                 std::this_thread::sleep_until(due);
+                now = Clock::now();
+            }
+            limiter_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - limiter_start).count();
+        } else {
+            // Adaptive display pacing: sleep until this frame's slot when half-rate mode is engaged.
+            const Clock::time_point limiter_start = now;
+            int64_t adpf_hz = 0;
+            const int64_t pace_ns = pacer.PacePeriod(now, frame_start, &adpf_hz);
+            if (adpf_hz > 0) PerfHintTarget(int(adpf_hz));
+            if (pace_ns > 0) {
+                std::this_thread::sleep_for(std::chrono::nanoseconds(pace_ns));
                 now = Clock::now();
             }
             limiter_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - limiter_start).count();
@@ -888,9 +1033,10 @@ int main(int argc, char** argv) {
                 ForwardInput(e);
             }
         }
-        const int64_t service_start_ns = timing ? MonotonicNanos() : 0;
+        const int64_t service_start_ns = MonotonicNanos();
         bool keep = (GuestCall(service, {quit ? 1u : 0u, focused ? 0u : 1u}) & 0xff) != 0;
-        const int64_t service_end_ns = timing ? MonotonicNanos() : 0;
+        const int64_t service_end_ns = MonotonicNanos();
+        pacer.ObserveService(service_end_ns - service_start_ns);
         GuestCall(focus, {focused ? 1u : 0u});
         if (timing) {
             const int64_t focus_end_ns = MonotonicNanos();
