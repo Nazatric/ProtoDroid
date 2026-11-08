@@ -1,0 +1,83 @@
+name: lib-report
+
+# Reports the exact native library bytes inside the published releases and in this build, so the size and
+# performance difference against another build of the same source can be attributed to specific files.
+on:
+  push:
+    paths:
+      - '.github/workflows/lib-report.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Compare published release libraries with the pinned hashes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          out=lib-report.txt
+          : > "$out"
+          log() { echo "$@" | tee -a "$out"; }
+          log "# Library report"
+          log ""
+          log "Pinned by build-scripts/build_v016.sh (the recipe that produced the faster 35 MB APK):"
+          log '```'
+          sed -n '/declare -A RELEASE_SHA/,/^)/p' build-scripts/build_v016.sh | grep -E '\[lib' | tee -a "$out"
+          log '```'
+          log ""
+          for tag in protodroid-v0.15 protodroid-v0.14 protodroid-v0.13; do
+            log "## $tag"
+            dir=/tmp/$tag
+            rm -rf "$dir" && mkdir -p "$dir"
+            if ! gh release download "$tag" -p '*.apk' -D "$dir" --clobber > /tmp/dl.log 2>&1; then
+              log "- download failed: $(tail -n 2 /tmp/dl.log | tr '\n' ' ')"
+              continue
+            fi
+            apk=$(ls "$dir"/*.apk | head -n1)
+            log "- apk: $(basename "$apk") $(stat -c%s "$apk") bytes"
+            log '```'
+            unzip -l "$apk" | grep -E 'lib/arm64-v8a/' | awk '{printf "%12d  %s\n", $1, $4}' | sort -k2 | tee -a "$out"
+            log '```'
+            rm -rf "$dir/x" && mkdir -p "$dir/x"
+            unzip -qo "$apk" 'lib/arm64-v8a/*' -d "$dir/x" 2>/dev/null
+            log "sha256:"
+            log '```'
+            (cd "$dir/x/lib/arm64-v8a" && sha256sum *.so) | tee -a "$out"
+            log '```'
+          done
+
+      - name: Compare with this build's libraries
+        run: |
+          set -uo pipefail
+          out=lib-report.txt
+          log() { echo "$@" | tee -a "$out"; }
+          log ""
+          log "## Libraries built by this branch"
+          log '```'
+          for f in build/android/arm64-v8a/libmain.so build/android/arm64-v8a-v80/libmain.so; do
+            [ -s "$f" ] && printf '%12d  %s  %s\n' "$(stat -c%s "$f")" "$(sha256sum "$f" | cut -d' ' -f1)" "$f"
+          done
+          for f in "$HOME"/protodroid-data/android-deps/arm64-v8a/lib/*.so; do
+            [ -e "$f" ] && printf '%12d  %s  %s\n' "$(stat -c%s "$f")" "$(sha256sum "$f" | cut -d' ' -f1)" "$(basename "$f")"
+          done
+          for f in "$HOME"/protodroid-data/android-turnip/lib/*.so; do
+            [ -e "$f" ] && printf '%12d  %s  %s\n' "$(stat -c%s "$f")" "$(sha256sum "$f" | cut -d' ' -f1)" "turnip/$(basename "$f")"
+          done
+          log '```'
+
+      - name: Publish the report
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f lib-report.txt
+          git commit -q -m "Publish the native library report [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
