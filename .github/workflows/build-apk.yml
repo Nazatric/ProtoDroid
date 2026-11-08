@@ -1012,7 +1012,7 @@ jobs:
           echo "::group::Make libmain.so (single job for memory)"
           # Do not use pipefail for this block - capture exit code manually
           set +e
-          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/protodroid-data/android-deps/arm64-v8a" -j1 V=1 > /tmp/make.log 2>&1
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/protodroid-data/android-deps/arm64-v8a" TURNIP=/tmp/no-turnip -j1 V=1 > /tmp/make.log 2>&1
           MAKE_EXIT=$?
           set -e
           echo "make exit $MAKE_EXIT"
@@ -1217,6 +1217,11 @@ jobs:
       - name: Build APK (package + sign)
         id: package
         env:
+          # Package one ABI with the main/DXVK/SDL/FAudio set only: no second libmain variant and no bundled
+          # Adreno driver stack. Those are optional additions this recipe does not ship, and leaving them out is
+          # what makes the package the size of the archive author's build. System Vulkan (the Mali path in use
+          # here) is unaffected; it never loads those files.
+          TURNIP_ROOT: /tmp/no-turnip
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
           BUILD_TOOLS: ${{ env.ANDROID_SDK_ROOT }}/build-tools/36.0.0
@@ -1224,6 +1229,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "Building APK..."
+          mkdir -p /tmp/no-turnip/lib
+          rm -f build/android/arm64-v8a-v80/libmain.so build/android/arm64-v8a/libturnipprobe.so
           # Ensure deps are in expected location for build-apk.sh
           mkdir -p $HOME/protodroid-data/android-deps/arm64-v8a
           # build-apk.sh expects DEPS_ROOT/$ABI/lib/*.so
@@ -1267,6 +1274,31 @@ jobs:
             } catch(e) {
               console.log("No APK packaging log: " + e);
             }
+
+      - name: Report APK composition
+        if: always()
+        run: |
+          python3 - <<'PYEOF'
+          import zipfile
+          from pathlib import Path
+          apk = Path("build/apk/prototype.apk")
+          if not apk.is_file():
+              print("::warning title=APK composition::no APK was produced")
+              raise SystemExit(0)
+          with zipfile.ZipFile(apk) as archive:
+              rows = [(i.filename, i.file_size, i.compress_size) for i in archive.infolist()]
+          rows.sort(key=lambda r: r[2], reverse=True)
+          for name, stored, packed in rows:
+              if name.startswith("lib/"):
+                  print(f"{packed:>10} packed {stored:>10} stored  {name}")
+          total = apk.stat().st_size
+          libs = sum(r[2] for r in rows if r[0].startswith("lib/"))
+          print(f"::notice title=APK total::{total} bytes ({total / 1048576:.1f} MiB)")
+          print(f"::notice title=APK libraries::{libs} bytes ({libs / 1048576:.1f} MiB)")
+          for name, stored, packed in rows:
+              if name.startswith("lib/"):
+                  print(f"::notice title={name}::{packed} bytes packed ({stored} stored)")
+          PYEOF
 
       - name: Verify APK and embedded Android DXVK
         if: always()
