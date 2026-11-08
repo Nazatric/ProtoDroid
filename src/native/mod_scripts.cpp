@@ -18,6 +18,7 @@
 #include <deque>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <limits>
 #include <string>
 #include <type_traits>
