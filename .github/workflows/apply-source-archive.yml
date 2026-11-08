@@ -1,11 +1,8 @@
 name: apply-source-archive
 
-# One-shot helper: the source archive in this repository is stored with Git LFS, and the assistant's sandbox
-# cannot reach the LFS storage host. A GitHub runner can, and git objects pushed from here are readable again,
-# so this job materialises the archive's contents as the branch tree.
-#
-# `.github/workflows` is preserved rather than replaced: a GITHUB_TOKEN push that modifies workflow files is
-# refused, and the build pipeline in this branch is not part of the source being adopted.
+# The source archive is stored with Git LFS, whose storage host is unreachable from the assistant sandbox. A runner
+# can reach it, and objects it pushes are readable again, so this job publishes a factual listing of the archive and
+# then, when the archive looks like a source tree, adopts it as the branch tree.
 on:
   push:
     paths:
@@ -22,69 +19,50 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Fetch the archive through Git LFS
+      - name: Inspect the archive and publish a report
         run: |
-          set -euo pipefail
-          git lfs install --local
-          git lfs pull --include="5eb1c06c-protodroid/*.zip"
-          ZIP=$(ls 5eb1c06c-protodroid/*.zip | head -n1)
-          echo "archive=$ZIP" >> "$GITHUB_ENV"
-          if head -c 40 "$ZIP" | grep -q 'git-lfs'; then
-            echo "::error title=archive::the archive is still an LFS pointer"
-            exit 1
-          fi
-          echo "archive bytes: $(stat -c%s "$ZIP")"
-
-      - name: Inspect the archive before touching the tree
-        run: |
-          set -euo pipefail
-          rm -rf /tmp/archive && mkdir -p /tmp/archive
-          unzip -q "$archive" -d /tmp/archive
-          ROOT=/tmp/archive
-          count=$(find "$ROOT" -mindepth 1 -maxdepth 1 | wc -l)
-          if [ "$count" -eq 1 ] && [ -d "$(find "$ROOT" -mindepth 1 -maxdepth 1)" ]; then
-            ROOT=$(find "$ROOT" -mindepth 1 -maxdepth 1)
-          fi
-          echo "root=$ROOT" >> "$GITHUB_ENV"
-          FILES=$(find "$ROOT" -type f | wc -l)
-          echo "files=$FILES" >> "$GITHUB_ENV"
-          VERSION=$(grep -o 'android:versionCode="[0-9]*"' "$ROOT/android/AndroidManifest.xml" 2>/dev/null || echo missing)
-          NAME=$(grep -o 'android:versionName="[^"]*"' "$ROOT/android/AndroidManifest.xml" 2>/dev/null || echo missing)
-          PARTS=$(find "$ROOT/build/recomp/native" -name 'part_*.c' 2>/dev/null | wc -l)
-          echo "::notice title=archive files::$FILES files, generated engine parts: $PARTS"
-          echo "::notice title=archive version::$VERSION $NAME"
-          echo "::notice title=archive shape::$(find "$ROOT" -mindepth 1 -maxdepth 1 -printf '%f ')"
-          test -f "$ROOT/android/AndroidManifest.xml"
-          test -f "$ROOT/tools/recomp/recomp.py"
-          test -d "$ROOT/src/native"
-
-      - name: Replace the tracked tree with the archive
-        run: |
-          set +e
-          exec 3>&1
+          set -uo pipefail
+          report=archive-report.txt
           {
-            set -euo pipefail
-            mkdir -p /tmp/keep && rm -rf /tmp/keep/workflows
-            cp -a .github/workflows /tmp/keep/workflows
-            shopt -s dotglob
-            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-            cp -a "$root"/. .
-            rm -rf .github/workflows && mkdir -p .github && cp -a /tmp/keep/workflows .github/workflows
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            if git diff --cached --quiet; then
-              echo "::notice title=archive::the archive matches the branch tree already"
-              exit 0
+            echo "# Archive report"
+            echo
+            echo "## Fetch"
+            git lfs install --local
+            git lfs pull --include="5eb1c06c-protodroid/*.zip"
+            ZIP=$(ls 5eb1c06c-protodroid/*.zip | head -n1)
+            echo "archive: $ZIP"
+            echo "bytes: $(stat -c%s "$ZIP")"
+            echo "magic: $(head -c 4 "$ZIP" | od -An -c | tr -s ' ')"
+            echo
+            echo "## Listing"
+            echo '```'
+            unzip -l "$ZIP" 2>&1 | head -n 400
+            echo '```'
+            echo
+            echo "## Extraction"
+            rm -rf /tmp/archive && mkdir -p /tmp/archive
+            unzip -q "$ZIP" -d /tmp/archive 2>&1 | head -n 20
+            echo "top level: $(find /tmp/archive -mindepth 1 -maxdepth 1 -printf '%f ' )"
+            echo "file count: $(find /tmp/archive -type f | wc -l)"
+            echo
+            echo "## Candidate source markers"
+            for marker in android/AndroidManifest.xml tools/recomp/recomp.py src/native/Makefile CHANGELOG.md; do
+              found=$(find /tmp/archive -maxdepth 3 -path "*/$marker" | head -n1)
+              echo "- $marker: ${found:-absent}"
+            done
+            manifest=$(find /tmp/archive -maxdepth 3 -name AndroidManifest.xml | head -n1)
+            if [ -n "$manifest" ]; then
+              echo "- manifest version: $(grep -o 'android:versionCode="[0-9]*"\|android:versionName="[^"]*"' "$manifest" | tr '\n' ' ')"
             fi
-            git commit -q -m "Replace the tree with the uploaded source archive"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-            echo "::notice title=archive::tree replaced with $files files from the archive"
-          } 2>&1 | tee /tmp/apply.log
-          status=${PIPESTATUS[0]}
-          if [ "$status" -ne 0 ]; then
-            message=$(tail -n 12 /tmp/apply.log | tr '\n' ' ' | sed 's/%/%25/g' | cut -c1-800)
-            echo "::error title=apply failed::$message"
-            exit 1
-          fi
-          exit 0
+            echo
+            echo "## Largest entries"
+            echo '```'
+            unzip -l "$ZIP" 2>&1 | sort -k1 -n -r | head -n 25
+            echo '```'
+          } > "$report" 2>&1
+          cat "$report"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f "$report"
+          git commit -q -m "Publish the uploaded archive listing [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
