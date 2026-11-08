@@ -689,31 +689,7 @@ jobs:
       - name: Test staged driver imports, rollback, and pinned catalog packages
         env:
           DRIVER_CATALOG_ONLINE: '1'
-        # This gate downloads the four pinned driver release assets and checks their exact size and digest. The
-        # release CDN answers HTTP 504 intermittently, so a single attempt fails for a reason that has nothing to
-        # do with this repository. Retry a bounded number of times; a genuine mismatch still fails every attempt.
-        run: |
-          set -uo pipefail
-          status=1
-          for attempt in 1 2 3 4; do
-            if android/test-driver-package.sh 2>&1 | tee /tmp/driver-attempt.log; then
-              echo "driver package validation passed on attempt $attempt"
-              status=0
-              break
-            fi
-            echo "driver package validation attempt $attempt failed"
-            if [ "$attempt" -lt 4 ]; then sleep $((attempt * 20)); fi
-          done
-          if [ "$status" -ne 0 ]; then
-            {
-              echo "### Driver package validation output"
-              echo '```'
-              tail -n 60 /tmp/driver-attempt.log
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "driver package validation failed on every attempt" >&2
-            exit 1
-          fi
+        run: android/test-driver-package.sh
 
   build-turnip:
     runs-on: ubuntu-24.04
@@ -757,11 +733,7 @@ jobs:
 
   build-apk:
     runs-on: ubuntu-24.04
-    # driver-package-tests validates optional published driver downloads against their pinned size and digest. Its
-    # download host currently answers HTTP 504, which is an upstream outage rather than a defect in this tree, so it
-    # must not stop a testable APK from being produced. The job still runs, still reports red on a real mismatch, and
-    # is still required before anything is published (see the release job).
-    needs: [build-deps, build-turnip, bink-tests, arm64-graphics-tests]
+    needs: [build-deps, build-turnip, bink-tests, arm64-graphics-tests, driver-package-tests]
     env:
       SOURCE_REVISION: ${{ github.sha }}
       PUBLISH_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release == true) }}
@@ -1293,43 +1265,6 @@ jobs:
               console.log("No APK packaging log: " + e);
             }
 
-      - name: Report APK composition
-        if: always()
-        # The package size is dominated by native libraries, and the size question keeps coming up. Print the
-        # per-entry stored/compressed sizes to the log and to annotations, so the composition is answerable from
-        # the run itself instead of being estimated.
-        run: |
-          python3 - <<'PY'
-          import zipfile
-          from pathlib import Path
-          apk = Path("build/apk/prototype.apk")
-          if not apk.is_file():
-              print("::warning title=APK composition::no APK was produced")
-              raise SystemExit(0)
-          rows = []
-          with zipfile.ZipFile(apk) as archive:
-              for info in archive.infolist():
-                  rows.append((info.filename, info.file_size, info.compress_size))
-          rows.sort(key=lambda r: r[2], reverse=True)
-          total_stored = sum(r[1] for r in rows)
-          total_packed = sum(r[2] for r in rows)
-          print(f"APK file: {apk.stat().st_size} bytes; entries stored {total_stored}, packed {total_packed}")
-          libs = [r for r in rows if r[0].startswith("lib/")]
-          for name, stored, packed in libs:
-              print(f"{packed:>10} {stored:>10}  {name}")
-          groups = {}
-          for name, stored, packed in rows:
-              groups[name.split("/")[0]] = groups.get(name.split("/")[0], 0) + packed
-          for group, packed in sorted(groups.items(), key=lambda kv: -kv[1]):
-              print(f"::notice title=APK section {group}::{packed} bytes ({packed / 1048576:.1f} MiB) packed")
-          drivers = sum(r[2] for r in libs if "freedreno" in r[0] or "hook" in r[0] or "turnipprobe" in r[0])
-          core = sum(r[2] for r in libs if r[0].endswith(("libmain.so", "libmain_v80.so", "libdxvk_d3d9.so",
-                                                         "libSDL2.so", "libFAudio.so", "libvulkan_wrapper.so")))
-          print(f"::notice title=APK driver bundle::{drivers} bytes ({drivers / 1048576:.1f} MiB) in Adreno/Turnip drivers")
-          print(f"::notice title=APK core libraries::{core} bytes ({core / 1048576:.1f} MiB) in main/DXVK/SDL/FAudio")
-          print(f"::notice title=APK total::{apk.stat().st_size} bytes ({apk.stat().st_size / 1048576:.1f} MiB)")
-          PY
-
       - name: Verify APK and embedded Android DXVK
         if: always()
         run: |
@@ -1430,9 +1365,7 @@ jobs:
   # dispatch on main after all host tests and the real ARM64 build have passed for this exact commit.
   release:
     runs-on: ubuntu-24.04
-    # Publishing additionally requires the driver-catalog gate, so a driver size/digest regression can never reach a
-    # release even though it no longer blocks artifact generation.
-    needs: [build-apk, driver-package-tests]
+    needs: build-apk
     if: >
       github.ref == 'refs/heads/main' &&
       ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
