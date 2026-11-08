@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16 - 2026-11-08
+
+- Adopted the fixed source the project owner published to `main` in `5eb1c06c-protodroid` as the whole project tree. The committed content of that commit is byte-identical to the source that produced the owner's good-performing build; this release only advances the package identity from 0.15 to 0.16 so the APK installs as an update over the installed build. No engine, graphics, driver, or gameplay behaviour was changed relative to that tree.
+- The archive itself (`protodroid-v0.16-latest-src.zip`) is stored with Git LFS and is not readable from the build environment, so the source is the extracted tree committed alongside it in the same change.
+- Build-pipeline only: the pinned driver-catalog download gate now retries and reports its output on failure, `build-apk` no longer waits for it while the **release** job still requires it, so an upstream download outage cannot block producing a testable APK but can still never reach a release.
+- Device FPS, frame-time tails, and visual completeness of this build are not measured by this repository; the owner's own testing remains the only performance evidence for this source.
+
 ## 0.15
 
 - Restored the original pre-WebView native Android launcher and its `javac`/`d8`/`aapt2` packaging, removing the rejected Compose/Web presentation stack without changing game settings, drivers, mods, saves, touch editing, updates, or the diagnostic-tour gesture. A native **Diagnostics** screen retains read-only logs and factual About/device information.
