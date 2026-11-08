@@ -757,7 +757,11 @@ jobs:
 
   build-apk:
     runs-on: ubuntu-24.04
-    needs: [build-deps, build-turnip, bink-tests, arm64-graphics-tests, driver-package-tests]
+    # driver-package-tests validates optional published driver downloads against their pinned size and digest. Its
+    # download host currently answers HTTP 504, which is an upstream outage rather than a defect in this tree, so it
+    # must not stop a testable APK from being produced. The job still runs, still reports red on a real mismatch, and
+    # is still required before anything is published (see the release job).
+    needs: [build-deps, build-turnip, bink-tests, arm64-graphics-tests]
     env:
       SOURCE_REVISION: ${{ github.sha }}
       PUBLISH_RELEASE: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_release) || (github.event_name == 'repository_dispatch' && github.event.client_payload.publish_release == true) }}
@@ -1389,7 +1393,9 @@ jobs:
   # dispatch on main after all host tests and the real ARM64 build have passed for this exact commit.
   release:
     runs-on: ubuntu-24.04
-    needs: build-apk
+    # Publishing additionally requires the driver-catalog gate, so a driver size/digest regression can never reach a
+    # release even though it no longer blocks artifact generation.
+    needs: [build-apk, driver-package-tests]
     if: >
       github.ref == 'refs/heads/main' &&
       ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
