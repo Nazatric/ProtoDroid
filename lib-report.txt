@@ -1,0 +1,117 @@
+# Library report
+
+Pinned by build-scripts/build_v016.sh (the recipe that produced the faster 35 MB APK):
+```
+  [libSDL2.so]=30b12c49f77382b3e7588ca4407d370cd7d12749383011e575e7ae48b2e22800
+  [libFAudio.so]=79609e857e3eb135330e64178c0c8005850d697b7bf354a03f395c3cf4c2db56
+  [libvulkan_wrapper.so]=79057396f39144d31aed8327dc19c68d9b7d0ef5f1e31e27ea0e0fc346f4aeb8
+  [libdxvk_d3d9.so]=c9b2fa054f4984ef21b6d8e618b8327113e8edfbbd42c27dfb1c8820e15dbc84
+```
+
+## protodroid-v0.15
+- apk: prototype.apk 59023246 bytes
+```
+      258568  lib/arm64-v8a/libFAudio.so
+     1335272  lib/arm64-v8a/libSDL2.so
+     3356888  lib/arm64-v8a/libdxvk_d3d9.so
+        3984  lib/arm64-v8a/libfile_redirect_hook.so
+        4280  lib/arm64-v8a/libgsl_alloc_hook.so
+      105224  lib/arm64-v8a/libhook_impl.so
+    77654200  lib/arm64-v8a/libmain.so
+        4200  lib/arm64-v8a/libmain_hook.so
+    77666744  lib/arm64-v8a/libmain_v80.so
+      140416  lib/arm64-v8a/libturnipprobe.so
+    14222856  lib/arm64-v8a/libvulkan_freedreno.so
+    14140616  lib/arm64-v8a/libvulkan_freedreno_gen8.so
+    13850384  lib/arm64-v8a/libvulkan_freedreno_next.so
+     3602728  lib/arm64-v8a/libvulkan_wrapper.so
+```
+sha256:
+```
+bc9e5e2c6fe66636dc308e79cc0073dda4a5f05ff154faeed14884c3ff61e0c2  libFAudio.so
+3fc0358daee63b2fbc61bbf2403c13ca3fc2a2f0925a95bdf57dc19226073e05  libSDL2.so
+b2c819c321184887f7a8bc24be37e0980d4569ce67a6fcb53058899e33403f44  libdxvk_d3d9.so
+d5d5a0e0c24ef9e532f9b9920727ddbcd7171a78955d90c1921120b63defb0a1  libfile_redirect_hook.so
+a7814fa704ec8b9c5d057e53a3672bfd082333d23063ba6de98ca4347ac12c80  libgsl_alloc_hook.so
+9cb5ce482b677e4fbc6a12fd0d9d87a19cecc066fa3a46a49442bd76565959ab  libhook_impl.so
+5bc2fe6aeca356b890f1784448d90ce36af7a63df63f039da541d767a7b6aa14  libmain.so
+a4fc232fd566947e19517b4f0acbd455096ac47762e281a9bd243753ad4fc8c5  libmain_hook.so
+d00c5e13f67eac6d1661300b5ddbd8834ec3fca794d59fe6a5ed8709cfddb80d  libmain_v80.so
+68b50264cf46aa080609fa0049043aec2f6455633f6fb35f30c2b9dd0a7532b9  libturnipprobe.so
+5355e37e11646a54e001a6537c9eb8462577ed859541c062fb3fc088df7bceef  libvulkan_freedreno.so
+95dc639d6408959a7d5a9dafd4f048193bde0ef84d6bfce5692389cde90b11ee  libvulkan_freedreno_gen8.so
+835d02c1aa94eb2bcf2ef85a32ce46be1dc97146d7136bf9f221c7cb11c11d12  libvulkan_freedreno_next.so
+978592dc74653101c88cf2726c29822522f012ff149eb83400a53bcc17540d3d  libvulkan_wrapper.so
+```
+## protodroid-v0.14
+- apk: prototype.apk 57175950 bytes
+```
+      258568  lib/arm64-v8a/libFAudio.so
+     1335272  lib/arm64-v8a/libSDL2.so
+     3335784  lib/arm64-v8a/libdxvk_d3d9.so
+        3984  lib/arm64-v8a/libfile_redirect_hook.so
+        4280  lib/arm64-v8a/libgsl_alloc_hook.so
+      105224  lib/arm64-v8a/libhook_impl.so
+    73170872  lib/arm64-v8a/libmain.so
+        4200  lib/arm64-v8a/libmain_hook.so
+    73183416  lib/arm64-v8a/libmain_v80.so
+      140416  lib/arm64-v8a/libturnipprobe.so
+    14222856  lib/arm64-v8a/libvulkan_freedreno.so
+    14140616  lib/arm64-v8a/libvulkan_freedreno_gen8.so
+    13850384  lib/arm64-v8a/libvulkan_freedreno_next.so
+     3602728  lib/arm64-v8a/libvulkan_wrapper.so
+```
+sha256:
+```
+bc9e5e2c6fe66636dc308e79cc0073dda4a5f05ff154faeed14884c3ff61e0c2  libFAudio.so
+5636363dba2eb61f738546f258bcfa8454ce2816c83a6858a8efc60dd09565c3  libSDL2.so
+392bc5cc43da6ea9de305c20c437feb192617c3f329e12b1148150c9fc796cff  libdxvk_d3d9.so
+d5d5a0e0c24ef9e532f9b9920727ddbcd7171a78955d90c1921120b63defb0a1  libfile_redirect_hook.so
+a7814fa704ec8b9c5d057e53a3672bfd082333d23063ba6de98ca4347ac12c80  libgsl_alloc_hook.so
+9cb5ce482b677e4fbc6a12fd0d9d87a19cecc066fa3a46a49442bd76565959ab  libhook_impl.so
+c8202c9bccb5f01815ac1d2856e1b95c100d4afa868a97ace481a1b3b89ffb7e  libmain.so
+a4fc232fd566947e19517b4f0acbd455096ac47762e281a9bd243753ad4fc8c5  libmain_hook.so
+2797663d20aebd1f1418ceb280d4cf25607e878f3494bf5cd7b86c965a4ff273  libmain_v80.so
+68b50264cf46aa080609fa0049043aec2f6455633f6fb35f30c2b9dd0a7532b9  libturnipprobe.so
+5355e37e11646a54e001a6537c9eb8462577ed859541c062fb3fc088df7bceef  libvulkan_freedreno.so
+95dc639d6408959a7d5a9dafd4f048193bde0ef84d6bfce5692389cde90b11ee  libvulkan_freedreno_gen8.so
+835d02c1aa94eb2bcf2ef85a32ce46be1dc97146d7136bf9f221c7cb11c11d12  libvulkan_freedreno_next.so
+c5d496d30eacda381c32f9d766497389c5e9a9d7f0e106cd5123ac969e1803cc  libvulkan_wrapper.so
+```
+## protodroid-v0.13
+- apk: prototype.apk 55668447 bytes
+```
+      258568  lib/arm64-v8a/libFAudio.so
+     1335272  lib/arm64-v8a/libSDL2.so
+     3335224  lib/arm64-v8a/libdxvk_d3d9.so
+        3984  lib/arm64-v8a/libfile_redirect_hook.so
+        4280  lib/arm64-v8a/libgsl_alloc_hook.so
+      105224  lib/arm64-v8a/libhook_impl.so
+    72989088  lib/arm64-v8a/libmain.so
+        4200  lib/arm64-v8a/libmain_hook.so
+    73001712  lib/arm64-v8a/libmain_v80.so
+      132608  lib/arm64-v8a/libturnipprobe.so
+    14222856  lib/arm64-v8a/libvulkan_freedreno.so
+    14140616  lib/arm64-v8a/libvulkan_freedreno_gen8.so
+    13850384  lib/arm64-v8a/libvulkan_freedreno_next.so
+```
+sha256:
+```
+bc9e5e2c6fe66636dc308e79cc0073dda4a5f05ff154faeed14884c3ff61e0c2  libFAudio.so
+5636363dba2eb61f738546f258bcfa8454ce2816c83a6858a8efc60dd09565c3  libSDL2.so
+c530c4745c5b30f0a431e523241608997c0c470982338848c0709267b1c30c8a  libdxvk_d3d9.so
+d5d5a0e0c24ef9e532f9b9920727ddbcd7171a78955d90c1921120b63defb0a1  libfile_redirect_hook.so
+a7814fa704ec8b9c5d057e53a3672bfd082333d23063ba6de98ca4347ac12c80  libgsl_alloc_hook.so
+9cb5ce482b677e4fbc6a12fd0d9d87a19cecc066fa3a46a49442bd76565959ab  libhook_impl.so
+29f4bbcb924c0dc6147f12d8b3cf4538cc2067eb5adc84f4544e0584ea4fc5b6  libmain.so
+a4fc232fd566947e19517b4f0acbd455096ac47762e281a9bd243753ad4fc8c5  libmain_hook.so
+ff7593fc2c9a212e5e57166477521693d62681ab743e36019349d67c5fbfc445  libmain_v80.so
+36fab2025ab4fcf2d0c818f9de7dbd90f73ddf9b88cca3915d0d3f27896136ea  libturnipprobe.so
+5355e37e11646a54e001a6537c9eb8462577ed859541c062fb3fc088df7bceef  libvulkan_freedreno.so
+95dc639d6408959a7d5a9dafd4f048193bde0ef84d6bfce5692389cde90b11ee  libvulkan_freedreno_gen8.so
+835d02c1aa94eb2bcf2ef85a32ce46be1dc97146d7136bf9f221c7cb11c11d12  libvulkan_freedreno_next.so
+```
+
+## Libraries built by this branch
+```
+```
