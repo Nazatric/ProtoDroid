@@ -1012,7 +1012,7 @@ jobs:
           echo "::group::Make libmain.so (single job for memory)"
           # Do not use pipefail for this block - capture exit code manually
           set +e
-          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/protodroid-data/android-deps/arm64-v8a" TURNIP=/tmp/no-turnip -j1 V=1 > /tmp/make.log 2>&1
+          make -C src/native PLATFORM=android ABI=arm64-v8a RECOMP_DIR=../../build/recomp/native DXVK=$DXVK_SRC NDK="$EFFECTIVE_NDK" DEPS="$HOME/protodroid-data/android-deps/arm64-v8a" -j1 V=1 > /tmp/make.log 2>&1
           MAKE_EXIT=$?
           set -e
           echo "make exit $MAKE_EXIT"
@@ -1217,11 +1217,11 @@ jobs:
       - name: Build APK (package + sign)
         id: package
         env:
-          # Package one ABI with the main/DXVK/SDL/FAudio set only: no second libmain variant and no bundled
-          # Adreno driver stack. Those are optional additions this recipe does not ship, and leaving them out is
-          # what makes the package the size of the archive author's build. System Vulkan (the Mali path in use
-          # here) is unaffected; it never loads those files.
-          TURNIP_ROOT: /tmp/no-turnip
+          # Package one engine build and no bundled Adreno driver files: the archive's own build recipe ships
+          # neither, and an empty TURNIP_ROOT leaves them out of staging. Driver selection, the fork probe and
+          # the system-driver policy stay compiled into libmain, so Mali keeps the exact path it used before
+          # and an Adreno user can still import a driver package.
+          TURNIP_ROOT: /tmp/protodroid-no-bundled-driver
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
           BUILD_TOOLS: ${{ env.ANDROID_SDK_ROOT }}/build-tools/36.0.0
@@ -1229,8 +1229,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "Building APK..."
-          mkdir -p /tmp/no-turnip/lib
-          rm -f build/android/arm64-v8a-v80/libmain.so build/android/arm64-v8a/libturnipprobe.so
+          mkdir -p /tmp/protodroid-no-bundled-driver/lib
+          rm -f build/android/arm64-v8a-v80/libmain.so
           # Ensure deps are in expected location for build-apk.sh
           mkdir -p $HOME/protodroid-data/android-deps/arm64-v8a
           # build-apk.sh expects DEPS_ROOT/$ABI/lib/*.so
