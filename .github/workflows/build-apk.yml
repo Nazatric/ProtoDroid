@@ -694,16 +694,26 @@ jobs:
         # do with this repository. Retry a bounded number of times; a genuine mismatch still fails every attempt.
         run: |
           set -uo pipefail
+          status=1
           for attempt in 1 2 3 4; do
-            if android/test-driver-package.sh; then
+            if android/test-driver-package.sh 2>&1 | tee /tmp/driver-attempt.log; then
               echo "driver package validation passed on attempt $attempt"
-              exit 0
+              status=0
+              break
             fi
-            echo "driver package validation attempt $attempt failed (transient release-CDN errors are retried)"
+            echo "driver package validation attempt $attempt failed"
             if [ "$attempt" -lt 4 ]; then sleep $((attempt * 20)); fi
           done
-          echo "driver package validation failed on every attempt" >&2
-          exit 1
+          if [ "$status" -ne 0 ]; then
+            {
+              echo "### Driver package validation output"
+              echo '```'
+              tail -n 60 /tmp/driver-attempt.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "driver package validation failed on every attempt" >&2
+            exit 1
+          fi
 
   build-turnip:
     runs-on: ubuntu-24.04
