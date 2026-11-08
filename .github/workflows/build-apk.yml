@@ -1285,19 +1285,20 @@ jobs:
           if not apk.is_file():
               print("::warning title=APK composition::no APK was produced")
               raise SystemExit(0)
+          import hashlib
+          data = apk.read_bytes()
+          print(f"::notice title=APK size::{len(data)} bytes ({len(data) / 1048576:.1f} MiB)")
+          print(f"::notice title=APK sha256::{hashlib.sha256(data).hexdigest()}")
           with zipfile.ZipFile(apk) as archive:
               rows = [(i.filename, i.file_size, i.compress_size) for i in archive.infolist()]
-          rows.sort(key=lambda r: r[2], reverse=True)
-          for name, stored, packed in rows:
-              if name.startswith("lib/"):
-                  print(f"{packed:>10} packed {stored:>10} stored  {name}")
-          total = apk.stat().st_size
-          libs = sum(r[2] for r in rows if r[0].startswith("lib/"))
-          print(f"::notice title=APK total::{total} bytes ({total / 1048576:.1f} MiB)")
-          print(f"::notice title=APK libraries::{libs} bytes ({libs / 1048576:.1f} MiB)")
-          for name, stored, packed in rows:
-              if name.startswith("lib/"):
-                  print(f"::notice title={name}::{packed} bytes packed ({stored} stored)")
+          libs = [r for r in rows if r[0].startswith("lib/")]
+          libs.sort(key=lambda r: r[2], reverse=True)
+          packed_in_apk = sum(r[2] for r in libs)
+          stored_raw = sum(r[1] for r in libs)
+          print(f"::notice title=Native libraries::{len(libs)} files, {packed_in_apk} bytes inside the APK "
+                f"({stored_raw} bytes on disk once installed)")
+          for name, stored, packed in libs:
+              print(f"{name}: {packed} packed / {stored} stored")
           PYEOF
 
       - name: Verify APK and embedded Android DXVK
