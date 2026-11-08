@@ -12,8 +12,6 @@ CXX=${CXX:-g++}
   "$ROOT/src/native/runtime.cpp" "$ROOT/src/native/imports.cpp" "$ROOT/src/native/misc.cpp" \
   "$ROOT/src/native/tests/runtime_bridge_test.cpp" -pthread -o "$OUT"
 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 "$OUT"
-printf 'Runtime bridge import profiling pass enabled\n'
-PROTODROID_IMPORT_PROFILE=1 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 "$OUT"
 
 # The import range is disjoint from the engine image. Keep its direct check ahead of the known-miss guest hash probe.
 python3 - "$ROOT/src/native/runtime.cpp" <<'PY'
@@ -26,37 +24,7 @@ dispatch = dispatch.split('extern "C" void RecompCpuid', 1)[0]
 assert dispatch.index("if (DispatchImport(ctx, target)) return;") < dispatch.index("RecompLookup(target)"), (
     "direct imports must not attempt a known-miss recompiled-function lookup"
 )
-build = source.split("void BuildHash()", 1)[1].split("\n}", 1)[0]
-assert build.index("for (uint32_t i = 0; i < g_recomp_count; ++i)") < build.index("g_hash.store"), (
-    "the dispatch table was published before it was fully populated"
-)
-lookup = source.split('extern "C" RecompFn RecompLookup(uint32_t target)', 1)[1]
-lookup = lookup.split('extern "C" void RecompCpuid', 1)[0]
-assert lookup.index("g_hash.load") < lookup.index("if (!hash)") < lookup.index("RecompInitializeDispatch();"), (
-    "the initialized lookup fast path still enters lazy initialization"
-)
-assert lookup.index("RecompInitializeDispatch();") < lookup.index("for (uint32_t h = HashOf(target)"), (
-    "lazy fallback does not complete before hash probes"
-)
-print("Runtime bridge dispatch-order and publication fast-path checks passed")
-PY
-
-python3 - "$ROOT/src/native/imports.cpp" <<'PY'
-from pathlib import Path
-import sys
-
-source = Path(sys.argv[1]).read_text(encoding="utf-8")
-assert "std::vector<ImportFn> g_slot_functions;" in source, "dense import functions still use a lazy hot accessor"
-create = source.split("uint32_t ImportThunk(", 1)[1].split("bool DispatchImport(", 1)[0]
-assert "g_slot_functions.push_back(slots.back().fn);" in create, "hot import function was not published"
-assert "slots.pop_back();" in create, "failed hot-array publication leaves metadata and functions misaligned"
-dispatch = source.split("bool DispatchImport(", 1)[1]
-assert "index >= g_slot_functions.size()" in dispatch, "dispatch bounds do not match the hot function array"
-assert dispatch.index("const ImportFn fn = g_slot_functions[index];") < dispatch.index("if (ImportProfiling())"), (
-    "default import dispatch does not fetch the dense function before profiling metadata"
-)
-assert "fn(ctx);" in dispatch, "default import dispatch does not call the dense function pointer"
-print("Dense import-function publication and bounds checks passed")
+print("Runtime bridge dispatch-order check passed")
 PY
 
 # The engine resolves this export dynamically rather than through its static import table. Keep both halves of that

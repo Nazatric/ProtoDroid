@@ -35,7 +35,6 @@
 #include "diagnostic_tour.h"
 #include "diagnostics.h"
 #include "dxvk_config.h"
-#include "frame_limiter.h"
 #include "guest.h"
 #include "guest_time.h"
 #include "input.h"
@@ -63,7 +62,6 @@ std::string g_mirror_dir;
 std::string g_mirror_log_path;
 std::string g_mirror_prev_path;
 std::mutex g_mirror_copy_mutex;
-native::StateCacheBackupState g_mirror_cache_backup;
 std::thread g_mirror_thread;
 std::atomic<bool> g_mirror_copy_active{false};
 }  // namespace
@@ -299,7 +297,7 @@ void MirrorCopyDXVKLogs() {
     std::string mirror_cache = g_mirror_dir + "/prototypeenginef.dll.dxvk-cache";
     // Replace the ordinary backup atomically. A process kill or failed write must not truncate the last usable cache,
     // and the live DXVK writer remains in app-private storage instead of doing shader-cache I/O through shared FUSE.
-    native::BackupStateCache(base_cache, mirror_cache, &g_mirror_cache_backup);
+    native::BackupStateCache(base_cache, mirror_cache);
 }
 
 void MirrorCopyDXVKLogsAsync() {
@@ -366,8 +364,9 @@ extern SDL_Window* g_sdl_window;
 }  // namespace native
 
 
-// ---- presented-frame counters (read by the on-screen overlay through JNI) ----
+// ---- frame limiter and presented-frame counters (read by the on-screen overlay through JNI) ----
 namespace native {
+std::atomic<int> g_fps_limit{0};  // 0 = no limit (the swap interval still applies)
 std::atomic<bool> g_unlock_menu_fps{true};
 
 bool MenuFpsUnlocked() { return g_unlock_menu_fps.load(std::memory_order_relaxed); }
@@ -396,11 +395,8 @@ extern "C" JNIEXPORT jint JNICALL Java_com_protodroid_TouchControls_nativeMemory
     return jint(native::ResidentMiB());
 }
 extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetFpsLimit(JNIEnv*, jclass, jint fps) {
-    const int previous = native::FrameLimitTarget();
-    native::SetFrameLimitTarget(fps);
+    native::g_fps_limit.store(fps);
     native::PerfHintTarget(fps);
-    if (previous != native::FrameLimitTarget())
-        native::Log("fps limit: live target %d -> %d (successful-Present pacing)", previous, native::FrameLimitTarget());
 }
 extern "C" JNIEXPORT void JNICALL Java_com_protodroid_TouchControls_nativeSetMenuFpsUnlocked(
     JNIEnv*, jclass, jboolean unlocked) {
@@ -468,8 +464,6 @@ int main(int argc, char** argv) {
         unsetenv("PROTODROID_PIPELINE_TRACE");
         unsetenv("PROTODROID_PIPELINE_TRACE_DIR");
         unsetenv("PROTODROID_PIPELINE_TIMING");
-        unsetenv("PROTODROID_D3D9_TIMING");
-        unsetenv("PROTODROID_WARM_CACHE_TRACE");
         unsetenv("PROTODROID_IMPORT_PROFILE");
         unsetenv("DXVK_LOG_TIMESTAMPS");
     }
@@ -522,12 +516,24 @@ int main(int argc, char** argv) {
         return 1;
     }
     // DXVK v2.5.3 reads DXVK_STATE_CACHE_PATH and the Android patch resolves prototypeenginef.dll.dxvk-cache within
-    // it. Ordinary recovery runs after shared mirror initialization below, but still before D3D9/DXVK creation.
-    // The tour starts with its own cache path and performs no ordinary migration or backup.
+    // it. Ordinary Play recovers a populated cache without inventing a seed. The tour starts with its own cache path
+    // and performs no ordinary migration or backup.
     const char* cache_dir = diagnostic_tour ? diagnostic_cache_dir.c_str() : base;
     std::string state_cache = native::StateCacheFile(cache_dir, native::kStateCacheFilename);
+    if (!diagnostic_tour) {
+        native::StateCacheMigration cache_migration = native::PlanStateCacheMigration(
+            base, {"/storage/emulated/0/Prototype/logs", "/storage/emulated/0/Prototype"});
+        if (!cache_migration.source.empty()) {
+            native::StateCacheMigrationResult migrated = native::MigrateStateCache(cache_migration);
+            if (migrated == native::StateCacheMigrationResult::Migrated)
+                Log("DXVK state cache restored from %s", cache_migration.source.c_str());
+            else
+                Log("DXVK state cache migration from %s failed: %s", cache_migration.source.c_str(), strerror(errno));
+        }
+    }
     setenv("DXVK_STATE_CACHE_PATH", cache_dir, 1);
     setenv("DXVK_LOG_PATH", diagnostic_tour ? kDiagnosticTourLogDir : base, 1);
+    Log("DXVK state cache: %s", state_cache.c_str());
     // Attempt to find game dir across multiple locations (Issue 4)
     if (!g_game_dir || access((std::string(g_game_dir) + "/prototypeenginef.dll").c_str(), R_OK) != 0) {
         std::string found = FindGameDir(base, g_game_dir);
@@ -595,39 +601,6 @@ int main(int argc, char** argv) {
         setenv("DXVK_LOG_PATH", g_mirror_dir.c_str(), 1);
         Log("DXVK logs mirrored to %s", g_mirror_dir.c_str());
     }
-    // Recover only an actually populated legacy/shared cache; never invent or bundle a shader seed. Doing this after
-    // MirrorInit makes shared storage ready and, importantly, puts the result in the persistent/uploaded native log.
-    // It remains well before InitD3D9Bridge, so DXVK still observes the recovered file on its first cache open.
-    if (!diagnostic_tour) {
-        const native::StateCacheStatus cache_before = native::InspectStateCache(state_cache);
-        native::StateCacheMigration cache_migration = native::PlanStateCacheMigration(
-            base, {"/storage/emulated/0/Prototype/logs", "/storage/emulated/0/Prototype"});
-        native::StateCacheMigrationResult cache_result = native::StateCacheMigrationResult::NoCandidate;
-        int cache_error = 0;
-        if (!cache_migration.source.empty()) {
-            errno = 0;
-            cache_result = native::MigrateStateCache(cache_migration);
-            if (cache_result == native::StateCacheMigrationResult::Failed) cache_error = errno;
-        }
-        const native::StateCacheStatus cache_after = native::InspectStateCache(state_cache);
-        Log("DXVK state cache: %s (before=%s, after=%s)", state_cache.c_str(),
-            native::StateCacheStatusName(cache_before), native::StateCacheStatusName(cache_after));
-        if (!cache_migration.source.empty()) {
-            if (cache_result == native::StateCacheMigrationResult::Migrated) {
-                Log("DXVK state cache restored from %s", cache_migration.source.c_str());
-            } else {
-                Log("DXVK state cache migration from %s failed: %s", cache_migration.source.c_str(),
-                    cache_error ? strerror(cache_error) : "unknown error");
-            }
-        } else if (cache_before == native::StateCacheStatus::Missing ||
-                   cache_before == native::StateCacheStatus::Empty) {
-            Log("DXVK state cache recovery: no populated legacy/shared candidate");
-        } else if (cache_before == native::StateCacheStatus::Invalid) {
-            Log("DXVK state cache recovery: invalid app-private target preserved for DXVK diagnosis");
-        }
-    } else {
-        Log("DXVK state cache: %s (isolated diagnostic tour; ordinary recovery disabled)", state_cache.c_str());
-    }
     // Log game dir detection
     Log("game dir: %s", g_game_dir);
     Log("data dir: %s", g_data_dir ? g_data_dir : "(none)");
@@ -653,25 +626,6 @@ int main(int argc, char** argv) {
     setenv("PROTODROID_PIPELINE_TIMING",
            (diagnostic_tour || SettingInt("pipeline_timing", detailed_diagnostics ? 1 : 0)) ? "1" : "0",
            diagnostic_tour ? 1 : 0);
-    // Detailed diagnostics already opt into slower measurement. Include the existing method/lock attribution by
-    // default there, while ordinary Play remains free of these clocks and relaxed counters. d3d9_timing = 0 still
-    // provides an explicit escape for a lighter detailed capture.
-    const bool d3d9_timing = diagnostic_tour || SettingInt("d3d9_timing", detailed_diagnostics ? 1 : 0) != 0;
-    setenv("PROTODROID_D3D9_TIMING", d3d9_timing ? "1" : "0", diagnostic_tour ? 1 : 0);
-    if (d3d9_timing)
-        Log("DXVK D3D9 method timing enabled (%s)",
-            diagnostic_tour ? "diagnostic tour" : detailed_diagnostics ? "detailed diagnostics" : "d3d9_timing = 1");
-    if (SettingInt("guest_function_trace", 0) != 0) {
-#ifdef PROTODROID_GUEST_FUNCTION_TRACE
-        Log("guest-function probes compiled in; runtime records enabled");
-#else
-        Log("guest_function_trace requested, but ordinary builds contain no guest probes; rebuild with GUEST_FUNCTION_TRACE=1");
-#endif
-    }
-    // Independent of the tour to preserve prior tour comparability. This samples existing queues; it never drains them.
-    const bool warm_cache_trace = SettingInt("warm_cache_trace", 0) != 0;
-    setenv("PROTODROID_WARM_CACHE_TRACE", warm_cache_trace ? "1" : "0", 1);
-    if (warm_cache_trace) Log("DXVK warm-cache snapshots enabled (250 ms, try-lock, no drain; warm_cache_trace = 1)");
     if (diagnostic_tour) setenv("PROTODROID_PIPELINE_TRACE_DIR", kDiagnosticTourLogDir, 1);
     if (diagnostic_tour || SettingInt("pipeline_trace", 0) == 1) {
         setenv("PROTODROID_PIPELINE_TRACE", "1", diagnostic_tour ? 1 : 0);
@@ -682,7 +636,6 @@ int main(int argc, char** argv) {
     const bool fxaa = AaUsesFxaa(SettingInt("game_aa_level", kAaGameDefault));
     setenv("PROTODROID_FXAA", fxaa ? "1" : "0", 1);
     if (fxaa) Log("AA policy: FXAA present filter requested; Prototype built-in MSAA disabled");
-    RecompInitializeDispatch();
     InitGuestMemory();
     AttachThread(8u << 20);
     InitD3D9Bridge();
@@ -882,15 +835,27 @@ int main(int argc, char** argv) {
     StartWatchdog(&frames);
     int fps_limit = SettingInt("fps_limit", 0);
     if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
-    SetFrameLimitTarget(fps_limit);
+    g_fps_limit.store(fps_limit);
     PerfHintStart(fps_limit);
-    Log("fps limit: target=%d (successful-Present pacing; FIFO/display timing remains independent)",
-        FrameLimitTarget());
+    using Clock = std::chrono::steady_clock;
+    Clock::time_point frame_start = Clock::now();
     for (uint64_t frame = 0;; ++frame) {
         frames.store(frame, std::memory_order_relaxed);
         if (frame == 900) VulkanDriverConfirm();  // well past the intro movies: the driver survived startup
-        // Do not pace this loop: it can iterate thousands of times without a Present in menus/loading and can block
-        // inside EngineService during gameplay. The dedicated limiter runs only after a successful D3D9 Present.
+        // The limiter remains anchored to the engine loop. FPS, frame statistics, and ADPF are anchored only to real
+        // D3D9 presents, so thousands of empty message-pump iterations cannot inflate them or skew CPU clocking.
+        Clock::time_point now = Clock::now();
+        int64_t limiter_ns = -1;
+        if (int limit = g_fps_limit.load(); limit > 0) {
+            const Clock::time_point limiter_start = now;
+            Clock::time_point due = frame_start + std::chrono::microseconds(1000000 / limit);
+            if (now < due) {
+                std::this_thread::sleep_until(due);
+                now = Clock::now();
+            }
+            limiter_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - limiter_start).count();
+        }
+        frame_start = now;
         for (const Tap& t : taps) {
             if (t.key == SDL_SCANCODE_UNKNOWN) continue;
             if (frame == t.frame) InjectKey(t.key, true);
@@ -930,7 +895,7 @@ int main(int argc, char** argv) {
         if (timing) {
             const int64_t focus_end_ns = MonotonicNanos();
             RecordEngineLoop(service_end_ns, service_end_ns - service_start_ns, service_start_ns - pump_start_ns,
-                             focus_end_ns - service_end_ns);
+                             limiter_ns, focus_end_ns - service_end_ns);
         }
         ModPlatformFrame();
         if (!keep) {

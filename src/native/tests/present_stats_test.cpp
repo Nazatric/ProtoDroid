@@ -1,12 +1,9 @@
 #include "present_stats.h"
 
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
-#include <thread>
-#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -90,28 +87,6 @@ void TestCumulativePresentCount() {
     Check(native::PresentedFrameCount() == before + 2, "cumulative present count did not track successful Presents");
 }
 
-void TestAdapterDetailedGate() {
-    native::SetPresentDetailedEnabled(false);
-    native::TakePresentDetailedStats();
-    native::ResetDetailedPresentTotals();
-    native::RecordPresent();
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    native::RecordPresent();
-    Check(native::TakePresentDetailedStats().count == 0, "disabled global adapter retained detailed samples");
-    Check(native::GetDetailedPresentTotals().intervals == 0, "disabled global adapter retained detailed totals");
-
-    native::SetPresentDetailedEnabled(true);
-    native::RecordPresent();
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    native::RecordPresent();
-    const auto enabled = native::TakePresentDetailedStats();
-    Check(enabled.count == 2, "enabled global adapter lost detailed Present intervals");
-    Check(enabled.worst[0].tid == int(gettid()), "global adapter recorded the wrong detailed-sample TID");
-    Check(native::GetDetailedPresentTotals().intervals == 2, "global adapter detailed totals do not match samples");
-    native::SetPresentDetailedEnabled(false);
-    native::ResetDetailedPresentTotals();
-}
-
 void TestDisabledDetailedCollection() {
     native::PresentStatsTracker tracker;
     tracker.AddPresent(1000000000ll, 7, false);
@@ -146,9 +121,8 @@ int main() {
     TestAveragePercentileAndOutlier();
     TestNoLoopCounterLeak();
     TestCumulativePresentCount();
-    TestAdapterDetailedGate();
     TestDisabledDetailedCollection();
     TestDetailedCumulativeTotals();
-    std::puts("present-stats tests passed (baseline, ADPF count, FPS, percentiles, adapter gate/TID, detailed totals)");
+    std::puts("present-stats tests passed (baseline, ADPF count, FPS, percentiles, detailed totals)");
     return 0;
 }

@@ -31,9 +31,7 @@
 #include "d3d9_dxt.h"
 #include "d3d9_state.h"
 #include "diagnostics.h"
-#include "frame_limiter.h"
 #include "mod_platform.h"
-#include "operation_timing.h"
 #include "present_stats.h"
 
 namespace native {
@@ -60,25 +58,30 @@ std::recursive_mutex g_mutex;
 
 // Lightweight interval diagnostics. The bookkeeping mutex is acquired only after the measured operation returns,
 // never around decoding or a driver call, and lets the periodic reader take one consistent count/total/max snapshot.
-using TextureTiming = OperationTiming;
+struct TextureTiming {
+    uint64_t calls = 0;
+    uint64_t total_ns = 0;
+    uint64_t max_ns = 0;
+    std::array<uint64_t, 3> over{};  // >10, >50 and >100 ms
+};
 TextureTiming g_decode_timing, g_create_timing, g_upload_timing;
-// Rect-only lock phases. Buffer/box locks deliberately do not feed these counters: their high frequency would
-// otherwise be misreported as the texture LockRect cost seen in import profiles. Host UnlockRect remains in the
-// existing upload timer; these phases cover the host lock and bridge work around it.
-TextureTiming g_rect_host_timing, g_rect_wait_timing, g_rect_alloc_timing, g_rect_copy_in_timing;
-TextureTiming g_rect_adapt_timing, g_rect_copy_back_timing, g_rect_free_timing;
 TimingWindow g_present_timing;
 std::mutex g_texture_timing_mutex;
 std::mutex g_present_timing_mutex;
 
 void RecordTextureTiming(TextureTiming& timing, std::chrono::steady_clock::duration elapsed) {
+    const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
     std::lock_guard<std::mutex> lock(g_texture_timing_mutex);
-    timing.Add(DurationNanos(elapsed));
+    ++timing.calls;
+    timing.total_ns += ns;
+    timing.max_ns = std::max(timing.max_ns, ns);
+    static constexpr uint64_t kThresholds[] = {10000000ull, 50000000ull, 100000000ull};
+    for (size_t i = 0; i < timing.over.size(); ++i)
+        if (ns > kThresholds[i]) ++timing.over[i];
 }
 
 void RecordPresentTiming(int64_t at_ns, int64_t duration_ns) {
-    // Raw interval capture needs PresentDetailedEnabled(), but must not opt into this additional wall-clock window.
-    if (!DetailedDiagnosticsEnabled()) return;
+    if (!PresentDetailedEnabled()) return;
     thread_local const int tid = int(gettid());
     std::lock_guard<std::mutex> lock(g_present_timing_mutex);
     g_present_timing.Add(at_ns, duration_ns, tid);
@@ -90,15 +93,6 @@ HRESULT TimedTextureUpload(Upload upload) {
     const auto start = std::chrono::steady_clock::now();
     HRESULT hr = upload();
     RecordTextureTiming(g_upload_timing, std::chrono::steady_clock::now() - start);
-    return hr;
-}
-
-template <typename Lock>
-HRESULT TimedRectLock(Lock lock) {
-    if (!DetailedDiagnosticsEnabled()) return lock();
-    const auto start = std::chrono::steady_clock::now();
-    HRESULT hr = lock();
-    RecordTextureTiming(g_rect_host_timing, std::chrono::steady_clock::now() - start);
     return hr;
 }
 
@@ -364,39 +358,26 @@ bool IsBlockCompressed(D3DFORMAT f) {
 }
 
 // Maps the host's locked memory into a guest buffer. Read-only locks never copy back; discard locks need no input.
-uint32_t ShadowLock(void* object, uint32_t sub, void* host, uint32_t size, DWORD flags, bool full = true,
-                    bool rect = false) {
-    const bool timing = rect && DetailedDiagnosticsEnabled();
-    const auto wait_start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+uint32_t ShadowLock(void* object, uint32_t sub, void* host, uint32_t size, DWORD flags, bool full = true) {
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
-    if (timing) RecordTextureTiming(g_rect_wait_timing, std::chrono::steady_clock::now() - wait_start);
     Shadow& s = g_shadows[{object, sub}];
     if (s.capacity < size) {
-        const auto start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         if (s.guest) HeapFree(s.guest);
         s.guest = HeapAlloc(size);
         s.capacity = size;
-        if (timing) RecordTextureTiming(g_rect_alloc_timing, std::chrono::steady_clock::now() - start);
     }
     s.size = size;
     s.host = host;
     const D3D9LockPlan plan = D3D9ShadowLockPlan(flags);
     s.write_back = plan.write_back;
     s.full = full;
-    if (plan.copy_in) {
-        const auto start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-        memcpy(Ptr<void>(s.guest), host, size);
-        if (timing) RecordTextureTiming(g_rect_copy_in_timing, std::chrono::steady_clock::now() - start);
-    }
+    if (plan.copy_in) memcpy(Ptr<void>(s.guest), host, size);
     return s.guest;
 }
 
 void ShadowUnlock(void* object, uint32_t sub, const D3DSURFACE_DESC* texture_desc = nullptr,
-                  bool release_scratch = false, bool rect = false) {
-    const bool timing = rect && DetailedDiagnosticsEnabled();
-    const auto wait_start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+                  bool release_scratch = false) {
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
-    if (timing) RecordTextureTiming(g_rect_wait_timing, std::chrono::steady_clock::now() - wait_start);
     auto it = g_shadows.find({object, sub});
     if (it == g_shadows.end() || !it->second.host) return;
     Shadow& s = it->second;
@@ -405,24 +386,16 @@ void ShadowUnlock(void* object, uint32_t sub, const D3DSURFACE_DESC* texture_des
                                                                 : texture_desc->Height;
         uint32_t pitch = rows ? s.size / rows : 0;
         if (rows && pitch * rows == s.size) {
-            const auto start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
             ModTexturesReplace(object, sub, uint32_t(texture_desc->Format), texture_desc->Width,
                                texture_desc->Height, pitch, Ptr<void>(s.guest), s.write_back);
-            if (timing) RecordTextureTiming(g_rect_adapt_timing, std::chrono::steady_clock::now() - start);
         }
     }
-    {
-        const auto start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-        D3D9ShadowCopyBack(s.host, Ptr<void>(s.guest), s.size, s.write_back);
-        if (timing) RecordTextureTiming(g_rect_copy_back_timing, std::chrono::steady_clock::now() - start);
-    }
+    D3D9ShadowCopyBack(s.host, Ptr<void>(s.guest), s.size, s.write_back);
     if (release_scratch) {
         // Adapted static textures do not need their upload buffer after the last consumer has run. Large entries
         // are page-backed, so HeapFree also unmaps them; dynamic/ordinary locks retain their reusable shadows.
-        const auto start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         HeapFree(s.guest);
         g_shadows.erase(it);
-        if (timing) RecordTextureTiming(g_rect_free_timing, std::chrono::steady_clock::now() - start);
         return;
     }
     s.host = nullptr;
@@ -447,7 +420,7 @@ void LockRectCommon(Ctx* c, void* object, uint32_t sub, HRESULT hr, const D3DLOC
     if (SUCCEEDED(hr)) {
         uint32_t size = uint32_t(lr.Pitch) * RectRows(desc, rect);
         W32(out, uint32_t(lr.Pitch));
-        W32(out + 4, ShadowLock(object, sub, lr.pBits, size, flags, rect == nullptr, true));
+        W32(out + 4, ShadowLock(object, sub, lr.pBits, size, flags, rect == nullptr));
     }
     Return(c, uint32_t(hr), args);
 }
@@ -582,22 +555,17 @@ HRESULT AdaptedLockRect(void* tex, uint32_t sub, const TexAdapt& a, UINT level, 
         if (FAILED(hr)) return hr;
         if (!a.decode) {  // same format and size on the host: plain shadow
             W32(out, uint32_t(lr.Pitch));
-            W32(out + 4, ShadowLock(tex, sub, lr.pBits, uint32_t(lr.Pitch) * rows, flags, rect == nullptr, true));
+            W32(out + 4, ShadowLock(tex, sub, lr.pBits, uint32_t(lr.Pitch) * rows, flags, rect == nullptr));
             return D3D_OK;
         }
     }
-    const bool timing = DetailedDiagnosticsEnabled();
-    const auto wait_start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
-    if (timing) RecordTextureTiming(g_rect_wait_timing, std::chrono::steady_clock::now() - wait_start);
     AdaptedLock& l = g_adapted_locks[{tex, sub}];
     uint32_t size = pitch * rows;
     if (l.capacity < size) {
-        const auto start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         if (l.guest) HeapFree(l.guest);
         l.guest = HeapAlloc(size);
         l.capacity = size;
-        if (timing) RecordTextureTiming(g_rect_alloc_timing, std::chrono::steady_clock::now() - start);
     }
     l.pitch = pitch;
     l.format = a.format;
@@ -615,23 +583,19 @@ HRESULT AdaptedLockRect(void* tex, uint32_t sub, const TexAdapt& a, UINT level, 
 
 // Returns true when the lock was a decoded or dropped one (the host level, if any, must still be unlocked).
 bool AdaptedUnlock(void* tex, uint32_t sub, bool* host_locked, bool texture_2d = false) {
-    const bool timing = DetailedDiagnosticsEnabled();
-    const auto wait_start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
-    if (timing) RecordTextureTiming(g_rect_wait_timing, std::chrono::steady_clock::now() - wait_start);
     auto it = g_adapted_locks.find({tex, sub});
     if (it == g_adapted_locks.end() || !it->second.guest) return false;
     AdaptedLock& l = it->second;
     // Decoded/dropped read-only locks do not receive a guest-input copy in this path. Only writable full locks have
     // authoritative original pixels to hash; read-only locks must never establish identity from scratch memory.
     if (texture_2d && l.full && l.write_back) {
-        const auto start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         ModTexturesReplace(tex, sub, uint32_t(l.format), l.width, l.height, l.pitch, Ptr<void>(l.guest), true);
-        if (timing) RecordTextureTiming(g_rect_adapt_timing, std::chrono::steady_clock::now() - start);
     }
     *host_locked = l.host != nullptr;
     if (l.host) {
         if (l.write_back) {
+            const bool timing = DetailedDiagnosticsEnabled();
             const auto start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
             DecodeDxt(l.format, Ptr<uint8_t>(l.guest), l.pitch, l.width, l.height, l.host, l.host_pitch,
                       l.decode_format);
@@ -642,10 +606,8 @@ bool AdaptedUnlock(void* tex, uint32_t sub, bool* host_locked, bool texture_2d =
     // The D3D lock pointer is invalid after UnlockRect. Release the compressed guest copy only after mod
     // replacement and decoding have consumed it; this bounds static-texture upload memory instead of retaining one
     // scratch allocation per subresource for the texture's entire lifetime.
-    const auto free_start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     HeapFree(l.guest);
     g_adapted_locks.erase(it);
-    if (timing) RecordTextureTiming(g_rect_free_timing, std::chrono::steady_clock::now() - free_start);
     return true;
 }
 
@@ -760,32 +722,6 @@ std::string TakeTextureTimingStats() {
              (unsigned long long)calls[2], total[2] / 1.0e6,
              calls[2] ? total[2] / double(calls[2]) / 1.0e6 : 0.0, maximum[2] / 1.0e6,
              (unsigned long long)over[2][0], (unsigned long long)over[2][1], (unsigned long long)over[2][2]);
-    return out;
-}
-
-std::string TakeLockTimingStats() {
-    TextureTiming* timings[] = {&g_rect_host_timing, &g_rect_wait_timing, &g_rect_alloc_timing,
-                                &g_rect_copy_in_timing, &g_rect_adapt_timing, &g_rect_copy_back_timing,
-                                &g_rect_free_timing};
-    const char* names[] = {"rect_host", "rect_wait", "rect_alloc", "rect_copy_in",
-                           "rect_adapt", "rect_copy_back", "rect_free"};
-    TextureTiming taken[7];
-    {
-        std::lock_guard<std::mutex> lock(g_texture_timing_mutex);
-        for (size_t i = 0; i < 7; ++i) taken[i] = timings[i]->Take();
-    }
-    std::string out;
-    for (size_t i = 0; i < 7; ++i) {
-        char piece[256];
-        snprintf(piece, sizeof(piece),
-                 "%s n=%llu total=%.2fms avg=%.2f max=%.2f gt10/50/100=%llu/%llu/%llu", names[i],
-                 (unsigned long long)taken[i].calls, taken[i].total_ns / 1.0e6,
-                 taken[i].calls ? taken[i].total_ns / double(taken[i].calls) / 1.0e6 : 0.0,
-                 taken[i].max_ns / 1.0e6, (unsigned long long)taken[i].over[0],
-                 (unsigned long long)taken[i].over[1], (unsigned long long)taken[i].over[2]);
-        if (i) out += "; ";
-        out += piece;
-    }
     return out;
 }
 
@@ -934,7 +870,6 @@ M(IDirect3DDevice9, Reset) {
         pp.MultiSampleType, pp.MultiSampleQuality, pp.PresentationInterval, uint32_t(hr),
         double(MonotonicNanos() - reset_start_ns) / 1e6);
     if (SUCCEEDED(hr)) {
-        ResetPresentFrameLimiter();  // a swapchain reset is a new pacing boundary, not a catch-up opportunity
         if (OverrideModes()) SetClientSize(int(pp.BackBufferWidth), int(pp.BackBufferHeight));
     }
     ToGuest(pp, Arg(c, 1));
@@ -999,21 +934,11 @@ void MaybeScreenshot(IDirect3DDevice9* dev) {
 std::mutex g_present_mutex;
 bool g_surface_gone = false;  // under g_present_mutex
 
-void RegisterPresentPerfHintThread() {
-    // Guest priority labels do not reliably identify the real D3D9 render/Present thread. Register the observed thread
-    // once, independently of that label; subsequent Presents only read this thread-local boolean.
-    thread_local bool registered = false;
-    if (registered) return;
-    PerfHintAddThread(int(gettid()));
-    registered = true;
-}
-
 template <typename F>
 HRESULT GuardedPresent(F present) {
     std::unique_lock<std::mutex> lock(g_present_mutex);
     if (g_surface_gone) {
         lock.unlock();
-        ResetPresentFrameLimiter();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return D3D_OK;
     }
@@ -1029,18 +954,6 @@ HRESULT GuardedPresent(F present) {
         // complete end-to-end interval; empty guest pump iterations and skipped surface-less presents do not.
         const int64_t duration_ns = RecordPresent();
         if (duration_ns > 0) PerfHintFrame(duration_ns);
-        RegisterPresentPerfHintThread();
-    } else {
-        ResetPresentFrameLimiter();
-    }
-
-    // Never sleep with the surface mutex held: Android must remain free to report surface loss/recreation. Record the
-    // actual Present before this wait, so the next real interval includes the preceding pacing delay without moving
-    // or inventing a presentation timestamp. Failed/skipped calls do not advance the limiter's deadline grid.
-    lock.unlock();
-    if (SUCCEEDED(hr)) {
-        const FrameLimitResult limit = LimitPresentedFrame();
-        if (timing) RecordPresentLimiter(limit);
     }
     return hr;
 }
@@ -1079,26 +992,19 @@ M(IDirect3DDevice9, Present) {
 }
 // Clamp expensive filtering at the bridge as well as in DXVK. At 1x, anisotropic filtering is exactly linear
 // filtering; using LINEAR also avoids DXVK enabling a sampler's anisotropy feature with maxAnisotropy = 1.
+int MaxAnisotropy() {
+    static const int value = [] {
 #ifdef __ANDROID__
-static int g_max_anisotropy = 1;
+        const int configured = std::clamp(SettingInt("max_anisotropy", 1), 1, 16);
 #else
-static int g_max_anisotropy = 16;
+        const int configured = std::clamp(SettingInt("max_anisotropy", 16), 1, 16);
 #endif
-
-// Called by InitD3D9Bridge after settings/logging are ready and before any guest D3D9 call. Resolving here avoids
-// a thread-safe local-static guard on every SetSamplerState while preserving the existing defaults and clamp.
-void InitMaxAnisotropy() {
-#ifdef __ANDROID__
-    const int configured = std::clamp(SettingInt("max_anisotropy", 1), 1, 16);
-#else
-    const int configured = std::clamp(SettingInt("max_anisotropy", 16), 1, 16);
-#endif
-    Log("samplers: effective DXVK forwarding maximum %dx%s", configured,
-        configured == 1 ? "; MIN/MAG anisotropic -> LINEAR" : "");
-    g_max_anisotropy = configured;
+        Log("samplers: effective DXVK forwarding maximum %dx%s", configured,
+            configured == 1 ? "; MIN/MAG anisotropic -> LINEAR" : "");
+        return configured;
+    }();
+    return value;
 }
-
-int MaxAnisotropy() { return g_max_anisotropy; }
 
 M(IDirect3DDevice9, SetSamplerState) {
     const DWORD stage = Arg(c, 1), type = Arg(c, 2), requested = Arg(c, 3);
@@ -1150,14 +1056,14 @@ M(IDirect3DSurface9, LockRect) {
     auto* s = Host<IDirect3DSurface9>(Arg(c, 0));
     const RECT* rect = Ptr<RECT>(Arg(c, 2));
     D3DLOCKED_RECT lr;
-    HRESULT hr = TimedRectLock([&] { return s->LockRect(&lr, rect, Arg(c, 3)); });
+    HRESULT hr = s->LockRect(&lr, rect, Arg(c, 3));
     D3DSURFACE_DESC desc;
     s->GetDesc(&desc);
     LockRectCommon(c, s, 0, hr, lr, desc, rect, Arg(c, 3), Arg(c, 1), 4);
 }
 M(IDirect3DSurface9, UnlockRect) {
     auto* s = Host<IDirect3DSurface9>(Arg(c, 0));
-    ShadowUnlock(s, 0, nullptr, false, true);
+    ShadowUnlock(s, 0);
     Return(c, uint32_t(TimedTextureUpload([&] { return s->UnlockRect(); })), 1);
 }
 M(IDirect3DSurface9, GetDC) { Return(c, uint32_t(D3DERR_INVALIDCALL), 2); }
@@ -1278,13 +1184,13 @@ M(IDirect3DTexture9, LockRect) {
         TexAdapt copy = *a;
         HRESULT hr = AdaptedLockRect(t, level, copy, level, rect, Arg(c, 4), Arg(c, 2),
                                      [&](UINT host_level, D3DLOCKED_RECT* lr) {
-                                         return TimedRectLock([&] { return t->LockRect(host_level, lr, rect, Arg(c, 4)); });
+                                         return t->LockRect(host_level, lr, rect, Arg(c, 4));
                                      });
         Return(c, uint32_t(hr), 5);
         return;
     }
     D3DLOCKED_RECT lr;
-    HRESULT hr = TimedRectLock([&] { return t->LockRect(level, &lr, rect, Arg(c, 4)); });
+    HRESULT hr = t->LockRect(level, &lr, rect, Arg(c, 4));
     D3DSURFACE_DESC desc;
     t->GetLevelDesc(level, &desc);
     LockRectCommon(c, t, level, hr, lr, desc, rect, Arg(c, 4), Arg(c, 2), 5);
@@ -1307,11 +1213,11 @@ M(IDirect3DTexture9, UnlockRect) {
         } else {
             t->GetLevelDesc(level, &guest_desc);
         }
-        ShadowUnlock(t, level, &guest_desc, a != nullptr, true);
+        ShadowUnlock(t, level, &guest_desc, a != nullptr);
     } else {
         // Ordinary Play keeps the original unlock route and avoids a DXVK description query. Adapted static
         // textures still release their completed upload scratch; all other shadows remain reusable.
-        ShadowUnlock(t, level, nullptr, a != nullptr, true);
+        ShadowUnlock(t, level, nullptr, a != nullptr);
     }
     Return(c, uint32_t(TimedTextureUpload([&] { return t->UnlockRect(a ? level - a->skip : level); })), 2);
 }
@@ -1324,13 +1230,13 @@ M(IDirect3DCubeTexture9, LockRect) {
         TexAdapt copy = *a;
         HRESULT hr = AdaptedLockRect(t, face * 64 + level, copy, level, rect, Arg(c, 5), Arg(c, 3),
                                      [&](UINT host_level, D3DLOCKED_RECT* lr) {
-                                         return TimedRectLock([&] { return t->LockRect(D3DCUBEMAP_FACES(face), host_level, lr, rect, Arg(c, 5)); });
+                                         return t->LockRect(D3DCUBEMAP_FACES(face), host_level, lr, rect, Arg(c, 5));
                                      });
         Return(c, uint32_t(hr), 6);
         return;
     }
     D3DLOCKED_RECT lr;
-    HRESULT hr = TimedRectLock([&] { return t->LockRect(D3DCUBEMAP_FACES(face), level, &lr, rect, Arg(c, 5)); });
+    HRESULT hr = t->LockRect(D3DCUBEMAP_FACES(face), level, &lr, rect, Arg(c, 5));
     D3DSURFACE_DESC desc;
     t->GetLevelDesc(level, &desc);
     LockRectCommon(c, t, face * 64 + level, hr, lr, desc, rect, Arg(c, 5), Arg(c, 3), 6);
@@ -1348,7 +1254,7 @@ M(IDirect3DCubeTexture9, UnlockRect) {
                3);
         return;
     }
-    ShadowUnlock(t, face * 64 + level, nullptr, a != nullptr, true);
+    ShadowUnlock(t, face * 64 + level, nullptr, a != nullptr);
     Return(c,
            uint32_t(TimedTextureUpload(
                [&] { return t->UnlockRect(D3DCUBEMAP_FACES(face), a ? level - a->skip : level); })),
@@ -1449,7 +1355,6 @@ struct Registrar {
 
 // Called once guest memory exists (the vtables live there).
 void InitD3D9Bridge() {
-    InitMaxAnisotropy();
     for (const InterfaceDef& i : kInterfaces) {
         uint32_t vt = HeapAlloc(uint32_t(4 * i.count));
         for (size_t k = 0; k < i.count; ++k) {

@@ -14,8 +14,6 @@ assert 'setenv("WRAPPER_VK_VERSION", "1.3", 1);' in configure, (
 assert "ProbeRequiredDxvkFeatures" in configure, "the override must document the independent feature gate"
 
 try_wrapper = driver.split("bool TryVulkanWrapper", 1)[1].split("void AutomaticSystemDevice", 1)[0]
-assert "ReadDriverFailureMarker(kWrapperFailed, kBuild)" in try_wrapper, "ordinary Auto launches lost the wrapper crash-loop guard"
-assert "unlink(kWrapperFailed)" not in driver, "native launch must leave marker cleanup to an explicit launcher driver action"
 assert "ConfigureWrapperLogging(true);" in try_wrapper, "isolated wrapper probe lacks the effective-version override"
 assert "TurnipWorksInChild(driver)" in try_wrapper, "wrapper probe must remain isolated"
 assert "ConfigureWrapperLogging(false);" in try_wrapper, "in-process wrapper lacks the effective-version override"

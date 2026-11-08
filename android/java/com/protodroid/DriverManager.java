@@ -84,7 +84,7 @@ final class DriverManager {
             return;
         }
         preferences.edit().putString(ACTIVE_ID, id).apply();
-        clearFailureMarkers();
+        clearFailureMarker();
         setStatus("Custom driver selected", entry.installed.name
                 + " will be tried in ProtoDroid's isolated probe on the next Play. "
                 + "If it cannot initialize safely, the system driver is used and the reason is logged.");
@@ -238,7 +238,7 @@ final class DriverManager {
 
     private void installSucceeded(DriverRepository.Entry installed) {
         preferences.edit().putBoolean(LEGACY_IGNORED, true).apply();
-        clearFailureMarkers();
+        clearFailureMarker();
         String name = installed.installed.name;
         setStatus("Driver installed", name + " is ready in your library. Auto remains unchanged; "
                 + "choose Custom, then Select on this card when you want to use it. No system driver was modified.");
@@ -280,7 +280,7 @@ final class DriverManager {
                 preferences.edit().remove(ACTIVE_ID).apply();
                 if (selected != null && selected.id.equals(id)) new GameSettings(activity).setCustomDriverSelected(false);
             }
-            clearFailureMarkers();
+            clearFailureMarker();
             setStatus("Driver removed", "Only ProtoDroid's private copy was removed. Auto is available, and your original ZIP/.so, saves, and system driver are unchanged.");
             return true;
         } catch (IOException e) {
@@ -296,13 +296,8 @@ final class DriverManager {
         notifyObserver();
     }
 
-    /** Explicit driver actions may retry a guarded path; ordinary Auto launches must retain its crash-loop guard. */
-    void clearFailureMarkers() {
-        // Native changes directory to SDL_AndroidGetExternalStoragePath(), not getFilesDir(), before writing these.
-        File nativeDirectory = activity.getExternalFilesDir(null);
-        if (nativeDirectory == null) return;
-        new File(nativeDirectory, "turnip_failed").delete();
-        new File(nativeDirectory, "vulkan_wrapper_failed").delete();
+    private void clearFailureMarker() {
+        new File(files(), "turnip_failed").delete();
     }
 
     private String displayName(Uri uri) {

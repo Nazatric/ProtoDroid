@@ -60,12 +60,10 @@ struct Object {
     // Keep the real mastering voice (and its real-time output thread) for the lifetime of the FAudio engine.
     std::mutex mastering_mutex;
     FAudioVoice* retained_master = nullptr;
-    // Track every real master, including a non-retained master whose destroy was refused while senders remained.
-    FAudioVoice* live_master = nullptr;
     uint32_t retained_channels = 0, retained_rate = 0, retained_flags = 0, retained_device = 0;
-    uint32_t master_users = 0;          // logical mastering wrappers, retained or not
-    Object* master_owner = nullptr;     // mastering wrapper -> owning engine
-    bool uses_retained_master = false;  // set only on retained mastering-voice wrappers
+    uint32_t retained_users = 0;
+    Object* master_owner = nullptr;     // retained mastering wrapper -> owning engine
+    bool uses_retained_master = false;  // set only on mastering-voice wrappers
 };
 
 std::recursive_mutex g_mutex;
@@ -282,7 +280,6 @@ M(EngineRelease) {
         }
         if (!orphaned.empty()) Log("xaudio2: engine release reclaimed %zu voice wrapper(s)", orphaned.size());
         o->retained_master = nullptr;
-        o->live_master = nullptr;
         FAudio_Release(o->audio);
         for (EngineCallback* cb : o->engine_callbacks) delete cb;
         delete o;
@@ -388,8 +385,8 @@ M(CreateMasteringVoice) {
     FAudioMasteringVoice* v = nullptr;
     uint32_t hr = 0;
     bool retained = false, reused = false;
-    std::lock_guard<std::mutex> lock(e->mastering_mutex);
     if (reuse_master) {
+        std::lock_guard<std::mutex> lock(e->mastering_mutex);
         if (e->retained_master && e->retained_channels == channels && e->retained_rate == rate &&
             e->retained_flags == flags && e->retained_device == device) {
             v = reinterpret_cast<FAudioMasteringVoice*>(e->retained_master);
@@ -399,15 +396,12 @@ M(CreateMasteringVoice) {
             reused = true;
         } else {
             if (e->retained_master) {
-                if (e->master_users) {
+                if (e->retained_users) {
                     hr = FAUDIO_E_INVALID_CALL;  // FAudio supports exactly one allocated master at a time
                 } else {
-                    // Do not forget the old output if FAudio refuses destruction because a sender remains.
-                    hr = FAudioVoice_DestroyVoiceSafeEXT(e->retained_master);
-                    if (hr == 0) {
-                        e->retained_master = nullptr;
-                        e->live_master = nullptr;
-                    }
+                    // The logical old master is gone, so a different configuration can now replace its real output.
+                    FAudioVoice_DestroyVoice(e->retained_master);
+                    e->retained_master = nullptr;
                 }
             }
             if (hr == 0) {
@@ -415,7 +409,6 @@ M(CreateMasteringVoice) {
                 retained = hr == 0;
                 if (retained) {
                     e->retained_master = v;
-                    e->live_master = v;
                     e->retained_channels = channels;
                     e->retained_rate = rate;
                     e->retained_flags = flags;
@@ -423,28 +416,15 @@ M(CreateMasteringVoice) {
                 }
             }
         }
+        if (retained) ++e->retained_users;
     } else {
-        // A previous void DestroyVoice can leave the real master alive when another voice still sends to it.
-        // Retry that destruction before creating a replacement; never overwrite FAudio's live master pointer.
-        if (e->live_master) {
-            if (e->master_users) {
-                hr = FAUDIO_E_INVALID_CALL;
-            } else {
-                hr = FAudioVoice_DestroyVoiceSafeEXT(e->live_master);
-                if (hr == 0) e->live_master = nullptr;
-            }
-        }
-        if (hr == 0) {
-            hr = FAudio_CreateMasteringVoice(e->audio, &v, channels, rate, flags, device, effects);
-            if (hr == 0) e->live_master = v;
-        }
+        hr = FAudio_CreateMasteringVoice(e->audio, &v, channels, rate, flags, device, effects);
     }
     Object* wrapper = hr == 0 ? new Object(kMastering, nullptr, v) : nullptr;
-    if (wrapper) {
-        wrapper->owner = e;
+    if (wrapper) wrapper->owner = e;
+    if (wrapper && retained) {
+        wrapper->uses_retained_master = true;
         wrapper->master_owner = e;
-        wrapper->uses_retained_master = retained;
-        ++e->master_users;
     }
     W32(Arg(c, 1), wrapper ? NewGuest(wrapper) : 0);
     const double elapsed_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
@@ -524,16 +504,9 @@ M(DestroyVoice) {
     Object* o = Obj(g);
     // Logical mastering wrappers can die; the retained real output dies with its owning engine (or a later valid
     // configuration change). Other voices keep synchronous destruction, which waits for callbacks to finish.
-    if (o->kind == kMastering) {
-        Object* e = o->master_owner;
-        std::lock_guard<std::mutex> lock(e->mastering_mutex);
-        if (e->master_users) --e->master_users;
-        if (!o->uses_retained_master) {
-            // The XAudio2 2.3 method is void, so a refused real destroy is retried at the next master create or
-            // left for FAudio_Release; the guest wrapper is still tombstoned exactly as before.
-            uint32_t hr = FAudioVoice_DestroyVoiceSafeEXT(o->voice);
-            if (hr == 0 && e->live_master == o->voice) e->live_master = nullptr;
-        }
+    if (o->uses_retained_master) {
+        std::lock_guard<std::mutex> lock(o->master_owner->mastering_mutex);
+        if (o->master_owner->retained_users) --o->master_owner->retained_users;
     } else {
         FAudioVoice_DestroyVoice(o->voice);
     }

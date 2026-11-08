@@ -514,31 +514,6 @@ void CheckMonotonicWaitPacing() {
     Call("BinkSetSoundTrack", 2, {1, selection});
 }
 
-void CheckAudioOutputRetry() {
-    // A transient platform/audio-open failure must not permanently disable later movie audio.
-    // Run before the first successful open so this covers the process-lifetime initialization state.
-    Check(g_sdl_test_open_calls == 0 && g_sdl_test_close_calls == 0,
-          "audio retry fixture did not start with a fresh SDL output");
-    g_sdl_test_fail_opens = 1;
-    uint32_t first = OpenName("movies\\intro.bik");
-    Check(first != 0, "movie did not retain monotonic video fallback after audio-open failure");
-    Check(g_sdl_test_open_calls == 1 && g_sdl_test_close_calls == 0,
-          "unexpected audio device lifecycle after failed open");
-    Decode(first);
-    Close(first);
-    uint32_t second = OpenName("movies\\intro.bik");
-    Check(second != 0, "second movie did not open after transient audio failure");
-    Check(g_sdl_test_open_calls == 2 && g_sdl_test_close_calls == 0,
-          "failed audio initialization was not retried exactly once");
-    Decode(second);
-    Close(second);
-    uint32_t third = OpenName("movies\\intro.bik");
-    Check(third != 0, "healthy movie did not open after audio recovery");
-    Check(g_sdl_test_open_calls == 2 && g_sdl_test_close_calls == 0,
-          "healthy audio output was reopened instead of reused");
-    Close(third);
-}
-
 void CheckAudioAndTrackApi() {
     uint32_t h = OpenName("movies\\intro.bik");
     Check(h != 0, "audio test open failed");
@@ -747,7 +722,6 @@ int main(int argc, char** argv) {
         Check(avcodec_find_decoder(AV_CODEC_ID_BINKAUDIO_RDFT) && avcodec_find_decoder(AV_CODEC_ID_BINKAUDIO_DCT),
               "minimal FFmpeg is missing a Bink audio decoder");
         uint32_t ids = HeapAlloc(4); W32(ids, 0); Call("BinkSetSoundTrack", 2, {1, ids});
-        CheckAudioOutputRetry();
 
         CheckOpenDecodeClose(OpenName("c:\\GaMe\\movies\\intro.bik"));
         g_test_logs.clear();

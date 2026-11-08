@@ -77,15 +77,4 @@ Release run `41660305950`, job `126001422675`, checked out `18ba66b` on `ubuntu-
 
 `tools/perf_evidence.py` extracts source/device/settings, raw Present windows, and tested-phase metrics from native logs. Its comparator marks device, GPU, configuration, phase, or metric coverage mismatches as non-comparable. `tools/test_perf_evidence.py` covers synthetic A/B data, mismatch guards, and the supplied historical logs. This tooling does not infer FPS where no device measurement exists.
 
-For exact global frame-time A/B evidence, first run `tools/analyze_frame_intervals.py` on each closed raw CSV and `tools/perf_evidence.py summarize` on each matching native-log set. Then use:
-
-```sh
-python3 tools/perf_evidence.py compare-raw \
-  baseline-summary.json candidate-summary.json baseline-frames.json candidate-frames.json \
-  --baseline-scene static-outdoor --candidate-scene static-outdoor \
-  --baseline-cache-state warm --candidate-cache-state warm
-```
-
-The raw comparator requires source/device/GPU/configuration metadata, matching caller-declared scene and cache-state labels, and closed exact reports. It compares global nearest-rank p50/p95/p99/max, average interval/rate, and threshold counts normalized per 1,000 completed intervals when row counts differ. Missing metadata, mismatched protocol, or an unclosed prefix is non-comparable. The labels are protocol declarations, not independent scene/cache proof; a single comparison is not significance, visual validation, or automatic adoption.
-
 Physical-device 0.15 baseline capture remains an explicit open gate for Phases 3, 10, and 12; no current phone FPS number is available to copy or estimate.

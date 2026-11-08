@@ -4,8 +4,6 @@
 #include <cstdint>
 #include <cstring>
 #include <vector>
-#include <chrono>
-#include <thread>
 
 using Uint8 = uint8_t;
 using SDL_AudioDeviceID = uint32_t;
@@ -34,19 +32,9 @@ struct SDLTestAudioState {
 };
 inline SDLTestAudioState g_sdl_test_audio;
 inline int g_sdl_test_forced_rate = 0;
-inline int g_sdl_test_open_calls = 0;
-inline int g_sdl_test_close_calls = 0;
-inline int g_sdl_test_fail_opens = 0;
-inline int g_sdl_test_open_delay_ms = 0;
 inline int SDL_InitSubSystem(uint32_t) { return 0; }
 inline const char* SDL_GetError() { return "SDL test stub"; }
 inline SDL_AudioDeviceID SDL_OpenAudioDevice(const char*, int, const SDL_AudioSpec* want, SDL_AudioSpec* got, int) {
-    ++g_sdl_test_open_calls;
-    if (g_sdl_test_open_delay_ms > 0) std::this_thread::sleep_for(std::chrono::milliseconds(g_sdl_test_open_delay_ms));
-    if (g_sdl_test_fail_opens > 0) {
-        --g_sdl_test_fail_opens;
-        return 0;
-    }
     g_sdl_test_audio.spec = *want;
     g_sdl_test_audio.spec.freq = g_sdl_test_forced_rate ? g_sdl_test_forced_rate : want->freq;
     g_sdl_test_audio.spec.samples = want->samples;
@@ -54,10 +42,7 @@ inline SDL_AudioDeviceID SDL_OpenAudioDevice(const char*, int, const SDL_AudioSp
     return 1;
 }
 inline void SDL_PauseAudioDevice(SDL_AudioDeviceID, int pause) { g_sdl_test_audio.paused = pause != 0; }
-inline void SDL_CloseAudioDevice(SDL_AudioDeviceID) {
-    ++g_sdl_test_close_calls;
-    g_sdl_test_audio.spec.callback = nullptr;
-}
+inline void SDL_CloseAudioDevice(SDL_AudioDeviceID) { g_sdl_test_audio.spec.callback = nullptr; }
 inline void SDLTestPumpAudio(int frames = 1024) {
     if (!g_sdl_test_audio.spec.callback) return;
     g_sdl_test_audio.last_output.assign(static_cast<size_t>(frames) * 2 * sizeof(float), 0);

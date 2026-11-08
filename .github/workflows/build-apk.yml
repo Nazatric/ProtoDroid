@@ -42,7 +42,6 @@ jobs:
           python3 tools/test_native_launcher.py
           REQUIRE_JAVA_COMPILER=1 python3 tools/test_native_diagnostics.py
           python3 tools/test_sdl_version.py
-          python3 tools/test_recomp_lto_policy.py
 
       - name: Install host test dependencies
         run: |
@@ -69,14 +68,6 @@ jobs:
         run: |
           bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test
           bash src/native/tests/run_memory_test.sh /tmp/memory_test
-
-      - name: Check out pinned FAudio header for XAudio2 regression
-        run: |
-          git clone -q --depth 1 --branch 25.10 https://github.com/FNA-XNA/FAudio.git /tmp/protodroid-faudio-test
-          test "$(git -C /tmp/protodroid-faudio-test rev-parse HEAD)" = "ba876ce3be73eabd7094fa276a751ede8328b608"
-
-      - name: Compile and run XAudio2 lifecycle regression
-        run: bash src/native/tests/run_xaudio2_test.sh /tmp/protodroid-faudio-test /tmp/protodroid-xaudio2-test
 
       - name: Compile and run Prototype Fix policy tests
         run: |
@@ -180,38 +171,8 @@ jobs:
           set -euo pipefail
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
           g++ $CXXFLAGS src/native/present_stats.cpp src/native/tests/present_stats_test.cpp -o /tmp/present_stats_test
-          g++ $CXXFLAGS src/native/tests/frame_interval_trace_test.cpp -o /tmp/frame_interval_trace_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/present_stats_test
-          /tmp/frame_interval_trace_test
-
-      - name: Compile and run successful-Present frame-limiter tests
-        run: |
-          set -euo pipefail
-          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
-          g++ $CXXFLAGS src/native/frame_limiter.cpp src/native/tests/frame_limiter_test.cpp -o /tmp/frame_limiter_test
-          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
-          /tmp/frame_limiter_test
-
-      - name: Compile and run opt-in memory-size profile tests
-        run: |
-          set -euo pipefail
-          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
-          g++ $CXXFLAGS src/native/tests/memory_size_profile_test.cpp -o /tmp/memory_size_profile_test
-          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
-          /tmp/memory_size_profile_test
-
-      - name: Test selected guest-function tracing
-        run: |
-          set -euo pipefail
-          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
-          g++ $CXXFLAGS src/native/tests/guest_function_trace_test.cpp -o /tmp/guest_function_trace_test
-          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
-          /tmp/guest_function_trace_test
-          python3 tools/test_guest_function_trace.py
-          python3 tools/test_guest_function_trace_runtime.py
-          python3 tools/test_analyze_guest_function_trace.py
-          python3 tools/test_analyze_warm_cache_trace.py
 
       - name: Compile and run diagnostic-tour plan and guest-clock tests
         run: |
@@ -253,9 +214,7 @@ jobs:
       - name: Test DXVK memory selection and state-cache behavior
         run: |
           set -euo pipefail
-          python3 tools/test_dxvk_build_optimization.py
           git clone -q --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/protodroid-dxvk-test
-          git -C /tmp/protodroid-dxvk-test submodule update --init --depth 1 include/native/directx include/vulkan include/spirv
           for patch in "$PWD"/android/patches/dxvk-*.patch; do
             git -C /tmp/protodroid-dxvk-test apply --check "$patch"
             git -C /tmp/protodroid-dxvk-test apply "$patch"
@@ -263,39 +222,17 @@ jobs:
           python3 tools/test_dxvk_unified_memory.py /tmp/protodroid-dxvk-test/src/dxvk/dxvk_memory.cpp
           python3 tools/test_dxvk_depth_resolve.py /tmp/protodroid-dxvk-test/src/d3d9/d3d9_device.cpp
           python3 tools/test_dxvk_fxaa.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_present_path.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_pipeline_outcomes.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_submission_timing.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_submission_timing_runtime.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_submission_timing_syntax.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_pipeline_drain.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_pipeline_drain_runtime.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_pipeline_drain_syntax.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_warm_cache_trace.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_warm_cache_trace_runtime.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_warm_cache_trace_syntax.py /tmp/protodroid-dxvk-test
-          python3 tools/test_dxvk_frame_pacing.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_device_preflight.py /tmp/protodroid-dxvk-test
           python3 tools/test_dxvk_bc_support.py /tmp/protodroid-dxvk-test
-          for shader in dxvk_present_vert.vert dxvk_present_frag.frag dxvk_present_frag_blit.frag \
-            dxvk_present_frag_ms.frag dxvk_present_frag_ms_blit.frag dxvk_present_frag_ms_amd.frag \
-            dxvk_present_frag_fxaa.frag; do
-            glslangValidator --quiet -V --target-env vulkan1.3 \
-              -I/tmp/protodroid-dxvk-test/src/dxvk/shaders \
-              "/tmp/protodroid-dxvk-test/src/dxvk/shaders/${shader}" \
-              -o "/tmp/protodroid-${shader}.spv"
-            test -s "/tmp/protodroid-${shader}.spv"
-          done
+          glslangValidator --quiet -V --target-env vulkan1.3 \
+            -I/tmp/protodroid-dxvk-test/src/dxvk/shaders \
+            /tmp/protodroid-dxvk-test/src/dxvk/shaders/dxvk_present_frag_fxaa.frag \
+            -o /tmp/protodroid-fxaa.spv
+          test -s /tmp/protodroid-fxaa.spv
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-test/src/dxvk"
           g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/state_cache_test
-          python3 tools/inspect_dxvk_state_cache.py prototypeenginef.dll.dxvk-cache \
-            --output /tmp/protodroid-real-cache-inventory.json \
-            > /tmp/protodroid-real-cache-inventory.stdout \
-            2> /tmp/protodroid-real-cache-inventory.stderr
-          cat /tmp/protodroid-real-cache-inventory.stdout
-          test ! -s /tmp/protodroid-real-cache-inventory.stderr
 
       - name: Compile and run GameDB video-setting tests
         run: |
@@ -395,37 +332,11 @@ jobs:
       - name: Test Vulkan wrapper negotiation policy
         run: python3 tools/test_vulkan_wrapper_policy.py
 
-      - name: Test ordinary-play hot-path, Present-limiter, and failed-driver recovery policies
-        run: |
-          python3 tools/test_runtime_performance.py
-          python3 tools/test_frame_limiter.py
-
-      - name: Test opt-in rect-lock attribution boundaries
-        run: python3 tools/test_rect_lock_diagnostics.py
-
-      - name: Test worker-only raw frame interval tracing
-        run: |
-          python3 tools/test_frame_interval_trace.py
-          python3 tools/test_analyze_frame_intervals.py
-
-      - name: Test exact D3D9 timing aggregation
-        run: python3 tools/test_analyze_d3d9_timing.py
-
-      - name: Test bounded guest caller attribution
-        run: |
-          python3 tools/test_import_caller_profile.py
-          python3 tools/test_import_caller_profile_runtime.py
-          python3 tools/test_analyze_import_callers.py
-
-      - name: Test opt-in CRT memory-size accounting
-        run: |
-          python3 tools/test_memory_size_profile.py
-          python3 tools/test_analyze_memory_sizes.py
+      - name: Test ordinary-play hot-path and failed-driver recovery policies
+        run: python3 tools/test_runtime_performance.py
 
       - name: Test performance-evidence comparability guards
-        run: |
-          python3 tools/test_perf_evidence.py
-          python3 tools/test_perf_raw_compare.py
+        run: python3 tools/test_perf_evidence.py
 
       - name: Test compatibility controls and graphics policies
         run: python3 tools/test_compatibility_batch.py
@@ -515,9 +426,6 @@ jobs:
 
   arm64-graphics-tests:
     runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: read
-      checks: write
     steps:
       - uses: actions/checkout@v4
 
@@ -528,303 +436,6 @@ jobs:
           g++ $CXXFLAGS src/native/d3d9_dxt.cpp src/native/tests/graphics_test.cpp -o /tmp/graphics_test_arm64
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/graphics_test_arm64
-
-      - name: Measure exact D3D9 bridge candidates on native ARM64
-        run: |
-          set -euo pipefail
-          # Native Linux ARM64 microfixtures, not Android-device FPS or GPU results. Keep an identical A/A control
-          # and the exact source revisions that introduced each candidate.
-          git fetch -q --depth=1 origin c03364950239b1d7d8a34741fe2c73b92df7258b
-          git fetch -q --depth=1 origin ca25c4603ca3969fbaabd5e2dfc1264a50101925
-          git show c03364950239b1d7d8a34741fe2c73b92df7258b:src/native/d3d9.cpp > /tmp/d3d9-before-host-table.cpp
-          git show ca25c4603ca3969fbaabd5e2dfc1264a50101925:src/native/d3d9.cpp > /tmp/d3d9-before-anisotropy.cpp
-          git show ca25c4603ca3969fbaabd5e2dfc1264a50101925:src/native/d3d9.cpp > /tmp/d3d9-rejected-host-table-candidate.cpp
-          python3 tools/measure_d3d9_bridge.py host-table \
-            --before /tmp/d3d9-before-host-table.cpp --after /tmp/d3d9-rejected-host-table-candidate.cpp \
-            --output /tmp/d3d9-host-table-arm64 --calls 20000000 --rounds 24
-          python3 tools/measure_d3d9_bridge.py anisotropy \
-            --before /tmp/d3d9-before-anisotropy.cpp --output /tmp/d3d9-anisotropy-arm64 \
-            --calls 20000000 --rounds 24
-          git fetch -q --depth=1 origin \
-            e30a2b81c0118501c86caed1a2c8a3b6981adb8a \
-            87d3f2e371a4184c82dd95d2667fdeef6129b3c3
-          git show e30a2b81c0118501c86caed1a2c8a3b6981adb8a:src/native/imports.cpp > /tmp/imports-before-dense.cpp
-          git show 87d3f2e371a4184c82dd95d2667fdeef6129b3c3:src/native/imports.cpp > /tmp/imports-dense.cpp
-          python3 tools/measure_import_dispatch.py \
-            --before /tmp/imports-before-dense.cpp --after /tmp/imports-dense.cpp \
-            --output /tmp/import-dense-arm64 --calls 2000000 --rounds 24 --working-set 1024
-          python3 tools/measure_import_dispatch.py \
-            --before /tmp/imports-dense.cpp --after src/native/imports.cpp \
-            --output /tmp/import-tls-arm64 --calls 2000000 --rounds 24 --working-set 1024
-          # Architecture-specific screening only: the x86-64 atomic-guard experiment was neutral, while ARM64 has
-          # different local-static guard instructions. Generate an exact candidate without changing production source.
-          python3 - <<'PY'
-          from pathlib import Path
-          source = Path('src/native/imports.cpp').read_text()
-          source = source.replace('#include <sys/mman.h>\n', '#include <sys/mman.h>\n\n#include <atomic>\n', 1)
-          old = '''bool ImportProfiling() {
-              static const bool on = SettingInt("import_profile", 0) != 0;
-              return on;
-          }'''
-          new = '''std::atomic<int> g_import_profiling{-1};
-
-          bool ImportProfiling() {
-              int value = g_import_profiling.load(std::memory_order_relaxed);
-              if (value < 0) {
-                  value = SettingInt("import_profile", 0) != 0;
-                  g_import_profiling.store(value, std::memory_order_relaxed);
-              }
-              return value != 0;
-          }'''
-          assert source.count(old) == 1
-          Path('/tmp/imports-atomic-profile.cpp').write_text(source.replace(old, new))
-          PY
-          python3 tools/measure_import_dispatch.py \
-            --before src/native/imports.cpp --after /tmp/imports-atomic-profile.cpp \
-            --output /tmp/import-profile-guard-arm64 --calls 2000000 --rounds 24 --working-set 1024
-          git fetch -q --depth=1 origin ba19b5a32c186e0e5fe39a6a3c63fa92c1b9dd86
-          git show ba19b5a32c186e0e5fe39a6a3c63fa92c1b9dd86:android/patches/dxvk-zzzzzzzzzzzzzzzzz-submission-timing.patch \
-            > /tmp/d3d9-timing-before.patch
-          cp android/patches/dxvk-zzzzzzzzzzzzzzzzz-submission-timing.patch /tmp/d3d9-timing-after.patch
-          python3 tools/measure_dxvk_timing_guard.py \
-            --before-patch /tmp/d3d9-timing-before.patch --after-patch /tmp/d3d9-timing-after.patch \
-            --output /tmp/dxvk-timing-guard-arm64 --calls 20000000 --rounds 24
-      - name: Publish ARM64 D3D9 bridge evidence summary
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          # The artifact retains raw files. Also publish the compact result through Checks so head-specific evidence
-          # is available through the GitHub API without downloading a redirected artifact.
-          python3 - <<'PY' > /tmp/d3d9-arm64-check-summary.json
-          import json
-          from pathlib import Path
-          host = json.loads(Path('/tmp/d3d9-host-table-arm64/result.json').read_text())
-          aniso = json.loads(Path('/tmp/d3d9-anisotropy-arm64/result.json').read_text())
-          dxvk_guard = json.loads(Path('/tmp/dxvk-timing-guard-arm64/result.json').read_text())
-          host['raw_timing_jsonl'] = Path('/tmp/d3d9-host-table-arm64/timing.jsonl').read_text()
-          aniso['raw_timing_jsonl'] = Path('/tmp/d3d9-anisotropy-arm64/timing.jsonl').read_text()
-          dxvk_guard['raw_timing_jsonl'] = Path('/tmp/dxvk-timing-guard-arm64/timing.jsonl').read_text()
-          aniso['correctness_cases'] = json.loads(Path('/tmp/d3d9-anisotropy-arm64/correctness.json').read_text())
-          summary = {
-              'schema': 1,
-              'kind': 'native-linux-arm64-microfixtures-not-android-device-fps',
-              'physical_android_device': False,
-              'host_table': host,
-              'anisotropy': aniso,
-              'dxvk_timing_guard': dxvk_guard,
-          }
-          payload = '```json\n' + json.dumps(summary, indent=2) + '\n```'
-          assert len(payload.encode()) < 60000, len(payload.encode())
-          print(payload)
-          PY
-          SUMMARY=$(cat /tmp/d3d9-arm64-check-summary.json)
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
-            -f name='arm64-d3d9-bridge-evidence' \
-            -f head_sha="${GITHUB_SHA}" \
-            -f status='completed' \
-            -f conclusion='neutral' \
-            -f output[title]='Native ARM64 D3D9 bridge microfixtures' \
-            -f output[summary]="${SUMMARY}" > /tmp/d3d9-check-run.json
-          python3 -c "import json; assert json.load(open('/tmp/d3d9-check-run.json'))['id'] > 0"
-
-      - name: Publish ARM64 import-dispatch evidence summary
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          # Keep complete raw timelines available through the GitHub API even when redirected artifact downloads fail.
-          # This payload is separate from the D3D9 timelines to remain below the Checks output size limit.
-          python3 - <<'PY' > /tmp/import-arm64-check-summary.json
-          import json
-          from pathlib import Path
-          dense = json.loads(Path('/tmp/import-dense-arm64/result.json').read_text())
-          tls = json.loads(Path('/tmp/import-tls-arm64/result.json').read_text())
-          guard = json.loads(Path('/tmp/import-profile-guard-arm64/result.json').read_text())
-          dense['raw_timing_jsonl'] = Path('/tmp/import-dense-arm64/timing.jsonl').read_text()
-          tls['raw_timing_jsonl'] = Path('/tmp/import-tls-arm64/timing.jsonl').read_text()
-          guard['raw_timing_jsonl'] = Path('/tmp/import-profile-guard-arm64/timing.jsonl').read_text()
-          summary = {
-              'schema': 1,
-              'kind': 'native-linux-arm64-import-microfixtures-not-android-device-fps',
-              'physical_android_device': False,
-              'import_dense': dense,
-              'import_tls': tls,
-              'import_profile_guard_candidate': guard,
-          }
-          payload = '```json\n' + json.dumps(summary, indent=2) + '\n```'
-          assert len(payload.encode()) < 60000, len(payload.encode())
-          print(payload)
-          PY
-          SUMMARY=$(cat /tmp/import-arm64-check-summary.json)
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
-            -f name='arm64-import-dispatch-evidence' \
-            -f head_sha="${GITHUB_SHA}" \
-            -f status='completed' \
-            -f conclusion='neutral' \
-            -f output[title]='Native ARM64 import-dispatch microfixtures' \
-            -f output[summary]="${SUMMARY}" > /tmp/import-check-run.json
-          python3 -c "import json; assert json.load(open('/tmp/import-check-run.json'))['id'] > 0"
-
-      - name: Upload ARM64 D3D9 bridge measurements
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: arm64-d3d9-bridge
-          path: |
-            /tmp/d3d9-host-table-arm64
-            /tmp/d3d9-anisotropy-arm64
-            /tmp/import-dense-arm64
-            /tmp/import-tls-arm64
-            /tmp/import-profile-guard-arm64
-            /tmp/dxvk-timing-guard-arm64
-            /tmp/d3d9-arm64-check-summary.json
-            /tmp/d3d9-check-run.json
-            /tmp/import-arm64-check-summary.json
-            /tmp/import-check-run.json
-          retention-days: 30
-          if-no-files-found: error
-
-      - name: Compile and run native ARM64 state-cache tests
-        run: |
-          set -euo pipefail
-          git clone -q --depth 1 --branch v2.5.3 https://github.com/doitsujin/dxvk.git /tmp/protodroid-dxvk-state-cache-arm64
-          for patch in "$PWD"/android/patches/dxvk-*.patch; do
-            git -C /tmp/protodroid-dxvk-state-cache-arm64 apply --check "$patch"
-            git -C /tmp/protodroid-dxvk-state-cache-arm64 apply "$patch"
-          done
-          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -I/tmp/protodroid-dxvk-state-cache-arm64/src/dxvk"
-          g++ $CXXFLAGS src/native/state_cache.cpp src/native/tests/state_cache_test.cpp -o /tmp/state_cache_test_arm64
-          /tmp/state_cache_test_arm64 > /tmp/state-cache-arm64-test.stdout 2> /tmp/state-cache-arm64-test.stderr || {
-            cat /tmp/state-cache-arm64-test.stdout /tmp/state-cache-arm64-test.stderr
-            exit 1
-          }
-          cat /tmp/state-cache-arm64-test.stdout
-          test ! -s /tmp/state-cache-arm64-test.stderr
-          python3 tools/inspect_dxvk_state_cache.py prototypeenginef.dll.dxvk-cache \
-            --output /tmp/state-cache-arm64-real-inventory.json \
-            > /tmp/state-cache-arm64-real-inventory.stdout \
-            2> /tmp/state-cache-arm64-real-inventory.stderr
-          cat /tmp/state-cache-arm64-real-inventory.stdout
-          test ! -s /tmp/state-cache-arm64-real-inventory.stderr
-          python3 - <<'PY'
-          import json
-          r = json.load(open('/tmp/state-cache-arm64-real-inventory.json'))
-          assert r['all_entries_valid'] and not r['errors']
-          assert r['file_sha256'] == '759f38aaa80f86e4bf283e52a51f4ce3316e6609a57b4cac841c5592518930b1'
-          assert r['file_bytes'] == 179336 and r['version'] == 18
-          assert r['summary']['entry_count'] == 1014
-          assert r['summary']['valid_entries'] == 1014 and r['summary']['invalid_entries'] == 0
-          PY
-
-      - name: Measure exact state-cache backup candidate on native ARM64
-        run: |
-          set -euo pipefail
-          # Native Linux ARM64 file-I/O microfixtures, not Android shared-FUSE latency or physical-device FPS.
-          git fetch -q --depth=1 origin 9a65eb9b59dc1e755d434ae9204affef547ef5d4
-          git show 9a65eb9b59dc1e755d434ae9204affef547ef5d4:src/native/state_cache.cpp > /tmp/state-cache-before.cpp
-          git show 9a65eb9b59dc1e755d434ae9204affef547ef5d4:src/native/state_cache.h > /tmp/state-cache-before.h
-          python3 tools/measure_state_cache_backup.py \
-            --before-cpp /tmp/state-cache-before.cpp --before-header /tmp/state-cache-before.h \
-            --after-cpp src/native/state_cache.cpp --after-header src/native/state_cache.h \
-            --output /tmp/state-cache-backup-arm64-unchanged --rounds 12 --order-offset 0 --mode unchanged
-          python3 tools/measure_state_cache_backup.py \
-            --before-cpp /tmp/state-cache-before.cpp --before-header /tmp/state-cache-before.h \
-            --after-cpp src/native/state_cache.cpp --after-header src/native/state_cache.h \
-            --output /tmp/state-cache-backup-arm64-changed --rounds 12 --order-offset 3 --mode changed
-          python3 tools/measure_state_cache_backup.py \
-            --before-cpp /tmp/state-cache-before.cpp --before-header /tmp/state-cache-before.h \
-            --after-cpp src/native/state_cache.cpp --after-header src/native/state_cache.h \
-            --output /tmp/state-cache-backup-arm64-real-unchanged --rounds 12 --order-offset 0 --mode unchanged \
-            --fixture prototypeenginef.dll.dxvk-cache
-          python3 tools/measure_state_cache_backup.py \
-            --before-cpp /tmp/state-cache-before.cpp --before-header /tmp/state-cache-before.h \
-            --after-cpp src/native/state_cache.cpp --after-header src/native/state_cache.h \
-            --output /tmp/state-cache-backup-arm64-real-changed --rounds 12 --order-offset 3 --mode changed \
-            --fixture prototypeenginef.dll.dxvk-cache
-
-      - name: Publish ARM64 state-cache evidence summary
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' > /tmp/state-cache-arm64-check-summary.json
-          import json
-          from pathlib import Path
-          summary = {
-              'schema': 1,
-              'kind': 'native-linux-arm64-file-io-microfixtures-not-android-device-fps',
-              'physical_android_device': False,
-              'correctness_stdout': Path('/tmp/state-cache-arm64-test.stdout').read_text(),
-              'correctness_stderr': Path('/tmp/state-cache-arm64-test.stderr').read_text(),
-          }
-          inventory = json.loads(Path('/tmp/state-cache-arm64-real-inventory.json').read_text())
-          inventory.pop('entries', None)  # Full per-entry hashes are uploaded; keep the Check below 60,000 characters.
-          summary['real_cache_inventory'] = inventory
-          for mode in ('unchanged', 'changed'):
-              base = Path(f'/tmp/state-cache-backup-arm64-{mode}')
-              result = json.loads((base / 'result.json').read_text())
-              result.pop('build_commands', None)
-              result['raw_timing'] = {}
-              for path in sorted(base.glob('timing-*.jsonl')):
-                  size = path.stem.split('-')[1]
-                  rows = [json.loads(line) for line in path.read_text().splitlines()]
-                  result['raw_timing'][size] = [
-                      {'round': row['round'], 'variant': row['variant'], 'elapsed_ns': row['elapsed_ns']}
-                      for row in rows
-                  ]
-              summary[mode] = result
-          for mode in ('unchanged', 'changed'):
-              base = Path(f'/tmp/state-cache-backup-arm64-real-{mode}')
-              result = json.loads((base / 'result.json').read_text())
-              result.pop('build_commands', None)
-              result['raw_timing'] = {}
-              for path in sorted(base.glob('timing-*.jsonl')):
-                  size = path.stem.split('-')[1]
-                  rows = [json.loads(line) for line in path.read_text().splitlines()]
-                  result['raw_timing'][size] = [
-                      {'round': row['round'], 'variant': row['variant'], 'elapsed_ns': row['elapsed_ns']}
-                      for row in rows
-                  ]
-              summary[f'real_cache_{mode}'] = result
-          # Preserve every generic and real-cache raw row within the Check limit; whitespace is not evidence.
-          rendered = '```json\n' + json.dumps(summary, separators=(',', ':')) + '\n```'
-          if len(rendered) > 60000:
-              raise SystemExit(f'Checks summary too large: {len(rendered)}')
-          print(rendered)
-          PY
-          SUMMARY=$(cat /tmp/state-cache-arm64-check-summary.json)
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
-            -f name='arm64-state-cache-evidence' \
-            -f head_sha="${GITHUB_SHA}" \
-            -f status='completed' \
-            -f conclusion='neutral' \
-            -f output[title]='Native ARM64 state-cache backup microfixtures' \
-            -f output[summary]="${SUMMARY}" > /tmp/state-cache-check-run.json
-          python3 -c "import json; assert json.load(open('/tmp/state-cache-check-run.json'))['id'] > 0"
-
-      - name: Upload ARM64 state-cache measurements
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: arm64-state-cache-backup
-          path: |
-            /tmp/state-cache-backup-arm64-unchanged
-            /tmp/state-cache-backup-arm64-changed
-            /tmp/state-cache-backup-arm64-real-unchanged
-            /tmp/state-cache-backup-arm64-real-changed
-            /tmp/state-cache-arm64-real-inventory.json
-            /tmp/state-cache-arm64-real-inventory.stdout
-            /tmp/state-cache-arm64-real-inventory.stderr
-            /tmp/state-cache-arm64-test.stdout
-            /tmp/state-cache-arm64-test.stderr
-            /tmp/state-cache-arm64-check-summary.json
-            /tmp/state-cache-check-run.json
-          retention-days: 30
-          if-no-files-found: error
 
       - name: Measure ARM64 BC1 decoder against the corrected baseline
         run: |
@@ -967,22 +578,6 @@ jobs:
           /tmp/present_stats_test_arm64
           /tmp/guest_time_test_arm64
 
-      - name: Compile and run native ARM64 successful-Present frame-limiter tests
-        run: |
-          set -euo pipefail
-          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
-          g++ $CXXFLAGS src/native/frame_limiter.cpp src/native/tests/frame_limiter_test.cpp -o /tmp/frame_limiter_test_arm64
-          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
-          /tmp/frame_limiter_test_arm64
-
-      - name: Compile and run native ARM64 opt-in memory-size profile tests
-        run: |
-          set -euo pipefail
-          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
-          g++ $CXXFLAGS src/native/tests/memory_size_profile_test.cpp -o /tmp/memory_size_profile_test_arm64
-          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
-          /tmp/memory_size_profile_test_arm64
-
       - name: Compile and run native ARM64 CPU affinity tests
         run: |
           set -euo pipefail
@@ -1016,37 +611,10 @@ jobs:
           git show FETCH_HEAD:prototypeenginef.dll > /tmp/protodroid-hot-engine.dll
           test "$(stat -c%s /tmp/protodroid-hot-engine.dll)" = 20205568
           python3 -m venv /tmp/protodroid-hot-venv
-          /tmp/protodroid-hot-venv/bin/pip install -q capstone==5.0.7 pefile==2023.2.7
+          /tmp/protodroid-hot-venv/bin/pip install -q capstone pefile
           export PATH=/tmp/protodroid-hot-venv/bin:$PATH
           export PROTODROID_ENGINE=/tmp/protodroid-hot-engine.dll
-          python3 tools/test_ebp_stack.py
-          python3 tools/test_x87_localization.py
-          python3 tools/test_xmm_localization.py
           src/native/tests/run_hot_test.sh 2>&1 | tee /tmp/protodroid-arm-hot-test.log
-
-      - name: Test and measure generated ThinLTO on native ARM64
-        id: recomp_lto
-        run: |
-          set -euo pipefail
-          {
-            if ! command -v clang >/dev/null || ! command -v ld.lld >/dev/null; then
-              sudo apt-get update
-              sudo apt-get install -y --no-install-recommends clang lld
-            fi
-            clang --version
-            ld.lld --version
-            CC=clang LINK_FLAGS=-fuse-ld=lld /tmp/protodroid-hot-venv/bin/python \
-              tools/measure_recomp_thin_lto.py --rounds 24 --iterations 1000000 \
-              --output /tmp/arm64-recomp-thin-lto.json
-          } 2>&1 | tee /tmp/arm64-recomp-thin-lto.log
-
-      - name: Report native ARM64 generated-ThinLTO failure
-        if: failure() && steps.recomp_lto.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api repos/${{ github.repository }}/issues/1/comments \
-            --raw-field body="ARM64 generated-ThinLTO failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/arm64-recomp-thin-lto.log 2>/dev/null || echo 'no ThinLTO log')\n\`\`\`" || true
 
       - name: Report native ARM64 hot-test failure
         if: failure() && steps.hot.outcome == 'failure'
@@ -1055,17 +623,6 @@ jobs:
         run: |
           gh api repos/${{ github.repository }}/issues/1/comments \
             --raw-field body="ARM64 hot-test failure for ${{ github.sha }}:\n\`\`\`\n$(tail -n 120 /tmp/protodroid-arm-hot-test.log 2>/dev/null || echo 'no hot-test log')\n\`\`\`" || true
-
-      - name: Upload ARM64 generated-ThinLTO measurement
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: arm64-recomp-thin-lto
-          path: |
-            /tmp/arm64-recomp-thin-lto.json
-            /tmp/arm64-recomp-thin-lto.log
-          retention-days: 30
-          if-no-files-found: warn
 
   build-deps:
     runs-on: ubuntu-24.04
@@ -1132,21 +689,7 @@ jobs:
       - name: Test staged driver imports, rollback, and pinned catalog packages
         env:
           DRIVER_CATALOG_ONLINE: '1'
-        run: |
-          set -euo pipefail
-          # Release-asset gateways can transiently return 504. Retry the complete verifier, never its size,
-          # SHA-256, ZIP-safety, backend, or direct-ICD assertions; three genuine failures still fail CI.
-          for attempt in 1 2 3; do
-            if android/test-driver-package.sh; then
-              exit 0
-            fi
-            if [ "$attempt" -lt 3 ]; then
-              delay=$((attempt * 10))
-              echo "Driver catalog verification attempt $attempt failed; retrying in ${delay}s"
-              sleep "$delay"
-            fi
-          done
-          exit 1
+        run: android/test-driver-package.sh
 
   build-turnip:
     runs-on: ubuntu-24.04
@@ -1206,7 +749,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip p7zip-full unzip
-          pip3 install --user --break-system-packages meson==1.5.2 capstone==5.0.7 pefile==2023.2.7
+          pip3 install --user --break-system-packages meson==1.5.2 capstone pefile
           echo "SDK: $ANDROID_SDK_ROOT $ANDROID_HOME"
           echo "NDK: $ANDROID_NDK_LATEST_HOME"
           ls $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt 2>&1 | head
@@ -1221,12 +764,6 @@ jobs:
             echo \"platform android-35 not found, using 34\"
             sudo ln -sf $ANDROID_SDK_ROOT/platforms/android-34 $ANDROID_SDK_ROOT/platforms/android-35 || true
           fi
-
-      - name: Test proven stack and selective x87/XMM generation
-        run: |
-          python3 tools/test_ebp_stack.py
-          python3 tools/test_x87_localization.py
-          python3 tools/test_xmm_localization.py
 
       - name: Download deps artifacts
         uses: actions/download-artifact@v4
@@ -1360,7 +897,7 @@ jobs:
         id: cache-recomp
         with:
           path: build/recomp/native
-          key: recomp-${{ hashFiles('re/functions.csv', 're/extra_functions.txt', 're/loading_boundary_trace.txt', 'tools/recomp/recomp.py', 'tools/recomp/data_entries.py', 'tools/patch_native_recomp.py') }}-${{ hashFiles('prototypeenginef.dll') }}
+          key: recomp-${{ hashFiles('re/functions.csv', 're/extra_functions.txt', 'tools/recomp/recomp.py', 'tools/recomp/data_entries.py', 'tools/patch_native_recomp.py') }}-${{ hashFiles('prototypeenginef.dll') }}
 
       - name: List recomp after cache
         run: |
@@ -1385,7 +922,7 @@ jobs:
           mkdir -p build/recomp/native
           ls -lh re/functions.csv re/extra_functions.txt || true
           python3 -c "import capstone, pefile; print('capstone', capstone.__version__)"
-          timeout 600 bash -c 'PROTODROID_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --trace-functions re/loading_boundary_trace.txt --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
+          timeout 600 bash -c 'PROTODROID_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
           cat /tmp/recomp.log | tail -n 100
           test -f /tmp/recomp_exit && cat /tmp/recomp_exit
           if [ "$(awk '{print $2}' /tmp/recomp_exit)" != "0" ]; then
@@ -1416,13 +953,6 @@ jobs:
       - name: Verify generated video-setting hooks
         if: env.HAS_DLL == '1'
         run: python3 tools/recomp/verify_video_hooks.py build/recomp/native
-
-      - name: Verify selected guest-function probes
-        if: env.HAS_DLL == '1'
-        run: |
-          set -euo pipefail
-          python3 tools/recomp/verify_guest_trace.py build/recomp/native
-          CC=gcc PROTODROID_ENGINE="$DLL_PATH" python3 tools/test_guest_function_trace.py --integration
 
       - name: Build libmain.so from source (Android arm64-v8a)
         if: env.HAS_DLL == '1'
@@ -1546,38 +1076,6 @@ jobs:
               exit 1
             fi
           done
-          # Generated C is the only source compiled with ThinLTO. Both ARM variants must retain every exported guest
-          # entry for dispatch, native hooks, and crash symbols even when a caller inlines a separate-part callee.
-          for LOG in /tmp/make.log /tmp/make_v80.log; do
-            grep -q -- '-flto=thin -fno-semantic-interposition' "$LOG"
-            grep -q -- '-flto=thin -Wl,--thinlto-jobs=1' "$LOG"
-            if grep -E 'clang\+\+.+-c .+\.cpp' "$LOG" | grep -q -- '-flto=thin'; then
-              echo "ERROR: native C++ unexpectedly entered the generated-only ThinLTO batch"
-              exit 1
-            fi
-          done
-          NDK_TOOLS="$EFFECTIVE_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          "$NDK_TOOLS/llvm-nm" -D --defined-only build/android/arm64-v8a/libmain.so > /tmp/libmain-main.nm
-          "$NDK_TOOLS/llvm-nm" -D --defined-only build/android/arm64-v8a-v80/libmain.so > /tmp/libmain-v80.nm
-          python3 - <<'PY'
-          import json
-          import re
-          from pathlib import Path
-          expected = set()
-          for path in Path('build/recomp/native').glob('part_*.c'):
-              expected.update(re.findall(r'(?m)^void (f_[0-9a-f]{8})\(Ctx\* c\) \{', path.read_text()))
-          assert len(expected) == 126974, len(expected)
-          report = {'expected_functions': len(expected), 'variants': {}}
-          for variant in ('main', 'v80'):
-              rows = Path(f'/tmp/libmain-{variant}.nm').read_text().splitlines()
-              actual = {parts[-1] for row in rows if len(parts := row.split()) >= 3 and parts[-1].startswith('f_')}
-              missing = sorted(expected - actual)
-              if missing:
-                  raise SystemExit(f'{variant}: ThinLTO dropped {len(missing)} generated entries: {missing[:12]}')
-              report['variants'][variant] = {'generated_dynamic_functions': len(actual), 'missing': 0}
-          Path('/tmp/recomp-lto-symbols.json').write_text(json.dumps(report, indent=2) + '\n')
-          print(json.dumps(report))
-          PY
           printf 'nativeBuild=compiled\nsourceRevision=%s\n' "$SOURCE_REVISION" > build/native-build.txt
 
       - name: Build source ARM64 plugin and Lua examples
@@ -1605,7 +1103,6 @@ jobs:
             ./make_v80.log
             /tmp/dxvk-addr2line.txt
             /tmp/dxvk-nm.txt
-            /tmp/recomp-lto-symbols.json
           retention-days: 7
           if-no-files-found: warn
 

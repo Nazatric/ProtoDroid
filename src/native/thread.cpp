@@ -12,7 +12,7 @@
 
 namespace native {
 
-extern __thread Ctx* tl_ctx;
+extern thread_local Ctx* tl_ctx;
 
 namespace {
 
