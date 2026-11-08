@@ -1,0 +1,38 @@
+# Archive report
+
+## Fetch
+Updated Git hooks.
+Git LFS initialized.
+archive: 5eb1c06c-protodroid/protodroid-v0.16-latest-src (1).zip
+bytes: 38465055
+magic:  P K 003 004
+
+## Listing
+```
+Archive:  5eb1c06c-protodroid/protodroid-v0.16-latest-src (1).zip
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+ 38464851  2026-11-08 17:04   protodroid-v0.16-latest-src (1).zip
+---------                     -------
+ 38464851                     1 file
+```
+
+## Extraction
+top level: protodroid-v0.16-latest-src (1).zip 
+file count: 1
+
+## Candidate source markers
+- android/AndroidManifest.xml: absent
+- tools/recomp/recomp.py: absent
+- src/native/Makefile: absent
+- CHANGELOG.md: absent
+
+## Largest entries
+```
+ 38464851  2026-11-08 17:04   protodroid-v0.16-latest-src (1).zip
+ 38464851                     1 file
+Archive:  5eb1c06c-protodroid/protodroid-v0.16-latest-src (1).zip
+---------  ---------- -----   ----
+---------                     -------
+  Length      Date    Time    Name
+```
