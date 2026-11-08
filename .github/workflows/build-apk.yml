@@ -689,7 +689,21 @@ jobs:
       - name: Test staged driver imports, rollback, and pinned catalog packages
         env:
           DRIVER_CATALOG_ONLINE: '1'
-        run: android/test-driver-package.sh
+        # This gate downloads the four pinned driver release assets and checks their exact size and digest. The
+        # release CDN answers HTTP 504 intermittently, so a single attempt fails for a reason that has nothing to
+        # do with this repository. Retry a bounded number of times; a genuine mismatch still fails every attempt.
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3 4; do
+            if android/test-driver-package.sh; then
+              echo "driver package validation passed on attempt $attempt"
+              exit 0
+            fi
+            echo "driver package validation attempt $attempt failed (transient release-CDN errors are retried)"
+            if [ "$attempt" -lt 4 ]; then sleep $((attempt * 20)); fi
+          done
+          echo "driver package validation failed on every attempt" >&2
+          exit 1
 
   build-turnip:
     runs-on: ubuntu-24.04
