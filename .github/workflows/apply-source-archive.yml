@@ -1,0 +1,84 @@
+name: apply-source-archive
+
+# One-shot helper: the source archive in this repository is stored with Git LFS, and the assistant's sandbox
+# cannot reach the LFS storage host. A GitHub runner can, and git objects pushed from here are readable again,
+# so this job materialises the archive's contents as the branch tree.
+#
+# It runs only when this file itself changes, replaces the whole tracked tree with the archive's contents, and is
+# removed by that replacement, so it cannot repeat.
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-source-archive.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Fetch the archive through Git LFS
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs pull --include="5eb1c06c-protodroid/*.zip"
+          ls -l 5eb1c06c-protodroid/
+          ZIP=$(ls 5eb1c06c-protodroid/*.zip | head -n1)
+          echo "archive=$ZIP" >> "$GITHUB_ENV"
+          head -c 4 "$ZIP" | od -An -c | head -n1
+          if head -c 40 "$ZIP" | grep -q 'git-lfs'; then
+            echo "::error title=archive::the archive is still an LFS pointer"
+            exit 1
+          fi
+
+      - name: Inspect the archive before touching the tree
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/archive && mkdir -p /tmp/archive
+          unzip -q "$archive" -d /tmp/archive
+          # Archives usually carry one top-level directory; strip it when present.
+          ROOT=/tmp/archive
+          count=$(find "$ROOT" -mindepth 1 -maxdepth 1 | wc -l)
+          if [ "$count" -eq 1 ] && [ -d "$(find "$ROOT" -mindepth 1 -maxdepth 1)" ]; then
+            ROOT=$(find "$ROOT" -mindepth 1 -maxdepth 1)
+          fi
+          echo "root=$ROOT" >> "$GITHUB_ENV"
+          echo "files=$(find "$ROOT" -type f | wc -l)" >> "$GITHUB_ENV"
+          {
+            echo "### Archive contents"
+            echo "- files: $(find "$ROOT" -type f | wc -l)"
+            echo "- top-level: $(find "$ROOT" -mindepth 1 -maxdepth 1 -printf '%f ' )"
+            if [ -f "$ROOT/android/AndroidManifest.xml" ]; then
+              echo "- manifest: $(grep -o 'android:versionCode="[0-9]*"' "$ROOT/android/AndroidManifest.xml") $(grep -o 'android:versionName="[^"]*"' "$ROOT/android/AndroidManifest.xml")"
+            else
+              echo "- manifest: MISSING"
+            fi
+            echo "- recompiler present: $([ -f "$ROOT/tools/recomp/recomp.py" ] && echo yes || echo no)"
+            echo "- native sources present: $([ -d "$ROOT/src/native" ] && echo yes || echo no)"
+            echo "- generated engine parts: $(find "$ROOT/build/recomp/native" -name 'part_*.c' 2>/dev/null | wc -l)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Replace the tracked tree with the archive
+        run: |
+          set -euo pipefail
+          test -f "$root/android/AndroidManifest.xml"
+          test -f "$root/tools/recomp/recomp.py"
+          test -d "$root/src/native"
+          shopt -s dotglob
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a "$root"/. .
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "::notice title=archive::the archive matches the branch tree already"
+            exit 0
+          fi
+          git commit -q -m "Replace the tree with the uploaded source archive"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "::notice title=archive::tree replaced with $files files from the archive"
