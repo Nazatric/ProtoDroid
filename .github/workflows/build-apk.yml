@@ -65,8 +65,15 @@ jobs:
 
       - name: Install host test dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends zlib1g-dev python3-yaml glslang-tools
+          # apt is retried: the runner's mirror intermittently answers with exit 100 ("Could not get lock" / transient
+          # 5xx), which is not a problem with this repository.
+          for attempt in 1 2 3; do
+            sudo apt-get update -o Acquire::Retries=3 && \
+              sudo apt-get install -y --no-install-recommends zlib1g-dev python3-yaml glslang-tools && break
+            echo "apt attempt $attempt failed; waiting"
+            sleep $((attempt * 15))
+          done
+          dpkg -s glslang-tools >/dev/null && dpkg -s zlib1g-dev >/dev/null
 
       - name: Compile and run native input-lookup tests
         run: |
