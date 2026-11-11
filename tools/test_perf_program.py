@@ -73,6 +73,14 @@ contains("src/native/Makefile", r"-fvisibility=hidden", "the build does not hide
 absent("src/native/Makefile", r"-Wl,--export-dynamic[^\n]*\n[^\n]*libdobby", "the Android link still exports everything")
 check((ROOT / "src/native/libmain.map").is_file(), "the libmain export map is missing")
 contains("src/native/libmain.map", r"Java_\*", "JNI entry points are no longer exported")
+
+# Every symbol named explicitly in the version script must actually be defined in the library: ld.lld fails the link
+# with "version script assignment of 'global' to symbol 'X' failed: symbol not defined" otherwise, which is exactly how
+# JNI_OnLoad/JNI_Unload got caught (libmain.so registers no JNI natives; SDL2 owns them).
+exports = re.findall(r"^\s*(?!\*)([A-Za-z_][\w]*)\s*;", text("src/native/libmain.map"), re.MULTILINE)
+sources = "\n".join(text(str(p.relative_to(ROOT))) for p in sorted((ROOT / "src/native").glob("*.cpp")))
+for symbol in exports:
+    check(symbol in sources, f"libmain.map exports {symbol}, which no source in src/native defines")
 contains("src/native/Makefile", r"PGO_PROFILE", "the PGO switch is missing")
 contains("src/native/Makefile", r"FAST_FP", "the FP-contraction switch is missing")
 
