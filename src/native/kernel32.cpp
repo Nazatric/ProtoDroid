@@ -1,0 +1,1543 @@
+// KERNEL32 for the native host: the subset prototypeenginef.dll imports.
+#include <dirent.h>
+#include <fcntl.h>
+#include <fnmatch.h>
+#include <pthread.h>
+#include <sched.h>
+#include <sys/prctl.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
+#include <sys/statvfs.h>
+#include <sys/time.h>
+#include <unistd.h>
+#if defined(__linux__)
+#include <linux/futex.h>
+#include <sys/syscall.h>
+#endif
+
+#include <algorithm>
+#include <atomic>
+#include <climits>
+#include <chrono>
+#include <cstring>
+#include <ctime>
+#include <thread>
+#include <unordered_map>
+#include <vector>
+
+#include "win.h"
+#include "cpu_affinity.h"
+#include "diagnostics.h"
+#include "guest_time.h"
+#include "mod_platform.h"
+
+namespace native {
+
+std::mutex g_kernel_mutex;
+std::condition_variable g_kernel_cv;
+LoadedImage g_engine;
+
+namespace {
+
+// ---- handles ----
+// handle = 0x100 + 4 * index. Lookups (every wait and signal) read the table without a lock; slots are assigned
+// and cleared under g_handles_mutex.
+constexpr uint32_t kMaxHandles = 1u << 16;
+std::mutex g_handles_mutex;
+std::atomic<KObject*> g_handles[kMaxHandles];
+uint32_t g_handles_used = 0;  // slots below this have been handed out at least once
+// Freed indices, so creating a handle is O(1) instead of an O(n) scan from slot 0 that got slower as the game went on.
+std::vector<uint32_t> g_handle_free;
+
+// Objects closed while another thread may still hold the pointer it just looked up are deleted a couple of seconds
+// later, never in the middle of that thread's wait.
+struct DeferredFree {
+    KObject* obj;
+    std::chrono::steady_clock::time_point when;
+};
+std::vector<DeferredFree> g_deferred;  // under g_handles_mutex
+
+void ReapDeferredLocked() {
+    const auto now = std::chrono::steady_clock::now();
+    size_t keep = 0;
+    for (size_t i = 0; i < g_deferred.size(); ++i) {
+        if (now >= g_deferred[i].when) {
+            if (g_deferred[i].obj->refs.load() == 0) delete g_deferred[i].obj;
+        } else {
+            g_deferred[keep++] = g_deferred[i];
+        }
+    }
+    g_deferred.resize(keep);
+}
+
+thread_local uint32_t tl_last_error = 0;
+
+// ---- futex: the single-object wait path ----
+// Signalling an event and waiting on it are the engine job system's hottest pair (its own comment: "tens of thousands
+// of times a second"). Doing that under one process-wide mutex bounced that lock's cache line between clusters, so a
+// wait or signal on a plain event or semaphore now runs entirely on the object's own atomic word, with the kernel
+// only involved when the fast path cannot complete (FUTEX_WAIT_PRIVATE/FUTEX_WAKE_PRIVATE on the guest window, which
+// is private anonymous memory shared by this process only).
+#if defined(__linux__)
+int FutexWait(std::atomic<uint32_t>* word, uint32_t expect, int64_t ms) {
+    timespec timeout;
+    timespec* tp = nullptr;
+    if (ms >= 0) {
+        timeout.tv_sec = ms / 1000;
+        timeout.tv_nsec = (ms % 1000) * 1000000;
+        tp = &timeout;
+    }
+    return static_cast<int>(syscall(SYS_futex, reinterpret_cast<uint32_t*>(word), FUTEX_WAIT_PRIVATE, expect, tp,
+                                    nullptr, 0));
+}
+void FutexWake(std::atomic<uint32_t>* word, int count) {
+    syscall(SYS_futex, reinterpret_cast<uint32_t*>(word), FUTEX_WAKE_PRIVATE, count, nullptr, nullptr, 0);
+}
+// A short spin before sleeping: contended job-system events are released within microseconds, and sleeping there
+// costs a futex round trip and a scheduler wake-up.
+inline void ShortSpin() {
+#if defined(__aarch64__)
+    asm volatile("yield" ::: "memory");
+#else
+    __builtin_ia32_pause();
+#endif
+}
+#else
+int FutexWait(std::atomic<uint32_t>*, uint32_t, int64_t) { return -1; }
+void FutexWake(std::atomic<uint32_t>*, int) {}
+inline void ShortSpin() {}
+#endif
+
+}  // namespace
+
+uint32_t NewHandle(KObject* obj) {
+    std::lock_guard<std::mutex> lock(g_handles_mutex);
+    uint32_t i;
+    if (!g_handle_free.empty()) {
+        i = g_handle_free.back();
+        g_handle_free.pop_back();
+    } else {
+        i = g_handles_used;
+        if (i == kMaxHandles) Fatal("out of kernel handles");
+        ++g_handles_used;
+    }
+    g_handles[i].store(obj, std::memory_order_release);
+    return 0x100 + 4 * i;
+}
+
+KObject* HandleObject(uint32_t handle) {
+    if (handle < 0x100 || (handle & 3)) return nullptr;
+    uint32_t i = (handle - 0x100) / 4;
+    return i < kMaxHandles ? g_handles[i].load(std::memory_order_acquire) : nullptr;
+}
+
+void CloseKernelHandle(uint32_t handle) {
+    KObject* obj = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(g_handles_mutex);
+        if (handle < 0x100 || (handle & 3)) return;
+        uint32_t i = (handle - 0x100) / 4;
+        if (i >= kMaxHandles) return;
+        obj = g_handles[i].exchange(nullptr);
+        if (obj) g_handle_free.push_back(i);
+        ReapDeferredLocked();
+    }
+    if (obj && obj->refs.fetch_sub(1) == 1 && obj->type != KType::Thread) {
+        std::lock_guard<std::mutex> lock(g_handles_mutex);
+        g_deferred.push_back({obj, std::chrono::steady_clock::now() + std::chrono::seconds(2)});
+    }
+}
+
+void SetLastError(uint32_t code) { tl_last_error = code; }
+uint32_t GetLastError() { return tl_last_error; }
+
+// Storage diagnostics: the engine streams assets, music and speech through synchronous Win32 calls. Ordinary Play
+// performs the syscall and error handling without diagnostic clocks or counter atomics. Detailed mode (including the
+// tour) records relaxed counters; its event list locks/allocates only after an operation has already taken >50 ms.
+struct IoEvent {
+    bool write = false;
+    uint64_t microseconds = 0;
+    uint64_t bytes = 0;
+    int64_t offset = -1;
+    int tid = 0;
+    std::string path;
+};
+struct IoStats {
+    std::atomic<uint64_t> reads{0}, read_bytes{0}, read_ns{0}, read_errors{0};
+    std::atomic<uint64_t> writes{0}, write_bytes{0}, write_ns{0}, write_errors{0};
+    std::atomic<uint64_t> opens{0}, open_errors{0}, over10{0}, over50{0}, over100{0};
+    std::atomic<uint64_t> max_read_us{0}, max_write_us{0};
+    std::mutex slow_mutex;
+    std::vector<IoEvent> slow_events;
+    uint64_t slow_events_dropped = 0;
+} g_io;
+
+void RecordMax(std::atomic<uint64_t>& target, uint64_t value) {
+    for (uint64_t old = target.load(std::memory_order_relaxed);
+         value > old && !target.compare_exchange_weak(old, value, std::memory_order_relaxed);) {
+    }
+}
+
+void RecordSlowIo(bool write, const std::string& path, uint64_t bytes, int64_t offset, uint64_t us) {
+    std::lock_guard<std::mutex> lock(g_io.slow_mutex);
+    try {
+        if (g_io.slow_events.size() < 16) {
+            g_io.slow_events.push_back({write, us, bytes, offset, int(gettid()), path});
+        } else {
+            ++g_io.slow_events_dropped;
+        }
+    } catch (...) {
+        // Diagnostics must never turn an already-slow game I/O operation into a fatal allocation failure.
+        ++g_io.slow_events_dropped;
+    }
+}
+
+std::string TakeIoStats() {
+    const uint64_t reads = g_io.reads.exchange(0, std::memory_order_relaxed);
+    const uint64_t read_bytes = g_io.read_bytes.exchange(0, std::memory_order_relaxed);
+    const uint64_t read_ns = g_io.read_ns.exchange(0, std::memory_order_relaxed);
+    const uint64_t writes = g_io.writes.exchange(0, std::memory_order_relaxed);
+    const uint64_t write_bytes = g_io.write_bytes.exchange(0, std::memory_order_relaxed);
+    const uint64_t write_ns = g_io.write_ns.exchange(0, std::memory_order_relaxed);
+    char line[640];
+    snprintf(line, sizeof(line),
+             "opens=%llu open_errors=%llu; reads=%llu bytes=%llu (%.3f MiB) total=%.2fms avg=%.3fms max=%.2fms "
+             "errors=%llu; writes=%llu bytes=%llu total=%.2fms avg=%.3fms max=%.2fms errors=%llu; "
+             "io_gt10/50/100ms=%llu/%llu/%llu",
+             (unsigned long long)g_io.opens.exchange(0, std::memory_order_relaxed),
+             (unsigned long long)g_io.open_errors.exchange(0, std::memory_order_relaxed),
+             (unsigned long long)reads, (unsigned long long)read_bytes, double(read_bytes) / 1048576.0,
+             read_ns / 1.0e6, reads ? read_ns / double(reads) / 1.0e6 : 0.0,
+             double(g_io.max_read_us.exchange(0, std::memory_order_relaxed)) / 1000.0,
+             (unsigned long long)g_io.read_errors.exchange(0, std::memory_order_relaxed), (unsigned long long)writes,
+             (unsigned long long)write_bytes, write_ns / 1.0e6, writes ? write_ns / double(writes) / 1.0e6 : 0.0,
+             double(g_io.max_write_us.exchange(0, std::memory_order_relaxed)) / 1000.0,
+             (unsigned long long)g_io.write_errors.exchange(0, std::memory_order_relaxed),
+             (unsigned long long)g_io.over10.exchange(0, std::memory_order_relaxed),
+             (unsigned long long)g_io.over50.exchange(0, std::memory_order_relaxed),
+             (unsigned long long)g_io.over100.exchange(0, std::memory_order_relaxed));
+    return line;
+}
+
+std::string TakeIoEvents() {
+    std::vector<IoEvent> events;
+    uint64_t dropped = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_io.slow_mutex);
+        events.swap(g_io.slow_events);
+        dropped = g_io.slow_events_dropped;
+        g_io.slow_events_dropped = 0;
+    }
+    std::string out;
+    for (const IoEvent& event : events) {
+        char line[256];
+        snprintf(line, sizeof(line), "%s %.2fms bytes=%llu offset=%lld tid=%d path=",
+                 event.write ? "write" : "read", double(event.microseconds) / 1000.0,
+                 (unsigned long long)event.bytes, (long long)event.offset, event.tid);
+        if (!out.empty()) out += " | ";
+        out += line;
+        out += event.path;
+    }
+    if (dropped) {
+        char line[80];
+        snprintf(line, sizeof(line), "%s%llu additional slow event(s) not retained", out.empty() ? "" : " | ",
+                 (unsigned long long)dropped);
+        out += line;
+    }
+    return out;
+}
+
+namespace {
+
+// ---- waitable objects ----
+struct Event : KObject {
+    Event(bool manual, bool state) : KObject(KType::Event), manual(manual) { signaled.store(state ? 1u : 0u); }
+    bool Signaled(uint32_t) override { return signaled.load(std::memory_order_acquire) != 0; }
+    void Acquire(uint32_t) override {
+        if (!manual) signaled.store(0, std::memory_order_release);
+    }
+    std::atomic<uint32_t>* WaitWord() override { return &signaled; }
+    bool manual;
+    std::atomic<uint32_t> signaled{0};
+};
+
+struct Semaphore : KObject {
+    Semaphore(int32_t count, int32_t max) : KObject(KType::Semaphore), max(max) {
+        this->count.store(uint32_t(count), std::memory_order_release);
+    }
+    bool Signaled(uint32_t) override { return count.load(std::memory_order_acquire) != 0; }
+    void Acquire(uint32_t) override { count.fetch_sub(1, std::memory_order_acq_rel); }
+    std::atomic<uint32_t>* WaitWord() override { return &count; }
+    std::atomic<uint32_t> count{0};
+    int32_t max;
+};
+
+struct Mutex : KObject {
+    Mutex() : KObject(KType::Mutex) {}
+    bool Signaled(uint32_t tid) override { return owner == 0 || owner == tid; }
+    void Acquire(uint32_t tid) override {
+        owner = tid;
+        ++recursion;
+    }
+    uint32_t owner = 0;
+    int recursion = 0;
+};
+
+struct Thread : KObject {
+    Thread() : KObject(KType::Thread) {}
+    bool Signaled(uint32_t) override { return done; }
+    bool done = false;
+    bool suspended = false;
+    uint32_t exit_code = 259;  // STILL_ACTIVE
+    uint32_t id = 0;
+    int host_tid = 0;
+};
+
+uint32_t CurrentTid() { return CurrentThread()->id; }
+
+// Waits until `pred` holds or the timeout expires (0xffffffff = forever); g_kernel_mutex is held by `lock`. The
+// thread sleeps on its own condition variable, registered with each object it waits for, so a signal wakes only
+// that object's waiters (the engine's job system signals and waits tens of thousands of times a second).
+template <typename Pred>
+bool WaitKernel(std::unique_lock<std::mutex>& lock, uint32_t ms, KObject* const* objs, size_t n, Pred pred) {
+    // A short spin first: the engine signals job-system events within microseconds of a worker waiting, and sleeping
+    // on one costs a futex round trip plus a scheduler wake-up.
+    for (int spin = 0; spin < 64; ++spin) {
+        if (pred()) return true;
+        if (ms == 0) return false;
+        ShortSpin();
+    }
+    thread_local KWaiter self;
+    // Registered under the lock; the counters tell the single-object fast path that this object also has waiters it
+    // must notify through the shared condition variables.
+    for (size_t i = 0; i < n; ++i)
+        if (objs[i]) {
+            objs[i]->legacy_waiters.fetch_add(1, std::memory_order_relaxed);
+            objs[i]->waiters.push_back(&self);
+        }
+    bool ok;
+    if (ms == 0xffffffffu) {
+        self.cv.wait(lock, pred);
+        ok = true;
+    } else {
+        ok = self.cv.wait_for(lock, std::chrono::milliseconds(ms), pred);
+    }
+    for (size_t i = 0; i < n; ++i) {
+        if (!objs[i]) continue;
+        objs[i]->legacy_waiters.fetch_sub(1, std::memory_order_relaxed);
+        auto& w = objs[i]->waiters;
+        for (size_t k = 0; k < w.size(); ++k) {
+            if (w[k] == &self) {
+                w[k] = w.back();
+                w.pop_back();
+                break;
+            }
+        }
+    }
+    return ok;
+}
+
+// ---- files ----
+struct File : KObject {
+    File() : KObject(KType::File) {}
+    ~File() override {
+        if (fd >= 0) close(fd);
+    }
+    int fd = -1;
+    std::string path;  // retained for rare slow-I/O diagnostics, not accessed on the normal read path
+    // Item 51: the engine streams the RCF/p3d archives sequentially, but every read was forwarded one-to-one, so each
+    // small read paid a full FUSE round trip and the kernel never prefetched ahead. `next`/`sequential` detect the
+    // sequential pattern per handle; when it holds, the next 512 KiB are hinted to the kernel as needed.
+    int64_t next = 0;
+    bool sequential = false;
+};
+
+struct Find : KObject {
+    Find() : KObject(KType::Find) {}
+    std::string dir, pattern;
+    std::vector<std::string> names;
+    size_t next = 0;
+};
+
+constexpr uint32_t ERROR_FILE_NOT_FOUND = 2, ERROR_PATH_NOT_FOUND = 3, ERROR_ACCESS_DENIED = 5,
+                   ERROR_INVALID_HANDLE = 6, ERROR_NO_MORE_FILES = 18, ERROR_ALREADY_EXISTS = 183,
+                   ERROR_FILE_EXISTS = 80;
+
+uint32_t ErrnoToWin(int e) {
+    switch (e) {
+        case ENOENT: return ERROR_FILE_NOT_FOUND;
+        case ENOTDIR: return ERROR_PATH_NOT_FOUND;
+        case EACCES: case EPERM: return ERROR_ACCESS_DENIED;
+        case EEXIST: return ERROR_ALREADY_EXISTS;
+        default: return 31;  // ERROR_GEN_FAILURE
+    }
+}
+
+// 100 ns intervals since 1601-01-01.
+uint64_t ToFileTime(const struct timespec& ts) {
+    return (uint64_t(ts.tv_sec) + 11644473600ull) * 10000000ull + uint64_t(ts.tv_nsec) / 100;
+}
+
+uint32_t Attributes(const struct stat& st) {
+    uint32_t a = S_ISDIR(st.st_mode) ? 0x10 : 0x80;  // DIRECTORY : NORMAL
+    if (!(st.st_mode & S_IWUSR)) a |= 0x01;           // READONLY
+    return a;
+}
+
+void FillFindData(uint32_t out, const std::string& dir, const std::string& name) {
+    memset(Ptr<void>(out), 0, 320);
+    struct stat st;
+    if (stat((dir + "/" + name).c_str(), &st) == 0) {
+        W32(out, Attributes(st));
+        uint64_t ft = ToFileTime(st.st_mtim);
+        W64(out + 4, ft);
+        W64(out + 12, ft);
+        W64(out + 20, ft);
+        W32(out + 28, uint32_t(uint64_t(st.st_size) >> 32));
+        W32(out + 32, uint32_t(st.st_size));
+    }
+    strncpy(Str(out + 44), name.c_str(), 259);
+}
+
+bool FindNextMatch(Find* f, uint32_t out) {
+    while (f->next < f->names.size()) {
+        const std::string& n = f->names[f->next++];
+        if (fnmatch(f->pattern.c_str(), n.c_str(), FNM_CASEFOLD) == 0) {
+            FillFindData(out, f->dir, n);
+            return true;
+        }
+    }
+    return false;
+}
+
+// ---- modules ----
+std::mutex g_modules_mutex;
+std::vector<std::string> g_module_names;  // fake module handle = 0x0e000000 + 0x10000 * index
+constexpr uint32_t kModuleBase = 0x0e000000u;
+constexpr uint32_t kExeBase = 0x00400000u;
+
+std::string LowerName(const char* s) {
+    std::string r(s);
+    for (char& ch : r) ch = char(tolower((unsigned char)ch));
+    size_t slash = r.find_last_of("\\/");
+    if (slash != std::string::npos) r = r.substr(slash + 1);
+    if (r.find('.') == std::string::npos) r += ".dll";
+    return r;
+}
+
+uint32_t ModuleHandle(const std::string& name) {
+    if (name == "prototypeenginef.dll") return g_engine.base;
+    if (name == "prototypef.exe") return kExeBase;
+    std::lock_guard<std::mutex> lock(g_modules_mutex);
+    for (size_t i = 0; i < g_module_names.size(); ++i) {
+        if (g_module_names[i] == name) return kModuleBase + 0x10000 * uint32_t(i);
+    }
+    g_module_names.push_back(name);
+    return kModuleBase + 0x10000 * uint32_t(g_module_names.size() - 1);
+}
+
+// Libraries the host provides (LoadLibrary succeeds for these only).
+bool KnownLibrary(const std::string& name) {
+    static const char* known[] = {"kernel32.dll", "user32.dll", "advapi32.dll", "msvcr80.dll", "d3d9.dll",
+                                  "dsound.dll", "xinput1_3.dll", "winmm.dll", "ws2_32.dll", "binkw32.dll",
+                                  "shell32.dll", "ole32.dll", "oleaut32.dll", "rpcrt4.dll", "prototypeenginef.dll"};
+    for (const char* k : known)
+        if (name == k) return true;
+    return false;
+}
+
+auto g_start = std::chrono::steady_clock::now();
+
+uint64_t NowFileTime() {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return ToFileTime(ts);
+}
+
+void WriteSystemTime(uint32_t out, const struct tm& t, int ms) {
+    W16(out + 0, uint16_t(t.tm_year + 1900));
+    W16(out + 2, uint16_t(t.tm_mon + 1));
+    W16(out + 4, uint16_t(t.tm_wday));
+    W16(out + 6, uint16_t(t.tm_mday));
+    W16(out + 8, uint16_t(t.tm_hour));
+    W16(out + 10, uint16_t(t.tm_min));
+    W16(out + 12, uint16_t(t.tm_sec));
+    W16(out + 14, uint16_t(ms));
+}
+
+// ---- critical sections ----
+// The lock state lives in the guest's own CRITICAL_SECTION, which is 24 bytes and only ever touched through these
+// handlers, so the layout is ours: [0] lock word (0 free, 1 held), [4] owning guest thread id, [8] recursion count,
+// [12] spin count. Fast path is one CAS. Contended sections spin with the ARM yield hint and only then enter the kernel
+// with FUTEX_WAIT_PRIVATE on the lock word. The previous implementation did a per-thread unordered_map lookup (hash plus
+// bucket chase) on every Enter/Leave/TryEnter and then took a std::recursive_mutex that never spun, so a short contended
+// section forced a scheduler round trip, and DeleteCriticalSection had nothing to free because hosts mutexes leaked.
+constexpr uint32_t kCsSpin = 128;
+
+inline std::atomic<uint32_t>* CsWord(uint32_t cs) { return reinterpret_cast<std::atomic<uint32_t>*>(Ptr<uint32_t>(cs)); }
+
+void CsReset(uint32_t cs) {
+    for (int i = 0; i < 6; ++i) W32(cs + 4 * i, 0);
+}
+
+void CsAcquireSlow(std::atomic<uint32_t>* word) {
+    for (;;) {
+        for (int spin = 0; spin < kCsSpin; ++spin) {
+            uint32_t spin_expected = 0;
+            if (word->compare_exchange_weak(spin_expected, 1, std::memory_order_acquire)) return;
+            ShortSpin();
+        }
+#if defined(__linux__)
+        uint32_t taken = 1;
+        if (!word->compare_exchange_strong(taken, 1, std::memory_order_acquire) && taken == 1) {
+            // Still held: sleep until the holder releases it (the release stores 0 and wakes one waiter).
+            FutexWait(word, 1, -1);
+        }
+#else
+        uint32_t yield_expected = 0;
+        while (!word->compare_exchange_weak(yield_expected, 1, std::memory_order_acquire)) {
+            yield_expected = 0;
+            std::this_thread::yield();
+        }
+        return;
+#endif
+        uint32_t retry = 0;
+        if (word->compare_exchange_strong(retry, 1, std::memory_order_acquire)) return;
+    }
+}
+
+void EnterCriticalSectionGuest(uint32_t cs) {
+    std::atomic<uint32_t>* word = CsWord(cs);
+    const uint32_t tid = CurrentTid();
+    uint32_t expected = 0;
+    if (word->compare_exchange_strong(expected, 1, std::memory_order_acquire)) {
+        W32(cs + 4, tid);
+        W32(cs + 8, 1);
+        return;
+    }
+    if (R32(cs + 4) == tid) {  // recursive section: the owner never blocks on itself
+        W32(cs + 8, R32(cs + 8) + 1);
+        return;
+    }
+    CsAcquireSlow(word);
+    W32(cs + 4, tid);
+    W32(cs + 8, 1);
+}
+
+void LeaveCriticalSectionGuest(uint32_t cs) {
+    const uint32_t tid = CurrentTid();
+    if (R32(cs + 4) != tid) {
+        Log("LeaveCriticalSection(%08x) from a thread that does not own it", cs);
+        return;
+    }
+    const uint32_t recursion = R32(cs + 8);
+    if (recursion > 1) {
+        W32(cs + 8, recursion - 1);
+        return;
+    }
+    W32(cs + 4, 0);
+    W32(cs + 8, 0);
+    CsWord(cs)->store(0, std::memory_order_release);
+    FutexWake(CsWord(cs), 1);
+}
+
+bool TryEnterCriticalSectionGuest(uint32_t cs) {
+    std::atomic<uint32_t>* word = CsWord(cs);
+    const uint32_t tid = CurrentTid();
+    uint32_t expected = 0;
+    if (word->compare_exchange_strong(expected, 1, std::memory_order_acquire)) {
+        W32(cs + 4, tid);
+        W32(cs + 8, 1);
+        return true;
+    }
+    if (R32(cs + 4) == tid) {
+        W32(cs + 8, R32(cs + 8) + 1);
+        return true;
+    }
+    return false;
+}
+
+// ---- TLS ----
+std::mutex g_tls_mutex;
+bool g_tls_used[64];
+
+#define K(name) void k_##name(Ctx* c)
+
+// ---------------- handlers ----------------
+K(GetCurrentProcessId) { Return(c, 0x1000); }
+K(GetCurrentThreadId) { Return(c, CurrentTid()); }
+K(GetCurrentProcess) { Return(c, kCurrentProcess); }
+K(GetCurrentThread) { Return(c, kCurrentThread); }
+K(GetTickCount) {
+    const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - g_start).count());
+    Return(c, uint32_t(GuestElapsedNanos(ns) / 1000000ull));
+}
+K(QueryPerformanceCounter) {
+    const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - g_start).count());
+    // Frequency remains 10 MHz: the tour accelerates the guest's observed elapsed time, not the host clock or FPS.
+    W64(Arg(c, 0), GuestElapsedNanos(ns) / 100ull);
+    Return(c, 1, 1);
+}
+K(QueryPerformanceFrequency) {
+    W64(Arg(c, 0), 10000000ull);
+    Return(c, 1, 1);
+}
+K(GetSystemTimeAsFileTime) {
+    W64(Arg(c, 0), NowFileTime());
+    Return(c, 0, 1);
+}
+K(GetLocalTime) {
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    struct tm t;
+    localtime_r(&tv.tv_sec, &t);
+    WriteSystemTime(Arg(c, 0), t, int(tv.tv_usec / 1000));
+    Return(c, 0, 1);
+}
+K(GetTimeZoneInformation) {
+    memset(Ptr<void>(Arg(c, 0)), 0, 172);
+    Return(c, 0, 1);  // TIME_ZONE_ID_UNKNOWN, bias 0
+}
+K(InterlockedCompareExchange) {
+    uint32_t expected = Arg(c, 2);
+    __atomic_compare_exchange_n(Ptr<uint32_t>(Arg(c, 0)), &expected, Arg(c, 1), false, __ATOMIC_SEQ_CST,
+                                __ATOMIC_SEQ_CST);
+    Return(c, expected, 3);
+}
+K(InterlockedExchange) { Return(c, __atomic_exchange_n(Ptr<uint32_t>(Arg(c, 0)), Arg(c, 1), __ATOMIC_SEQ_CST), 2); }
+K(InterlockedDecrement) { Return(c, __atomic_sub_fetch(Ptr<uint32_t>(Arg(c, 0)), 1, __ATOMIC_SEQ_CST), 1); }
+
+K(VirtualAlloc) {
+    uint32_t addr = Arg(c, 0), size = Arg(c, 1);
+    uint32_t r = PageAlloc(size, addr);
+    if (!r) SetLastError(8);  // ERROR_NOT_ENOUGH_MEMORY
+    Return(c, r, 4);
+}
+K(VirtualFree) {
+    if (Arg(c, 2) & 0x8000) PageFree(Arg(c, 0));  // MEM_RELEASE; MEM_DECOMMIT keeps the pages
+    Return(c, 1, 3);
+}
+K(GetProcessHeap) { Return(c, 0x00ee0000u); }
+K(HeapFree) {
+    native::HeapFree(Arg(c, 2));
+    Return(c, 1, 3);
+}
+K(GlobalMemoryStatus) {
+    uint32_t m = Arg(c, 0);
+    W32(m + 0, 32);
+    W32(m + 4, 30);
+    W32(m + 8, 0x7fffffffu);   // total physical
+    W32(m + 12, 0x60000000u);  // available physical
+    W32(m + 16, 0x7fffffffu);
+    W32(m + 20, 0x60000000u);
+    W32(m + 24, 0x7ffe0000u);  // total virtual
+    W32(m + 28, 0x60000000u);
+    Return(c, 0, 1);
+}
+
+K(GetModuleHandleA) {
+    uint32_t name = Arg(c, 0);
+    Return(c, name ? ModuleHandle(LowerName(Str(name))) : kExeBase, 1);
+}
+K(LoadLibraryA) {
+    std::string n = LowerName(Str(Arg(c, 0)));
+    if (!KnownLibrary(n)) {
+        Log("LoadLibraryA(%s): not provided", Str(Arg(c, 0)));
+        SetLastError(126);  // ERROR_MOD_NOT_FOUND
+        Return(c, 0, 1);
+        return;
+    }
+    Return(c, ModuleHandle(n), 1);
+}
+K(FreeLibrary) { Return(c, 1, 1); }
+K(GetProcAddress) {
+    uint32_t module = Arg(c, 0), name = Arg(c, 1);
+    std::string proc = name < 0x10000 ? "#" + std::to_string(name) : std::string(Str(name));
+    uint32_t r = 0;
+    if (module == g_engine.base) {
+        r = FindExport(g_engine, proc.c_str());
+    } else if (module >= kModuleBase && module < kModuleBase + 0x1000000) {
+        std::string dll;
+        {
+            std::lock_guard<std::mutex> lock(g_modules_mutex);
+            dll = g_module_names[(module - kModuleBase) / 0x10000];
+        }
+        r = ImportThunk(dll.c_str(), proc.c_str());
+    }
+    Return(c, r, 2);
+}
+K(GetModuleFileNameA) {
+    uint32_t module = Arg(c, 0), buf = Arg(c, 1), size = Arg(c, 2);
+    std::string p = std::string(kGuestGameDir) + (module == g_engine.base ? "\\prototypeenginef.dll" : "\\prototypef.exe");
+    uint32_t n = uint32_t(p.size()) < size ? uint32_t(p.size()) : size - 1;
+    memcpy(Str(buf), p.c_str(), n);
+    Str(buf)[n] = 0;
+    Return(c, n, 3);
+}
+
+K(GetVersionExA) {
+    uint32_t v = Arg(c, 0);
+    W32(v + 4, 6);      // Windows 7
+    W32(v + 8, 1);
+    W32(v + 12, 7601);
+    W32(v + 16, 2);     // VER_PLATFORM_WIN32_NT
+    strcpy(Str(v + 20), "Service Pack 1");
+    Return(c, 1, 1);
+}
+K(IsDebuggerPresent) { Return(c, 0); }
+K(SetErrorMode) { Return(c, 0, 1); }
+K(SetUnhandledExceptionFilter) { Return(c, 0, 1); }
+K(UnhandledExceptionFilter) { Return(c, 0, 1); }
+K(OutputDebugStringA) {
+    Log("debug: %s", Str(Arg(c, 0)));
+    Return(c, 0, 1);
+}
+K(RaiseException) {
+    uint32_t code = Arg(c, 0);
+    if (code == 0x406d1388u) {  // MSVC SetThreadName convention: ignored
+        Return(c, 0, 4);
+        return;
+    }
+    Fatal("RaiseException %08x from %08x", code, R32(c->esp));
+}
+K(TerminateProcess) {
+    Log("TerminateProcess(%u)", Arg(c, 1));
+    _exit(int(Arg(c, 1)));
+}
+K(GetLastError) { Return(c, GetLastError()); }
+K(FormatMessageA) {
+    uint32_t buf = Arg(c, 4), size = Arg(c, 5);
+    const char* msg = "error";
+    if (Arg(c, 0) & 0x100) {  // FORMAT_MESSAGE_ALLOCATE_BUFFER
+        W32(buf, GuestStrdup(msg));
+    } else if (size) {
+        strncpy(Str(buf), msg, size);
+    }
+    Return(c, uint32_t(strlen(msg)), 7);
+}
+
+// ---- threads ----
+namespace {
+
+struct ThreadStart {
+    Thread* thread;
+    uint32_t stack, start, param;
+};
+
+// Guest threads run on their own host thread. bionic's default 1 MiB stack is smaller than what the recompiled C
+// frames need (the fiber code already budgets 4 MiB for the same reason), so the stack is set explicitly. Threads are
+// named so simpleperf/Perfetto and the ADPF code can find the render, worker and loader threads on a trace.
+void* ThreadMain(void* argument) {
+    auto* s = static_cast<ThreadStart*>(argument);
+    GuestThread* g = AttachThread(s->stack);
+    s->thread->host_tid = int(gettid());
+    {
+        std::lock_guard<std::mutex> lock(g_kernel_mutex);
+        s->thread->id = g->id;
+    }
+    g_kernel_cv.notify_all();  // the creator waits for this instead of spinning on yield()
+    char name[24];
+    snprintf(name, sizeof(name), "proto-guest-%u", g->id >> 2);
+    pthread_setname_np(pthread_self(), name);
+    SetThreadTimerslack();
+    {
+        std::unique_lock<std::mutex> lock(g_kernel_mutex);
+        g_kernel_cv.wait(lock, [s] { return !s->thread->suspended; });
+    }
+    const uint32_t code = GuestCall(s->start, {s->param});
+    // Release the guest stack and TEB before the host thread exits (they used to stay mapped for the whole session).
+    DetachThread();
+    {
+        std::lock_guard<std::mutex> lock(g_kernel_mutex);
+        s->thread->exit_code = code;
+        s->thread->done = true;
+        s->thread->Notify();
+    }
+    delete s;
+    return nullptr;
+}
+
+}  // namespace
+
+K(CreateThread) {
+    uint32_t stack = Arg(c, 1), start = Arg(c, 2), param = Arg(c, 3), flags = Arg(c, 4), tid_out = Arg(c, 5);
+    auto* t = new Thread();
+    t->refs = 2;
+    t->suspended = (flags & 4) != 0;  // CREATE_SUSPENDED
+    uint32_t handle = NewHandle(t);
+    auto* s = new ThreadStart{t, stack, start, param};
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 8u << 20);  // virtual memory only: pages are committed as the stack is used
+    pthread_t host;
+    if (pthread_create(&host, &attr, ThreadMain, s) != 0) {
+        pthread_attr_destroy(&attr);
+        delete s;
+        SetLastError(8);  // ERROR_NOT_ENOUGH_MEMORY
+        Return(c, 0, 6);
+        return;
+    }
+    pthread_attr_destroy(&attr);
+    pthread_detach(host);
+    uint32_t id = 0;
+    {
+        std::unique_lock<std::mutex> lock(g_kernel_mutex);
+        g_kernel_cv.wait(lock, [t] { return t->id != 0; });
+        id = t->id;
+    }
+    if (tid_out) W32(tid_out, id);
+    Return(c, handle, 6);
+}
+K(ResumeThread) {
+    auto* t = static_cast<Thread*>(HandleObject(Arg(c, 0)));
+    uint32_t prev = 0;
+    if (t && t->type == KType::Thread) {
+        std::lock_guard<std::mutex> lock(g_kernel_mutex);
+        prev = t->suspended ? 1 : 0;
+        t->suspended = false;
+        g_kernel_cv.notify_all();
+    }
+    Return(c, prev, 1);
+}
+K(SuspendThread) {
+    Log("SuspendThread(%08x) ignored", Arg(c, 0));
+    Return(c, 0, 1);
+}
+// Windows priorities become nice values only. No host affinity is set: Android must remain free to schedule the
+// engine, DXVK submission, and compiler threads across every available core.
+K(SetThreadPriority) {
+    uint32_t h = Arg(c, 0);
+    int prio = int32_t(Arg(c, 1));
+    int tid = 0;
+    if (h == kCurrentThread) {
+        tid = int(gettid());
+    } else {
+        std::lock_guard<std::mutex> lock(g_kernel_mutex);
+        KObject* o = HandleObject(h);
+        if (o && o->type == KType::Thread) tid = static_cast<Thread*>(o)->host_tid;
+    }
+    int nice = prio >= 15 ? -10 : prio <= -15 ? 10 : -2 * prio;  // TIME_CRITICAL / IDLE / -2..2
+    if (tid) {
+        // No log line per call: the engine sets priorities while it is still starting threads, and a log line here
+        // takes the process-wide log mutex and writes to storage.
+        setpriority(PRIO_PROCESS, id_t(tid), nice);
+        if (nice > 0) {
+            // THREAD_PRIORITY_IDLE / BELOW_NORMAL: background/polling threads must never compete with the render
+            // thread for a big core once ADPF or the scheduler looks at utilisation.
+            sched_param sp{};
+            sched_setscheduler(id_t(tid), SCHED_BATCH, &sp);
+        }
+        // THREAD_PRIORITY_HIGHEST: the engine's render thread; TIME_CRITICAL: its audio feeder. Engine job workers
+        // (normal priority) are frame-critical too, so they join the ADPF session as well.
+        if (prio >= 0 && tid != int(gettid())) PerfHintAddThread(tid);
+    }
+    Return(c, 1, 2);
+}
+uint32_t HostProcessAffinityMask();
+
+// Real affinity: the guest mask is applied to the calling thread and the previous mask is returned. Android keeps the
+// engine free to spread work across cores, so this only ever narrows to the CPUs the guest asked for.
+K(SetThreadAffinityMask) {
+    const uint32_t mask = Arg(c, 1);
+    cpu_set_t cpus;
+    CPU_ZERO(&cpus);
+    uint32_t applied = 0;
+    for (uint32_t i = 0; i < 32; ++i) {
+        if (mask & (1u << i)) {
+            CPU_SET(i, &cpus);
+            applied |= 1u << i;
+        }
+    }
+    const uint32_t previous = HostProcessAffinityMask();
+    if (applied && sched_setaffinity(0, sizeof(cpus), &cpus) != 0) {
+        Return(c, 0, 2);
+        return;
+    }
+    Return(c, previous, 2);
+}
+
+uint32_t HostProcessAffinityMask() {
+    cpu_set_t cpus;
+    if (sched_getaffinity(0, sizeof(cpus), &cpus) == 0) {
+        const uint32_t mask = LowCpuMask([&cpus](uint32_t cpu) { return CPU_ISSET(cpu, &cpus); });
+        if (mask) return mask;
+    }
+    // If the kernel interface is unavailable or exposes only CPUs above the 32-bit Windows limit, retain a
+    // conservative nonzero fallback. The engine counts these bits when choosing its worker-pool size.
+    return FallbackCpuMask(uint32_t(std::max(sysconf(_SC_NPROCESSORS_ONLN), 1l)));
+}
+
+K(GetProcessAffinityMask) {
+    static const uint32_t mask = [] {
+        const uint32_t value = HostProcessAffinityMask();
+        Log("process affinity: reporting mask %08x (%u low CPUs) to the engine", value,
+            unsigned(__builtin_popcount(value)));
+        return value;
+    }();
+    W32(Arg(c, 1), mask);
+    W32(Arg(c, 2), mask);
+    Return(c, 1, 3);
+}
+K(GetExitCodeThread) {
+    auto* t = static_cast<Thread*>(HandleObject(Arg(c, 0)));
+    std::lock_guard<std::mutex> lock(g_kernel_mutex);
+    W32(Arg(c, 1), t && t->type == KType::Thread ? t->exit_code : 0);
+    Return(c, 1, 2);
+}
+K(TerminateThread) {
+    Log("TerminateThread(%08x) ignored", Arg(c, 0));
+    Return(c, 1, 2);
+}
+K(ExitThread) { Fatal("ExitThread(%u): not supported yet", Arg(c, 0)); }
+K(Sleep) {
+    const uint32_t ms = Arg(c, 0);
+    if (ms == 0) {
+        // Sleep(0) means "give up the rest of my timeslice". A guest that calls it in a tight poll loop keeps its core
+        // runnable forever, which on Android shows up as a big core pinned at 100% (heat and battery) for no progress.
+        // After a burst of yields the thread backs off briefly so the core can actually idle.
+        static thread_local uint32_t yields = 0;
+        if (++yields < 64) {
+            std::this_thread::yield();
+        } else {
+            yields = 0;
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
+        }
+    } else if (ms <= 2) {
+        std::this_thread::sleep_for(std::chrono::microseconds(ms * 1000));
+    } else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+    }
+    Return(c, 0, 1);
+}
+
+// ---- fibers ----
+K(ConvertThreadToFiber) { Return(c, FiberConvertThread(Arg(c, 0)), 1); }
+K(CreateFiber) { Return(c, FiberCreate(Arg(c, 0), Arg(c, 1), Arg(c, 2)), 3); }
+K(SwitchToFiber) {
+    uint32_t target = Arg(c, 0);
+    // Pop the call frame first: the resumed fiber continues from its own frame, and this one resumes here later.
+    Return(c, 0, 1);
+    FiberSwitch(target);
+}
+K(DeleteFiber) {
+    FiberDelete(Arg(c, 0));
+    Return(c, 0, 1);
+}
+K(ConvertFiberToThread) {
+    FiberConvertToThread();
+    Return(c, 1);
+}
+
+// ---- TLS ----
+K(TlsAlloc) {
+    std::lock_guard<std::mutex> lock(g_tls_mutex);
+    for (int i = 0; i < 64; ++i) {
+        if (!g_tls_used[i]) {
+            g_tls_used[i] = true;
+            Return(c, uint32_t(i));
+            return;
+        }
+    }
+    Return(c, 0xffffffffu);
+}
+K(TlsFree) {
+    std::lock_guard<std::mutex> lock(g_tls_mutex);
+    if (Arg(c, 0) < 64) g_tls_used[Arg(c, 0)] = false;
+    Return(c, 1, 1);
+}
+K(TlsGetValue) {
+    SetLastError(0);
+    Return(c, R32(TebTlsSlot(int(Arg(c, 0)))), 1);
+}
+K(TlsSetValue) {
+    W32(TebTlsSlot(int(Arg(c, 0))), Arg(c, 1));
+    Return(c, 1, 2);
+}
+
+// ---- synchronization ----
+K(InitializeCriticalSection) {
+    CsReset(Arg(c, 0));
+    Return(c, 0, 1);
+}
+K(InitializeCriticalSectionAndSpinCount) {
+    CsReset(Arg(c, 0));
+    Return(c, 1, 2);
+}
+K(SetCriticalSectionSpinCount) { Return(c, Arg(c, 1), 2); }
+// The lock lives in the guest structure, so deleting it has nothing to free (the old host mutex leaked for the session).
+K(DeleteCriticalSection) {
+    CsReset(Arg(c, 0));
+    Return(c, 0, 1);
+}
+K(EnterCriticalSection) {
+    EnterCriticalSectionGuest(Arg(c, 0));
+    Return(c, 0, 1);
+}
+K(LeaveCriticalSection) {
+    LeaveCriticalSectionGuest(Arg(c, 0));
+    Return(c, 0, 1);
+}
+K(TryEnterCriticalSection) { Return(c, TryEnterCriticalSectionGuest(Arg(c, 0)) ? 1 : 0, 1); }
+
+K(CreateEventA) { Return(c, NewHandle(new Event(Arg(c, 1) != 0, Arg(c, 2) != 0)), 4); }
+K(SetEvent) {
+    auto* e = static_cast<Event*>(HandleObject(Arg(c, 0)));
+    if (!e || e->type != KType::Event) {
+        Return(c, 0, 1);
+        return;
+    }
+    e->signaled.store(1, std::memory_order_release);
+    FutexWake(&e->signaled, e->manual ? INT32_MAX : 1);
+    if (e->legacy_waiters.load(std::memory_order_relaxed)) {
+        std::lock_guard<std::mutex> lock(g_kernel_mutex);
+        if (e->manual) e->Notify();
+        else e->NotifyOne();
+    }
+    Return(c, 1, 1);
+}
+K(ResetEvent) {
+    auto* e = static_cast<Event*>(HandleObject(Arg(c, 0)));
+    if (e && e->type == KType::Event) e->signaled.store(0, std::memory_order_release);
+    Return(c, e ? 1 : 0, 1);
+}
+K(CreateSemaphoreA) { Return(c, NewHandle(new Semaphore(int32_t(Arg(c, 1)), int32_t(Arg(c, 2)))), 4); }
+K(ReleaseSemaphore) {
+    auto* s = static_cast<Semaphore*>(HandleObject(Arg(c, 0)));
+    if (!s || s->type != KType::Semaphore) {
+        Return(c, 0, 3);
+        return;
+    }
+    const uint32_t previous = s->count.fetch_add(Arg(c, 1), std::memory_order_acq_rel);
+    if (Arg(c, 2)) W32(Arg(c, 2), previous);
+    FutexWake(&s->count, INT32_MAX);
+    if (s->legacy_waiters.load(std::memory_order_relaxed)) {
+        std::lock_guard<std::mutex> lock(g_kernel_mutex);
+        s->Notify();
+    }
+    Return(c, 1, 3);
+}
+K(CreateMutexA) {
+    auto* m = new Mutex();
+    if (Arg(c, 1)) m->Acquire(CurrentTid());
+    Return(c, NewHandle(m), 3);
+}
+K(WaitForSingleObject) {
+    KObject* o = HandleObject(Arg(c, 0));
+    if (!o) {
+        SetLastError(ERROR_INVALID_HANDLE);
+        Return(c, 0xffffffffu, 2);
+        return;
+    }
+    // Single-object wait on an event or semaphore: no process-wide lock at all. A waiter claims the object with a CAS
+    // on its own word and sleeps in the kernel only when the claim fails, so unrelated signals never block each other.
+    if (std::atomic<uint32_t>* word = o->WaitWord()) {
+        if (o->legacy_waiters.load(std::memory_order_relaxed) == 0) {
+            const uint32_t ms = Arg(c, 1);
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms == 0xffffffffu ? 0 : ms);
+            const bool forever = ms == 0xffffffffu;
+            const bool auto_reset = o->type == KType::Event && !static_cast<Event*>(o)->manual;
+            for (;;) {
+                uint32_t observed = word->load(std::memory_order_acquire);
+                while (observed != 0) {
+                    if (auto_reset) {
+                        if (word->compare_exchange_weak(observed, 0, std::memory_order_acq_rel)) {
+                            Return(c, 0, 2);  // WAIT_OBJECT_0
+                            return;
+                        }
+                        continue;  // reloaded by compare_exchange_weak
+                    }
+                    if (o->type == KType::Semaphore) {
+                        if (word->compare_exchange_weak(observed, observed - 1, std::memory_order_acq_rel)) {
+                            Return(c, 0, 2);
+                            return;
+                        }
+                        continue;
+                    }
+                    Return(c, 0, 2);  // manual-reset event: stays signaled
+                    return;
+                }
+                if (ms == 0) {
+                    Return(c, 0x102, 2);  // WAIT_TIMEOUT
+                    return;
+                }
+                int64_t remaining = -1;
+                if (!forever) {
+                    const auto now = std::chrono::steady_clock::now();
+                    if (now >= deadline) {
+                        Return(c, 0x102, 2);
+                        return;
+                    }
+                    remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+                }
+                FutexWait(word, 0, remaining);
+            }
+        }
+    }
+    uint32_t tid = CurrentTid();
+    std::unique_lock<std::mutex> lock(g_kernel_mutex);
+    bool ok = WaitKernel(lock, Arg(c, 1), &o, 1, [&] { return o->Signaled(tid); });
+    if (ok) o->Acquire(tid);
+    Return(c, ok ? 0 : 0x102, 2);  // WAIT_OBJECT_0 / WAIT_TIMEOUT
+}
+K(WaitForMultipleObjects) {
+    uint32_t n = Arg(c, 0), handles = Arg(c, 1), all = Arg(c, 2), ms = Arg(c, 3);
+    // Windows allows at most 64 handles here; the first 8 (every wait the engine makes) need no allocation at all.
+    constexpr uint32_t kInline = 8;
+    KObject* inline_objs[kInline];
+    std::vector<KObject*> heap_objs;
+    KObject** objs = inline_objs;
+    if (n > kInline) {
+        heap_objs.resize(n);
+        objs = heap_objs.data();
+    }
+    for (uint32_t i = 0; i < n; ++i) objs[i] = HandleObject(R32(handles + 4 * i));
+    uint32_t tid = CurrentTid();
+    uint32_t which = 0x102;
+    std::unique_lock<std::mutex> lock(g_kernel_mutex);
+    WaitKernel(lock, ms, objs, n, [&] {
+        if (all) {
+            for (uint32_t i = 0; i < n; ++i)
+                if (!objs[i] || !objs[i]->Signaled(tid)) return false;
+            for (uint32_t i = 0; i < n; ++i) objs[i]->Acquire(tid);
+            which = 0;
+            return true;
+        }
+        for (uint32_t i = 0; i < n; ++i) {
+            if (objs[i] && objs[i]->Signaled(tid)) {
+                objs[i]->Acquire(tid);
+                which = i;
+                return true;
+            }
+        }
+        return false;
+    });
+    Return(c, which, 4);
+}
+K(CloseHandle) {
+    CloseKernelHandle(Arg(c, 0));
+    Return(c, 1, 1);
+}
+
+// ---- files ----
+K(CreateFileA) {
+    const char* name = Str(Arg(c, 0));
+    uint32_t access = Arg(c, 1), disposition = Arg(c, 4);
+    std::string host = HostPath(name);
+    int flags = 0;
+    bool write = (access & 0x40000000u) || (access & 0x10000000u);  // GENERIC_WRITE / GENERIC_ALL
+    bool read = (access & 0x80000000u) || (access & 0x10000000u) || !write;
+    flags = read && write ? O_RDWR : write ? O_WRONLY : O_RDONLY;
+    switch (disposition) {
+        case 1: flags |= O_CREAT | O_EXCL; break;   // CREATE_NEW
+        case 2: flags |= O_CREAT | O_TRUNC; break;  // CREATE_ALWAYS
+        case 3: break;                              // OPEN_EXISTING
+        case 4: flags |= O_CREAT; break;            // OPEN_ALWAYS
+        case 5: flags |= O_TRUNC; break;            // TRUNCATE_EXISTING
+    }
+    // Only an existing read-only open can be redirected. Saves, write/create/truncate modes and every path outside
+    // C:\Game retain HostPath's original routing; the overlay itself enforces that guest-directory boundary.
+    if (!write && disposition == 3) host = ModFilesResolveReadPath(name, host);
+    struct stat st;
+    bool existed = stat(host.c_str(), &st) == 0;
+    if (existed && S_ISDIR(st.st_mode)) {
+        SetLastError(ERROR_ACCESS_DENIED);
+        Return(c, kInvalidHandle, 7);
+        return;
+    }
+    if (flags & O_CREAT) {
+        // Create the immediate parent for save/settings files lazily (shared or legacy native_c).
+        std::string dir = host.substr(0, host.find_last_of('/'));
+        mkdir(dir.c_str(), 0755);
+    }
+    int fd = open(host.c_str(), flags | O_CLOEXEC, 0644);
+    if (DetailedDiagnosticsEnabled()) {
+        g_io.opens.fetch_add(1, std::memory_order_relaxed);
+        if (fd < 0) g_io.open_errors.fetch_add(1, std::memory_order_relaxed);
+    }
+    static const bool trace = getenv("PROTODROID_TRACE_FILES") != nullptr;
+    if (trace) Log("CreateFileA(%s, %x, disp %u) -> %s", name, access, disposition, fd < 0 ? strerror(errno) : "ok");
+    if (fd < 0) {
+        SetLastError(ErrnoToWin(errno));
+        Return(c, kInvalidHandle, 7);
+        return;
+    }
+    auto* f = new File();
+    f->fd = fd;
+    // Item 51: tell the kernel how this stream will be read. The archives are read at scattered offsets (do not waste
+    // readahead on them); movies and loose audio/bink data are read straight through.
+    if (fd >= 0) {
+        std::string lowered = host;
+        for (char& ch : lowered) ch = char(tolower(static_cast<unsigned char>(ch)));
+        const bool movie = lowered.size() > 4 && lowered.compare(lowered.size() - 4, 4, ".bik") == 0;
+        const bool archive = lowered.find(".rcf") != std::string::npos || lowered.find(".p3d") != std::string::npos;
+        if (movie) posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+        else if (archive) posix_fadvise(fd, 0, 0, POSIX_FADV_RANDOM);
+    }
+    f->path = host;
+    SetLastError((disposition == 2 || disposition == 4) && existed ? ERROR_ALREADY_EXISTS : 0);
+    Return(c, NewHandle(f), 7);
+}
+File* FileOf(uint32_t h) {
+    KObject* o = HandleObject(h);
+    return o && o->type == KType::File ? static_cast<File*>(o) : nullptr;
+}
+// OVERLAPPED: [8] Offset, [12] OffsetHigh, [16] hEvent. I/O completes synchronously.
+void CompleteOverlapped(uint32_t ov, uint32_t bytes) {
+    W32(ov, 0);
+    W32(ov + 4, bytes);
+    if (uint32_t ev = R32(ov + 16)) {
+        auto* e = static_cast<Event*>(HandleObject(ev & ~1u));
+        if (e && e->type == KType::Event) {
+            e->signaled.store(1, std::memory_order_release);
+            FutexWake(&e->signaled, e->manual ? INT32_MAX : 1);
+            if (e->legacy_waiters.load(std::memory_order_relaxed)) {
+                std::lock_guard<std::mutex> lock(g_kernel_mutex);
+                if (e->manual) e->Notify();
+                else e->NotifyOne();
+            }
+        }
+    }
+}
+K(ReadFile) {
+    File* f = FileOf(Arg(c, 0));
+    uint32_t buf = Arg(c, 1), n = Arg(c, 2), out = Arg(c, 3), ov = Arg(c, 4);
+    if (!f) {
+        if (DetailedDiagnosticsEnabled()) g_io.read_errors.fetch_add(1, std::memory_order_relaxed);
+        SetLastError(ERROR_INVALID_HANDLE);
+        Return(c, 0, 5);
+        return;
+    }
+    const int64_t offset = ov ? int64_t(uint64_t(R32(ov + 8)) | (uint64_t(R32(ov + 12)) << 32)) : -1;
+    // Readahead: when the guest keeps reading forward, tell the kernel what comes next. posix_fadvise(WILLNEED) is
+    // advisory and costs one syscall per large step, not per read.
+    if (ov) {
+        if (offset == f->next) {
+            f->sequential = true;
+            if ((offset & 0x3ffff) == 0) posix_fadvise(f->fd, off_t(offset + 0x80000), 0x80000, POSIX_FADV_WILLNEED);
+        } else {
+            f->sequential = false;
+        }
+        f->next = offset + int64_t(n);
+    }
+    const bool timing = DetailedDiagnosticsEnabled();
+    const auto t0 = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    ssize_t r = ov ? pread(f->fd, Ptr<void>(buf), n, off_t(offset)) : read(f->fd, Ptr<void>(buf), n);
+    const int io_error = r < 0 ? errno : 0;
+    if (timing) {
+        const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - t0).count());
+        const uint64_t us = ns / 1000;
+        g_io.reads.fetch_add(1, std::memory_order_relaxed);
+        g_io.read_ns.fetch_add(ns, std::memory_order_relaxed);
+        if (r > 0) g_io.read_bytes.fetch_add(uint64_t(r), std::memory_order_relaxed);
+        if (r < 0) g_io.read_errors.fetch_add(1, std::memory_order_relaxed);
+        if (us > 10000) g_io.over10.fetch_add(1, std::memory_order_relaxed);
+        if (us > 50000) g_io.over50.fetch_add(1, std::memory_order_relaxed);
+        if (us > 100000) g_io.over100.fetch_add(1, std::memory_order_relaxed);
+        RecordMax(g_io.max_read_us, us);
+        if (us > 50000) RecordSlowIo(false, f->path, r > 0 ? uint64_t(r) : 0, offset, us);
+    }
+    if (r < 0) {
+        SetLastError(ErrnoToWin(io_error));
+        Return(c, 0, 5);
+        return;
+    }
+    if (out) W32(out, uint32_t(r));
+    if (ov) CompleteOverlapped(ov, uint32_t(r));
+    Return(c, 1, 5);
+}
+K(WriteFile) {
+    File* f = FileOf(Arg(c, 0));
+    uint32_t buf = Arg(c, 1), n = Arg(c, 2), out = Arg(c, 3), ov = Arg(c, 4);
+    if (!f) {
+        if (DetailedDiagnosticsEnabled()) g_io.write_errors.fetch_add(1, std::memory_order_relaxed);
+        SetLastError(ERROR_INVALID_HANDLE);
+        Return(c, 0, 5);
+        return;
+    }
+    const int64_t offset = ov ? int64_t(uint64_t(R32(ov + 8)) | (uint64_t(R32(ov + 12)) << 32)) : -1;
+    const bool timing = DetailedDiagnosticsEnabled();
+    const auto t0 = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    ssize_t r = ov ? pwrite(f->fd, Ptr<void>(buf), n, off_t(offset)) : write(f->fd, Ptr<void>(buf), n);
+    const int io_error = r < 0 ? errno : 0;
+    if (timing) {
+        const uint64_t ns = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - t0).count());
+        const uint64_t us = ns / 1000;
+        g_io.writes.fetch_add(1, std::memory_order_relaxed);
+        g_io.write_ns.fetch_add(ns, std::memory_order_relaxed);
+        if (r > 0) g_io.write_bytes.fetch_add(uint64_t(r), std::memory_order_relaxed);
+        if (r < 0) g_io.write_errors.fetch_add(1, std::memory_order_relaxed);
+        if (us > 10000) g_io.over10.fetch_add(1, std::memory_order_relaxed);
+        if (us > 50000) g_io.over50.fetch_add(1, std::memory_order_relaxed);
+        if (us > 100000) g_io.over100.fetch_add(1, std::memory_order_relaxed);
+        RecordMax(g_io.max_write_us, us);
+        if (us > 50000) RecordSlowIo(true, f->path, r > 0 ? uint64_t(r) : 0, offset, us);
+    }
+    if (r < 0) {
+        SetLastError(ErrnoToWin(io_error));
+        Return(c, 0, 5);
+        return;
+    }
+    if (out) W32(out, uint32_t(r));
+    if (ov) CompleteOverlapped(ov, uint32_t(r));
+    Return(c, 1, 5);
+}
+K(SetFilePointer) {
+    File* f = FileOf(Arg(c, 0));
+    int64_t dist = int32_t(Arg(c, 1));
+    uint32_t high = Arg(c, 2);
+    if (high) dist = int64_t((uint64_t(R32(high)) << 32) | Arg(c, 1));
+    off_t r = f ? lseek(f->fd, off_t(dist), int(Arg(c, 3))) : -1;  // FILE_BEGIN/CURRENT/END = SEEK_*
+    if (r < 0) {
+        SetLastError(f ? 131 : ERROR_INVALID_HANDLE);  // ERROR_NEGATIVE_SEEK
+        Return(c, 0xffffffffu, 4);
+        return;
+    }
+    if (high) W32(high, uint32_t(uint64_t(r) >> 32));
+    SetLastError(0);
+    Return(c, uint32_t(r), 4);
+}
+K(GetFileSize) {
+    File* f = FileOf(Arg(c, 0));
+    struct stat st;
+    if (!f || fstat(f->fd, &st) != 0) {
+        Return(c, 0xffffffffu, 2);
+        return;
+    }
+    if (Arg(c, 1)) W32(Arg(c, 1), uint32_t(uint64_t(st.st_size) >> 32));
+    Return(c, uint32_t(st.st_size), 2);
+}
+K(SetEndOfFile) {
+    File* f = FileOf(Arg(c, 0));
+    Return(c, f && ftruncate(f->fd, lseek(f->fd, 0, SEEK_CUR)) == 0 ? 1 : 0, 1);
+}
+K(FlushFileBuffers) { Return(c, 1, 1); }
+K(GetFileTime) {
+    File* f = FileOf(Arg(c, 0));
+    struct stat st;
+    if (!f || fstat(f->fd, &st) != 0) {
+        Return(c, 0, 4);
+        return;
+    }
+    uint64_t t = ToFileTime(st.st_mtim);
+    for (int i = 1; i <= 3; ++i)
+        if (Arg(c, i)) W64(Arg(c, i), t);
+    Return(c, 1, 4);
+}
+K(CompareFileTime) {
+    uint64_t a = R64(Arg(c, 0)), b = R64(Arg(c, 1));
+    Return(c, a < b ? 0xffffffffu : a > b ? 1 : 0, 2);
+}
+K(DeleteFileA) {
+    int r = unlink(HostPath(Str(Arg(c, 0))).c_str());
+    if (r) SetLastError(ErrnoToWin(errno));
+    Return(c, r == 0, 1);
+}
+K(MoveFileA) {
+    int r = rename(HostPath(Str(Arg(c, 0))).c_str(), HostPath(Str(Arg(c, 1))).c_str());
+    if (r) SetLastError(ErrnoToWin(errno));
+    Return(c, r == 0, 2);
+}
+K(CopyFileA) {
+    std::string from = HostPath(Str(Arg(c, 0))), to = HostPath(Str(Arg(c, 1)));
+    struct stat st;
+    if (Arg(c, 2) && stat(to.c_str(), &st) == 0) {
+        SetLastError(ERROR_FILE_EXISTS);
+        Return(c, 0, 3);
+        return;
+    }
+    FILE* in = fopen(from.c_str(), "rb");
+    FILE* out = in ? fopen(to.c_str(), "wb") : nullptr;
+    bool ok = in && out;
+    char buf[65536];
+    size_t n;
+    while (ok && (n = fread(buf, 1, sizeof(buf), in)) > 0) ok = fwrite(buf, 1, n, out) == n;
+    if (in) fclose(in);
+    if (out) fclose(out);
+    if (!ok) SetLastError(ERROR_FILE_NOT_FOUND);
+    Return(c, ok, 3);
+}
+K(GetFileAttributesA) {
+    const char* name = Str(Arg(c, 0));
+    std::string host = ModFilesResolveReadPath(name, HostPath(name));
+    struct stat st;
+    if (stat(host.c_str(), &st) != 0) {
+        SetLastError(ErrnoToWin(errno));
+        Return(c, 0xffffffffu, 1);
+        return;
+    }
+    Return(c, Attributes(st), 1);
+}
+K(SetFileAttributesA) { Return(c, 1, 2); }
+K(CreateDirectoryA) {
+    std::string host = HostPath(Str(Arg(c, 0)));
+    int r = mkdir(host.c_str(), 0755);
+    if (r) SetLastError(errno == EEXIST ? ERROR_ALREADY_EXISTS : ErrnoToWin(errno));
+    Return(c, r == 0, 2);
+}
+K(RemoveDirectoryA) { Return(c, rmdir(HostPath(Str(Arg(c, 0))).c_str()) == 0, 1); }
+K(FindFirstFileA) {
+    std::string full = FullGuestPath(Str(Arg(c, 0)));
+    size_t slash = full.find_last_of('\\');
+    auto* f = new Find();
+    f->dir = HostPath(full.substr(0, slash).c_str());
+    f->pattern = full.substr(slash + 1);
+    if (f->pattern == "*.*") f->pattern = "*";
+    if (DIR* d = opendir(f->dir.c_str())) {
+        while (dirent* e = readdir(d)) f->names.push_back(e->d_name);
+        closedir(d);
+    }
+    if (!FindNextMatch(f, Arg(c, 1))) {
+        delete f;
+        SetLastError(ERROR_FILE_NOT_FOUND);
+        Return(c, kInvalidHandle, 2);
+        return;
+    }
+    Return(c, NewHandle(f), 2);
+}
+K(FindNextFileA) {
+    KObject* o = HandleObject(Arg(c, 0));
+    if (!o || o->type != KType::Find || !FindNextMatch(static_cast<Find*>(o), Arg(c, 1))) {
+        SetLastError(ERROR_NO_MORE_FILES);
+        Return(c, 0, 2);
+        return;
+    }
+    Return(c, 1, 2);
+}
+K(FindClose) {
+    CloseKernelHandle(Arg(c, 0));
+    Return(c, 1, 1);
+}
+K(GetFullPathNameA) {
+    std::string full = FullGuestPath(Str(Arg(c, 0)));
+    uint32_t size = Arg(c, 1), buf = Arg(c, 2), part = Arg(c, 3);
+    if (full.size() + 1 > size) {
+        Return(c, uint32_t(full.size() + 1), 4);
+        return;
+    }
+    strcpy(Str(buf), full.c_str());
+    if (part) W32(part, buf + uint32_t(full.find_last_of('\\') + 1));
+    Return(c, uint32_t(full.size()), 4);
+}
+K(GetCurrentDirectoryA) {
+    std::string d = GuestCurrentDir();
+    uint32_t size = Arg(c, 0), buf = Arg(c, 1);
+    if (d.size() + 1 > size) {
+        Return(c, uint32_t(d.size() + 1), 2);
+        return;
+    }
+    strcpy(Str(buf), d.c_str());
+    Return(c, uint32_t(d.size()), 2);
+}
+K(SetCurrentDirectoryA) {
+    SetGuestCurrentDir(FullGuestPath(Str(Arg(c, 0))));
+    Return(c, 1, 1);
+}
+K(GetDriveTypeA) { Return(c, 3, 1); }  // DRIVE_FIXED
+K(GetLogicalDrives) { Return(c, 1u << 2); }
+K(GetVolumeInformationA) {
+    if (Arg(c, 1)) strncpy(Str(Arg(c, 1)), "PROTO", Arg(c, 2));
+    if (Arg(c, 3)) W32(Arg(c, 3), 0x12345678u);
+    if (Arg(c, 4)) W32(Arg(c, 4), 255);
+    if (Arg(c, 5)) W32(Arg(c, 5), 0x3);
+    if (Arg(c, 6)) strncpy(Str(Arg(c, 6)), "NTFS", Arg(c, 7));
+    Return(c, 1, 8);
+}
+K(GetDiskFreeSpaceExA) {
+    struct statvfs s;
+    uint64_t free_bytes = statvfs(g_game_dir, &s) == 0 ? uint64_t(s.f_bavail) * s.f_frsize : (1ull << 34);
+    for (int i = 1; i <= 3; ++i)
+        if (Arg(c, i)) W64(Arg(c, i), free_bytes);
+    Return(c, 1, 4);
+}
+K(DeviceIoControl) {
+    SetLastError(1);  // ERROR_INVALID_FUNCTION
+    Return(c, 0, 8);
+}
+K(OpenFile) {
+    // OFSTRUCT-based open; the engine only probes for existence (OF_EXIST).
+    const char* name = Str(Arg(c, 0));
+    std::string host = ModFilesResolveReadPath(name, HostPath(name));
+    struct stat st;
+    bool exists = stat(host.c_str(), &st) == 0;
+    Return(c, exists ? 1 : 0xffffffffu, 3);
+}
+
+// ---- locale / strings ----
+K(MultiByteToWideChar) {
+    uint32_t src = Arg(c, 2), out = Arg(c, 4), out_size = Arg(c, 5);
+    int32_t n = int32_t(Arg(c, 3));
+    if (n < 0) n = int32_t(strlen(Str(src))) + 1;
+    if (out_size == 0) {
+        Return(c, uint32_t(n), 6);
+        return;
+    }
+    int32_t m = n < int32_t(out_size) ? n : int32_t(out_size);
+    for (int32_t i = 0; i < m; ++i) W16(out + 2 * i, R8(src + i));  // Latin-1 code page subset
+    Return(c, uint32_t(m), 6);
+}
+K(lstrlenW) {
+    uint32_t s = Arg(c, 0), n = 0;
+    if (s)
+        while (R16(s + 2 * n)) ++n;
+    Return(c, n, 1);
+}
+K(GetACP) { Return(c, 1252); }
+K(GetThreadLocale) { Return(c, 1033); }
+K(GetSystemDefaultLangID) { Return(c, 1033); }
+K(GetLocaleInfoA) {
+    uint32_t type = Arg(c, 1), buf = Arg(c, 2), size = Arg(c, 3);
+    const char* v = "";
+    switch (type & 0xffff) {
+        case 0x0003: v = "ENU"; break;            // LOCALE_SABBREVLANGNAME
+        case 0x0059: v = "en"; break;             // LOCALE_SISO639LANGNAME
+        case 0x005a: v = "US"; break;             // LOCALE_SISO3166CTRYNAME
+        case 0x000e: v = "."; break;              // LOCALE_SDECIMAL
+        case 0x000f: v = ","; break;              // LOCALE_STHOUSAND
+        case 0x1004: v = "1252"; break;           // LOCALE_IDEFAULTANSICODEPAGE
+        default: v = "";
+    }
+    uint32_t n = uint32_t(strlen(v)) + 1;
+    if (size) strncpy(Str(buf), v, size);
+    Return(c, n, 4);
+}
+
+#undef K
+
+#define E(name) {"kernel32.dll", #name, k_##name}
+const ImportDef kKernel32[] = {
+    E(GetCurrentProcessId), E(GetCurrentThreadId), E(GetCurrentProcess), E(GetCurrentThread), E(GetTickCount),
+    E(QueryPerformanceCounter), E(QueryPerformanceFrequency), E(GetSystemTimeAsFileTime), E(GetLocalTime),
+    E(GetTimeZoneInformation), E(InterlockedCompareExchange), E(InterlockedExchange), E(InterlockedDecrement),
+    E(VirtualAlloc), E(VirtualFree), E(GetProcessHeap), E(HeapFree), E(GlobalMemoryStatus), E(GetModuleHandleA),
+    E(LoadLibraryA), E(FreeLibrary), E(GetProcAddress), E(GetModuleFileNameA), E(GetVersionExA),
+    E(IsDebuggerPresent), E(SetErrorMode), E(SetUnhandledExceptionFilter), E(UnhandledExceptionFilter),
+    E(OutputDebugStringA), E(RaiseException), E(TerminateProcess), E(GetLastError), E(FormatMessageA),
+    E(CreateThread), E(ResumeThread), E(SuspendThread), E(SetThreadPriority), E(SetThreadAffinityMask),
+    E(GetProcessAffinityMask), E(GetExitCodeThread), E(TerminateThread), E(ExitThread), E(Sleep),
+    E(ConvertThreadToFiber), E(CreateFiber), E(SwitchToFiber), E(DeleteFiber), E(ConvertFiberToThread),
+    E(TlsAlloc), E(TlsFree), E(TlsGetValue), E(TlsSetValue), E(InitializeCriticalSection),
+    E(DeleteCriticalSection), E(EnterCriticalSection), E(LeaveCriticalSection), E(TryEnterCriticalSection),
+    E(CreateEventA), E(SetEvent), E(ResetEvent), E(CreateSemaphoreA), E(ReleaseSemaphore), E(CreateMutexA),
+    E(WaitForSingleObject), E(WaitForMultipleObjects), E(CloseHandle), E(CreateFileA), E(ReadFile), E(WriteFile),
+    E(SetFilePointer), E(GetFileSize), E(SetEndOfFile), E(FlushFileBuffers), E(GetFileTime), E(CompareFileTime),
+    E(DeleteFileA), E(MoveFileA), E(CopyFileA), E(GetFileAttributesA), E(SetFileAttributesA), E(CreateDirectoryA),
+    E(RemoveDirectoryA), E(FindFirstFileA), E(FindNextFileA), E(FindClose), E(GetFullPathNameA),
+    E(GetCurrentDirectoryA), E(SetCurrentDirectoryA), E(GetDriveTypeA), E(GetLogicalDrives),
+    E(GetVolumeInformationA), E(GetDiskFreeSpaceExA), E(DeviceIoControl), E(OpenFile), E(MultiByteToWideChar),
+    E(lstrlenW), E(GetACP), E(GetThreadLocale), E(GetSystemDefaultLangID), E(GetLocaleInfoA),
+};
+#undef E
+ImportRegistrar g_kernel32(kKernel32);
+
+}  // namespace
+
+int DuplicateFileHandle(uint32_t h) {
+    File* f = FileOf(h);
+    return f ? fcntl(f->fd, F_DUPFD_CLOEXEC, 0) : -1;
+}
+
+}  // namespace native

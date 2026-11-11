@@ -1,0 +1,17 @@
+# никогда не коммитим ассеты игры
+*.rcf
+*.p3d
+*.bik
+*.gfx
+*.dds
+extracted/
+__pycache__/
+ghidra/
+build/
+modding/example/package/lib/
+!build/recomp/
+!build/recomp/**
+re/decomp/
+
+# Generated runtime logs
+/*.log

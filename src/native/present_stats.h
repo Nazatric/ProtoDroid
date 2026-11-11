@@ -1,0 +1,112 @@
+// Presented-frame timing, independent of the engine's message-pump loop. Times are monotonic nanoseconds supplied by
+// the caller so the production clock and host regression tests use exactly the same accounting.
+#pragma once
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
+#include "timing_window.h"
+
+namespace native {
+
+struct PresentStatsSnapshot {
+    double fps = 0;
+    double average_ms = 0;
+    double p99_ms = 0;
+    double max_ms = 0;
+    uint64_t frames = 0;
+};
+
+// Intervals collected only while detailed diagnostics are active. The tour resets these totals at each phase boundary
+// to report exact per-phase average/max without stealing the diagnostics worker's one-second percentile samples.
+struct PresentStatsTotals {
+    uint64_t intervals = 0;
+    uint64_t total_ns = 0;
+    int64_t max_ns = 0;
+};
+
+class PresentStatsTracker {
+public:
+    PresentStatsTracker() { samples_.reserve(4096); }  // avoid repeated first-window allocations in fast menus
+
+    // The first Present establishes the baseline. Every later call returns one complete Present-to-Present interval;
+    // this is also the single value that may be reported to ADPF for that Present.
+    int64_t AddPresent(int64_t now_ns, int tid = 0, bool collect_detailed = true) {
+        if (!have_last_) {
+            have_last_ = true;
+            last_present_ns_ = now_ns;
+            window_start_ns_ = now_ns;
+            return 0;
+        }
+
+        const int64_t duration_ns = now_ns - last_present_ns_;
+        last_present_ns_ = now_ns;
+        if (duration_ns <= 0) return 0;
+
+        if (collect_detailed) {
+            detailed_.Add(now_ns, duration_ns, tid);
+            ++detailed_totals_.intervals;
+            detailed_totals_.total_ns += uint64_t(duration_ns);
+            detailed_totals_.max_ns = std::max(detailed_totals_.max_ns, duration_ns);
+        }
+        ++window_frames_;
+        window_total_ns_ += duration_ns;
+        window_max_ns_ = std::max(window_max_ns_, duration_ns);
+        samples_.push_back(duration_ns);
+
+        const int64_t elapsed_ns = now_ns - window_start_ns_;
+        if (elapsed_ns >= 1000000000ll) FinishWindow(elapsed_ns);
+        return duration_ns;
+    }
+
+    PresentStatsSnapshot Snapshot() const { return current_; }
+    PresentStatsTotals DetailedTotals() const { return detailed_totals_; }
+    void ResetDetailedTotals() { detailed_totals_ = {}; }
+    TimingWindowSnapshot TakeDetailed() { return detailed_.Take(); }
+
+private:
+    void FinishWindow(int64_t elapsed_ns) {
+        current_ = {};
+        current_.frames = window_frames_;
+        current_.fps = double(window_frames_) * 1e9 / double(elapsed_ns);
+        current_.average_ms = double(window_total_ns_) / double(window_frames_) / 1e6;
+        current_.max_ms = double(window_max_ns_) / 1e6;
+
+        // Nearest-rank p99: the 99th item for 100 samples, not the maximum unless the distribution requires it.
+        const size_t rank = (99 * samples_.size() + 99) / 100;
+        auto percentile = samples_.begin() + (rank - 1);
+        std::nth_element(samples_.begin(), percentile, samples_.end());
+        current_.p99_ms = double(*percentile) / 1e6;
+
+        window_frames_ = 0;
+        window_total_ns_ = 0;
+        window_max_ns_ = 0;
+        window_start_ns_ = last_present_ns_;
+        samples_.clear();
+    }
+
+    bool have_last_ = false;
+    int64_t last_present_ns_ = 0;
+    int64_t window_start_ns_ = 0;
+    uint64_t window_frames_ = 0;
+    int64_t window_total_ns_ = 0;
+    int64_t window_max_ns_ = 0;
+    std::vector<int64_t> samples_;
+    PresentStatsSnapshot current_;
+    TimingWindow detailed_;
+    PresentStatsTotals detailed_totals_;
+};
+
+// Process-wide thread-safe adapter used by D3D9 Present, the main-loop logger, and the Android overlay.
+int64_t RecordPresent();  // monotonic clock read and tracker update; returns the ADPF interval, or zero
+uint64_t PresentedFrameCount();  // cumulative successful Presents; unlike Snapshot().frames, never resets each window
+PresentStatsSnapshot GetPresentStats();
+PresentStatsTotals GetDetailedPresentTotals();
+void ResetDetailedPresentTotals();
+void SetPresentDetailedEnabled(bool enabled);
+bool PresentDetailedEnabled();
+TimingWindowSnapshot TakePresentDetailedStats();
+
+}  // namespace native

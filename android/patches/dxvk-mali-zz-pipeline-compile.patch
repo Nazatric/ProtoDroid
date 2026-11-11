@@ -1,0 +1,71 @@
+diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
+index 46d0e99..d3340bb 100644
+--- a/src/dxvk/dxvk_adapter.cpp
++++ b/src/dxvk/dxvk_adapter.cpp
+@@ -1,4 +1,5 @@
+ #include <cstring>
++#include <mutex>
+ #include <unordered_set>
+ 
+ #include "dxvk_adapter.h"
+@@ -7,6 +8,40 @@
+ 
+ namespace dxvk {
+ 
++#ifdef __ANDROID__
++  // ARM's proprietary shader compiler is not thread-safe on affected Mali
++  // drivers. DXVK normally compiles on both the CS thread and pipeline
++  // workers, so serialize at the device-function-table boundary to cover
++  // every graphics and compute pipeline creation path.
++  static std::mutex                      g_pipelineCompileMutex;
++  static PFN_vkCreateGraphicsPipelines   g_createGraphicsPipelines = nullptr;
++  static PFN_vkCreateComputePipelines    g_createComputePipelines = nullptr;
++
++  static VKAPI_ATTR VkResult VKAPI_CALL serializedCreateGraphicsPipelines(
++          VkDevice                        device,
++          VkPipelineCache                 pipelineCache,
++          uint32_t                        createInfoCount,
++    const VkGraphicsPipelineCreateInfo*   pCreateInfos,
++    const VkAllocationCallbacks*          pAllocator,
++          VkPipeline*                     pPipelines) {
++    std::lock_guard<std::mutex> lock(g_pipelineCompileMutex);
++    return g_createGraphicsPipelines(device, pipelineCache,
++      createInfoCount, pCreateInfos, pAllocator, pPipelines);
++  }
++
++  static VKAPI_ATTR VkResult VKAPI_CALL serializedCreateComputePipelines(
++          VkDevice                        device,
++          VkPipelineCache                 pipelineCache,
++          uint32_t                        createInfoCount,
++    const VkComputePipelineCreateInfo*    pCreateInfos,
++    const VkAllocationCallbacks*          pAllocator,
++          VkPipeline*                     pPipelines) {
++    std::lock_guard<std::mutex> lock(g_pipelineCompileMutex);
++    return g_createComputePipelines(device, pipelineCache,
++      createInfoCount, pCreateInfos, pAllocator, pPipelines);
++  }
++#endif
++
+   DxvkDeviceQueue getDeviceQueue(const Rc<vk::DeviceFn>& vkd, uint32_t family, uint32_t index) {
+     DxvkDeviceQueue result = { };
+     result.queueFamily = family;
+@@ -590,6 +625,19 @@ namespace dxvk {
+     
+     Rc<vk::DeviceFn> vkd = new vk::DeviceFn(m_vki, true, device);
+ 
++#ifdef __ANDROID__
++    // Match the ARM vendor rather than a device-name string. This includes
++    // Mali-G720 r49p1, where concurrent pipeline compilation has been observed
++    // to fault in cmpbe_v2_compile_multiple_shaders.
++    if (m_deviceInfo.core.properties.vendorID == 0x13B5) {
++      g_createGraphicsPipelines = vkd->vkCreateGraphicsPipelines;
++      g_createComputePipelines  = vkd->vkCreateComputePipelines;
++      vkd->vkCreateGraphicsPipelines = &serializedCreateGraphicsPipelines;
++      vkd->vkCreateComputePipelines  = &serializedCreateComputePipelines;
++      Logger::info("DXVK: Serializing Vulkan pipeline compilation on ARM");
++    }
++#endif
++
+     DxvkDeviceQueueSet queues = { };
+     queues.graphics = getDeviceQueue(vkd, queueFamilies.graphics, 0);
+     queues.transfer = getDeviceQueue(vkd, queueFamilies.transfer, 0);

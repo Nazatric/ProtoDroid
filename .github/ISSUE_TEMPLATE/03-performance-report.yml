@@ -1,0 +1,55 @@
+name: Performance or frame pacing
+description: Report stutter, FPS drops, heat, throttling, or battery use
+title: "[Performance] "
+labels: ["bug", "performance"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: ProtoDroid version
+      description: Visible version and commit, if shown.
+      placeholder: 0.15
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone, chip, and Android version
+      placeholder: Phone model; SoC/GPU; Android version
+    validations:
+      required: true
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: Symptom
+      options:
+        - Low FPS
+        - Stutter or uneven pacing
+        - Heat or throttling
+        - Battery use
+        - Slow loading
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: When and where does it happen?
+      description: Include the scene, duration, FPS cap, graphics settings, and approximate cache state.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps or comparison
+      description: Give reproduction steps or a matched same-scene comparison.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and extra context
+      description: Attach logs from the affected run. Leave pipeline_trace off unless a maintainer asks for it.
+      render: text
+    validations:
+      required: true

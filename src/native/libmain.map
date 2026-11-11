@@ -1,0 +1,21 @@
+/* Dynamic symbols of libmain.so (item 4).
+ *
+ * The recompiled engine used to export ~127k f_<guest address> functions through --export-dynamic, only so dladdr()
+ * could name them in watchdog and crash reports. That made .dynsym/.dynstr megabytes long, slowed System.loadLibrary
+ * and relocation processing, kept -fvisibility=hidden off (so every call went through a PLT) and bloated RSS on symbol
+ * lookup. runtime.cpp now resolves a faulting program counter through the recompilation table
+ * (RecompNameForAddress), so only the entry points that other code resolves by name stay exported.
+ */
+{
+  global:
+    /* SDLActivity looks these up with dlsym in the app's library. */
+    SDL_main;
+    JNI_OnLoad;
+    JNI_OnUnload;
+    /* Static native methods on the Java side of the port (ProtoActivity, ProtoSurface, TouchControls, ...). */
+    Java_*;
+    /* libadrenotools: the driver probe compares the running API level through this symbol (see the defsym below). */
+    protodroid_device_api_level;
+  local:
+    *;
+};
