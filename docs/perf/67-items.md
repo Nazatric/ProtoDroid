@@ -400,9 +400,17 @@ with unpredictable quality. The inputs it needs (items 44, 45, 46) are in place 
 
 ### 48. No Game Mode or sustained-performance integration
 
-`ProtoActivity` sets `setSustainedPerformanceMode(true)` and moves the `GameManager` state through
-`GAME_STATE_LOADING` -> running -> `GAME_STATE_PAUSED` on pause, so Game Dashboard and the thermal governor know this
-is a game and the CPU is not thermally throttled by the launcher's background work.
+`ProtoActivity` sets `setSustainedPerformanceMode(true)` so the platform stops quietly dropping clocks mid-session, and
+reports the game state so the power HAL can apply its game-loading boost and its per-game profile:
+
+* `onCreate` -> `setGameState(new GameState(true, GameState.GAME_STATE_NONE))` (loading),
+* `onResume` after the first -> `(false, GAME_STATE_GAMEPLAY_UNINTERRUPTIBLE)` (in gameplay),
+* `onPause` -> `(false, GAME_STATE_NONE)` (interruptible).
+
+`GameManager.setGameState` exists from **API 33** and takes an `android.app.GameState` object; the first version of this
+change called it with an int on API 31 and with a non-existent `GAME_STATE_PAUSED` constant. That only failed in CI's
+javac run, which is now the reason the structural Java test asserts the shape of this call and why the CI javac step
+emits its diagnostics as annotations.
 **Status: done.**
 
 ### 49. Game data is read through FUSE, with no install-to-internal option

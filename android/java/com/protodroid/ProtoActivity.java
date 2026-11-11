@@ -2,9 +2,11 @@ package com.protodroid;
 
 import android.content.Context;
 import android.content.pm.ActivityInfo;
+import android.app.GameManager;
+import android.app.GameState;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Window;
-import android.app.GameManager;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.view.ViewGroup;
@@ -60,7 +62,8 @@ public class ProtoActivity extends SDLActivity {
      */
     @Override
     protected void onPause() {
-        updateGameState(Build.VERSION.SDK_INT >= 31 ? GameManager.GAME_STATE_PAUSED : 0);
+        // Not loading, and no longer in gameplay: the platform may interrupt us.
+        updateGameState(false, GameState.GAME_STATE_NONE);
         super.onPause();
     }
 
@@ -93,18 +96,22 @@ public class ProtoActivity extends SDLActivity {
     }
 
     /**
-     * Item 48: the app declares itself a game but never used the platform's game APIs. GameManager lets the OS apply its
-     * per-game performance/battery profile and boost CPU/IO while loading, and sustained performance mode stops the
-     * system from quietly dropping the clocks mid-session. Both are best-effort: absence of the APIs (or a device that
-     * ignores them) must not change behaviour.
+     * Item 48: the app declares itself a game but never used the platform's game APIs. Telling the platform that the
+     * game is loading lets it put the power HAL into its game-loading mode (a CPU/IO boost) and telling it that the game
+     * is in uninterruptible gameplay keeps the per-game performance profile applied; sustained performance mode stops
+     * the system from quietly dropping the clocks mid-session.
+     *
+     * `GameManager.setGameState` landed in API 33 and takes a `GameState` object, not a constant - the earlier version of
+     * this method called it with an int on API 31 and did not compile. Everything is best-effort: a device or OEM build
+     * without a usable game service must not change behaviour.
      */
-    private void updateGameState(int state) {
-        if (Build.VERSION.SDK_INT < 31) return;
+    private void updateGameState(boolean loading, int state) {
+        if (Build.VERSION.SDK_INT < 33) return;
         try {
             GameManager manager = getSystemService(GameManager.class);
-            if (manager != null) manager.setGameState(state);
+            if (manager != null) manager.setGameState(new GameState(loading, state));
         } catch (RuntimeException ignored) {
-            // OEM builds without a usable game service
+            // OEM builds without a usable game service, or a GameState value it rejects
         }
     }
 
@@ -118,6 +125,16 @@ public class ProtoActivity extends SDLActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        // Past the first resume the engine is running its intro/gameplay: uninterrupted gameplay state, not loading.
+        if (started) updateGameState(false, GameState.GAME_STATE_GAMEPLAY_UNINTERRUPTIBLE);
+        started = true;
+    }
+
+    private boolean started;
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         int orientation = getSharedPreferences("controls", MODE_PRIVATE).getInt("display_orientation", 0);
         if (orientation == 1) {
@@ -127,7 +144,7 @@ public class ProtoActivity extends SDLActivity {
         }
         applySustainedPerformance();
         prepareVulkanDriver();
-        updateGameState(GameManager.GAME_STATE_LOADING);
+        updateGameState(true, GameState.GAME_STATE_NONE);  // loading: the platform may boost CPU/IO
         ModManager.prepareForLaunch(this);
         // The native side loads the bundled Vulkan driver (Turnip, on Adreno) from the extracted libraries.
         try {

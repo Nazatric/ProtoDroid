@@ -168,6 +168,22 @@ def referenced_types(java: JavaFile) -> list[tuple[str, int]]:
     return found
 
 
+def unresolved_static_access(java: JavaFile, siblings: set[str]) -> list[str]:
+    """`Type.FIELD` / `Type.method(` where Type is not imported or declared: javac's 'package Type does not exist'."""
+    problems = []
+    known = JAVA_LANG | EXTERNAL | java.types | java.imports | siblings
+    for match in re.finditer(r"(?<![\w.])([A-Z][\w]*)\s*\.\s*([A-Za-z_][\w]*)\s*(?:\(|that\b|[.,;)])", java.code):
+        name = match.group(1)
+        # All-caps identifiers are constant fields (BY_CODE.length, TAG.name()), not types; a type name has at least
+        # one lower-case letter.
+        if name in known or name in PRIMITIVES or re.fullmatch(r"[A-Z]", name) or not re.search(r"[a-z]", name):
+            continue
+        line = java.code.count("\n", 0, match.start()) + 1
+        problems.append(f"{java.path.name}:{line}: static access on unknown type {name} "
+                        f"(no import, not in this package) - javac says 'package {name} does not exist'")
+    return problems
+
+
 def unresolved(java: JavaFile, siblings: set[str]) -> list[str]:
     problems = []
     for type_name, line in referenced_types(java):
@@ -315,6 +331,7 @@ def main() -> int:
     for java in files:
         problems += balance(java)
         problems += unresolved(java, siblings)
+        problems += unresolved_static_access(java, siblings)
         problems += final_reassigned(java)
         problems += duplicate_methods(java)
         problems += check_overrides(java, by_name)
