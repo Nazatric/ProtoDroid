@@ -78,9 +78,75 @@ contains("src/native/libmain.map", r"Java_\*", "JNI entry points are no longer e
 # with "version script assignment of 'global' to symbol 'X' failed: symbol not defined" otherwise, which is exactly how
 # JNI_OnLoad/JNI_Unload got caught (libmain.so registers no JNI natives; SDL2 owns them).
 exports = re.findall(r"^\s*(?!\*)([A-Za-z_][\w]*)\s*;", text("src/native/libmain.map"), re.MULTILINE)
-sources = "\n".join(text(str(p.relative_to(ROOT))) for p in sorted((ROOT / "src/native").glob("*.cpp")))
+raw_sources = "\n".join(text(str(p.relative_to(ROOT))) for p in sorted((ROOT / "src/native").glob("*.cpp")))
+# Comment lines are dropped first: libmain.map's own documentation names the symbols, and a check that is satisfied by
+# a comment cannot notice that the definition lost its export.
+sources = "\n".join(line for line in raw_sources.splitlines()
+                    if not line.lstrip().startswith(("//", "/*", "*")))
 for symbol in exports:
     check(symbol in sources, f"libmain.map exports {symbol}, which no source in src/native defines")
+
+# The version script can only keep symbols the compiler exported. With -fvisibility=hidden a name listed as `global`
+# vanishes from .dynsym with no link error, which is exactly what the first real ARM64 build of this branch reported
+# ("llvm-nm -D libmain.so | grep protodroid_device_api_level" failed). SDL_main is the one exception: SDL's SDL_main.h
+# declares it with SDLMAIN_DECLSPEC, which is __attribute__((visibility("default"))) on Android.
+for symbol in exports:
+    if symbol == "SDL_main":
+        contains("src/native/main.cpp", r"#include <SDL2/SDL_main\.h>",
+                 "SDL_main is expected to come from SDL's SDL_main.h, which exports it")
+        continue
+    check(re.search(rf"PROTODROID_EXPORT[^;{{]*\b{symbol}\b", sources) is not None,
+          f"libmain.map exports {symbol}, but its definition does not carry PROTODROID_EXPORT "
+          f"(hidden visibility wins over the version script)")
+
+
+def version_script_keeps_exports() -> None:
+    """Link a stub against the real libmain.map with the real flags and read .dynsym back.
+
+    Source checks cannot prove the linker behaviour, and the failure mode is silent: the library links, the symbol is
+    simply absent at run time. The stub defines what the map names plus one deliberately hidden control symbol.
+    """
+    import shutil
+    import tempfile
+
+    nm = shutil.which("nm")
+    cc = shutil.which("gcc") or shutil.which("cc")
+    if nm is None or cc is None:
+        FAILURES.append("no gcc/cc and nm available to prove the export map keeps its symbols")
+        return
+    stub = ["#define PROTODROID_EXPORT __attribute__((visibility(\"default\")))"]
+    for symbol in exports:
+        if symbol == "SDL_main":
+            # SDL's SDL_main.h supplies SDLMAIN_DECLSPEC, i.e. exactly this attribute, on Android.
+            stub.append(f'int PROTODROID_EXPORT {symbol}(int argc, char **argv) {{ return argc + (argv != 0); }}')
+        else:
+            stub.append(f'void PROTODROID_EXPORT {symbol}(void) {{}}')
+    stub.append("void control_hidden_symbol(void) {}")
+    with tempfile.TemporaryDirectory() as work:
+        source = Path(work) / "stub.c"
+        library = Path(work) / "libstub.so"
+        source.write_text("\n".join(stub) + "\n")
+        built = subprocess.run(
+            [cc, "-shared", "-fPIC", "-fvisibility=hidden", "-o", str(library), str(source),
+             "-Wl,--version-script=src/native/libmain.map"],
+            cwd=ROOT, capture_output=True, text=True)
+        if built.returncode != 0:
+            FAILURES.append(f"a stub cannot be linked against libmain.map:\n{(built.stderr or built.stdout)[-800:]}")
+            return
+        dynamic = subprocess.run([nm, "-D", "--defined-only", str(library)],
+                                 capture_output=True, text=True).stdout
+        for symbol in exports:
+            if symbol.endswith("*"):
+                check(re.search(rf" [A-Za-z] {re.escape(symbol[:-1])}", dynamic) is not None,
+                      f"libmain.map's {symbol} pattern exports nothing")
+                continue
+            check(re.search(rf" [A-Za-z] {re.escape(symbol)}$", dynamic, re.MULTILINE) is not None,
+                  f"libmain.map lists {symbol}, but it is not a dynamic symbol of the linked library")
+        check("control_hidden_symbol" not in dynamic,
+              "the version script does not hide symbols that are not listed")
+
+
+version_script_keeps_exports()
 contains("src/native/Makefile", r"PGO_PROFILE", "the PGO switch is missing")
 contains("src/native/Makefile", r"FAST_FP", "the FP-contraction switch is missing")
 

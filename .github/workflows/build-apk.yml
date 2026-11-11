@@ -1379,6 +1379,10 @@ jobs:
           printf '%s\n' "$MAIN_STRINGS" | grep -Fx "$SOURCE_REVISION"
           printf '%s\n' "$MAIN_STRINGS" | grep -F 'vulkan: Adreno 825: trying the A8xx Turnip build'
           printf '%s\n' "$MAIN_STRINGS" | grep -F 'DXVK found no compatible Vulkan GPU'
+          # The export contract of src/native/libmain.map, checked on the packaged library: SDL's Java glue dlopens
+          # libmain.so and dlsym()s SDL_main, so a hidden SDL_main is a launch failure rather than a slow frame, and
+          # libadrenotools' driver probe reaches the API-level shim through the --defsym alias.
+          $TOOLS/llvm-nm -D "$MAIN" | grep -E ' [A-Za-z] SDL_main$'
           $TOOLS/llvm-nm -D "$MAIN" | grep -E ' [A-Za-z] protodroid_device_api_level$'
           printf '%s\n' "$MAIN_STRINGS" | grep -F 'binkw32.dll'
           printf '%s\n' "$MAIN_STRINGS" | grep -F 'unlock_menu_fps'

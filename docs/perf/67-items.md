@@ -72,11 +72,30 @@ documented as profile-driven follow-ups (BOLT-style layout needs the PGO profile
 ### 4. Roughly 127,000 recompiled guest functions are exported from `libmain.so`
 
 Exporting them costs a dynamic symbol per function (hash table, GOT, relocation processing at load) and prevents the
-linker from localising or inlining them. `src/native/libmain.map` now exports only `JNI_OnLoad`, `JNI_OnUnload` and the
-handful of symbols bionic's loader needs; `-fvisibility=hidden` is the default; `--export-dynamic` is gone. Guest
-function names are recovered from the recompilation table instead (`RecompNameForAddress`), so crash traces stay
-readable: `watchdog.cpp` and `DescribeAddress` both use it.
-**Status: done (unmeasured).** Verify: `nm -D --defined-only libmain.so | wc -l` before/after (expected 127k -> < 20).
+linker from localising or inlining them. `src/native/libmain.map` now exports only `SDL_main` (SDL's Java glue
+`dlopen`s `libmain.so` and `dlsym`s it), `Java_*` (the natives the Java side binds after that load) and
+`protodroid_device_api_level` (the `--defsym` target for libadrenotools); `-fvisibility=hidden` is the default;
+`--export-dynamic` is gone. Guest function names are recovered from the recompilation table instead
+(`RecompNameForAddress`), so crash traces stay readable: `watchdog.cpp` and `DescribeAddress` both use it.
+
+Two things this item had to learn from the real ARM64 build, both now asserted:
+
+* **A version script cannot export a symbol the compiler hid.** `-fvisibility=hidden` wins, the symbol silently
+  disappears from `.dynsym`, and the link still succeeds - so the first real build of this branch produced a
+  `libmain.so` without `protodroid_device_api_level` and the APK verification step caught it
+  (`llvm-nm -D libmain.so | grep protodroid_device_api_level`). Definitions named in the map now carry
+  `PROTODROID_EXPORT` (`src/native/exports.h`); `SDL_main` does not need it because SDL's own `SDL_main.h` declares it
+  with `SDLMAIN_DECLSPEC`, which is `__attribute__((visibility("default")))` on Android. `tools/test_perf_program.py`
+  proves the pair by linking a stub against the real `libmain.map` with the same flags and reading `.dynsym` back, and
+  rejecting a map entry whose definition lost the attribute; the APK step also checks `SDL_main` and
+  `protodroid_device_api_level` in the packaged library, since a missing `SDL_main` is a launch failure, not a slow
+  frame.
+* **A name in the map must exist in every variant that links against it.** `protodroid_device_api_level` sits outside
+  the Adreno-only `#if`, so an `x86_64` build without the Turnip/AdrenoTools libraries still links.
+
+**Status: done (unmeasured).** Verify: `nm -D --defined-only libmain.so | wc -l` before/after (expected 127k -> < 20);
+`llvm-nm -D lib/arm64-v8a/libmain.so` on a device-pulled APK should show `SDL_main`, the `Java_*` natives and
+`protodroid_device_api_level`, and nothing else.
 
 ### 5. The dependencies are built for generic ARMv8
 
