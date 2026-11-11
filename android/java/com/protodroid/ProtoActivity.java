@@ -63,7 +63,7 @@ public class ProtoActivity extends SDLActivity {
     @Override
     protected void onPause() {
         // Not loading, and no longer in gameplay: the platform may interrupt us.
-        updateGameState(false, GameState.GAME_STATE_NONE);
+        updateGameState(false, GameState.MODE_NONE);
         super.onPause();
     }
 
@@ -101,9 +101,10 @@ public class ProtoActivity extends SDLActivity {
      * is in uninterruptible gameplay keeps the per-game performance profile applied; sustained performance mode stops
      * the system from quietly dropping the clocks mid-session.
      *
-     * `GameManager.setGameState` landed in API 33 and takes a `GameState` object, not a constant - the earlier version of
-     * this method called it with an int on API 31 and did not compile. Everything is best-effort: a device or OEM build
-     * without a usable game service must not change behaviour.
+     * `GameManager.setGameState` landed in API 33 and takes a `GameState` object whose mode is one of GameState's own
+     * `MODE_*` constants - the first version of this method called it with an int on API 31, and the second used
+     * `GAME_STATE_*` names that exist only in Google's codelab enum, not in the platform class. Both failed javac.
+     * Everything here is best-effort: a device or OEM build without a usable game service must not change behaviour.
      */
     private void updateGameState(boolean loading, int state) {
         if (Build.VERSION.SDK_INT < 33) return;
@@ -128,7 +129,7 @@ public class ProtoActivity extends SDLActivity {
     protected void onResume() {
         super.onResume();
         // Past the first resume the engine is running its intro/gameplay: uninterrupted gameplay state, not loading.
-        if (started) updateGameState(false, GameState.GAME_STATE_GAMEPLAY_UNINTERRUPTIBLE);
+        if (started) updateGameState(false, GameState.MODE_GAMEPLAY_UNINTERRUPTIBLE);
         started = true;
     }
 
@@ -144,7 +145,7 @@ public class ProtoActivity extends SDLActivity {
         }
         applySustainedPerformance();
         prepareVulkanDriver();
-        updateGameState(true, GameState.GAME_STATE_NONE);  // loading: the platform may boost CPU/IO
+        updateGameState(true, GameState.MODE_NONE);  // loading: the platform may boost CPU/IO
         ModManager.prepareForLaunch(this);
         // The native side loads the bundled Vulkan driver (Turnip, on Adreno) from the extracted libraries.
         try {

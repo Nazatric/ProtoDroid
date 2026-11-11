@@ -403,14 +403,20 @@ with unpredictable quality. The inputs it needs (items 44, 45, 46) are in place 
 `ProtoActivity` sets `setSustainedPerformanceMode(true)` so the platform stops quietly dropping clocks mid-session, and
 reports the game state so the power HAL can apply its game-loading boost and its per-game profile:
 
-* `onCreate` -> `setGameState(new GameState(true, GameState.GAME_STATE_NONE))` (loading),
-* `onResume` after the first -> `(false, GAME_STATE_GAMEPLAY_UNINTERRUPTIBLE)` (in gameplay),
-* `onPause` -> `(false, GAME_STATE_NONE)` (interruptible).
+* `onCreate` -> `setGameState(new GameState(true, GameState.MODE_NONE))` (loading),
+* `onResume` after the first -> `(false, GameState.MODE_GAMEPLAY_UNINTERRUPTIBLE)` (in gameplay),
+* `onPause` -> `(false, GameState.MODE_NONE)` (interruptible).
 
-`GameManager.setGameState` exists from **API 33** and takes an `android.app.GameState` object; the first version of this
-change called it with an int on API 31 and with a non-existent `GAME_STATE_PAUSED` constant. That only failed in CI's
-javac run, which is now the reason the structural Java test asserts the shape of this call and why the CI javac step
-emits its diagnostics as annotations.
+Getting this right took three attempts, all of them rejected by CI's javac:
+
+1. `setGameState(int)` on API 31 - the method arrived in **API 33** and takes an `android.app.GameState` object;
+2. `new GameState(..)` with `GAME_STATE_*` names - those belong to Google's Adaptability codelab enum, not to the
+   platform class, whose modes are `MODE_UNKNOWN`, `MODE_NONE`, `MODE_GAMEPLAY_INTERRUPTIBLE`,
+   `MODE_GAMEPLAY_UNINTERRUPTIBLE` and `MODE_CONTENT` (confirmed against the API reference);
+3. a missing `Build` import for the API-level guard.
+
+The javac step now emits its diagnostics as check annotations, `tools/test_java_sources.py` reports static access on a
+type that is not imported, and the gate asserts the `MODE_*` names, so the same mistake fails locally next time.
 **Status: done.**
 
 ### 49. Game data is read through FUSE, with no install-to-internal option
