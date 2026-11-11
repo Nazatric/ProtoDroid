@@ -88,8 +88,17 @@ jobs:
 
       - name: Compile and run runtime bridge and guest-memory tests
         run: |
-          bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test
-          bash src/native/tests/run_memory_test.sh /tmp/memory_test
+          set -Eeuo pipefail
+          trap 'echo "::error::runtime tests: line $LINENO failed: $BASH_COMMAND"' ERR
+          bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test 2>&1 | tee /tmp/runtime-bridge.log
+          bash src/native/tests/run_memory_test.sh /tmp/memory_test 2>&1 | tee /tmp/memory.log
+
+      - name: Report runtime test failure
+        if: failure()
+        run: |
+          # A sanitizer abort reports only exit 134 to the check run, and the workflow log is not always retrievable.
+          python3 tools/annotate_log.py /tmp/runtime-bridge.log runtime-bridge --tail 25
+          python3 tools/annotate_log.py /tmp/memory.log runtime-memory --tail 25
 
       - name: Compile and run Prototype Fix policy tests
         run: |
@@ -508,8 +517,16 @@ jobs:
 
       - name: Compile and run native ARM64 runtime bridge and guest-memory tests
         run: |
-          bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test_arm64
-          bash src/native/tests/run_memory_test.sh /tmp/memory_test_arm64
+          set -Eeuo pipefail
+          trap 'echo "::error::ARM64 runtime tests: line $LINENO failed: $BASH_COMMAND"' ERR
+          bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test_arm64 2>&1 | tee /tmp/runtime-bridge-arm64.log
+          bash src/native/tests/run_memory_test.sh /tmp/memory_test_arm64 2>&1 | tee /tmp/memory-arm64.log
+
+      - name: Report ARM64 runtime test failure
+        if: failure()
+        run: |
+          python3 tools/annotate_log.py /tmp/runtime-bridge-arm64.log runtime-bridge-arm64 --tail 25
+          python3 tools/annotate_log.py /tmp/memory-arm64.log runtime-memory-arm64 --tail 25
 
       - name: Compile and run native ARM64 Prototype Fix policy tests
         run: |
