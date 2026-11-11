@@ -201,7 +201,7 @@ public class SetupActivity extends Activity {
         // Item 58: the launcher and the engine share one process, so the launcher's bitmaps should not stay resident
         // while the game runs (four 1440x810 backgrounds plus the icon).
         if (setupView != null && !isChangingConfigurations()) setupView.releaseArtwork();
-        updateManager.onPause();
+        // updateManager.onPause() is already called from onPause(); calling it twice would stop the same request twice.
         super.onStop();
     }
 

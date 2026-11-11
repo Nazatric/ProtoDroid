@@ -858,10 +858,19 @@ jobs:
           mkdir -p /tmp/protodroid-java-classes
           SDL2_VERSION=$(python3 tools/sdl_version.py pin android/build-deps.sh)
           python3 tools/sdl_version.py source "$HOME/protodroid-data/android-deps-src/SDL2" "$SDL2_VERSION"
+          set +e
           javac --release 11 -nowarn -cp "$ANDROID_SDK_ROOT/platforms/android-35/android.jar" \
             -d /tmp/protodroid-java-classes \
             "$HOME"/protodroid-data/android-deps-src/SDL2/android-project/app/src/main/java/org/libsdl/app/*.java \
-            android/java/com/protodroid/*.java
+            android/java/com/protodroid/*.java > /tmp/javac.log 2>&1
+          JAVAC_EXIT=$?
+          set -e
+          cat /tmp/javac.log
+          if [ "$JAVAC_EXIT" != "0" ]; then
+            # The workflow log may be unreachable outside CI, so the compiler diagnostics go into the check run.
+            python3 tools/annotate_log.py /tmp/javac.log javac --max 40
+            exit "$JAVAC_EXIT"
+          fi
           javap -classpath /tmp/protodroid-java-classes -private -verbose org.libsdl.app.SDLActivity \
             > /tmp/protodroid-SDLActivity.javap
           python3 tools/sdl_version.py verify-class /tmp/protodroid-SDLActivity.javap "$SDL2_VERSION"

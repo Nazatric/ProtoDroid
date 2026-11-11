@@ -1628,7 +1628,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private boolean uiShotPollEnabled;
     private final Rect uiDirty = new Rect();
 
-    /** Region the FPS text occupies, so a statistics refresh does not re-record the whole overlay display list. */
     /** A generous box around a touched point: enough for the button glow and its label. */
     private Rect dirtyControlRect(float x, float y) {
         int pad = (int) (160 * density);
