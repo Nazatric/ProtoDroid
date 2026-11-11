@@ -441,6 +441,10 @@ def score_item(item: Item) -> None:
 
 
 def run_tests() -> tuple[bool, str]:
+    # The self-test runs the critic against a partial copy of the tree (no game data, no build directory), where the host
+    # tests legitimately cannot run; it disables them so that it compares source-shape scores only.
+    if os.environ.get("PROTODROID_PERF_SKIP_TESTS") == "1":
+        return True, "tests skipped (PROTODROID_PERF_SKIP_TESTS=1)"
     ok, out = run([sys.executable, "tools/test_perf_program.py"], timeout=900)
     return ok, out
 

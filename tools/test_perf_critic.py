@@ -37,7 +37,8 @@ FAILURES: list[str] = []
 def rating(root: Path) -> float:
     done = subprocess.run([sys.executable, str(root / "tools" / "perf_critic.py"), "--json"],
                           cwd=root, capture_output=True, text=True,
-                          env={**os.environ, "PROTODROID_PERF_ROOT": str(root)})
+                          env={**os.environ, "PROTODROID_PERF_ROOT": str(root),
+                               "PROTODROID_PERF_SKIP_TESTS": "1"})
     if done.returncode not in (0, 1) or not done.stdout.strip():
         FAILURES.append(f"critic failed to run in {root}: {done.stdout[-500:]}{done.stderr[-500:]}")
         return -1.0
@@ -47,7 +48,8 @@ def rating(root: Path) -> float:
 def below_target(root: Path, label: str) -> None:
     done = subprocess.run([sys.executable, str(root / "tools" / "perf_critic.py"), "--min", "8.5"],
                           cwd=root, capture_output=True, text=True,
-                          env={**os.environ, "PROTODROID_PERF_ROOT": str(root)})
+                          env={**os.environ, "PROTODROID_PERF_ROOT": str(root),
+                               "PROTODROID_PERF_SKIP_TESTS": "1"})
     if done.returncode == 0:
         FAILURES.append(f"{label}: the critic still passes --min 8.5 after the regression")
 

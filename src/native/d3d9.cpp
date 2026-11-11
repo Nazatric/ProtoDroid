@@ -989,7 +989,6 @@ std::atomic<int> g_presents_in_flight{0};
 std::mutex g_present_state_mutex;  // only for the "wait until no present is in flight" handshake
 std::condition_variable g_present_idle;
 
-template <typename F>
 // CPU time this thread spent since the previous Present: the closest cheap measure of what APDF/the governor should
 // be told ("how much work did the frame cost"), as opposed to the wall interval between two presents.
 static int64_t RenderThreadWorkNanos() {
@@ -1002,6 +1001,10 @@ static int64_t RenderThreadWorkNanos() {
     return delta;
 }
 
+// The present callable is a template parameter, so this has to stay a template - but it is declared after the timing
+// helper it calls, not before (the stray `template <typename F>` that used to sit above the helper left the helper
+// inside no template at all and put `F` out of scope).
+template <typename F>
 HRESULT GuardedPresent(F present) {
     if (g_surface_gone.load(std::memory_order_acquire)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
