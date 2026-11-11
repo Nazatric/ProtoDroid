@@ -1341,7 +1341,10 @@ jobs:
       - name: Verify APK and embedded Android DXVK
         if: always()
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          # Every check below is a one-line assertion; without this trap the only trace of a failure is "exit code 1" in
+          # a workflow log that is not always retrievable. The trap names the exact command that failed.
+          trap 'echo "::error::verify: line $LINENO failed: $BASH_COMMAND"' ERR
           APK=build/apk/prototype.apk
           test -s "$APK"
           ls -lh "$APK"
