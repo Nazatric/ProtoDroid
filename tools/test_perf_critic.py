@@ -136,6 +136,9 @@ def main() -> int:
         print(f"critic self-test: {len(FAILURES)} failure(s)")
         for failure in FAILURES:
             print(f"  - {failure}")
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            for failure in FAILURES:
+                print("::error::critic self-test: " + failure.splitlines()[0][:900])
         return 1
     print("critic self-test passed: the rating falls when a documented claim stops being true")
     return 0
