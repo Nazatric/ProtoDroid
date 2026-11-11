@@ -187,8 +187,10 @@ endian = 'little'
 # Item 5: release tuning for the device cores, LTO across DXVK's translation units and no assertions in the shipped
 # library (`b_ndebug`); `buildtype=release` alone was still -O2 with asserts and no LTO.
 buildtype = 'release'
-b_lto = $LTO_MESON
-b_ndebug = true
+# Meson combos are strings here, not booleans: `b_ndebug = true` is rejected with "Value True (of type boolean) for
+# option b_ndebug is not one of the choices ... true, false, if-release".
+b_lto = '$LTO_MESON'
+b_ndebug = 'true'
 c_args = ['-D__ANDROID__=1', $TUNE_ARGV]
 cpp_args = ['-D__ANDROID__=1', $TUNE_ARGV]
 EOF
