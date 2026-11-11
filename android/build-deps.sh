@@ -27,16 +27,27 @@ case $ABI in
     *) echo "unknown ABI $ABI" >&2; exit 2 ;;
 esac
 
-# Item 5: every dependency used to be built with CMake/Meson defaults (no -O2 tuning for the phone's cores, no link-time
-# optimisation). DXVK's command-stream and state code, SDL2's event loop and FAudio's mixer all sit on the frame path, so
-# they are built with -O3, codegen tuned for the Cortex-A76 (mtune only: the binary must still run on every supported
-# core) and LTO. `-mtune` is ignored on x86_64, where the flag would only add noise.
+# Item 5: every dependency used to be built with CMake/Meson defaults (no tuning for the phone's cores). DXVK's
+# command-stream and state code, SDL2's event loop and FAudio's mixer all sit on the frame path, so they are built with
+# -O3 and codegen tuned for the Cortex-A76 (mtune only: the binary must still run on every supported core). `-mtune` is
+# dropped on x86_64, where it would only add noise.
+#
+# The flags go into CMAKE_<LANG>_FLAGS_RELEASE, never into CMAKE_<LANG>_FLAGS: the NDK toolchain file assembles the
+# target triple, -DANDROID and -fPIC into CMAKE_<LANG>_FLAGS, and overriding that variable from the command line is how
+# a dependency build silently loses its Android target. Release flags are appended after the base flags, so nothing is
+# overridden.
+#
+# Link-time optimisation of the dependencies is deliberately not enabled here. DXVK is built by meson in a separate
+# step where a full LTO link is one enormous job, and the CMake dependencies plus FFmpeg already rebuild from scratch
+# in CI whenever this script changes; the compile-time risk is not worth an unmeasured gain. `b_ndebug=true` (asserts
+# out of the release library) and `b_lto` are set for DXVK only through the cross file below when LTO_DEPS=1.
 if [ "$CPU_FAMILY" = aarch64 ]; then
     TUNE_FLAGS="-O3 -mtune=cortex-a76 -fomit-frame-pointer"
 else
     TUNE_FLAGS="-O3 -fomit-frame-pointer"
 fi
 DEPS_CFLAGS="$TUNE_FLAGS -ffunction-sections -fdata-sections -fno-math-errno"
+LTO_DEPS=${LTO_DEPS:-0}
 
 fetch() {  # fetch <dir> <url> <tag>
     [ -d "$SRC/$1" ] || git clone -q --depth 1 --branch "$3" --recurse-submodules --shallow-submodules "$2" "$SRC/$1"
@@ -101,8 +112,8 @@ install -m 644 "$SRC/Dobby/include/dobby.h" "$PREFIX/include/dobby.h"
 
 # SDL2 (also installs SDL2.pc, which DXVK's meson build looks up).
 cmake -S "$SRC/SDL2" -B "$SRC/build/SDL2-$ABI" "${CMAKE_ANDROID[@]}" -DSDL_STATIC=OFF -DSDL_TEST=OFF \
-      -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="$DEPS_CFLAGS" -DCMAKE_CXX_FLAGS="$DEPS_CFLAGS" \
-      -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
+      -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS_RELEASE="$DEPS_CFLAGS" \
+      -DCMAKE_CXX_FLAGS_RELEASE="$DEPS_CFLAGS"
 cmake --build "$SRC/build/SDL2-$ABI" -j "$JOBS"
 cmake --install "$SRC/build/SDL2-$ABI"
 # Bind the installed native library to the exact C/Java source version. The APK packager verifies this manifest
@@ -115,8 +126,8 @@ test -s "$PREFIX/lib/protodroid-sdl2-version.txt"
 # FAudio on SDL2.
 cmake -S "$SRC/FAudio" -B "$SRC/build/FAudio-$ABI" "${CMAKE_ANDROID[@]}" -DBUILD_SDL3=OFF -DBUILD_SHARED_LIBS=ON \
       -DSDL2_DIR="$PREFIX/lib/cmake/SDL2" \
-      -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="$DEPS_CFLAGS" -DCMAKE_CXX_FLAGS="$DEPS_CFLAGS" \
-      -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
+      -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS_RELEASE="$DEPS_CFLAGS" \
+      -DCMAKE_CXX_FLAGS_RELEASE="$DEPS_CFLAGS"
 cmake --build "$SRC/build/FAudio-$ABI" -j "$JOBS"
 cmake --install "$SRC/build/FAudio-$ABI"
 
@@ -150,6 +161,7 @@ done
 
 # DXVK native, d3d9 only.
 TUNE_ARGV=$(printf "'%s', " $TUNE_FLAGS | sed 's/, $//')
+LTO_MESON=$( [ "$LTO_DEPS" = 1 ] && echo true || echo false )
 CROSS=$SRC/build/android-$ABI.cross
 cat > "$CROSS" <<EOF
 [binaries]
@@ -175,7 +187,7 @@ endian = 'little'
 # Item 5: release tuning for the device cores, LTO across DXVK's translation units and no assertions in the shipped
 # library (`b_ndebug`); `buildtype=release` alone was still -O2 with asserts and no LTO.
 buildtype = 'release'
-b_lto = true
+b_lto = $LTO_MESON
 b_ndebug = true
 b_pie = true
 c_args = ['-D__ANDROID__=1', $TUNE_ARGV]

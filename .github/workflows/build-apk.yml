@@ -684,6 +684,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tail -n 180 /tmp/build-deps.log || true
+          # The workflow log itself is not always retrievable, so the actual diagnostics are also emitted as check
+          # annotations: a failed dependency build must say what failed, not just that the step exited non-zero.
+          python3 -c 'from pathlib import Path; p = Path("/tmp/build-deps.log"); lines = p.read_text(errors="replace").splitlines() if p.exists() else ["no /tmp/build-deps.log"]; markers = ("error:", "Error", "FAILED", "fatal", "CMake Error", "meson.build", "Traceback", "No such file", "undefined reference", "not found"); selected = [l for l in lines if any(m in l for m in markers)] or lines[-40:]; print("\n".join("::error::deps: " + l[:1800].replace("%", "%25").replace("\r", "%0D") for l in selected[-25:]))'
           gh api repos/${{ github.repository }}/issues/1/comments \
             --raw-field body="Dependency build failed for ${{ github.sha }}:\n\`\`\`\n$(tail -n 180 /tmp/build-deps.log 2>/dev/null || echo 'no dependency log')\n\`\`\`" || true
 

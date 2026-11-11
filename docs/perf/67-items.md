@@ -83,14 +83,30 @@ readable: `watchdog.cpp` and `DescribeAddress` both use it.
 `android/build-deps.sh` now builds every dependency for the device instead of with CMake/Meson defaults:
 
 * one `DEPS_CFLAGS` (`-O3 -mtune=cortex-a76 -fomit-frame-pointer -ffunction-sections -fdata-sections
-  -fno-math-errno`) shared by SDL2 and FAudio, with `CMAKE_BUILD_TYPE=Release` and
-  `CMAKE_INTERPROCEDURAL_OPTIMIZATION=ON`;
-* the DXVK cross file gets `buildtype = 'release'`, `b_lto = true`, `b_ndebug = true` and the same tuning flags;
+  -fno-math-errno`) shared by SDL2 and FAudio, passed through `CMAKE_<LANG>_FLAGS_RELEASE` with
+  `CMAKE_BUILD_TYPE=Release`;
+* the DXVK cross file gets `buildtype = 'release'` and `b_ndebug = true` plus the same tuning flags;
 * FFmpeg is configured with `--enable-neon --enable-optimizations` so the Bink audio decoders are not scalar.
 
 `-mtune` (not `-march`) is used on purpose: the same binary must run on every supported device.
-**Status: done (unmeasured).** Verify: `readelf -A`/`llvm-objdump` on the rebuilt `libdxvk_d3d9.so`, then a frame-time
-A/B of the same scene.
+
+Two decisions worth recording, and being precise about what is known versus inferred:
+
+* **The flags go into `CMAKE_<LANG>_FLAGS_RELEASE`, never into `CMAKE_<LANG>_FLAGS`.** The first version overrode
+  `CMAKE_C_FLAGS` on the command line and added `CMAKE_INTERPROCEDURAL_OPTIMIZATION=ON`. That change failed the
+  dependency job roughly 70 seconds into the build - a cold rebuild (the cache key hashes this script, so the
+  dependency tree was rebuilt from source) - and the job log could not be retrieved from this environment (the log
+  blob host is unreachable), so the cause below is inferred from the code, not proven by the log. Two things are
+  certainly wrong with it: overriding `CMAKE_C_FLAGS` from the command line is how a dependency build loses the NDK
+  toolchain's target triple, `-DANDROID` and `-fPIC`, and interprocedural optimisation makes each dependency run a
+  compiler-support check that was never exercised before. Both are gone: release flags are appended after the base
+  flags, and the failure annotation now prints the actual diagnostics on the next failure.
+* **Dependency LTO is not enabled by default.** It is reachable through `LTO_DEPS=1` (DXVK's `b_lto`), but the
+  dependency job is a cold full rebuild from source in CI, where a full-libLTO link buys an unmeasured gain at a real
+  build-time and memory cost. `b_ndebug=true` still keeps assertions out of the shipped DXVK.
+
+**Status: done (unmeasured).** Verify: `llvm-objdump -d build/…/libdxvk_d3d9.so | grep -c fmla` (or `readelf -A`), then a
+frame-time A/B of the same scene.
 
 ### 6. FP contraction is off for every float operation, including the hot native kernels
 
@@ -549,6 +565,8 @@ fixed above:
 | `ProtoActivity.java` used `GameManager`/`Window` with no imports | the launcher would not compile |
 | `ModManager.java` had a duplicated closing brace after the staging cleanup | the rest of the class fell outside the class body |
 | `TouchControls.fpsRefresh` invalidated the whole overlay | the statistics band is what changes, so `dirtyStatsRect` |
+| dependency flags overrode `CMAKE_C_FLAGS`, losing the NDK target | the dependency job failed (70 s, cold rebuild); flags moved to `CMAKE_*_FLAGS_RELEASE` |
+| CMake interprocedural optimisation on SDL2/FAudio | never exercised before; removed, LTO is now `LTO_DEPS=1` and off by default |
 | `imports.cpp` kept two unused helpers under `-Werror` | the runtime bridge test caught it, not review |
 | `watchdog.cpp` check was an assertion about a log call | the handler was already clean; the *check* was wrong, and it is now scoped to `OnSignal` |
 | `SetupActivity.onStop` had a precedence bug in `isFinishing() \|\| … &&` | `isChangingConfigurations()` alone is correct |
