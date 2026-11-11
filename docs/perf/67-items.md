@@ -585,6 +585,10 @@ fixed above:
 | `watchdog.cpp` check was an assertion about a log call | the handler was already clean; the *check* was wrong, and it is now scoped to `OnSignal` |
 | `SetupActivity.onStop` had a precedence bug in `isFinishing() \|\| … &&` | `isChangingConfigurations()` alone is correct |
 | `TouchControls` bitmap ownership double-free | only the shared LRU recycles; the button drops its reference |
+| `cached(String, …)` still called with string keys after the signature became `long` | javac: 'String cannot be converted to long' - the stick artwork now uses a numeric key |
+| `GameState.GAME_STATE_*` constants | they are the codelab's names; the platform class has `MODE_*` (verified against the API reference) |
 
 The lesson recorded for the next change: a Java edit without a compiler needs a mechanical check in the same commit, and
-the check has to be written against what the compiler would actually reject.
+the check has to be written against what the compiler would actually reject. `tools/test_java_sources.py` now covers
+unresolved types, unresolved static access, string arguments into numeric parameters, duplicated methods and `@Override`
+mismatches, and `--self-test` proves it reports the two mistakes javac actually caught here.

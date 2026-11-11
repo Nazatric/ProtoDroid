@@ -147,6 +147,7 @@ run(["bash", "src/native/tests/run_memory_test.sh", "/tmp/protodroid-perf-memory
 run(["bash", "src/native/tests/run_runtime_bridge_test.sh", "/tmp/protodroid-perf-bridge"], "runtime bridge test")
 run([sys.executable, "tools/test_runtime_performance.py"], "runtime performance policy test")
 run([sys.executable, "tools/test_java_sources.py"], "launcher Java structural verification")
+run([sys.executable, "tools/test_java_sources.py", "--self-test"], "launcher Java checker self-test")
 run([sys.executable, "tools/test_native_diagnostics.py"], "native diagnostics policy test")
 
 if FAILURES:

@@ -21,13 +21,16 @@ Run: python3 tools/test_java_sources.py [--verbose]
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_ROOT = ROOT / "android/java"
+# Overridable so the checker's own self-test can run it against a mutated copy of the sources.
+SOURCE_ROOT = Path(os.environ.get("PROTODROID_JAVA_ROOT") or ROOT / "android/java").resolve()
 
 # Auto-imported and universal types, plus the Android/iOS shims that are always available in this project.
 # java.lang is imported implicitly, so a plain reference to any of these needs no import clause.
@@ -295,6 +298,67 @@ def duplicate_methods(java: JavaFile) -> list[str]:
     return problems
 
 
+NUMERIC = {"long", "int", "short", "byte", "float", "double", "Long", "Integer", "Float", "Double"}
+
+
+def split_args(text: str) -> list[str]:
+    parts, depth, current = [], 0, ""
+    for ch in text:
+        if ch in "([{<":
+            depth += 1
+        elif ch in ")]}>":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += ch
+    if current.strip():
+        parts.append(current)
+    return parts
+
+
+def string_into_numeric_parameter(java: JavaFile) -> list[str]:
+    """`f("text" + x)` where every overload of `f` takes a number: javac's 'String cannot be converted to long'."""
+    problems = []
+    declarations: dict[str, list[list[str]]] = {}
+    for match in METHOD.finditer(java.code):
+        name = match.group("name")
+        if name in ("if", "for", "while", "switch", "catch", "synchronized") or match.group("ret") in ("new", "return"):
+            continue
+        params = []
+        for part in split_args(match.group("args")):
+            tokens = [t for t in re.split(r"\s+", part.strip()) if t and t not in ("final",)]
+            if len(tokens) >= 2:
+                params.append(re.sub(r"<.*", "", tokens[0]) + ("[]" if "[]" in part else ""))
+        declarations.setdefault(name, []).append(params)
+    for name, overloads in declarations.items():
+        if any(any(not t or t in ("String", "CharSequence", "Object") for t in params) for params in overloads):
+            continue  # an overload that takes text exists: no conclusion
+        arities = {len(params) for params in overloads if params}
+        for call in re.finditer(rf"(?<![\w.]){re.escape(name)}\s*\(", java.code):
+            body_start = call.end()
+            depth, index = 1, body_start
+            while index < len(java.code) and depth:
+                if java.code[index] == "(":
+                    depth += 1
+                elif java.code[index] == ")":
+                    depth -= 1
+                index += 1
+            args = split_args(java.code[body_start:index - 1])
+            if len(args) not in arities:
+                continue
+            for position, arg in enumerate(args):
+                if "\"" not in arg:
+                    continue
+                if all(position < len(params) and params[position] in NUMERIC for params in overloads if params):
+                    line = java.code.count("\n", 0, call.start()) + 1
+                    problems.append(f"{java.path.name}:{line}: argument {position + 1} of {name}(...) is a String but "
+                                    f"the parameter is numeric")
+                    break
+    return problems
+
+
 def check_overrides(java: JavaFile, by_name: dict[str, JavaFile]) -> list[str]:
     problems = []
     defined = {match.group("name") for match in METHOD.finditer(java.code)}
@@ -314,10 +378,61 @@ def check_overrides(java: JavaFile, by_name: dict[str, JavaFile]) -> list[str]:
     return problems
 
 
+def self_test() -> list[str]:
+    """Reintroduces the two mistakes javac actually caught here and requires the checker to report them."""
+    import shutil
+    import tempfile
+
+    failures = []
+    with tempfile.TemporaryDirectory(prefix="protodroid-java-") as temp:
+        target = Path(temp) / "java"
+        shutil.copytree(SOURCE_ROOT, target)
+        touch = target / "com" / "protodroid" / "TouchControls.java"
+        original = touch.read_text(encoding="utf-8")
+        broken = original.replace(
+            "cached(stickKey(0, false), stickR + 12 * density",
+            'cached("stick:" + stickR, stickR + 12 * density')
+        if broken == original:
+            failures.append("self-test: could not find the stick cache call to break")
+        touch.write_text(broken, encoding="utf-8")
+        for need, label in (('"stick:" + stickR', "string into a numeric parameter"),):
+            if need not in broken:
+                failures.append(f"self-test: the mutation for {label} did not apply")
+            else:
+                found = subprocess.run(
+                    [sys.executable, str(Path(__file__).resolve()), "--quiet"],
+                    capture_output=True, text=True,
+                    env={**os.environ, "PROTODROID_JAVA_ROOT": str(target)})
+                if found.returncode == 0:
+                    failures.append(f"self-test: the checker did not report {label}")
+        proto = target / "com" / "protodroid" / "ProtoActivity.java"
+        text = proto.read_text(encoding="utf-8").replace("import android.os.Build;\n", "")
+        text = text.replace("Build.VERSION.SDK_INT < 33", "android.os.Build.VERSION.SDK_INT < 33")
+        proto.write_text(text, encoding="utf-8")
+        found = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--quiet"],
+                               capture_output=True, text=True,
+                               env={**os.environ, "PROTODROID_JAVA_ROOT": str(target)})
+        if found.returncode == 0:
+            failures.append("self-test: the checker did not report an unimported type")
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--quiet", action="store_true", help="only report problems (used by the self-test)")
+    parser.add_argument("--self-test", action="store_true", help="prove the checker catches the mistakes javac caught")
     args = parser.parse_args()
+
+    if args.self_test:
+        failures = self_test()
+        for failure in failures:
+            print(f"  - {failure}")
+        if failures:
+            print(f"java checker self-test: {len(failures)} failure(s)")
+            return 1
+        print("java checker self-test passed: it reports a string in a numeric parameter and an unimported type")
+        return 0
 
     paths = sorted(SOURCE_ROOT.rglob("*.java"))
     if not paths:
@@ -334,9 +449,10 @@ def main() -> int:
         problems += unresolved_static_access(java, siblings)
         problems += final_reassigned(java)
         problems += duplicate_methods(java)
+        problems += string_into_numeric_parameter(java)
         problems += check_overrides(java, by_name)
 
-    if args.verbose or problems:
+    if (args.verbose or problems) and not args.quiet:
         for java in files:
             defs = ", ".join(sorted(java.types))
             print(f"{java.path.relative_to(ROOT)}: package {java.package or '(default)'}; types {defs}")
@@ -345,7 +461,9 @@ def main() -> int:
         for problem in problems:
             print(f"  - {problem}")
         return 1
-    print(f"java sources ok: {len(files)} files, {sum(len(j.types) for j in files)} types, no structural problems")
+    if not args.quiet:
+        print(f"java sources ok: {len(files)} files, {sum(len(j.types) for j in files)} types, "
+              f"no structural problems")
     return 0
 
 

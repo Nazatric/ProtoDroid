@@ -46,6 +46,7 @@ jobs:
       - name: Verify the Java sources structurally
         run: |
           python3 tools/test_java_sources.py --verbose
+          python3 tools/test_java_sources.py --self-test
       - name: Prove the critic can fail
         # A gate that cannot fail is decoration: this mutates a throwaway copy of the tree and requires the score to drop,
         # including below 8.5 when a critical regression is reintroduced.

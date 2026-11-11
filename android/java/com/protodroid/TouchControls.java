@@ -1307,10 +1307,16 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     }
 
     private void drawStick(Canvas c) {
-        blitCentered(c, cached("stick:" + stickR, stickR + 12 * density, this::paintStickBase), stickX, stickY);
+        blitCentered(c, cached(stickKey(0, false), stickR + 12 * density, this::paintStickBase), stickX, stickY);
         final boolean held = stickPointer >= 0;
-        blitCentered(c, cached("knob:" + held + stickR, stickR * 0.5f + 4 * density,
+        blitCentered(c, cached(stickKey(1, held), stickR * 0.5f + 4 * density,
                 (cc, x, y) -> paintKnob(cc, x, y, held)), knobX, knobY);
+    }
+
+    // Item 63: a numeric cache key for the stick artwork, built from the piece and the radius instead of a concatenated
+    // string (the stick used to build "knob:true" + radius on every frame).
+    private long stickKey(int piece, boolean held) {
+        return (0x51L << 56) ^ ((long) piece << 48) ^ (held ? 1L << 47 : 0) ^ (Float.floatToIntBits(stickR) & 0xffffffffL);
     }
 
     private void paintKnob(Canvas c, float x, float y, boolean held) {
