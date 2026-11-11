@@ -540,8 +540,10 @@ fails CI below 8.5), `tools/test_perf_program.py` (the gate it runs), `tools/tes
 verification of the Java half, since no JDK exists in the build environment) and `tools/perf_evidence.py` (unchanged,
 still the only place aggregate numbers come from).
 
-Build time is addressed too: `CCACHE=1` routes the compiler through ccache, the workflow caches `~/.ccache` between runs
-and prints `ccache -s`, so editing `src/native` no longer recompiles the 192 untouched generated translation units.
+Build time is addressed too: `CCACHE=1` routes the compiler through ccache, the workflow installs ccache, caches
+`~/.ccache` between runs and prints `ccache -s`, so editing `src/native` no longer recompiles the 192 untouched generated
+translation units. The Makefile only applies the prefix when `command -v ccache` succeeds, because the first version
+passed `CCACHE=1` on a runner without ccache and the native build died with `make: ccache: No such file or directory`.
 **Status: partial.** The generated recompiled C stays committed (412 MB): moving it to a build artifact would require
 the original game image in CI, which the repository cannot legally ship.
 

@@ -50,8 +50,11 @@ TOOLCHAIN := $(NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin
 # Item 67: the 192 recompiled translation units are regenerated only when the game image changes, so an ordinary
 # edit to src/native rebuilds all of them for nothing. CCACHE=1 routes the compiler through ccache in CI, where the
 # cache is restored between builds; a local build without ccache installed is unaffected because the default is 0.
+# ccache is optional in both directions: the workflow installs it and passes CCACHE=1, and a developer machine without
+# ccache simply gets an empty prefix instead of "make: ccache: No such file or directory".
 CCACHE ?= 0
-CCACHE_PREFIX := $(if $(filter 1,$(CCACHE)),ccache )
+CCACHE_BIN := $(shell command -v ccache 2>/dev/null)
+CCACHE_PREFIX := $(if $(filter 1,$(CCACHE)),$(if $(CCACHE_BIN),ccache ,))
 CXX := $(CCACHE_PREFIX)$(TOOLCHAIN)/$(TRIPLE)-clang++
 CC := $(CCACHE_PREFIX)$(TOOLCHAIN)/$(TRIPLE)-clang
 OUT ?= ../../build/android/$(ABI)

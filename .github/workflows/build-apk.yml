@@ -797,7 +797,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip p7zip-full unzip
+          sudo apt-get install -y --no-install-recommends ninja-build glslang-tools pkg-config python3-pip p7zip-full unzip ccache
           pip3 install --user --break-system-packages meson==1.5.2 capstone pefile
           echo "SDK: $ANDROID_SDK_ROOT $ANDROID_HOME"
           echo "NDK: $ANDROID_NDK_LATEST_HOME"
