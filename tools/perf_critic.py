@@ -450,6 +450,9 @@ def main() -> int:
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--min", type=float, default=None)
+    parser.add_argument("--annotations", action="store_true",
+                        help="emit ::error::/::warning:: lines for CI annotations (the workflow log is not always "
+                             "retrievable, so the reason a gate failed has to travel with the failure)")
     args = parser.parse_args()
 
     for item in ITEMS:
@@ -485,9 +488,22 @@ def main() -> int:
         if args.verbose:
             for item in ITEMS:
                 print(f"  {item.number:>2} [{item.severity:<8}] {item.status:.2f}  {item.title}\n             {item.note}")
-        elif not tests_ok:
-            print(tests_out[-2000:])
+        if not tests_ok:
+            # Always shown: in CI the rating multiplying by 0.85 is not a diagnosis on its own.
+            print("tests failed:\n" + tests_out[-4000:])
         print(f"\nrating {rating}/10 (code coverage {code_rating}/10, severity-weighted over {len(ITEMS)} items)")
+
+    if args.annotations:
+        for item in ITEMS:
+            if item.status <= SCALE["open"]:
+                print(f"::error::item {item.number} ({item.severity}) not addressed: {item.title}")
+            elif item.status < SCALE["done"]:
+                print(f"::warning::item {item.number} at {item.status:.2f}: {item.title} - {item.note}")
+        if not tests_ok:
+            for line in tests_out.splitlines():
+                if line.strip().startswith("- "):
+                    print(f"::error::record test {line.strip()[2:]}")
+        print(f"::notice::rating {rating}/10 (target 8.5)")
 
     if args.min is not None and rating < args.min:
         print(f"\nrating {rating} is below the required {args.min}", file=sys.stderr)

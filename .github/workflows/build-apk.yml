@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Score the performance programme
         run: |
-          python3 tools/perf_critic.py --verbose --min 8.5
+          python3 tools/perf_critic.py --verbose --annotations --min 8.5
       - name: Verify the Java sources structurally
         run: |
           python3 tools/test_java_sources.py --verbose

@@ -9,6 +9,7 @@ Run: python3 tools/test_perf_program.py
 """
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -152,5 +153,8 @@ if FAILURES:
     print(f"perf program: {len(FAILURES)} failure(s)")
     for failure in FAILURES:
         print(f"  - {failure}")
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        for failure in FAILURES:
+            print("::error::perf program: " + failure.splitlines()[0][:900])
     sys.exit(1)
 print("perf program checks passed")
