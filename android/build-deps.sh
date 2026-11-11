@@ -189,7 +189,6 @@ endian = 'little'
 buildtype = 'release'
 b_lto = $LTO_MESON
 b_ndebug = true
-b_pie = true
 c_args = ['-D__ANDROID__=1', $TUNE_ARGV]
 cpp_args = ['-D__ANDROID__=1', $TUNE_ARGV]
 EOF

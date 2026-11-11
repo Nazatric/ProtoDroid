@@ -686,7 +686,33 @@ jobs:
           tail -n 180 /tmp/build-deps.log || true
           # The workflow log itself is not always retrievable, so the actual diagnostics are also emitted as check
           # annotations: a failed dependency build must say what failed, not just that the step exited non-zero.
-          python3 -c 'from pathlib import Path; p = Path("/tmp/build-deps.log"); lines = p.read_text(errors="replace").splitlines() if p.exists() else ["no /tmp/build-deps.log"]; markers = ("error:", "Error", "FAILED", "fatal", "CMake Error", "meson.build", "Traceback", "No such file", "undefined reference", "not found"); selected = [l for l in lines if any(m in l for m in markers)] or lines[-40:]; print("\n".join("::error::deps: " + l[:1800].replace("%", "%25").replace("\r", "%0D") for l in selected[-25:]))'
+          # "not found" alone matches every CMake capability probe, so only real failures are surfaced: error:,
+          # CMake Error, Traceback, FAILED:, NOT FOUND (upper-case, the CMake convention for a hard failure).
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          log = Path("/tmp/build-deps.log")
+          lines = log.read_text(errors="replace").splitlines() if log.exists() else ["no /tmp/build-deps.log"]
+          # Case-insensitive for the ordinary failures; "NOT FOUND" stays case-sensitive because lower-case "not found"
+          # is what every successful CMake capability probe prints.
+          soft = re.compile(r"error:|CMake Error|Traceback|FAILED:|fatal error|undefined reference|No such file|"
+                            r"cannot find|Command not found|ninja: build stopped", re.IGNORECASE)
+          hard = re.compile(r"NOT FOUND")
+
+          def failing(line):
+              return bool(soft.search(line) or hard.search(line))
+
+          selected = [line for line in lines if failing(line)]
+          context = []
+          for index, line in enumerate(lines):
+              if failing(line):
+                  context.extend(lines[max(0, index - 2):index + 3])
+          chosen = context[-40:] if context else lines[-40:]
+          for line in chosen:
+              print("::error::deps: " + line[:1800].replace("%", "%25").replace("\r", "%0D"))
+          print("::error::deps: log said " + str(len(selected)) + " matching line(s) in " + str(len(lines)) + " lines")
+          PY
           gh api repos/${{ github.repository }}/issues/1/comments \
             --raw-field body="Dependency build failed for ${{ github.sha }}:\n\`\`\`\n$(tail -n 180 /tmp/build-deps.log 2>/dev/null || echo 'no dependency log')\n\`\`\`" || true
 
