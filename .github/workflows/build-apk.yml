@@ -1433,6 +1433,11 @@ jobs:
           grep -F "package: name='com.protodroid' versionCode='$versionCode' versionName='$versionName'" \
             /tmp/protodroid-badging.txt
           echo "Verified signed package: com.protodroid $versionName (versionCode $versionCode), $apkBytes bytes, SHA-256 $apkSha256"
+          # The workflow log is not retrievable from the review environment, so the figures that matter for the
+          # package-size budget travel with the check run as annotations.
+          echo "::notice::APK $apkBytes bytes, SHA-256 $apkSha256"
+          unzip -l "$APK" | awk 'NR > 3 && $1 ~ /^[0-9]+$/ { print $1, $4 }' | sort -rn | head -n 20 | \
+            while read -r size name; do echo "::notice::apk entry $size $name"; done
 
       - name: Upload source-built mod example
         if: success() && env.HAS_DLL == '1'
