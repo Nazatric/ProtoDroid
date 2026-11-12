@@ -42,13 +42,20 @@ class VersionTests(unittest.TestCase):
             MANIFEST.replace('    android:versionCode="1"\n', ""),
             MANIFEST.replace('android:versionName="0.1"', ""),
             MANIFEST.replace('android:versionCode="1"', 'android:versionCode="one"'),
-            MANIFEST.replace('android:versionName="0.1"', 'android:versionName="0.1.1"'),
             MANIFEST.replace('android:versionCode="1"', 'android:versionCode="0"'),
             MANIFEST.replace("</manifest>", '    android:versionCode="2"\n</manifest>'),
         ]
         for text in invalid:
             with self.subTest(text=text), self.assertRaises(VersionError):
                 bumped_text(text)
+
+    def test_patch_versions_increment_the_patch_component(self):
+        # The shipping manifest uses three-part names (0.17.5), and bump_version.py accepts them by incrementing the patch
+        # rather than the minor. This replaces an older expectation that a three-part name was rejected outright.
+        text = MANIFEST.replace('android:versionName="0.1"', 'android:versionName="0.17.5"')
+        bumped, old_name, old_code, new_name, new_code = bumped_text(text)
+        self.assertEqual((old_name, old_code, new_name, new_code), ("0.17.5", 1, "0.17.6", 2))
+        self.assertEqual(read_version(bumped), ("0.17.6", 2))
 
     def test_manifest_update_is_verified_on_disk(self):
         with tempfile.TemporaryDirectory() as directory:
