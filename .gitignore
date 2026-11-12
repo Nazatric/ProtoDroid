@@ -9,8 +9,6 @@ __pycache__/
 ghidra/
 build/
 modding/example/package/lib/
-!build/recomp/
-!build/recomp/**
 re/decomp/
 
 # Generated runtime logs
