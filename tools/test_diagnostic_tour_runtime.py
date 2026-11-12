@@ -38,10 +38,23 @@ assert direct_jump_target(0x100246B3) == 0x104E45C0
 assert direct_jump_target(0x1002BC01) == 0x104E4AD0
 
 # The generated thunks take the Android direct path rather than re-entering RecompDispatch for the final task.
-generated = (ROOT / "build/recomp/native/part_0002.c").read_text(encoding="utf-8")
-for thunk, task in ((0x7C0246B3, 0x7C4E45C0), (0x7C02BC01, 0x7C4E4AD0)):
-    body = generated.split(f"void f_{thunk:08x}(Ctx* c) {{", 1)[1].split("\n}", 1)[0]
-    assert f"if (RecompDirect(0x{task:08x}u))" in body
+# Generated sources are not tracked (they go stale against runtime.h); CI regenerates them in the APK job, so on a
+# fresh checkout this probe verifies the generator still emits that direct-thunk form instead.
+generated_path = ROOT / "build/recomp/native/part_0002.c"
+if generated_path.exists():
+    generated = generated_path.read_text(encoding="utf-8")
+    for thunk, task in ((0x7C0246B3, 0x7C4E45C0), (0x7C02BC01, 0x7C4E4AD0)):
+        body = generated.split(f"void f_{thunk:08x}(Ctx* c) {{", 1)[1].split("\n}", 1)[0]
+        assert f"if (RecompDirect(0x{task:08x}u))" in body
+else:
+    generator = (ROOT / "tools/recomp/recomp.py").read_text(encoding="utf-8")
+    assert 'return f"if (RecompDirect(0x{d:08x}u)) f_{d:08x}(c); else RecompDispatch' in generator, (
+        "The generator no longer emits Android direct thunks; review the tour probe"
+    )
+    assert "return \"if (RecompDirect(\" in text and text.count(\"RRELOAD\") == 2" in generator, (
+        "The direct-thunk recognition used by the probe changed"
+    )
+    print("generated sources absent; verified the direct-thunk form in tools/recomp/recomp.py")
 runtime_header = (ROOT / "src/recomp/runtime.h").read_text(encoding="utf-8")
 flat_direct = runtime_header.split("#ifdef RECOMP_FLAT_MEMORY", 1)[1].split("#else", 1)[0]
 assert "return 1;" in flat_direct, "Android's direct-thunk assumption changed; review the tour probe"
