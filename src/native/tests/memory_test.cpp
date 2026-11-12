@@ -118,6 +118,57 @@ int main() {
     for (uint32_t block : gap) HeapFree(block);
     Check(UsedMiB() == gap_start, "a page-backed block did not return its pages");
 
-    puts("Guest size-class sweep, alignment, large-page release, and small-block reuse checks passed");
+    // The sweep above allocates and frees the same size in pairs, which is exactly the pattern a bug in the *chunk tail*
+    // path (or in magazine reuse across classes) would survive. This walk mixes sizes, keeps up to 96 blocks live at
+    // once, and checks that no two live blocks overlap and that each block's contents survive until it is freed: a
+    // smaller block handed out for a larger request shows up as an overlap, and a block reused while still live shows up
+    // as a destroyed pattern. The generator is a fixed xorshift so a failure is reproducible.
+    struct Live {
+        uint32_t addr;
+        uint32_t size;
+        bool tail;  // a block smaller than 8 bytes has no room for a separate end marker
+    };
+    std::vector<Live> live;
+    uint32_t rng = 0x12345678u;
+    auto next = [&rng]() {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        return rng;
+    };
+    for (int step = 0; step < 20000; ++step) {
+        const bool allocate = live.empty() || ((next() % 100) < 58 && live.size() < 96);
+        if (allocate) {
+            const uint32_t size = next() % 70000 + 1;
+            const uint32_t addr = HeapAlloc(size);
+            Check(addr != 0, "random walk allocation failed");
+            Check((addr & 15u) == 0, "random walk block is not 16-byte aligned");
+            const uint32_t end = addr + size;
+            for (const Live& other : live) {
+                Check(end <= other.addr || addr >= other.addr + other.size, "random walk blocks overlap");
+            }
+            // memcpy: a block's end is only 16-byte aligned at its start, not at addr + size - 4.
+            const uint32_t head = addr ^ 0x5a5a5a5au, tail = addr ^ 0xa5a5a5a5u;
+            memcpy(Ptr<void>(addr), &head, sizeof(head));
+            const bool has_tail = size >= sizeof(head) * 2;
+            if (has_tail) memcpy(Ptr<void>(addr + size - 4), &tail, sizeof(tail));
+            live.push_back({addr, size, has_tail});
+        } else {
+            const size_t index = next() % live.size();
+            const Live block = live[index];
+            live[index] = live.back();
+            live.pop_back();
+            uint32_t head = 0, tail = 0;
+            memcpy(&head, Ptr<void>(block.addr), sizeof(head));
+            memcpy(&tail, Ptr<void>(block.addr + block.size - 4), sizeof(tail));
+            Check(head == (block.addr ^ 0x5a5a5a5au), "a live guest block was overwritten while it was allocated");
+            Check(!block.tail || tail == (block.addr ^ 0xa5a5a5a5u),
+                  "the end of a live guest block was overwritten while it was allocated");
+            HeapFree(block.addr);
+        }
+    }
+    for (const Live& block : live) HeapFree(block.addr);
+
+    puts("Guest size-class sweep, alignment, mixed-size walk, large-page release, and small-block reuse checks passed");
     return 0;
 }
