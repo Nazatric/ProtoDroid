@@ -152,12 +152,32 @@ contains("src/native/Makefile", r"FAST_FP", "the FP-contraction switch is missin
 
 # ---- recompiled dispatch and imports -------------------------------------------------------------------------
 contains("src/native/runtime.cpp", r"extern \"C\" void RecompInit", "the dispatch hash is not built at start-up")
-contains("src/native/runtime.cpp", r"RecompFn RecompLookup\(uint32_t target\) \{\n(?:.*\n)*?    if \(!g_hash\) BuildHash\(\);",
-         "RecompLookup still takes a lock or a call_once on the hot path")
+contains("src/native/runtime.cpp",
+         r"RecompFn RecompLookup\(uint32_t target\) \{\n    if \(const InlineCacheEntry\* cached = InlineCacheSlot\(target\)\)",
+         "RecompLookup does not consult the inline cache before the hash")
 absent("src/native/runtime.cpp", r"std::call_once\(once, BuildHash\)", "RecompLookup still uses call_once")
+check(not re.search(r"(lock_guard|call_once|unique_lock)", function_body("src/native/runtime.cpp", "RecompLookup")),
+      "src/native/runtime.cpp: RecompLookup takes a lock on the hot path")
 contains("src/native/runtime.cpp", r"InlineCacheSlot", "there is no monomorphic inline cache in front of the hash")
+# The cache publishes an immutable record through one atomic pointer: a shared {tag, function} pair written by every
+# thread let a reader pair one target's tag with another target's function and dispatch guest code to the wrong address.
+contains("src/native/runtime.cpp", r"std::atomic<const InlineCacheEntry\*> g_inline_cache",
+         "the inline cache is not published atomically (a torn tag/function pair dispatches the wrong guest function)")
+# The dispatch hash is published after it is filled; storing the pointer first let a second thread read a half-built
+# table and miss a function that exists.
+contains("src/native/runtime.cpp", r"g_hash\.store\(table, std::memory_order_release\)",
+         "the dispatch hash is not published only once it is complete")
 contains("src/native/runtime.cpp", r"RecompNameForAddress", "guest symbols cannot be named without the dynamic table")
-contains("src/native/imports.cpp", r"const Entry& e = g_entries\[index\]", "import dispatch does not use the dense table")
+contains("src/native/imports.cpp", r"const Entry& e = entries\[index\]", "import dispatch does not use the dense table")
+# Registration can happen after the engine's threads start (GetProcAddress reaches ImportThunk), so the table is
+# published atomically and old tables are retired rather than freed while another thread may still read them.
+for pattern, message in (
+        (r"std::atomic<Entry\*> g_entries", "the import dispatch table is not published atomically"),
+        (r"g_entries\.store\(grown, std::memory_order_release\)", "the import dispatch table is assigned in place"),
+        (r"g_retired\.push_back\(previous\)", "a replaced import dispatch table is freed while readers may hold it"),
+        (r"std::lock_guard<std::mutex> registration\(g_register_mutex\)", "import registration is not serialised"),
+):
+    contains("src/native/imports.cpp", pattern, message)
 absent("src/native/imports.cpp", r"static const bool on = SettingInt\(\"import_profile\"",
        "the import profiler still resolves a function-local static per call")
 
@@ -165,6 +185,13 @@ absent("src/native/imports.cpp", r"static const bool on = SettingInt\(\"import_p
 allocator = text("src/native/memory.cpp")
 contains("src/native/memory.cpp", r"thread_local Magazines", "guest allocations still serialise on one mutex")
 contains("src/native/memory.cpp", r"g_class_lookup", "the size-class lookup is not O(1)")
+# A zero-initialised lookup answered every size between the largest class and the page-backed limit with the 32-byte
+# class, so a 60 KB guest malloc returned 32 bytes and corrupted the heap. The table needs an explicit "no class"
+# sentinel, and the class sizes must be aligned to the 16 bytes a block's user pointer is required to have.
+contains("src/native/memory.cpp", r"kNoClass", "the size-class lookup has no \"no class\" sentinel")
+contains("src/native/memory.cpp", r"g_class_size\[n\+\+\] = RoundUp\(s, 16\)", "size classes are not 16-byte aligned")
+contains("src/native/tests/memory_test.cpp", r"for \(uint32_t size = 1; size <= 70000; \+\+size\)",
+         "the guest allocator test does not sweep the whole size range")
 contains("src/native/memory.cpp", r"kHostPage", "large heap blocks are still rounded to 64 KiB")
 contains("src/native/memory.cpp", r"hand its tail", "chunk tails are still abandoned")
 

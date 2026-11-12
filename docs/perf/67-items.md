@@ -300,10 +300,27 @@ allocation costs 25 pages instead of two 64 KiB units and the first-touch fault 
 `g_class_lookup` makes the class lookup O(1) and chunk tails are recovered (`hand its tail`) rather than wasted.
 **Status: done.**
 
+That lookup shipped with two defects that a device report on this build found, and both are fixed with tests that fail
+without the fix (see *Defects found by the device report* below):
+
+* **A request between the largest size class and `kMaxClassSize` was served from the 32-byte class.** The table is
+  zero-initialised, and "0" is a valid class index, so every size that fell in the gap above the last class
+  (44,289-65,536 bytes including the header) was answered with a 32-byte block. The guest's `malloc`, `HeapAlloc` and
+  the D3D9 texture path all go through this allocator, so the first store into such a block overwrote the neighbouring
+  blocks. The table now has an explicit `kNoClass` sentinel and those sizes take the page-backed path.
+* **Class sizes were not 16-byte aligned.** The 1.5x growth sequence produces odd sizes (13,122, 19,683, 29,524,
+  44,286) and a block's user pointer is its header plus 16, so the engine got 2-byte-aligned storage for 16-byte
+  structures. Sizes are rounded up to 16 bytes.
+
 ### 31. The D3D9 wrapper table grows forever
 
 `HostTable` recycles indices through a free list; `Forget` returns the slot (`g_hosts.Release`).
 **Status: done.**
+
+`run_memory_test.sh` now sweeps every size from 1 to 70,000 bytes: two blocks per size, checked for 16-byte alignment,
+for `HeapSize` agreement, for non-overlap, and for surviving a write to both ends. That sweep is what pins item 30:
+on the code as first committed it fails with "a guest block is not 16-byte aligned" and then "two guest blocks of one
+size overlap".
 
 ### 32. First-touch page-fault storms
 
@@ -613,3 +630,34 @@ The lesson recorded for the next change: a Java edit without a compiler needs a 
 the check has to be written against what the compiler would actually reject. `tools/test_java_sources.py` now covers
 unresolved types, unresolved static access, string arguments into numeric parameters, duplicated methods and `@Override`
 mismatches, and `--self-test` proves it reports the two mistakes javac actually caught here.
+
+---
+
+## Defects found by the device report on this build
+
+The first APK built from this branch crashed on a Mali-G720 device as soon as a level was clicked, before the first
+frame: `crash: signal 11 ... fault addr 0x10000a003b`, `pc f_7c626860+0x84`, with the log ending at
+`textures: skip 0 mip level(s) ... decode DXT on` (`proto-native-21/22.log`, source `98bd98b`). Note the fault address:
+guest base `0x1000000000` plus `0xa003b` - a pointer whose value is junk, read from an object field. That is a corrupted
+heap, not a bad instruction, and the three defects below are what produced it.
+
+1. **The allocator's size-class gap (item 30).** Requests of 44,273-65,520 bytes got a 32-byte block. Proven by
+   execution, not by reading: four 60,000-byte allocations returned four addresses 32 bytes apart, all inside one
+   previously handed-out 50,000-byte block. Fixed with `kNoClass`; `src/native/tests/memory_test.cpp` now sweeps
+   1-70,000 bytes, so this class of bug cannot come back silently. The old test only allocated 128 bytes and 4 MiB,
+   which is exactly why CI stayed green.
+2. **A torn inline-cache entry (item 14).** The cache stored `{target, function}` as a shared, non-atomic pair that
+   every thread wrote. A reader could take one target's tag with another target's function pointer and dispatch guest
+   code to the wrong function. Entries are now immutable records published through one atomic pointer per slot, which
+   keeps the one-load fast path. `runtime_bridge_test` adds two targets that share a slot and hammers them from four
+   threads; with the old shared pair it fails on every run ("returned the other target's function"), with the
+   publication it passes.
+3. **A racy dispatch-hash build (item 14).** `g_hash` was stored *before* the table was filled, so a second thread that
+   looked up a function during the build could see a valid pointer to a half-built table and miss a function that
+   exists (a `Fatal` on whichever thread loses). The hash is now built under a mutex and published with a release store.
+   This one was already reachable before this branch's changes: the existing `CheckConcurrentFirstUse` test failed
+   intermittently (2 of 10 runs) once the test table grew.
+
+Nothing in the host tests could have caught (1) before the device did, and that is the honest lesson recorded here: a
+size-class table is only proven by a sweep, not by two spot checks. The APK for the fix is built by the same workflow,
+and the verification step still refuses to upload anything whose exports, revision, or markers do not match.

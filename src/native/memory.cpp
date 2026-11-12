@@ -116,25 +116,40 @@ void BuildClassLookup();
 
 void InitClasses() {
     int n = 0;
-    for (uint32_t s = 32; s <= 512; s += 32) g_class_size[n++] = s;       // 16 classes
-    for (uint32_t s = 768; s <= 65536 && n < kClasses; s += s / 2) g_class_size[n++] = s;
+    for (uint32_t s = 32; s <= 512; s += 32) g_class_size[n++] = s;  // 16 classes
+    // Growth is 1.5x, and every class size is rounded up to 16 bytes: a block's user pointer is block + sizeof(Header),
+    // so an odd class size (the sequence reaches 13122, 19683, 29524, 44286) handed the engine 2-byte-aligned storage
+    // for the 16-byte structures it allocates with malloc/HeapAlloc. The header itself then sat at a misaligned address,
+    // which is undefined behaviour in C++ and an unaligned 16-byte store on ARM64.
+    for (uint32_t s = 768; s <= 65536 && n < kClasses; s += s / 2) g_class_size[n++] = RoundUp(s, 16);
     while (n < kClasses) g_class_size[n++] = 0xffffffffu;
     BuildClassLookup();
 }
 
-// Size -> class in one array read: every size up to the largest class maps to its class index, anything larger is a
-// page-backed large block. The old linear scan over 40 entries ran on every malloc/new in the process.
+// Size -> class in one array read: every size up to the largest class maps to its class index, and anything above it -
+// including a request that falls in a gap above the last class - maps to kNoClass and is served from pages. The old
+// linear scan over 40 entries ran on every malloc/new in the process.
+//
+// The sentinel matters: the lookup table is zero-initialised, so with a plain "0 means class 0" a request between the
+// largest class and kMaxClassSize was served from the 32-byte class. Every guest malloc, HeapAlloc and D3D9 surface
+// in that range (44,289..65,536 bytes, which includes the engine's DXT decode scratch and many asset buffers) then got a
+// 32-byte block and overwrote the heap around it. tools/test_perf_program.py's guest allocator test sweeps the whole
+// range now.
+constexpr uint8_t kNoClass = 0xff;
 uint8_t g_class_lookup[kMaxClassSize + 1];
 
 void BuildClassLookup() {
+    memset(g_class_lookup, kNoClass, sizeof(g_class_lookup));
     uint32_t size = 0;
     for (int i = 0; i < kClasses && g_class_size[i] != 0xffffffffu; ++i) {
-        for (; size <= g_class_size[i]; ++size) g_class_lookup[size] = static_cast<uint8_t>(i);
+        for (; size <= g_class_size[i] && size <= kMaxClassSize; ++size) g_class_lookup[size] = static_cast<uint8_t>(i);
     }
 }
 
 inline int ClassFor(uint32_t total) {
-    return total <= kMaxClassSize ? static_cast<int>(g_class_lookup[total]) : -1;
+    if (total > kMaxClassSize) return -1;
+    const uint8_t cls = g_class_lookup[total];
+    return cls == kNoClass ? -1 : static_cast<int>(cls);
 }
 
 // The free-list link of a block lives in the first bytes of its user area, so it costs no header space.
