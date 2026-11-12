@@ -34,6 +34,12 @@ public class ProtoActivity extends SDLActivity {
      * libmain.so is built for ARMv8.2 with RCpc (LDAPR keeps the emulated x86 memory ordering cheap) and LSE atomics;
      * older cores (Cortex-A53/A73, e.g. Snapdragon 6xx) get libmain_v80.so, built for ARMv8.0. Every core must have
      * both features: big.LITTLE phones list each core's features separately.
+     *
+     * "ilrcpc" (RCpc2, ARMv8.3+) satisfies the RCpc requirement and uses the same load-acquire instructions, but the
+     * first version of this test only accepted the literal "lrcpc". A core whose line says "ilrcpc" therefore sent the
+     * whole phone to the baseline ARMv8.0 build, which has neither LDAPR nor LSE atomics - the exact path every guest
+     * lock, reference count and emulated x86 acquire load takes. Also accept "lrrcpc"/"ilrcpc2", the feature names
+     * used for the same capability on newer kernels.
      */
     private static boolean modernCpu() {
         int cores = 0;
@@ -41,7 +47,10 @@ public class ProtoActivity extends SDLActivity {
             for (String line; (line = r.readLine()) != null;) {
                 if (!line.startsWith("Features")) continue;
                 List<String> features = Arrays.asList(line.substring(line.indexOf(':') + 1).trim().split("\\s+"));
-                if (!features.contains("atomics") || !features.contains("lrcpc")) return false;
+                boolean atomics = features.contains("atomics");
+                boolean rcpc = features.contains("lrcpc") || features.contains("ilrcpc") || features.contains("lrrcpc")
+                        || features.contains("ilrcpc2");
+                if (!atomics || !rcpc) return false;
                 ++cores;
             }
         } catch (IOException e) {

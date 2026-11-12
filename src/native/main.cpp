@@ -747,6 +747,44 @@ int main(int argc, char** argv) {
 #endif
     Log("protodroid build %s %s", __DATE__, __TIME__);
     Log("protodroid source %s", PROTODROID_SOURCE_REVISION);
+    // Which engine build this is. The APK carries two: libmain.so (ARMv8.2 + LSE atomics + RCpc load-acquire) and
+    // libmain_v80.so (ARMv8.0, outline atomics, no LDAPR), and ProtoActivity picks one from /proc/cpuinfo. The log has
+    // to say which one is running: "why is this build slower than that one" is otherwise unanswerable from a device
+    // report, especially since the two differ in exactly the atomics every guest lock and reference count uses.
+#if defined(__aarch64__)
+#if defined(__ARM_FEATURE_ATOMICS) && defined(__ARM_FEATURE_RCPC)
+    Log("engine build: arm64 LSE atomics + RCpc (libmain.so, the modern tier)");
+#else
+    Log("engine build: arm64 baseline (libmain_v80.so, outline atomics, no LDAPR)");
+#endif
+#elif defined(__x86_64__)
+    Log("engine build: x86_64");
+#else
+    Log("engine build: other architecture");
+#endif
+#ifdef __ANDROID__
+    // What the launcher's own feature test reads, repeated here so a report shows both halves of the decision.
+    {
+        std::string cores;
+        if (FILE* f = fopen("/proc/cpuinfo", "r")) {
+            char line[512];
+            int index = 0;
+            while (fgets(line, sizeof(line), f)) {
+                if (strncmp(line, "Features", 8) != 0) continue;
+                const char* colon = strchr(line, ':');
+                if (!colon) continue;
+                const bool atomics = strstr(colon, "atomics") != nullptr;
+                const bool rcpc = strstr(colon, "lrcpc") != nullptr || strstr(colon, "ilrcpc") != nullptr;
+                char buf[64];
+                snprintf(buf, sizeof(buf), " core%d=%s%s", index++, atomics ? "atomics" : "-",
+                         rcpc ? (strstr(colon, "ilrcpc") ? "+ilrcpc" : "+lrcpc") : "-rcpc");
+                cores += buf;
+            }
+            fclose(f);
+        }
+        Log("engine features (cpuinfo)%s", cores.empty() ? " unavailable" : cores.c_str());
+    }
+#endif
 #ifdef __ANDROID__
     if (!g_mirror_dir.empty()) {
         Log("logs mirrored to %s", g_mirror_dir.c_str());
