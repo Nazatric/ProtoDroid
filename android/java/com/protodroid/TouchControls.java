@@ -199,6 +199,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private InputManager inputManager;
     private boolean padConnected;
     private boolean panelOpen = false;
+    // Pointer that opened the mod panel, so the UP of that same finger (which lands outside the panel) does not close it
+    // again. The v1.1 archive's TouchControls.java uses this field but no longer declares it, which made javac fail with
+    // "cannot find symbol: variable panelOpener" for the whole APK.
+    private int panelOpener = -1;
     private final RectF panel = new RectF(), closeRect = new RectF(), layoutRect = new RectF();
 
     // ---- layout editor ----
@@ -1134,6 +1138,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     if (gearRect.contains(x, y)) {
                         releaseAll();
                         panelOpen = true;
+                        panelOpener = id;  // the finger that opened it: its UP must not close the panel again
                         buzz();
                     }
                 } else if (id == modePointer) {
@@ -1167,6 +1172,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void panelTap(float x, float y) {
         if (closeRect.contains(x, y) || !panel.contains(x, y)) {
             panelOpen = false;
+            panelOpener = -1;
             return;
         }
         if (layoutRect.contains(x, y)) {
