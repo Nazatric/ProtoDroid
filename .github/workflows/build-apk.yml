@@ -984,7 +984,7 @@ jobs:
         if: env.HAS_DLL == '1' && steps.cache-recomp.outputs.cache-hit != 'true' && hashFiles('build/recomp/native/table.c') == ''
         timeout-minutes: 30
         run: |
-          set -euo pipefail
+          set -uo pipefail
           export PATH=$HOME/.local/bin:$PATH
           if [ -f build/recomp/native/table.c ]; then
             echo "recomp output already present (committed), skipping generation"
@@ -992,22 +992,29 @@ jobs:
             echo "files $(ls build/recomp/native/*.c | wc -l) bytes $(du -sh build/recomp/native | cut -f1)"
             exit 0
           fi
-          echo "Building recompiled sources from $DLL_PATH"
+          echo "Building recompiled sources from ${DLL_PATH:-unset}"
+          # Generated sources are no longer committed, so this step owns the toolchain it needs.
+          python3 -m pip install --user --break-system-packages --quiet capstone pefile || true
+          if ! python3 -c "import capstone, pefile; print('capstone', capstone.__version__)"; then
+            echo "::error::recomp.py needs capstone and pefile; they are not importable by python3 here"
+            exit 1
+          fi
           mkdir -p build/recomp/native
           ls -lh re/functions.csv re/extra_functions.txt || true
-          python3 -c "import capstone, pefile; print('capstone', capstone.__version__)"
-          timeout 1800 bash -c 'PROTODROID_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
-          tail -n 100 /tmp/recomp.log
-          test -f /tmp/recomp_exit && cat /tmp/recomp_exit
-          RECOMP_EXIT=$(awk '{print $2}' /tmp/recomp_exit)
-          if [ "$RECOMP_EXIT" != "0" ]; then
-            echo "recomp failed (exit $RECOMP_EXIT), log tail:"
-            tail -n 40 /tmp/recomp.log
-            if [ "$RECOMP_EXIT" = "124" ]; then
-              echo "::error::recomp.py hit its 30-minute wall clock before finishing"
-            else
-              echo "::error::recomp.py exited $RECOMP_EXIT: $(grep -v '^Release' /tmp/recomp.log | tail -n 12 | tr '\n' '|' | cut -c1-900)"
-            fi
+          set +e
+          PROTODROID_ENGINE="$DLL_PATH" timeout 1800 python3 -u tools/recomp/recomp.py \
+            --functions all --base 0x7c000000 --split 400 --out build/recomp/native > /tmp/recomp.log 2>&1
+          RECOMP_EXIT=$?
+          set -e
+          tail -n 60 /tmp/recomp.log || true
+          echo "recomp exit $RECOMP_EXIT files $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
+          if [ "$RECOMP_EXIT" -ne 0 ]; then
+            tail -n 80 /tmp/recomp.log > /tmp/recomp_failure.txt || true
+            echo "::error::recomp.py exited $RECOMP_EXIT: $(tail -n 6 /tmp/recomp.log | tr '\n' '|' | cut -c1-700)"
+            exit 1
+          fi
+          if [ ! -f build/recomp/native/table.c ]; then
+            echo "::error::recomp.py exited 0 but wrote no table.c"
             exit 1
           fi
           ls -lh build/recomp/native | head -n 40
@@ -1186,6 +1193,8 @@ jobs:
           path: |
             /tmp/make.log
             /tmp/make_v80.log
+            /tmp/recomp.log
+            /tmp/recomp_failure.txt
             ./make.log
             ./make_v80.log
             /tmp/dxvk-addr2line.txt
