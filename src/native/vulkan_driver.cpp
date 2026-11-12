@@ -6,34 +6,12 @@
 // Setting vulkan_driver: auto (default) | system | turnip | custom. Custom also allows a probed Mali/PanVK package.
 #include "guest.h"
 
-#include <cstdlib>
-#ifdef __ANDROID__
-#include <sys/system_properties.h>
-#endif
-
-#include "exports.h"
-
-// libadrenotools is built for API 29, where libc exports android_get_device_api_level; libmain targets API 26, whose
-// headers only have an inline version, so the Makefile points that name here (--defsym). The definition lives outside
-// the Adreno-only block because src/native/libmain.map keeps the symbol in .dynsym in every Android build, including
-// an x86_64 one built without the Turnip/AdrenoTools libraries. It needs PROTODROID_EXPORT: the Android build compiles
-// with -fvisibility=hidden, and a version script cannot export a symbol the compiler hid.
-extern "C" PROTODROID_EXPORT int protodroid_device_api_level() {
-#ifdef __ANDROID__
-    char value[PROP_VALUE_MAX] = {};
-    __system_property_get("ro.build.version.sdk", value);
-    return atoi(value);
-#else
-    // No Android API level outside Android; the symbol exists so the export map stays linkable everywhere.
-    return 0;
-#endif
-}
-
 #if defined(__ANDROID__) && defined(PROTODROID_ADRENOTOOLS)
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
+#include <sys/system_properties.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -49,6 +27,14 @@ extern "C" PROTODROID_EXPORT int protodroid_device_api_level() {
 #include "diagnostic_tour.h"
 #include "turnip_load.h"
 #include "driver_recovery.h"
+
+// libadrenotools is built for API 29, where libc exports android_get_device_api_level; libmain targets API 26,
+// whose headers only have an inline version, so the Makefile points the symbol here (--defsym).
+extern "C" int protodroid_device_api_level() {
+    char value[PROP_VALUE_MAX] = {};
+    __system_property_get("ro.build.version.sdk", value);
+    return atoi(value);
+}
 
 namespace native {
 

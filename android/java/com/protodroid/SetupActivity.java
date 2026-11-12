@@ -191,25 +191,10 @@ public class SetupActivity extends Activity {
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
-        if (setupView != null) setupView.reloadArtwork(getAssets());  // item 58: reload what onStop released
-    }
-
-    @Override
-    protected void onStop() {
-        // Item 58: the launcher and the engine share one process, so the launcher's bitmaps should not stay resident
-        // while the game runs (four 1440x810 backgrounds plus the icon).
-        if (setupView != null && !isChangingConfigurations()) setupView.releaseArtwork();
-        // updateManager.onPause() is already called from onPause(); calling it twice would stop the same request twice.
-        super.onStop();
-    }
-
-    @Override
     protected void onResume() {
         super.onResume();
         ImmersiveMode.apply(this);
-        checkAsync();  // also after coming back from the permission screen (item 61: never on the UI thread)
+        check();  // also after coming back from the permission screen
         updateManager.onResume();
     }
 
@@ -232,37 +217,6 @@ public class SetupActivity extends Activity {
         super.onDestroy();
     }
 
-    // Item 61: the launcher used to run mkdirs() and several File.isFile()/canRead() probes against
-    // /storage/emulated/0 - a FUSE-mediated path where each call costs up to a few milliseconds - on the UI thread on
-    // every resume, then rebuild the state and redraw. It now runs on one small executor and posts the result.
-    private final java.util.concurrent.ExecutorService fileProbes =
-            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "launcher-file-probe");
-                t.setDaemon(true);
-                return t;
-            });
-
-    private void checkAsync() {
-        fileProbes.execute(() -> {
-            File app = appGame();
-            if (app != null) app.mkdirs();
-            final File sharedGameDir = sharedGame();
-            final File sharedSub = sharedGameSub();
-            final boolean sharedAccess = hasSharedAccess();
-            if (sharedAccess) sharedGameDir.mkdirs();
-            final File[] candidates = sharedAccess ? new File[]{app, sharedGameDir, sharedSub} : new File[]{app};
-            final File found = GameFiles.firstComplete(candidates);
-            final boolean inApp = found != null && found.equals(app);
-            final boolean uv = found == null && GameFiles.anyMissingUv(candidates);
-            runOnUiThread(() -> {
-                foundGame = found;
-                foundInApp = inApp;
-                missingUv = uv;
-                showSetup(app, sharedGameDir);
-            });
-        });
-    }
-
     private void check() {
         File app = appGame();
         if (app != null) app.mkdirs();
@@ -283,19 +237,125 @@ public class SetupActivity extends Activity {
 
     private void play() {
         check();  // also refreshes after files were copied while this screen remained open
-        if (foundGame != null) launch(foundInApp ? null : foundGame, tourArmed);
+        if (foundGame == null) return;
+        if (tourArmed) {
+            launch(foundInApp ? null : foundGame, true);
+            return;
+        }
+        if (needsShaderPrecompile()) {
+            offerShaderPrecompile();
+            return;
+        }
+        launch(foundInApp ? null : foundGame, false);
     }
 
-    private void launch(File gameDir, boolean tour) {
+    /**
+     * The one-time shader precompile: the automated tour builds every graphics pipeline in its own isolated run
+     * (and its own process), then this screen relaunches normal Play, which seeds its cache from the tour's.
+     * Offered only while no populated cache exists anywhere; the native side writes shader-precompile.done once
+     * seeding has happened. A tour cache as small as a few hundred bytes is real work (a populated DXVK state
+     * cache header plus entries — the fixed-scenario tour legitimately produces only ~19 pipelines), and the
+     * shared /Prototype backup is what normal play restores automatically, so its presence also skips the offer.
+     */
+    private boolean needsShaderPrecompile() {
+        File app = getExternalFilesDir(null);
+        if (app == null) return false;
+        if (new File(app, "shader-precompile.done").exists()) return false;
+        if (fileAtLeast(new File(app, "diagnostic-tour-cache/prototypeenginef.dll.dxvk-cache"), 128)) return false;
+        if (fileAtLeast(new File("/storage/emulated/0/Prototype/prototypeenginef.dll.dxvk-cache"), 4096)) return false;
+        return !fileAtLeast(new File(app, "prototypeenginef.dll.dxvk-cache"), 4096);
+    }
+
+    private static boolean fileAtLeast(File file, long bytes) {
+        return file.isFile() && file.length() >= bytes;
+    }
+
+    private void offerShaderPrecompile() {
+        PrecompileDialog.show(this, new PrecompileDialog.Actions() {
+            @Override
+            public void loadAllShadersNow() {
+                launchPrecompile(foundInApp ? null : foundGame);
+            }
+
+            @Override
+            public void playWithoutOptimizing() {
+                launch(foundInApp ? null : foundGame, false);
+            }
+
+            @Override
+            public void dontAskAgain() {
+                try {
+                    //noinspection ResultOfMethodCallIgnored
+                    new File(getExternalFilesDir(null), "shader-precompile.done").createNewFile();
+                } catch (java.io.IOException ignored) {
+                }
+                launch(foundInApp ? null : foundGame, false);
+            }
+        });
+    }
+
+    /**
+     * Starts the precompile tour in its own process and waits for its result. The tour's native side ends the
+     * run with an immediate process exit, so the relaunch into normal Play must be owned from here — this
+     * activity stays alive behind the tour screen and starts the game as soon as result.txt says "complete".
+     * The stale result of any earlier tour is deleted first: a watcher that read the previous session's
+     * "complete" reported "finished in a second" (the reported instant-finish bug).
+     */
+    private void launchPrecompile(File gameDir) {
+        if (!applyLaunchEnvironment(gameDir, true, "precompile")) return;
+        // The native side also rotates result.txt at tour startup; deleting here closes the gap
+        // between startActivity and the tour process reaching its own cleanup.
+        new File("/storage/emulated/0/Prototype/diagnostic-tour/logs/result.txt").delete();
+        startActivity(new Intent(this, TourActivity.class));
+        final File resultFile = new File("/storage/emulated/0/Prototype/diagnostic-tour/logs/result.txt");
+        final android.os.Handler handler = new android.os.Handler(getMainLooper());
+        final Runnable[] poll = new Runnable[1];
+        poll[0] = new Runnable() {
+            private int ticks;
+
+            @Override
+            public void run() {
+                String verdict = firstResultLine(resultFile);
+                if (verdict == null && ticks++ < 20 * 60) {  // the tour can legitimately run for minutes
+                    handler.postDelayed(this, 1000);
+                    return;
+                }
+                if ("complete".equals(verdict)) {
+                    Toast.makeText(SetupActivity.this, "Shaders optimized — starting game", Toast.LENGTH_LONG).show();
+                    launch(gameDir, false);
+                } else if (verdict != null) {
+                    Toast.makeText(SetupActivity.this,
+                            "Shader optimization did not finish; see Diagnostics.", Toast.LENGTH_LONG).show();
+                }
+            }
+        };
+        new Thread(() -> handler.post(poll[0]), "precompile-watch").start();
+    }
+
+    private static String firstResultLine(File resultFile) {
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(resultFile))) {
+            for (String line; (line = reader.readLine()) != null;) {
+                line = line.trim();
+                if (line.startsWith("result=")) return line.substring("result=".length()).trim();
+            }
+        } catch (java.io.IOException ignored) {
+            // not written yet
+        }
+        return null;
+    }
+
+    private boolean applyLaunchEnvironment(File gameDir, boolean tour, String purpose) {
         try {
             if (tour) Os.setenv("PROTODROID_DIAGNOSTIC_TOUR", "1", true);
             else Os.unsetenv("PROTODROID_DIAGNOSTIC_TOUR");
+            if (tour && purpose != null) Os.setenv("PROTODROID_TOUR_PURPOSE", purpose, true);
+            else Os.unsetenv("PROTODROID_TOUR_PURPOSE");
         } catch (ErrnoException e) {
             Toast.makeText(this, tour
                             ? "Could not arm the diagnostic tour; normal Play was not substituted."
                             : "Could not clear diagnostic-tour mode; Play was cancelled to protect your saves.",
                     Toast.LENGTH_LONG).show();
-            return;
+            return false;
         }
         try {
             if (gameDir == null) Os.unsetenv("PROTODROID_GAME");
@@ -317,6 +377,11 @@ public class SetupActivity extends Activity {
         } catch (ErrnoException ignored) {
             // the bundled drivers are used
         }
+        return true;
+    }
+
+    private void launch(File gameDir, boolean tour) {
+        if (!applyLaunchEnvironment(gameDir, tour, null)) return;
         startActivity(new Intent(this, ProtoActivity.class));
         finish();
     }

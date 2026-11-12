@@ -216,22 +216,6 @@ bool CopyRectToBuffer(const AVFrame* frame, const Public& pub, uint32_t dest, in
         uint8_t* vb = Ptr<uint8_t>(static_cast<uint32_t>(y_end));
         uint8_t* ub = vb + ptrdiff_t(cp) * crows;
         uint32_t c0 = dy / 2, c1 = (dy + sh - 1) / 2, k0 = dx / 2, k1 = (dx + sw - 1) / 2;
-        // Item 55: when the blit is a straight copy (even offsets and sizes, no clipping or scaling on this axis), the
-        // chroma planes are contiguous rows - memcpy them instead of walking samples one at a time with two min/max
-        // clamps per chroma sample. At 1080p this loop ran on the CPU next to the decoder for every movie frame.
-        const uint32_t want_rows = c1 - c0 + 1, want_cols = k1 - k0 + 1;
-        if ((dx & 1) == 0 && (sx & 1) == 0 && (sw & 1) == 0 && 2 * c0 == dy && 2 * k0 == dx) {
-            const uint32_t srow0 = std::min((sy + dy - dy) / 2, (pub.height + 1) / 2 - 1);
-            if (srow0 + want_rows <= (pub.height + 1) / 2 && want_cols <= uint32_t(cp)) {
-                for (uint32_t c = 0; c < want_rows && c0 + c < crows; ++c) {
-                    memcpy(vb + ptrdiff_t(c0 + c) * cp + k0,
-                           frame->data[2] + ptrdiff_t(srow0 + c) * frame->linesize[2] + (sx / 2), want_cols);
-                    memcpy(ub + ptrdiff_t(c0 + c) * cp + k0,
-                           frame->data[1] + ptrdiff_t(srow0 + c) * frame->linesize[1] + (sx / 2), want_cols);
-                }
-                return true;
-            }
-        }
         for (uint32_t c = c0; c <= c1 && c < crows; ++c) {
             uint32_t drow = std::max(2 * c, dy);
             uint32_t srow = std::min((sy + drow - dy) / 2, (pub.height + 1) / 2 - 1);

@@ -7,9 +7,6 @@
 #include <cstring>
 #include <mutex>
 #include <vector>
-#if defined(__linux__)
-#include <sys/prctl.h>
-#endif
 
 #include "guest.h"
 
@@ -34,23 +31,6 @@ constexpr uint32_t kTebSize = 0x1000;
 
 }  // namespace
 
-namespace {
-
-// Item 22: a guest thread's stack, TEB and GuestThread are released when it exits. Pooled fiber stacks keep their
-// virtual range (cheap to reuse) but drop their resident pages while idle.
-constexpr int kFiberStackPool = 8;
-std::vector<void*> g_fiber_host_stacks;  // under g_fibers_mutex
-std::mutex g_pool_mutex;
-
-}  // namespace
-
-void SetThreadTimerslack() {
-#if defined(__linux__) && defined(PR_SET_TIMERSLACK)
-    // 500 us: worker and audio wake-ups coalesce instead of pulling the CPU out of idle 1000 times a second.
-    prctl(PR_SET_TIMERSLACK, 500000ul, 0, 0, 0);
-#endif
-}
-
 GuestThread* AttachThread(uint32_t stack_size) {
     auto* t = new GuestThread();
     stack_size = stack_size ? (stack_size + 0xffff) & ~0xffffu : (1u << 20) * 4;
@@ -65,21 +45,8 @@ GuestThread* AttachThread(uint32_t stack_size) {
     W32(t->teb + kTebClientId, 0x10);
     W32(t->teb + kTebClientId + 4, t->id);
     tl_thread = t;
-    SetThreadTimerslack();
     RegisterGuestThread();
     return t;
-}
-
-// Releases everything AttachThread reserved. Runs on the thread itself, after its guest entry point returned, so the
-// guest stack is no longer in use.
-void DetachThread() {
-    GuestThread* t = tl_thread;
-    if (!t) return;
-    tl_thread = nullptr;
-    UnregisterGuestThread();
-    if (t->stack_lo) PageFree(t->stack_lo);
-    if (t->teb) PageFree(t->teb);
-    delete t;
 }
 
 GuestThread* CurrentThread() {
@@ -159,19 +126,11 @@ struct Fiber {
     uint32_t stack_lo, stack_hi;
     void* sp = nullptr;  // saved host stack pointer while switched out
     void* host_stack;
-    bool is_thread;       // the converted thread itself (runs on the thread's own stacks)
-    bool delete_pending;  // deleted while running: released by the next switch away from it
+    bool is_thread;  // the converted thread itself (runs on the thread's own stacks)
 };
 
 std::mutex g_fibers_mutex;
 std::vector<Fiber*> g_fibers;
-std::vector<uint32_t> g_fiber_indices;  // free slots in g_fibers, so fiber churn does not grow the table
-
-}  // namespace
-
-void ReleaseFiber(Fiber* f);  // frees the guest stack and recycles the host stack (defined below)
-
-namespace {
 
 Fiber* FiberOf(uint32_t handle) {
     std::lock_guard<std::mutex> lock(g_fibers_mutex);
@@ -184,16 +143,8 @@ Fiber* NewFiber(uint32_t param) {
     f->handle = HeapAlloc(32);
     W32(f->handle, param);
     std::lock_guard<std::mutex> lock(g_fibers_mutex);
-    uint32_t index;
-    if (!g_fiber_indices.empty()) {
-        index = g_fiber_indices.back();
-        g_fiber_indices.pop_back();
-    } else {
-        index = uint32_t(g_fibers.size());
-        g_fibers.push_back(nullptr);
-    }
-    g_fibers[index] = f;
-    W32(f->handle + 4, index);
+    W32(f->handle + 4, uint32_t(g_fibers.size()));
+    g_fibers.push_back(f);
     f->param = param;
     return f;
 }
@@ -242,14 +193,7 @@ uint32_t FiberCreate(uint32_t stack_size, uint32_t start, uint32_t param) {
     f->stack_lo = PageAlloc(stack_size);
     f->stack_hi = f->stack_lo + stack_size;
     constexpr size_t kHostStack = 4u << 20;  // recompiled C frames are larger than the guest frames
-    {
-        std::lock_guard<std::mutex> lock(g_pool_mutex);
-        if (!g_fiber_host_stacks.empty()) {
-            f->host_stack = g_fiber_host_stacks.back();
-            g_fiber_host_stacks.pop_back();
-        }
-    }
-    if (!f->host_stack) f->host_stack = malloc(kHostStack);
+    f->host_stack = malloc(kHostStack);
     f->sp = PrepareStack(static_cast<uint8_t*>(f->host_stack) + kHostStack, f);
     return f->handle;
 }
@@ -260,17 +204,6 @@ void FiberSwitch(uint32_t handle) {
     Fiber* to = FiberOf(handle);
     if (!from || !to) Fatal("SwitchToFiber %08x without a current fiber", handle);
     if (from == to) return;
-    {
-        // A fiber that deleted itself from its own stack can be released now that another fiber is running.
-        std::lock_guard<std::mutex> lock(g_fibers_mutex);
-        for (size_t i = 0; i < g_fibers.size(); ++i) {
-            Fiber* f = g_fibers[i];
-            if (!f || !f->delete_pending || f == to || f == from) continue;
-            g_fibers[i] = nullptr;
-            g_fiber_indices.push_back(uint32_t(i));
-            ReleaseFiber(f);
-        }
-    }
     // Per-fiber host state that lives in thread-locals: the active Ctx and the guest stack top.
     Ctx* saved_ctx = tl_ctx;
     uint32_t saved_stack_hi = t->stack_hi;
@@ -282,35 +215,10 @@ void FiberSwitch(uint32_t handle) {
     t->stack_hi = saved_stack_hi;
 }
 
-// A fiber that deletes itself is freed by the next FiberSwitch away from it; everything else is freed here.
-void ReleaseFiber(Fiber* f) {
-    if (f->stack_lo) PageFree(f->stack_lo);
-    if (f->host_stack) {
-        std::lock_guard<std::mutex> lock(g_pool_mutex);
-        if (int(g_fiber_host_stacks.size()) < kFiberStackPool) {
-            g_fiber_host_stacks.push_back(f->host_stack);
-            f->host_stack = nullptr;
-        }
-    }
-    free(f->host_stack);
-    delete f;
-}
-
 void FiberDelete(uint32_t handle) {
     Fiber* f = FiberOf(handle);
     if (!f || f->is_thread) return;
-    if (CurrentThread()->current_fiber == handle) {
-        // Deleting the running fiber: its own stacks cannot be freed while it is still executing on them.
-        f->delete_pending = true;
-        return;
-    }
-    {
-        std::lock_guard<std::mutex> lock(g_fibers_mutex);
-        const uint32_t index = R32(handle + 4);
-        if (index < g_fibers.size()) g_fibers[index] = nullptr;
-        g_fiber_indices.push_back(index);
-    }
-    ReleaseFiber(f);
+    // The stacks stay allocated: deleting the running fiber's stacks would pull them from under it.
 }
 
 void FiberConvertToThread() {

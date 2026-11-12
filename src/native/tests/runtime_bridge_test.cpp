@@ -2,15 +2,12 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <atomic>
 #include <cstdarg>
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iterator>
-#include <thread>
 #include <vector>
 
 #include "../guest.h"
@@ -48,77 +45,6 @@ void RecompiledProbe(Ctx* c) {
     native::Return(c, 0x11223344u);
 }
 
-void CollisionProbe1(Ctx* c) { native::Return(c, 0xc011de01u); }
-void CollisionProbe2(Ctx* c) { native::Return(c, 0xc011de02u); }
-void CollisionProbe3(Ctx* c) { native::Return(c, 0xc011de03u); }
-void CollisionProbe4(Ctx* c) { native::Return(c, 0xc011de04u); }
-// 0x110200 and 0x110a00 are four-byte aligned, differ by 0x800, and (target >> 2) & 511 is 128 for both: they occupy
-// the same slot of the dispatch inline cache, which is exactly the case a shared, non-atomic cache entry gets wrong.
-void SharedSlotProbe1(Ctx* c) { native::Return(c, 0x5a1e0001u); }
-void SharedSlotProbe2(Ctx* c) { native::Return(c, 0x5a1e0002u); }
-
-void CheckConcurrentFirstUse() {
-    constexpr uint32_t targets[] = {0x110100u, 0x11c675u, 0x1691f5u, 0x17576au, 0x1c22eau};
-    const RecompFn expected[] = {RecompiledProbe, CollisionProbe1, CollisionProbe2, CollisionProbe3, CollisionProbe4};
-    constexpr int kThreads = 8;
-    std::atomic<int> ready = 0;
-    std::atomic<bool> go = false;
-    std::atomic<int> failures = 0;
-    std::vector<std::thread> threads;
-    for (int t = 0; t < kThreads; ++t) {
-        threads.emplace_back([&] {
-            ++ready;
-            while (!go.load(std::memory_order_acquire)) std::this_thread::yield();
-            for (int round = 0; round < 64; ++round) {
-                for (size_t i = 0; i < std::size(targets); ++i) {
-                    if (RecompLookup(targets[i]) != expected[i]) ++failures;
-                }
-                if (RecompLookup(0x1ce85fu) != nullptr || RecompLookup(0) != nullptr) ++failures;
-            }
-        });
-    }
-    while (ready.load(std::memory_order_acquire) != kThreads) std::this_thread::yield();
-    go.store(true, std::memory_order_release);
-    for (auto& thread : threads) thread.join();
-    Check(failures.load() == 0, "concurrent first-use lookup returned a wrong association");
-}
-
-// Two targets that share an inline-cache slot, hammered from several threads. The cache stores a target and a function
-// pointer as a pair; if the pair is shared and written without an atomic publication, a reader can take the target of
-// one call with the function of the other and the guest jumps to the wrong function. Every lookup here has exactly one
-// correct answer, so a single mismatch fails the test.
-void CheckSharedSlotCacheIsAtomic() {
-    constexpr uint32_t kTargetA = 0x110200u, kTargetB = 0x110a00u;
-    constexpr int kThreads = 4;
-    constexpr int kRounds = 200000;
-    Check(((kTargetA >> 2) & 511u) == ((kTargetB >> 2) & 511u), "the two targets do not share an inline-cache slot");
-    std::atomic<int> ready = 0;
-    std::atomic<bool> go = false;
-    std::atomic<int> failures = 0;
-    std::vector<std::thread> threads;
-    for (int t = 0; t < kThreads; ++t) {
-        threads.emplace_back([&, t] {
-            ++ready;
-            while (!go.load(std::memory_order_acquire)) std::this_thread::yield();
-            for (int round = 0; round < kRounds; ++round) {
-                // Threads alternate the order so both targets are published while the others read.
-                const bool a_first = ((round + t) & 1) == 0;
-                if (a_first) {
-                    if (RecompLookup(kTargetA) != SharedSlotProbe1) ++failures;
-                    if (RecompLookup(kTargetB) != SharedSlotProbe2) ++failures;
-                } else {
-                    if (RecompLookup(kTargetB) != SharedSlotProbe2) ++failures;
-                    if (RecompLookup(kTargetA) != SharedSlotProbe1) ++failures;
-                }
-            }
-        });
-    }
-    while (ready.load(std::memory_order_acquire) != kThreads) std::this_thread::yield();
-    go.store(true, std::memory_order_release);
-    for (auto& thread : threads) thread.join();
-    Check(failures.load() == 0, "a lookup through the shared inline-cache slot returned the other target's function");
-}
-
 void PrepareImportCall(Ctx* c) {
     memset(c, 0, sizeof(*c));
     c->esp = 0x8000;
@@ -149,15 +75,6 @@ void CheckRecompiledCall(Ctx* c, uint32_t target, Ctx* outer) {
     Check(native::tl_ctx == outer, "recompiled dispatch changed the outer guest context");
     Check(c->eax == 0x11223344u, "recompiled target did not run");
     Check(c->ret_target == 0x5555u && c->esp == 0x8004, "recompiled return changed");
-}
-
-void CheckCollisionCall(Ctx* c, uint32_t target, uint32_t expected) {
-    memset(c, 0, sizeof(*c));
-    c->esp = 0x8000;
-    W32(c->esp, 0x5555u);
-    RecompDispatch(c, target);
-    Check(c->eax == expected, "collision chain returned the wrong function association");
-    Check(c->ret_target == 0x5555u && c->esp == 0x8004, "collision-chain return changed");
 }
 
 void CheckOleAut32Route(const char* name, const char* ordinal, uint32_t expected, int args) {
@@ -308,14 +225,8 @@ struct RecompTableEntry {
     uint32_t va;
     RecompFn fn;
 };
-// All five entries have hash 0x130ea under the production 18-bit multiplier. Distinct results verify that probing
-// keeps every key associated with its own function, rather than merely returning a non-null slot.
-extern const RecompTableEntry g_recomp_table[] = {
-    {0x110100u, RecompiledProbe}, {0x11c675u, CollisionProbe1}, {0x1691f5u, CollisionProbe2},
-    {0x17576au, CollisionProbe3}, {0x1c22eau, CollisionProbe4},
-    {0x110200u, SharedSlotProbe1}, {0x110a00u, SharedSlotProbe2},
-};
-extern const uint32_t g_recomp_count = 7;
+extern const RecompTableEntry g_recomp_table[] = {{0x110100u, RecompiledProbe}};
+extern const uint32_t g_recomp_count = 1;
 volatile uint32_t RecompDiagnosticTour = 0;
 }
 
@@ -374,20 +285,9 @@ int main() {
     CheckImportCall(&ctx, import, &outer);
     Check(g_import_calls == 1, "direct import was not dispatched exactly once");
 
-    // The direct import returned before hash lookup, so this still races lazy first-use construction.
-    CheckConcurrentFirstUse();
-    CheckSharedSlotCacheIsAtomic();
-
     // A normal computed guest call still reaches the recompiled-function table.
     CheckRecompiledCall(&ctx, 0x110100u, &outer);
     Check(g_recompiled_calls == 1, "direct recompiled target was not dispatched exactly once");
-
-    CheckCollisionCall(&ctx, 0x11c675u, 0xc011de01u);
-    CheckCollisionCall(&ctx, 0x1691f5u, 0xc011de02u);
-    CheckCollisionCall(&ctx, 0x17576au, 0xc011de03u);
-    CheckCollisionCall(&ctx, 0x1c22eau, 0xc011de04u);
-    Check(RecompLookup(0x1ce85fu) == nullptr, "same-hash unknown target became a false positive");
-    Check(RecompLookup(0) == nullptr, "empty zero key became a false positive");
 
     // An unresolved engine near-jump thunk still resolves to a recompiled target.
     W8(0x110000, 0xe9);

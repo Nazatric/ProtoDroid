@@ -121,7 +121,7 @@ final class SetupView extends View {
     private final GameSettings gameSettings;
     private final DiagnosticTourCode tourCode = new DiagnosticTourCode();
     private final Bitmap[] slides = new Bitmap[4];
-    private Bitmap icon;
+    private final Bitmap icon;
     private final Typeface medium;
     private final Typeface semibold;
     private final Typeface bold;
@@ -257,30 +257,10 @@ final class SetupView extends View {
         }
     }
 
-    // Item 58: the launcher's bitmaps are dropped while another activity (the game) is in front and reloaded when the
-    // launcher comes back, instead of sitting in the same process as the engine for the whole session.
-    void releaseArtwork() {
-        for (int i = 0; i < slides.length; i++) {
-            if (slides[i] != null && !slides[i].isRecycled()) slides[i].recycle();
-            slides[i] = null;
-        }
-    }
-
-    void reloadArtwork(AssetManager assets) {
-        for (int i = 0; i < slides.length; i++) {
-            if (slides[i] == null) slides[i] = loadBitmap(assets, "setup/images/bg_" + (i + 1) + ".jpg");
-        }
-        if (icon == null) icon = loadBitmap(assets, "setup/images/protodroid_icon.png");
-        invalidate();
-    }
-
     private static Bitmap loadBitmap(AssetManager assets, String name) {
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inScaled = false;
-        // Item 58: four 1440x810 backgrounds as ARGB_8888 are 18.7 MB of Java heap that stays resident for the whole
-        // session (the launcher activity outlives the game start in this process). RGB_565 halves that and the artwork
-        // is a dark, low-gradient backdrop where the extra 8 bits of colour are not visible.
-        options.inPreferredConfig = Bitmap.Config.RGB_565;
+        options.inPreferredConfig = Bitmap.Config.ARGB_8888;
         try (InputStream input = assets.open(name)) {
             return BitmapFactory.decodeStream(input, null, options);
         } catch (IOException | RuntimeException e) {
@@ -1510,18 +1490,10 @@ final class SetupView extends View {
         float x = getWidth() * eased * 1.03f;
         // Artwork stays visible from the first frame. The intro is a thin scan accent, not an opaque black curtain.
         paint.setStyle(Paint.Style.FILL);
-        // One reusable shader moved with setLocalMatrix instead of a new LinearGradient (and its int[] colours) per
-        // frame: the draw path allocated several of these every redraw, which is pure GC pressure on the UI thread.
-        if (sweepShader == null) {
-            sweepShader = new LinearGradient(-90f, 0f, 2f, 0f,
-                    new int[]{Color.TRANSPARENT, Color.WHITE, Color.TRANSPARENT}, null, Shader.TileMode.CLAMP);
-        }
-        sweepMatrix.setTranslate(x, 0f);
-        sweepShader.setLocalMatrix(sweepMatrix);
-        paint.setShader(sweepShader);
-        paint.setAlpha(Math.round(255f * 0.30f * (1f - progress)));
+        paint.setShader(new LinearGradient(x - 90f, 0f, x + 2f, 0f,
+                new int[]{Color.TRANSPARENT, withAlpha(RED_HOT, 0.30f * (1f - progress)), Color.TRANSPARENT},
+                null, Shader.TileMode.CLAMP));
         canvas.drawRect(x - 90f, 0f, x + 2f, getHeight(), paint);
-        paint.setAlpha(255);
         paint.setShader(null);
         paint.setColor(withAlpha(RED_HOT, 0.85f * (1f - progress)));
         canvas.drawRect(x - 2f, 0f, x + 1f, getHeight(), paint);
@@ -1541,18 +1513,8 @@ final class SetupView extends View {
             if (updateWarningVisible) drawUpdateWarning(canvas, now, dt);
             drawBootCurtain(canvas, now);
         }
-        // Item 57: the launcher used to redraw every vsync for as long as the window was visible - a Ken-Burns zoom,
-        // glow pulses, sweeping highlights and splat effects, with new Shader objects allocated in the draw path. That
-        // kept a big core and the GPU busy (and heated the phone) while the user was only reading settings, using up the
-        // thermal headroom the game then lacked. The backdrop now steps at 30 fps, and the settings panel - which covers
-        // the animation and does not move - draws once instead of scheduling frames.
-        if (motionEnabled && !settingsOpen && getWindowVisibility() == VISIBLE && isAttachedToWindow()) {
-            postInvalidateDelayed(33);
-        }
+        if (motionEnabled && getWindowVisibility() == VISIBLE && isAttachedToWindow()) postInvalidateOnAnimation();
     }
-
-    private LinearGradient sweepShader;
-    private final android.graphics.Matrix sweepMatrix = new android.graphics.Matrix();
 
     private int actionAt(float x, float y) {
         if (updateWarningVisible) {

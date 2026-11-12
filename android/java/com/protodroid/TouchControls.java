@@ -9,7 +9,6 @@ import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Rect;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
@@ -29,7 +28,6 @@ import org.libsdl.app.SDLActivity;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -86,8 +84,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         float fx, fy;
         float cx, cy, r;
         int pointer = -1;
-        Bitmap cachedBitmap;  // item 63: this button's glow, and the state hash it was rendered for
-        int cachedState;
 
         Button(String label, int keycode, int mouseButton, boolean fromRight, float dx, boolean fromBottom, float dy,
                 float sizeDp, boolean gameOnly) {
@@ -311,25 +307,14 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     }
 
     // Glowing shapes are rendered once into bitmaps (blur needs the software pipeline) and then only blitted.
-    // Item 63: the key used to be a seven-part string - label, binding text, mode, held, hidden, radius - rebuilt and
-    // hashed for every visible button on every frame, and the map was never evicted, so each new size step (including
-    // float radii from the layout editor) left another 150-300 KB ARGB bitmap behind. The cached bitmap and the state
-    // it was drawn for now live on the button itself, and the shared map is bounded.
-    private final Map<Long, Bitmap> cache = new LinkedHashMap<Long, Bitmap>(64, 0.75f, true) {
-        @Override protected boolean removeEldestEntry(Map.Entry<Long, Bitmap> eldest) {
-            if (size() <= 24) return false;
-            Bitmap gone = eldest.getValue();
-            if (gone != null && !gone.isRecycled()) gone.recycle();
-            return true;
-        }
-    };
+    private final Map<String, Bitmap> cache = new HashMap<>();
     private final Paint blit = new Paint(Paint.FILTER_BITMAP_FLAG);
 
     private interface Painter {
         void paint(Canvas c, float cx, float cy);
     }
 
-    private Bitmap cached(long key, float halfSize, Painter painter) {
+    private Bitmap cached(String key, float halfSize, Painter painter) {
         Bitmap b = cache.get(key);
         if (b == null) {
             int n = (int) Math.ceil(halfSize * 2);
@@ -342,18 +327,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             cache.put(key, b);
         }
         return b;
-    }
-
-    /** Everything a button's cached artwork depends on, folded into one int instead of a rebuilt string. */
-    private int buttonStateHash(Button b, boolean down) {
-        int hash = b.label == null ? 0 : b.label.hashCode();
-        hash = 31 * hash + b.bindingText().hashCode();
-        hash = 31 * hash + (editing ? 1 : 0);
-        hash = 31 * hash + (down ? 1 : 0);
-        hash = 31 * hash + (b.hidden ? 1 : 0);
-        // Radius is quantised to 1 px: the editor's float steps used to create a bitmap per distinct value.
-        hash = 31 * hash + Math.round(b.r);
-        return hash;
     }
 
     private void blitCentered(Canvas c, Bitmap b, float cx, float cy) {
@@ -1075,16 +1048,18 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             return true;
         }
         if (panelOpen) {
-            if (action == MotionEvent.ACTION_UP) panelTap(x, y);
+            if (action == MotionEvent.ACTION_UP) {
+                if (id == panelOpener) panelOpener = -1;  // opening on DOWN means this UP lands outside the
+                else panelTap(x, y);                      // panel and would instantly close it again
+            } else if (action == MotionEvent.ACTION_CANCEL) {
+                panelOpener = -1;
+            }
             invalidate();
             return true;
         }
         if (editing) {
             editTouch(e, action, id, x, y);
-            // Item 65: dirty-region invalidation around the edited control instead of a full-screen one. A full
-            // invalidate re-records the whole overlay display list (every button, stick, glow bitmap and label) and makes
-            // SurfaceFlinger blend the entire ARGB layer again, which can also cost the game surface its direct path.
-            invalidate(dirtyControlRect(x, y));
+            invalidate();
             return true;
         }
         // Camera-only movement has no overlay visual to redraw. Native mouse motion is still delivered for every
@@ -1247,17 +1222,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             c.drawLine(b.cx, b.cy, b.fx, b.fy, edge);
             c.drawCircle(b.fx, b.fy, 10 * density, edge);
         }
-        final int state = buttonStateHash(b, down);
-        Bitmap bmp;
-        if (b.cachedState == state && b.cachedBitmap != null && !b.cachedBitmap.isRecycled()) {
-            bmp = b.cachedBitmap;
-        } else {
-            final int wanted = state;
-            bmp = cached(((long) b.label.hashCode() << 32) ^ (wanted & 0xffffffffL), b.r + 12 * density,
-                    (cc, x, y) -> paintButton(cc, b, x, y, down));
-            b.cachedBitmap = bmp;
-            b.cachedState = wanted;
-        }
+        Bitmap bmp = cached(b.label + ":" + b.bindingText() + (editing ? ":E" : ":N")
+                        + (down ? ":1:" : ":0:") + (b.hidden ? ":H:" : ":V:") + b.r,
+                b.r + 12 * density, (cc, x, y) -> paintButton(cc, b, x, y, down));
         float savedOpacity = opacity;
         if (editing && b != selected) opacity *= 0.52f;
         blitCentered(c, bmp, b.cx, b.cy);
@@ -1307,16 +1274,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     }
 
     private void drawStick(Canvas c) {
-        blitCentered(c, cached(stickKey(0, false), stickR + 12 * density, this::paintStickBase), stickX, stickY);
+        blitCentered(c, cached("stick:" + stickR, stickR + 12 * density, this::paintStickBase), stickX, stickY);
         final boolean held = stickPointer >= 0;
-        blitCentered(c, cached(stickKey(1, held), stickR * 0.5f + 4 * density,
+        blitCentered(c, cached("knob:" + held + stickR, stickR * 0.5f + 4 * density,
                 (cc, x, y) -> paintKnob(cc, x, y, held)), knobX, knobY);
-    }
-
-    // Item 63: a numeric cache key for the stick artwork, built from the piece and the radius instead of a concatenated
-    // string (the stick used to build "knob:true" + radius on every frame).
-    private long stickKey(int piece, boolean held) {
-        return (0x51L << 56) ^ ((long) piece << 48) ^ (held ? 1L << 47 : 0) ^ (Float.floatToIntBits(stickR) & 0xffffffffL);
     }
 
     private void paintKnob(Canvas c, float x, float y, boolean held) {
@@ -1602,8 +1563,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     // leave a Handler retaining the view, and standalone layout editing never starts a gameplay statistics loop.
     private final Runnable fpsRefresh = new Runnable() {
         @Override public void run() {
-            if (!showFps) return;  // item 64: the overlay used to wake the UI thread twice a second even when hidden
-            invalidate(dirtyStatsRect());
+            if (showFps) invalidate();
             postDelayed(this, 500);
         }
     };
@@ -1612,9 +1572,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     // ui_shot_now in the app's files folder makes the controls draw themselves into ui_shot.png there.
     private final Runnable uiShotPoll = new Runnable() {
         @Override public void run() {
-            // Item 64: a test aid must not poll the FUSE-backed external files directory once a second for the whole
-            // session. Only developer builds enable it (see onAttachedToWindow).
-            if (!uiShotPollEnabled) return;
             File dir = getContext().getExternalFilesDir(null);
             File trigger = dir == null ? null : new File(dir, "ui_shot_now");
             if (trigger != null && trigger.delete() && getWidth() > 0) {
@@ -1631,35 +1588,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         }
     };
 
-    private boolean uiShotPollEnabled;
-    private final Rect uiDirty = new Rect();
-
-    /** A generous box around a touched point: enough for the button glow and its label. */
-    private Rect dirtyControlRect(float x, float y) {
-        int pad = (int) (160 * density);
-        uiDirty.set(Math.max(0, (int) x - pad), Math.max(0, (int) y - pad),
-                Math.min(getWidth(), (int) x + pad), Math.min(getHeight(), (int) y + pad));
-        return uiDirty;
-    }
-
-    private Rect dirtyOverlayRect() {
-        uiDirty.set(0, 0, getWidth(), getHeight());
-        return uiDirty;
-    }
-
-    // The statistics line is the only thing that changes between two refreshes: it is drawn at (16dp, 74dp) in 13sp
-    // text, so the band around it is the whole damaged region. Invalidating the full-screen overlay twice a second made
-    // the compositor redraw every control on top of the running game.
-    private Rect dirtyStatsRect() {
-        uiDirty.set(0, (int) (56 * density), (int) (380 * density), (int) (86 * density));
-        return uiDirty;
-    }
-
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        uiShotPollEnabled = (getContext().getApplicationInfo().flags
-                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
         if (inputManager == null) {
             inputManager = (InputManager) getContext().getSystemService(Context.INPUT_SERVICE);
             if (inputManager != null) {

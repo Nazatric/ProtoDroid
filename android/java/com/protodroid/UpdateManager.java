@@ -56,9 +56,7 @@ final class UpdateManager {
     private static final String KEY_APK_SHA256 = "apk_sha256";
     private static final String KEY_CERTIFICATE_SHA256 = "certificate_sha256";
     private static final String KEY_LAST_CHECK = "last_check";
-    // Item 62: an automatic resume check used to hit api.github.com every 15 minutes (and on every return from a
-    // settings screen). Releases do not appear that often, and the check wakes the radio right before the game starts.
-    private static final long CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L;
+    private static final long CHECK_INTERVAL_MS = 15L * 60L * 1000L;
     private static final int MAX_METADATA_BYTES = 2 * 1024 * 1024;
 
     static final int REQUEST_INSTALL = 40;

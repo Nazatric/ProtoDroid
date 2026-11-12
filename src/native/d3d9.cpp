@@ -107,71 +107,26 @@ public:
         chunks_[i >> kBits].load(std::memory_order_relaxed)[i & kMask].store(p, std::memory_order_release);
     }
     uint32_t Append(void* p) {
-        uint32_t i;
-        if (!free_.empty()) {
-            // Wrapped objects (surfaces, textures, state blocks, queries) are created and released all session, so a
-            // freed index is reused instead of growing the table forever.
-            i = free_.back();
-            free_.pop_back();
-        } else {
-            i = size_;
-            if ((i >> kBits) >= kChunks) Fatal("d3d9: too many objects");
-            if (!chunks_[i >> kBits].load(std::memory_order_relaxed)) {
-                chunks_[i >> kBits].store(new std::atomic<void*>[kMask + 1](), std::memory_order_release);
-            }
-            ++size_;
+        uint32_t i = size_;
+        if ((i >> kBits) >= kChunks) Fatal("d3d9: too many objects");
+        if (!chunks_[i >> kBits].load(std::memory_order_relaxed)) {
+            chunks_[i >> kBits].store(new std::atomic<void*>[kMask + 1](), std::memory_order_release);
         }
         Set(i, p);
+        ++size_;
         return i;
-    }
-    void Release(uint32_t i) {
-        Set(i, nullptr);
-        if (free_.size() < kMaxFree) free_.push_back(i);
     }
 
 private:
     static constexpr uint32_t kBits = 14, kMask = (1u << kBits) - 1, kChunks = 4096;
-    static constexpr size_t kMaxFree = 4096;
     std::atomic<std::atomic<void*>*> chunks_[kChunks] = {};
     uint32_t size_ = 0;
-    std::vector<uint32_t> free_;  // under g_mutex
 };
 HostTable g_hosts;
 // host object -> guest object. Child surfaces die with their texture without a Release through the bridge, so an
 // entry can be stale: a new object at the same address with another interface must not reuse it.
 std::unordered_map<void*, uint32_t> g_guest_of;
-// Interface name -> guest vtable. Every caller of WrapAs passes a string literal from this file, so the pointer itself
-// is a stable key: a tiny open-addressed table turns the lookup into one probe. The previous std::map<std::string>
-// built a temporary std::string per call (a heap allocation for names longer than the SSO buffer, e.g.
-// "IDirect3DVertexDeclaration9") and walked a red-black tree, for every GetSurfaceLevel/GetBackBuffer/CreateXxx/Query.
-struct VtableEntry {
-    const char* name;
-    uint32_t vtable;
-};
-constexpr uint32_t kVtableSlots = 64;
-VtableEntry g_vtable_slots[kVtableSlots];
-std::atomic<uint32_t> g_vtable_count{0};
-
-void RegisterVtable(const char* name, uint32_t vtable) {
-    uint32_t count = g_vtable_count.load(std::memory_order_relaxed);
-    for (uint32_t i = 0; i < count; ++i) {
-        if (g_vtable_slots[i].name == name) {
-            g_vtable_slots[i].vtable = vtable;
-            return;
-        }
-    }
-    if (count >= kVtableSlots) Fatal("d3d9: too many interfaces");
-    g_vtable_slots[count] = {name, vtable};
-    g_vtable_count.store(count + 1, std::memory_order_release);
-}
-
-uint32_t VtableFor(const char* name) {
-    const uint32_t count = g_vtable_count.load(std::memory_order_acquire);
-    for (uint32_t i = 0; i < count; ++i) {
-        if (g_vtable_slots[i].name == name) return g_vtable_slots[i].vtable;
-    }
-    Fatal("d3d9: no vtable for %s", name);
-}
+std::map<std::string, uint32_t> g_vtables;       // interface name -> guest vtable
 
 template <typename T>
 T* Host(uint32_t guest) {
@@ -185,12 +140,13 @@ T* Unwrap(uint32_t guest) {
 
 uint32_t WrapAs(void* host, const char* iface) {
     if (!host) return 0;
-    const uint32_t vtable = VtableFor(iface);
     std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    auto vt = g_vtables.find(iface);
+    if (vt == g_vtables.end()) Fatal("d3d9: no vtable for %s", iface);
     auto it = g_guest_of.find(host);
-    if (it != g_guest_of.end() && R32(it->second) == vtable) return it->second;
+    if (it != g_guest_of.end() && R32(it->second) == vt->second) return it->second;
     uint32_t g = HeapAlloc(16);
-    W32(g, vtable);
+    W32(g, vt->second);
     W32(g + 4, g_hosts.Append(host));
     g_guest_of[host] = g;
     return g;
@@ -201,7 +157,7 @@ void Forget(uint32_t guest) {
     uint32_t index = R32(guest + 4);
     auto it = g_guest_of.find(g_hosts.Get(index));
     if (it != g_guest_of.end() && it->second == guest) g_guest_of.erase(it);
-    g_hosts.Release(index);  // the index goes back to the free list; the guest block stays dead (see below)
+    g_hosts.Set(index, nullptr);
     W32(guest, 0);
     // The guest block is not reused: a stale guest pointer then faults on a null vtable instead of aliasing.
 }
@@ -627,36 +583,31 @@ HRESULT AdaptedLockRect(void* tex, uint32_t sub, const TexAdapt& a, UINT level, 
 
 // Returns true when the lock was a decoded or dropped one (the host level, if any, must still be unlocked).
 bool AdaptedUnlock(void* tex, uint32_t sub, bool* host_locked, bool texture_2d = false) {
-    AdaptedLock entry;
-    {
-        // Only the map surgery happens under the bridge-wide lock. The CPU DXT decode of a 1-2K level takes
-        // milliseconds, and every other bridge call (wrapping an object, locking a buffer, releasing a resource)
-        // needs the same recursive mutex, so decoding here used to block the render thread behind a loader thread's
-        // texture upload - the multi-millisecond frame spikes seen while streaming on Mali/non-BC GPUs.
-        std::lock_guard<std::recursive_mutex> lock(g_mutex);
-        auto it = g_adapted_locks.find({tex, sub});
-        if (it == g_adapted_locks.end() || !it->second.guest) return false;
-        entry = std::move(it->second);
-        g_adapted_locks.erase(it);
-    }
-    AdaptedLock& l = entry;
-    // The host level stays locked: the guest's UnlockRect has not been issued yet, so the pointer is still valid.
+    std::lock_guard<std::recursive_mutex> lock(g_mutex);
+    auto it = g_adapted_locks.find({tex, sub});
+    if (it == g_adapted_locks.end() || !it->second.guest) return false;
+    AdaptedLock& l = it->second;
     // Decoded/dropped read-only locks do not receive a guest-input copy in this path. Only writable full locks have
     // authoritative original pixels to hash; read-only locks must never establish identity from scratch memory.
     if (texture_2d && l.full && l.write_back) {
         ModTexturesReplace(tex, sub, uint32_t(l.format), l.width, l.height, l.pitch, Ptr<void>(l.guest), true);
     }
     *host_locked = l.host != nullptr;
-    if (l.host && l.write_back) {
-        const bool timing = DetailedDiagnosticsEnabled();
-        const auto start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-        DecodeDxt(l.format, Ptr<uint8_t>(l.guest), l.pitch, l.width, l.height, l.host, l.host_pitch, l.decode_format);
-        if (timing) RecordTextureTiming(g_decode_timing, std::chrono::steady_clock::now() - start);
+    if (l.host) {
+        if (l.write_back) {
+            const bool timing = DetailedDiagnosticsEnabled();
+            const auto start = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+            DecodeDxt(l.format, Ptr<uint8_t>(l.guest), l.pitch, l.width, l.height, l.host, l.host_pitch,
+                      l.decode_format);
+            if (timing) RecordTextureTiming(g_decode_timing, std::chrono::steady_clock::now() - start);
+        }
+        l.host = nullptr;
     }
     // The D3D lock pointer is invalid after UnlockRect. Release the compressed guest copy only after mod
     // replacement and decoding have consumed it; this bounds static-texture upload memory instead of retaining one
     // scratch allocation per subresource for the texture's entire lifetime.
     HeapFree(l.guest);
+    g_adapted_locks.erase(it);
     return true;
 }
 
@@ -980,40 +931,14 @@ void MaybeScreenshot(IDirect3DDevice9* dev) {
 // ProtoSurface.surfaceDestroyed waits for a present in flight and holds presents back until the surface is back,
 // as presenting or recreating the swap chain on a destroyed window crashes in the Vulkan loader. A skipped present
 // just drops the frame.
-// Item 43: the surface state is an atomic flag plus an in-flight present counter instead of one mutex held across the
-// whole Present. A FIFO present can block for a full vsync (longer if the compositor stalls or the surface is dying),
-// and the Android UI thread (surfaceDestroyed/surfaceChanged) used to take that same mutex - so rotation, home, split
-// screen or the notification shade could block the UI thread for a frame or longer ("input dispatching timed out").
-std::atomic<bool> g_surface_gone{false};
-std::atomic<int> g_presents_in_flight{0};
-std::mutex g_present_state_mutex;  // only for the "wait until no present is in flight" handshake
-std::condition_variable g_present_idle;
+std::mutex g_present_mutex;
+bool g_surface_gone = false;  // under g_present_mutex
 
-// CPU time this thread spent since the previous Present: the closest cheap measure of what APDF/the governor should
-// be told ("how much work did the frame cost"), as opposed to the wall interval between two presents.
-static int64_t RenderThreadWorkNanos() {
-    static thread_local int64_t last_cpu_ns = 0;
-    timespec ts{};
-    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) != 0) return 0;
-    const int64_t now = int64_t(ts.tv_sec) * 1000000000ll + ts.tv_nsec;
-    const int64_t delta = last_cpu_ns ? now - last_cpu_ns : 0;
-    last_cpu_ns = now;
-    return delta;
-}
-
-// The present callable is a template parameter, so this has to stay a template - but it is declared after the timing
-// helper it calls, not before (the stray `template <typename F>` that used to sit above the helper left the helper
-// inside no template at all and put `F` out of scope).
 template <typename F>
 HRESULT GuardedPresent(F present) {
-    if (g_surface_gone.load(std::memory_order_acquire)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
-        return D3D_OK;
-    }
-    g_presents_in_flight.fetch_add(1, std::memory_order_acq_rel);
-    if (g_surface_gone.load(std::memory_order_acquire)) {  // re-checked after the increment, so the handshake sees us
-        g_presents_in_flight.fetch_sub(1, std::memory_order_acq_rel);
-        g_present_idle.notify_all();
+    std::unique_lock<std::mutex> lock(g_present_mutex);
+    if (g_surface_gone) {
+        lock.unlock();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
         return D3D_OK;
     }
@@ -1025,15 +950,11 @@ HRESULT GuardedPresent(F present) {
         RecordPresentTiming(present_end_ns, present_end_ns - present_start_ns);
     }
     if (SUCCEEDED(hr)) {
+        // Both IDirect3DDevice9 and IDirect3DSwapChain9 presents converge here. A real Present contributes one
+        // complete end-to-end interval; empty guest pump iterations and skipped surface-less presents do not.
         const int64_t duration_ns = RecordPresent();
-        // Item 44: ADPF wants how long the CPU actually worked on the frame, not the Present-to-Present interval (which
-        // contains the FIFO/vsync wait and the frame limiter's sleep). Reporting the interval made a vsync-bound frame
-        // look exactly as expensive as its target, so the governor never saw headroom and never lowered clocks.
-        const int64_t work_ns = RenderThreadWorkNanos();
-        if (duration_ns > 0 && work_ns > 0) PerfHintFrame(work_ns);
+        if (duration_ns > 0) PerfHintFrame(duration_ns);
     }
-    g_presents_in_flight.fetch_sub(1, std::memory_order_acq_rel);
-    g_present_idle.notify_all();
     return hr;
 }
 
@@ -1041,22 +962,22 @@ HRESULT GuardedPresent(F present) {
 // Waits up to `seconds` for the game's window (surface) to be on screen; true if it is.
 bool WaitForWindow(int seconds) {
     for (int i = 0; i <= seconds * 10; ++i) {
-        if (!g_surface_gone.load(std::memory_order_acquire)) return true;
+        {
+            std::lock_guard<std::mutex> lock(g_present_mutex);
+            if (!g_surface_gone) return true;
+        }
         if (i < seconds * 10) std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     return false;
 }
 
 extern "C" JNIEXPORT void JNICALL Java_com_protodroid_ProtoSurface_nativeSurfaceGone(JNIEnv*, jclass) {
-    g_surface_gone.store(true, std::memory_order_release);
-    // Bounded wait for the present that is already in the driver: the UI thread must never block on a vsync, and the
-    // surface cannot be released while a present still references it.
-    std::unique_lock<std::mutex> lock(g_present_state_mutex);
-    g_present_idle.wait_for(lock, std::chrono::milliseconds(150),
-                            [] { return g_presents_in_flight.load(std::memory_order_acquire) == 0; });
+    std::lock_guard<std::mutex> lock(g_present_mutex);
+    g_surface_gone = true;
 }
 extern "C" JNIEXPORT void JNICALL Java_com_protodroid_ProtoSurface_nativeSurfaceReady(JNIEnv*, jclass) {
-    g_surface_gone.store(false, std::memory_order_release);
+    std::lock_guard<std::mutex> lock(g_present_mutex);
+    g_surface_gone = false;
 }
 #endif
 
@@ -1440,7 +1361,7 @@ void InitD3D9Bridge() {
             std::string n = std::string(i.name) + "::" + i.methods[k].name;
             W32(vt + uint32_t(4 * k), ImportThunk("d3d9.com", n.c_str()));
         }
-        RegisterVtable(i.name, vt);
+        g_vtables[i.name] = vt;
     }
 }
 

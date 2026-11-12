@@ -11,11 +11,6 @@
 
 #include "../recomp/runtime.h"
 
-// Built once at start-up: the recompiled-function dispatch hash (runtime.cpp). RecompNameForAddress names a faulting
-// program counter from the recompilation table, so the recompiled functions do not need to be exported symbols.
-extern "C" void RecompInit();
-extern "C" const char* RecompNameForAddress(uintptr_t pc);
-
 namespace native {
 
 // ---- logging ----
@@ -59,15 +54,8 @@ struct GuestThread {
 GuestThread* CurrentThread();
 // Creates the guest state for the calling host thread (main thread or a thread started by CreateThread).
 GuestThread* AttachThread(uint32_t stack_size);
-// Releases the guest stack, TEB and GuestThread of the calling thread once its entry point has returned.
-void DetachThread();
-// Hang diagnostics (watchdog.cpp): guest threads register themselves and release their slot on exit; the watchdog
-// watches the frame counter and can be paused while no frames are expected (loading, movies, backgrounded app).
+// Hang diagnostics (watchdog.cpp): guest threads register themselves; the watchdog watches the frame counter.
 void RegisterGuestThread();
-void UnregisterGuestThread();
-void SetWatchdogPaused(bool paused);
-// Coalesces wake-ups on non-render threads (500 us timer slack).
-void SetThreadTimerslack();
 
 // ---- calls into guest code ----
 // Calls the recompiled function at `va` with stdcall/cdecl arguments on the current guest thread's stack; returns
@@ -148,8 +136,6 @@ int SettingInt(const char* key, int def);
 bool MenuFpsUnlocked();
 void PerfHintStart(int fps_target);
 void PerfHintAddThread(int tid);
-// Adds the DXVK/engine threads found by name in /proc to the ADPF session once the engine has started them.
-void PerfHintAddNamedThreads();
 void PerfHintTarget(int fps_target);
 void PerfHintFrame(int64_t work_ns);
 struct PerfHintSnapshot {

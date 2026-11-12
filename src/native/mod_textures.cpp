@@ -44,45 +44,6 @@ void Put32(uint8_t* p, uint32_t value) {
 
 uint32_t RotateRight(uint32_t value, unsigned bits) { return (value >> bits) | (value << (32 - bits)); }
 
-constexpr uint32_t kSha256K[64] = {
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
-
-// Portable SHA-256 compression, used as the reference and as the fallback when the CPU has no SHA-2 extension.
-void Sha256TransformPortable(uint32_t state[8], const uint8_t* block) {
-    uint32_t w[64];
-    for (unsigned i = 0; i < 16; ++i) {
-        const uint8_t* p = block + i * 4;
-        w[i] = (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) | (uint32_t(p[2]) << 8) | p[3];
-    }
-    for (unsigned i = 16; i < 64; ++i) {
-        uint32_t s0 = RotateRight(w[i - 15], 7) ^ RotateRight(w[i - 15], 18) ^ (w[i - 15] >> 3);
-        uint32_t s1 = RotateRight(w[i - 2], 17) ^ RotateRight(w[i - 2], 19) ^ (w[i - 2] >> 10);
-        w[i] = w[i - 16] + s0 + w[i - 7] + s1;
-    }
-    uint32_t a = state[0], b = state[1], c = state[2], d = state[3];
-    uint32_t e = state[4], f = state[5], g = state[6], h = state[7];
-    for (unsigned i = 0; i < 64; ++i) {
-        uint32_t s1 = RotateRight(e, 6) ^ RotateRight(e, 11) ^ RotateRight(e, 25);
-        uint32_t choice = (e & f) ^ (~e & g);
-        uint32_t first = h + s1 + choice + kSha256K[i] + w[i];
-        uint32_t s0 = RotateRight(a, 2) ^ RotateRight(a, 13) ^ RotateRight(a, 22);
-        uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
-        uint32_t second = s0 + majority;
-        h = g; g = f; f = e; e = d + first;
-        d = c; c = b; b = a; a = first + second;
-    }
-    state[0] += a; state[1] += b; state[2] += c; state[3] += d;
-    state[4] += e; state[5] += f; state[6] += g; state[7] += h;
-}
-
-
 // Small self-contained SHA-256 used for the versioned texture-key format. No provider/OpenSSL dependency is added to
 // the Android native library.
 class Sha256 {
@@ -131,7 +92,41 @@ public:
     }
 
 private:
-    void Transform(const uint8_t* block) { Sha256TransformPortable(state_.data(), block); }
+    void Transform(const uint8_t* block) {
+        static constexpr uint32_t constants[64] = {
+            0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+            0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+            0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+            0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+            0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+            0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+            0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+            0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
+        uint32_t w[64];
+        for (unsigned i = 0; i < 16; ++i) {
+            const uint8_t* p = block + i * 4;
+            w[i] = (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) | (uint32_t(p[2]) << 8) | p[3];
+        }
+        for (unsigned i = 16; i < 64; ++i) {
+            uint32_t s0 = RotateRight(w[i - 15], 7) ^ RotateRight(w[i - 15], 18) ^ (w[i - 15] >> 3);
+            uint32_t s1 = RotateRight(w[i - 2], 17) ^ RotateRight(w[i - 2], 19) ^ (w[i - 2] >> 10);
+            w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+        }
+        uint32_t a = state_[0], b = state_[1], c = state_[2], d = state_[3];
+        uint32_t e = state_[4], f = state_[5], g = state_[6], h = state_[7];
+        for (unsigned i = 0; i < 64; ++i) {
+            uint32_t s1 = RotateRight(e, 6) ^ RotateRight(e, 11) ^ RotateRight(e, 25);
+            uint32_t choice = (e & f) ^ (~e & g);
+            uint32_t first = h + s1 + choice + constants[i] + w[i];
+            uint32_t s0 = RotateRight(a, 2) ^ RotateRight(a, 13) ^ RotateRight(a, 22);
+            uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
+            uint32_t second = s0 + majority;
+            h = g; g = f; f = e; e = d + first;
+            d = c; c = b; b = a; a = first + second;
+        }
+        state_[0] += a; state_[1] += b; state_[2] += c; state_[3] += d;
+        state_[4] += e; state_[5] += f; state_[6] += g; state_[7] += h;
+    }
 
     std::array<uint32_t, 8> state_;
     std::array<uint8_t, 64> block_{};
@@ -284,34 +279,6 @@ bool LoadDds(const std::string& path, Dds* output, std::string* error) {
     return true;
 }
 
-// Reads only the 128-byte header: enough to know whether a texture of a given format and size could match at all.
-bool PeekDdsShape(const std::string& path, uint32_t* format, uint32_t* width, uint32_t* height) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) return false;
-    std::array<uint8_t, 128> bytes{};
-    input.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
-    if (!input) return false;
-    if (memcmp(bytes.data(), "DDS ", 4) != 0 || Read32(bytes.data() + 4) != 124 ||
-        Read32(bytes.data() + 76) != 32 || Read32(bytes.data() + 112) != 0) return false;
-    *height = Read32(bytes.data() + 12);
-    *width = Read32(bytes.data() + 16);
-    const uint32_t pf_flags = Read32(bytes.data() + 80), fourcc = Read32(bytes.data() + 84);
-    uint32_t detected = 0;
-    if (pf_flags & 0x4) {
-        if (fourcc == FourCC('D', 'X', 'T', '1') || fourcc == FourCC('D', 'X', 'T', '3') ||
-            fourcc == FourCC('D', 'X', 'T', '5')) detected = fourcc;
-    } else if ((pf_flags & 0x40) && Read32(bytes.data() + 88) == 32 &&
-               Read32(bytes.data() + 92) == 0x00ff0000 && Read32(bytes.data() + 96) == 0x0000ff00 &&
-               Read32(bytes.data() + 100) == 0x000000ff) {
-        const uint32_t alpha = Read32(bytes.data() + 104);
-        if (alpha == 0xff000000) detected = kA8R8G8B8;
-        else if (alpha == 0) detected = kX8R8G8B8;
-    }
-    if (!detected || !*width || !*height || *width > 32768 || *height > 32768) return false;
-    *format = detected;
-    return true;
-}
-
 // Only the requested mip is temporary. Large packs do not accumulate a second permanent copy of every DDS payload.
 bool ReadDdsLevel(const Dds& dds, uint32_t level, uint32_t destination_pitch, void* destination) {
     if (!destination || level >= dds.levels.size()) return false;
@@ -352,19 +319,7 @@ struct TextureState {
     bool logged = false;
 };
 
-// Item 40: the digest of a texture is only interesting if some replacement could possibly match it. A replacement can
-// only match when its format and base dimensions are identical (that is enforced when the DDS is loaded), so the set of
-// candidate shapes is known from the DDS headers alone. Textures whose shape has no candidate skip the SHA-256 pass
-// entirely - which is almost all of them: a texture pack replaces a handful of images out of thousands. When any header
-// cannot be read the shortcut disables itself, because then "no candidate" is no longer provable.
-using ShapeKey = uint64_t;
-ShapeKey ShapeOf(uint32_t format, uint32_t width, uint32_t height) {
-    return (uint64_t(format) << 32) | (uint64_t(width) << 16) | uint64_t(height & 0xffff);
-}
-
 std::mutex g_mutex;
-std::unordered_set<ShapeKey> g_candidate_shapes;
-bool g_shape_index_complete = true;
 std::unordered_map<std::string, Replacement> g_replacements;
 std::unordered_set<void*> g_tracked;
 std::unordered_map<void*, TextureState> g_states;
@@ -424,16 +379,7 @@ void LoadMappings(const std::vector<ModEntry>& mods) {
             }
             Replacement replacement;
             replacement.path = path;
-            if (g_replacements.emplace(key, std::move(replacement)).second) {
-                ++accepted;
-                uint32_t shape_format = 0, shape_width = 0, shape_height = 0;
-                if (PeekDdsShape(path, &shape_format, &shape_width, &shape_height)) {
-                    g_candidate_shapes.insert(ShapeOf(shape_format, shape_width, shape_height));
-                } else {
-                    // Conservative: without the header the shape cannot be excluded, so every texture keeps hashing.
-                    g_shape_index_complete = false;
-                }
-            }
+            if (g_replacements.emplace(key, std::move(replacement)).second) ++accepted;
         }
         Log("mods: %s texture mappings=%u", mod.id.c_str(), accepted);
     }
@@ -501,8 +447,6 @@ void DumpOriginal(const std::string& key, uint32_t format, uint32_t width, uint3
 void ModTexturesInitialize(const std::vector<ModEntry>& mods) {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_replacements.clear();
-    g_candidate_shapes.clear();
-    g_shape_index_complete = true;
     g_tracked.clear();
     g_states.clear();
     g_dumped.clear();
@@ -545,9 +489,6 @@ void ModTexturesReplace(void* host, uint32_t level, uint32_t format, uint32_t wi
         state.format = format;
         state.width = width;
         state.height = height;
-        if (!g_dump && g_shape_index_complete && !g_candidate_shapes.count(ShapeOf(format, width, height))) {
-            return;  // no replacement has this shape: the digest cannot match anything
-        }
         state.key = TextureKey(format, width, height, pixels, pitch, tight_pitch, rows);
         auto found = g_replacements.find(state.key);
         if (found != g_replacements.end()) state.replacement = &found->second;

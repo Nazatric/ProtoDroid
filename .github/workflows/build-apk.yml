@@ -33,26 +33,6 @@ on:
     types: [publish-apk-release]
 
 jobs:
-  perf-critic:
-    # The performance programme (docs/perf/67-items.md) is scored by a critic that re-verifies every claim against the
-    # tree and fails below 8.5. It runs on every push because the checks are source-shape assertions plus the host
-    # tests: cheap, and it is the only thing standing between a plausible-looking change and a verified one.
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Score the performance programme
-        run: |
-          python3 tools/perf_critic.py --verbose --annotations --min 8.5
-      - name: Verify the Java sources structurally
-        run: |
-          python3 tools/test_java_sources.py --verbose
-          python3 tools/test_java_sources.py --self-test
-      - name: Prove the critic can fail
-        # A gate that cannot fail is decoration: this mutates a throwaway copy of the tree and requires the score to drop,
-        # including below 8.5 when a critical regression is reintroduced.
-        run: |
-          python3 tools/test_perf_critic.py
-
   bink-tests:
     runs-on: ubuntu-24.04
     steps:
@@ -365,9 +345,6 @@ jobs:
 
       - name: Test ordinary-play hot-path and failed-driver recovery policies
         run: python3 tools/test_runtime_performance.py
-
-      - name: Test performance-evidence comparability guards
-        run: python3 tools/test_perf_evidence.py
 
       - name: Test compatibility controls and graphics policies
         run: python3 tools/test_compatibility_batch.py

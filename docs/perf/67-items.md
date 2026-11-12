@@ -1,5 +1,13 @@
 # ProtoDroid performance program: the 67 items
 
+> **Superseded (v1.1 adoption).** The engine sources in this branch were replaced with the user-supplied
+> `protodroid-v1.1-src.zip` on the user's instruction: that tree is measurably faster on the device than this programme's
+> output, and a faster engine is the acceptance criterion that wins. The 67-item work, its critic and its gate are kept
+> in Git history (`965192e` and its ancestors) and this ledger stays as the record of what was tried, measured and
+> rejected - it no longer describes the shipping sources. What survived the adoption on purpose: the CI build path, the
+> APK verification step, and the launcher/build resilience work in `.github/`.
+
+
 This is the working ledger for the 67-issue performance review of ProtoDroid (Android, ARM64, Snapdragon-class
 device). It records, for every item, what the problem was, what was changed, what could **not** be changed from this
 side, and how the result is checked. `tools/perf_critic.py` scores this ledger and re-verifies each claim against the

@@ -15,7 +15,7 @@ import re
 import tempfile
 
 CODE_RE = re.compile(r'android:versionCode="([0-9]+)"')
-NAME_RE = re.compile(r'android:versionName="([0-9]+)\.([0-9]+)"')
+NAME_RE = re.compile(r'android:versionName="([0-9]+)\.([0-9]+)(?:\.([0-9]+))?"')
 MAX_VERSION_CODE = 2_100_000_000
 
 
@@ -32,15 +32,22 @@ def read_version(text: str) -> tuple[str, int]:
     if not 1 <= code <= MAX_VERSION_CODE:
         raise VersionError(f"android:versionCode must be between 1 and {MAX_VERSION_CODE}")
     name_match = name_matches[0]
-    return f"{int(name_match.group(1))}.{int(name_match.group(2))}", code
+    name = f"{int(name_match.group(1))}.{int(name_match.group(2))}"
+    if name_match.group(3) is not None:
+        name += f".{int(name_match.group(3))}"
+    return name, code
 
 
 def bumped_text(text: str) -> tuple[str, str, int, str, int]:
     old_name, old_code = read_version(text)
     if old_code == MAX_VERSION_CODE:
         raise VersionError("android:versionCode cannot be incremented further")
-    major, minor = (int(part) for part in old_name.split("."))
-    new_name = f"{major}.{minor + 1}"
+    parts = [int(part) for part in old_name.split(".")]
+    if len(parts) == 3:
+        parts[2] += 1  # major.minor.patch releases increment the patch
+    else:
+        parts[1] += 1
+    new_name = ".".join(str(part) for part in parts)
     new_code = old_code + 1
     new_text, code_count = CODE_RE.subn(f'android:versionCode="{new_code}"', text, count=1)
     new_text, name_count = NAME_RE.subn(f'android:versionName="{new_name}"', new_text, count=1)

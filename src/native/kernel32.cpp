@@ -2,22 +2,15 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <fnmatch.h>
-#include <pthread.h>
 #include <sched.h>
-#include <sys/prctl.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/time.h>
 #include <unistd.h>
-#if defined(__linux__)
-#include <linux/futex.h>
-#include <sys/syscall.h>
-#endif
 
 #include <algorithm>
 #include <atomic>
-#include <climits>
 #include <chrono>
 #include <cstring>
 #include <ctime>
@@ -26,7 +19,9 @@
 #include <vector>
 
 #include "win.h"
+#include "sync_futex.h"
 #include "cpu_affinity.h"
+#include "prime_affinity.h"
 #include "diagnostics.h"
 #include "guest_time.h"
 #include "mod_platform.h"
@@ -46,81 +41,17 @@ constexpr uint32_t kMaxHandles = 1u << 16;
 std::mutex g_handles_mutex;
 std::atomic<KObject*> g_handles[kMaxHandles];
 uint32_t g_handles_used = 0;  // slots below this have been handed out at least once
-// Freed indices, so creating a handle is O(1) instead of an O(n) scan from slot 0 that got slower as the game went on.
-std::vector<uint32_t> g_handle_free;
-
-// Objects closed while another thread may still hold the pointer it just looked up are deleted a couple of seconds
-// later, never in the middle of that thread's wait.
-struct DeferredFree {
-    KObject* obj;
-    std::chrono::steady_clock::time_point when;
-};
-std::vector<DeferredFree> g_deferred;  // under g_handles_mutex
-
-void ReapDeferredLocked() {
-    const auto now = std::chrono::steady_clock::now();
-    size_t keep = 0;
-    for (size_t i = 0; i < g_deferred.size(); ++i) {
-        if (now >= g_deferred[i].when) {
-            if (g_deferred[i].obj->refs.load() == 0) delete g_deferred[i].obj;
-        } else {
-            g_deferred[keep++] = g_deferred[i];
-        }
-    }
-    g_deferred.resize(keep);
-}
 
 thread_local uint32_t tl_last_error = 0;
-
-// ---- futex: the single-object wait path ----
-// Signalling an event and waiting on it are the engine job system's hottest pair (its own comment: "tens of thousands
-// of times a second"). Doing that under one process-wide mutex bounced that lock's cache line between clusters, so a
-// wait or signal on a plain event or semaphore now runs entirely on the object's own atomic word, with the kernel
-// only involved when the fast path cannot complete (FUTEX_WAIT_PRIVATE/FUTEX_WAKE_PRIVATE on the guest window, which
-// is private anonymous memory shared by this process only).
-#if defined(__linux__)
-int FutexWait(std::atomic<uint32_t>* word, uint32_t expect, int64_t ms) {
-    timespec timeout;
-    timespec* tp = nullptr;
-    if (ms >= 0) {
-        timeout.tv_sec = ms / 1000;
-        timeout.tv_nsec = (ms % 1000) * 1000000;
-        tp = &timeout;
-    }
-    return static_cast<int>(syscall(SYS_futex, reinterpret_cast<uint32_t*>(word), FUTEX_WAIT_PRIVATE, expect, tp,
-                                    nullptr, 0));
-}
-void FutexWake(std::atomic<uint32_t>* word, int count) {
-    syscall(SYS_futex, reinterpret_cast<uint32_t*>(word), FUTEX_WAKE_PRIVATE, count, nullptr, nullptr, 0);
-}
-// A short spin before sleeping: contended job-system events are released within microseconds, and sleeping there
-// costs a futex round trip and a scheduler wake-up.
-inline void ShortSpin() {
-#if defined(__aarch64__)
-    asm volatile("yield" ::: "memory");
-#else
-    __builtin_ia32_pause();
-#endif
-}
-#else
-int FutexWait(std::atomic<uint32_t>*, uint32_t, int64_t) { return -1; }
-void FutexWake(std::atomic<uint32_t>*, int) {}
-inline void ShortSpin() {}
-#endif
 
 }  // namespace
 
 uint32_t NewHandle(KObject* obj) {
     std::lock_guard<std::mutex> lock(g_handles_mutex);
-    uint32_t i;
-    if (!g_handle_free.empty()) {
-        i = g_handle_free.back();
-        g_handle_free.pop_back();
-    } else {
-        i = g_handles_used;
-        if (i == kMaxHandles) Fatal("out of kernel handles");
-        ++g_handles_used;
-    }
+    uint32_t i = 0;
+    while (i < g_handles_used && g_handles[i].load(std::memory_order_relaxed)) ++i;
+    if (i == kMaxHandles) Fatal("out of kernel handles");
+    if (i == g_handles_used) ++g_handles_used;
     g_handles[i].store(obj, std::memory_order_release);
     return 0x100 + 4 * i;
 }
@@ -131,21 +62,45 @@ KObject* HandleObject(uint32_t handle) {
     return i < kMaxHandles ? g_handles[i].load(std::memory_order_acquire) : nullptr;
 }
 
+// Pins the object against a concurrent CloseHandle so the lock-free fast paths can touch it
+// without g_kernel_mutex. Every reference transition (pin, unpin, close) happens under
+// g_handles_mutex: the critical section is two atomic ops on an uncontended lock, and it is
+// what makes object lifetime exact — a load-then-increment outside the lock could land on an
+// object that CloseHandle had already dropped to zero references and freed, corrupting the
+// count and later deleting an object a waiter still sleeps on. Objects die exactly once, on
+// whichever transition takes the count to zero; Thread objects are immortal by design because
+// the detached host thread and the generic wait path read them without holding a handle.
+KObject* HandleObjectPinned(uint32_t handle) {
+    if (handle < 0x100 || (handle & 3)) return nullptr;
+    uint32_t i = (handle - 0x100) / 4;
+    if (i >= kMaxHandles) return nullptr;
+    std::lock_guard<std::mutex> lock(g_handles_mutex);
+    KObject* o = g_handles[i].load(std::memory_order_relaxed);
+    if (o) o->refs.fetch_add(1, std::memory_order_relaxed);
+    return o;
+}
+
+void ReleasePinnedObject(KObject* o) {
+    bool dead = false;
+    {
+        std::lock_guard<std::mutex> lock(g_handles_mutex);
+        dead = o->refs.fetch_sub(1, std::memory_order_acq_rel) == 1 && o->type != KType::Thread;
+    }
+    if (dead) delete o;  // freed outside the lock: the destructor closes fds and joins nothing
+}
+
 void CloseKernelHandle(uint32_t handle) {
     KObject* obj = nullptr;
+    bool dead = false;
     {
         std::lock_guard<std::mutex> lock(g_handles_mutex);
         if (handle < 0x100 || (handle & 3)) return;
         uint32_t i = (handle - 0x100) / 4;
         if (i >= kMaxHandles) return;
-        obj = g_handles[i].exchange(nullptr);
-        if (obj) g_handle_free.push_back(i);
-        ReapDeferredLocked();
+        obj = g_handles[i].exchange(nullptr, std::memory_order_acq_rel);
+        if (obj) dead = obj->refs.fetch_sub(1, std::memory_order_acq_rel) == 1 && obj->type != KType::Thread;
     }
-    if (obj && obj->refs.fetch_sub(1) == 1 && obj->type != KType::Thread) {
-        std::lock_guard<std::mutex> lock(g_handles_mutex);
-        g_deferred.push_back({obj, std::chrono::steady_clock::now() + std::chrono::seconds(2)});
-    }
+    if (dead) delete obj;
 }
 
 void SetLastError(uint32_t code) { tl_last_error = code; }
@@ -250,27 +205,39 @@ std::string TakeIoEvents() {
 namespace {
 
 // ---- waitable objects ----
+// Events and semaphores carry their state in the futex primitives from sync_futex.h: the hot
+// paths (WaitForSingleObject, SetEvent, ReleaseSemaphore) run lock-free, while the generic
+// condition-variable path below (WaitForMultipleObjects, thread waits) still reaches the same
+// state through Signaled/Acquire under g_kernel_mutex. A fast signal forwards a Notify when
+// generic sleepers are registered (KObject::cv_waiters), so no one can miss a wake. The
+// primitives themselves carry the correctness contract for the park/consume races (see the
+// sync_futex.h header: tokens live in the count, sleepers never park on an available token).
 struct Event : KObject {
-    Event(bool manual, bool state) : KObject(KType::Event), manual(manual) { signaled.store(state ? 1u : 0u); }
-    bool Signaled(uint32_t) override { return signaled.load(std::memory_order_acquire) != 0; }
+    Event(bool manual, bool state) : KObject(KType::Event), fast(manual, state), manual(manual) {}
+    protodroid::FastEvent fast;
+    bool Signaled(uint32_t) override { return fast.IsSetForDiagnostics(); }
     void Acquire(uint32_t) override {
-        if (!manual) signaled.store(0, std::memory_order_release);
+        if (!manual) fast.Reset();  // auto-reset: the generic path consumes the signal
     }
-    std::atomic<uint32_t>* WaitWord() override { return &signaled; }
     bool manual;
-    std::atomic<uint32_t> signaled{0};
 };
 
 struct Semaphore : KObject {
-    Semaphore(int32_t count, int32_t max) : KObject(KType::Semaphore), max(max) {
-        this->count.store(uint32_t(count), std::memory_order_release);
-    }
-    bool Signaled(uint32_t) override { return count.load(std::memory_order_acquire) != 0; }
-    void Acquire(uint32_t) override { count.fetch_sub(1, std::memory_order_acq_rel); }
-    std::atomic<uint32_t>* WaitWord() override { return &count; }
-    std::atomic<uint32_t> count{0};
-    int32_t max;
+    Semaphore(int32_t count, int32_t max)
+        : KObject(KType::Semaphore), fast(count, max == 0 ? INT32_MAX : max) {}
+    protodroid::FastSemaphore fast;
+    bool Signaled(uint32_t) override { return fast.LoadForDiagnostics() > 0; }
+    void Acquire(uint32_t) override { fast.TryConsume(); }
 };
+
+// Signals an event through the fast path, forwarding a Notify for generic sleepers.
+void SignalEvent(Event* e) {
+    e->fast.Set();
+    if (e->cv_waiters.load(std::memory_order_acquire) != 0) {
+        std::lock_guard<std::mutex> lock(g_kernel_mutex);
+        e->Notify();
+    }
+}
 
 struct Mutex : KObject {
     Mutex() : KObject(KType::Mutex) {}
@@ -300,21 +267,14 @@ uint32_t CurrentTid() { return CurrentThread()->id; }
 // that object's waiters (the engine's job system signals and waits tens of thousands of times a second).
 template <typename Pred>
 bool WaitKernel(std::unique_lock<std::mutex>& lock, uint32_t ms, KObject* const* objs, size_t n, Pred pred) {
-    // A short spin first: the engine signals job-system events within microseconds of a worker waiting, and sleeping
-    // on one costs a futex round trip plus a scheduler wake-up.
-    for (int spin = 0; spin < 64; ++spin) {
-        if (pred()) return true;
-        if (ms == 0) return false;
-        ShortSpin();
-    }
+    if (pred()) return true;
+    if (ms == 0) return false;
     thread_local KWaiter self;
-    // Registered under the lock; the counters tell the single-object fast path that this object also has waiters it
-    // must notify through the shared condition variables.
     for (size_t i = 0; i < n; ++i)
-        if (objs[i]) {
-            objs[i]->legacy_waiters.fetch_add(1, std::memory_order_relaxed);
-            objs[i]->waiters.push_back(&self);
-        }
+        if (objs[i]) objs[i]->waiters.push_back(&self);
+    // Registered generic sleepers also make the lock-free signalers forward a Notify.
+    for (size_t i = 0; i < n; ++i)
+        if (objs[i]) objs[i]->cv_waiters.fetch_add(1, std::memory_order_release);
     bool ok;
     if (ms == 0xffffffffu) {
         self.cv.wait(lock, pred);
@@ -324,7 +284,7 @@ bool WaitKernel(std::unique_lock<std::mutex>& lock, uint32_t ms, KObject* const*
     }
     for (size_t i = 0; i < n; ++i) {
         if (!objs[i]) continue;
-        objs[i]->legacy_waiters.fetch_sub(1, std::memory_order_relaxed);
+        objs[i]->cv_waiters.fetch_sub(1, std::memory_order_release);
         auto& w = objs[i]->waiters;
         for (size_t k = 0; k < w.size(); ++k) {
             if (w[k] == &self) {
@@ -345,11 +305,6 @@ struct File : KObject {
     }
     int fd = -1;
     std::string path;  // retained for rare slow-I/O diagnostics, not accessed on the normal read path
-    // Item 51: the engine streams the RCF/p3d archives sequentially, but every read was forwarded one-to-one, so each
-    // small read paid a full FUSE round trip and the kernel never prefetched ahead. `next`/`sequential` detect the
-    // sequential pattern per handle; when it holds, the next 512 KiB are hinted to the kernel as needed.
-    int64_t next = 0;
-    bool sequential = false;
 };
 
 struct Find : KObject {
@@ -465,96 +420,23 @@ void WriteSystemTime(uint32_t out, const struct tm& t, int ms) {
     W16(out + 14, uint16_t(ms));
 }
 
-// ---- critical sections ----
-// The lock state lives in the guest's own CRITICAL_SECTION, which is 24 bytes and only ever touched through these
-// handlers, so the layout is ours: [0] lock word (0 free, 1 held), [4] owning guest thread id, [8] recursion count,
-// [12] spin count. Fast path is one CAS. Contended sections spin with the ARM yield hint and only then enter the kernel
-// with FUTEX_WAIT_PRIVATE on the lock word. The previous implementation did a per-thread unordered_map lookup (hash plus
-// bucket chase) on every Enter/Leave/TryEnter and then took a std::recursive_mutex that never spun, so a short contended
-// section forced a scheduler round trip, and DeleteCriticalSection had nothing to free because hosts mutexes leaked.
-constexpr uint32_t kCsSpin = 128;
+// ---- critical sections: host recursive mutexes keyed by the guest CRITICAL_SECTION address ----
+std::mutex g_cs_mutex;
+std::unordered_map<uint32_t, std::recursive_mutex*> g_cs;
 
-inline std::atomic<uint32_t>* CsWord(uint32_t cs) { return reinterpret_cast<std::atomic<uint32_t>*>(Ptr<uint32_t>(cs)); }
-
-void CsReset(uint32_t cs) {
-    for (int i = 0; i < 6; ++i) W32(cs + 4 * i, 0);
+std::recursive_mutex* CriticalSectionSlow(uint32_t cs) {
+    std::lock_guard<std::mutex> lock(g_cs_mutex);
+    auto& m = g_cs[cs];
+    if (!m) m = new std::recursive_mutex();
+    return m;
 }
 
-void CsAcquireSlow(std::atomic<uint32_t>* word) {
-    for (;;) {
-        for (int spin = 0; spin < kCsSpin; ++spin) {
-            uint32_t spin_expected = 0;
-            if (word->compare_exchange_weak(spin_expected, 1, std::memory_order_acquire)) return;
-            ShortSpin();
-        }
-#if defined(__linux__)
-        uint32_t taken = 1;
-        if (!word->compare_exchange_strong(taken, 1, std::memory_order_acquire) && taken == 1) {
-            // Still held: sleep until the holder releases it (the release stores 0 and wakes one waiter).
-            FutexWait(word, 1, -1);
-        }
-#else
-        uint32_t yield_expected = 0;
-        while (!word->compare_exchange_weak(yield_expected, 1, std::memory_order_acquire)) {
-            yield_expected = 0;
-            std::this_thread::yield();
-        }
-        return;
-#endif
-        uint32_t retry = 0;
-        if (word->compare_exchange_strong(retry, 1, std::memory_order_acquire)) return;
-    }
-}
-
-void EnterCriticalSectionGuest(uint32_t cs) {
-    std::atomic<uint32_t>* word = CsWord(cs);
-    const uint32_t tid = CurrentTid();
-    uint32_t expected = 0;
-    if (word->compare_exchange_strong(expected, 1, std::memory_order_acquire)) {
-        W32(cs + 4, tid);
-        W32(cs + 8, 1);
-        return;
-    }
-    if (R32(cs + 4) == tid) {  // recursive section: the owner never blocks on itself
-        W32(cs + 8, R32(cs + 8) + 1);
-        return;
-    }
-    CsAcquireSlow(word);
-    W32(cs + 4, tid);
-    W32(cs + 8, 1);
-}
-
-void LeaveCriticalSectionGuest(uint32_t cs) {
-    const uint32_t tid = CurrentTid();
-    if (R32(cs + 4) != tid) {
-        Log("LeaveCriticalSection(%08x) from a thread that does not own it", cs);
-        return;
-    }
-    const uint32_t recursion = R32(cs + 8);
-    if (recursion > 1) {
-        W32(cs + 8, recursion - 1);
-        return;
-    }
-    W32(cs + 4, 0);
-    W32(cs + 8, 0);
-    CsWord(cs)->store(0, std::memory_order_release);
-    FutexWake(CsWord(cs), 1);
-}
-
-bool TryEnterCriticalSectionGuest(uint32_t cs) {
-    std::atomic<uint32_t>* word = CsWord(cs);
-    const uint32_t tid = CurrentTid();
-    uint32_t expected = 0;
-    if (word->compare_exchange_strong(expected, 1, std::memory_order_acquire)) {
-        W32(cs + 4, tid);
-        W32(cs + 8, 1);
-        return true;
-    }
-    if (R32(cs + 4) == tid) {
-        W32(cs + 8, R32(cs + 8) + 1);
-        return true;
-    }
-    return false;
+// The mapping never changes (DeleteCriticalSection keeps the mutex), so each thread caches its lookups.
+std::recursive_mutex* CriticalSection(uint32_t cs) {
+    thread_local std::unordered_map<uint32_t, std::recursive_mutex*> cache;
+    auto& m = cache[cs];
+    if (!m) m = CriticalSectionSlow(cs);
+    return m;
 }
 
 // ---- TLS ----
@@ -719,79 +601,35 @@ K(FormatMessageA) {
 }
 
 // ---- threads ----
-namespace {
-
-struct ThreadStart {
-    Thread* thread;
-    uint32_t stack, start, param;
-};
-
-// Guest threads run on their own host thread. bionic's default 1 MiB stack is smaller than what the recompiled C
-// frames need (the fiber code already budgets 4 MiB for the same reason), so the stack is set explicitly. Threads are
-// named so simpleperf/Perfetto and the ADPF code can find the render, worker and loader threads on a trace.
-void* ThreadMain(void* argument) {
-    auto* s = static_cast<ThreadStart*>(argument);
-    GuestThread* g = AttachThread(s->stack);
-    s->thread->host_tid = int(gettid());
-    {
-        std::lock_guard<std::mutex> lock(g_kernel_mutex);
-        s->thread->id = g->id;
-    }
-    g_kernel_cv.notify_all();  // the creator waits for this instead of spinning on yield()
-    char name[24];
-    snprintf(name, sizeof(name), "proto-guest-%u", g->id >> 2);
-    pthread_setname_np(pthread_self(), name);
-    SetThreadTimerslack();
-    {
-        std::unique_lock<std::mutex> lock(g_kernel_mutex);
-        g_kernel_cv.wait(lock, [s] { return !s->thread->suspended; });
-    }
-    const uint32_t code = GuestCall(s->start, {s->param});
-    // Release the guest stack and TEB before the host thread exits (they used to stay mapped for the whole session).
-    DetachThread();
-    {
-        std::lock_guard<std::mutex> lock(g_kernel_mutex);
-        s->thread->exit_code = code;
-        s->thread->done = true;
-        s->thread->Notify();
-    }
-    delete s;
-    return nullptr;
-}
-
-}  // namespace
-
 K(CreateThread) {
     uint32_t stack = Arg(c, 1), start = Arg(c, 2), param = Arg(c, 3), flags = Arg(c, 4), tid_out = Arg(c, 5);
     auto* t = new Thread();
     t->refs = 2;
     t->suspended = (flags & 4) != 0;  // CREATE_SUSPENDED
     uint32_t handle = NewHandle(t);
-    auto* s = new ThreadStart{t, stack, start, param};
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setstacksize(&attr, 8u << 20);  // virtual memory only: pages are committed as the stack is used
-    pthread_t host;
-    if (pthread_create(&host, &attr, ThreadMain, s) != 0) {
-        pthread_attr_destroy(&attr);
-        delete s;
-        SetLastError(8);  // ERROR_NOT_ENOUGH_MEMORY
-        Return(c, 0, 6);
-        return;
-    }
-    pthread_attr_destroy(&attr);
-    pthread_detach(host);
-    uint32_t id = 0;
-    {
-        std::unique_lock<std::mutex> lock(g_kernel_mutex);
-        g_kernel_cv.wait(lock, [t] { return t->id != 0; });
-        id = t->id;
-    }
-    if (tid_out) W32(tid_out, id);
+    std::atomic<uint32_t> id{0};
+    std::thread([t, stack, start, param, &id]() {
+        ApplyGuestThreadAffinity(SettingInt("affinity_mode", 1));
+        GuestThread* g = AttachThread(stack);
+        t->host_tid = int(gettid());
+        t->id = g->id;
+        id.store(g->id);
+        {
+            std::unique_lock<std::mutex> lock(g_kernel_mutex);
+            g_kernel_cv.wait(lock, [t] { return !t->suspended; });
+        }
+        uint32_t code = GuestCall(start, {param});
+        std::lock_guard<std::mutex> lock(g_kernel_mutex);
+        t->exit_code = code;
+        t->done = true;
+        t->Notify();
+    }).detach();
+    while (!id.load()) std::this_thread::yield();
+    if (tid_out) W32(tid_out, id.load());
     Return(c, handle, 6);
 }
 K(ResumeThread) {
-    auto* t = static_cast<Thread*>(HandleObject(Arg(c, 0)));
+    auto* t = static_cast<Thread*>(HandleObjectPinned(Arg(c, 0)));
     uint32_t prev = 0;
     if (t && t->type == KType::Thread) {
         std::lock_guard<std::mutex> lock(g_kernel_mutex);
@@ -799,6 +637,7 @@ K(ResumeThread) {
         t->suspended = false;
         g_kernel_cv.notify_all();
     }
+    ReleasePinnedObject(t);
     Return(c, prev, 1);
 }
 K(SuspendThread) {
@@ -814,49 +653,23 @@ K(SetThreadPriority) {
     if (h == kCurrentThread) {
         tid = int(gettid());
     } else {
-        std::lock_guard<std::mutex> lock(g_kernel_mutex);
-        KObject* o = HandleObject(h);
-        if (o && o->type == KType::Thread) tid = static_cast<Thread*>(o)->host_tid;
+        KObject* o = HandleObjectPinned(h);
+        if (o && o->type == KType::Thread) {
+            std::lock_guard<std::mutex> lock(g_kernel_mutex);
+            tid = static_cast<Thread*>(o)->host_tid;
+        }
+        ReleasePinnedObject(o);
     }
     int nice = prio >= 15 ? -10 : prio <= -15 ? 10 : -2 * prio;  // TIME_CRITICAL / IDLE / -2..2
     if (tid) {
-        // No log line per call: the engine sets priorities while it is still starting threads, and a log line here
-        // takes the process-wide log mutex and writes to storage.
-        setpriority(PRIO_PROCESS, id_t(tid), nice);
-        if (nice > 0) {
-            // THREAD_PRIORITY_IDLE / BELOW_NORMAL: background/polling threads must never compete with the render
-            // thread for a big core once ADPF or the scheduler looks at utilisation.
-            sched_param sp{};
-            sched_setscheduler(id_t(tid), SCHED_BATCH, &sp);
-        }
-        // THREAD_PRIORITY_HIGHEST: the engine's render thread; TIME_CRITICAL: its audio feeder. Engine job workers
-        // (normal priority) are frame-critical too, so they join the ADPF session as well.
-        if (prio >= 0 && tid != int(gettid())) PerfHintAddThread(tid);
+        int r = setpriority(PRIO_PROCESS, id_t(tid), nice);
+        Log("SetThreadPriority(%d) -> nice %d on tid %d%s", prio, nice, tid, r == 0 ? "" : " (not permitted)");
+        // THREAD_PRIORITY_HIGHEST: the engine's render thread; TIME_CRITICAL: its audio feeder
+        if (prio == 2 || prio >= 15) PerfHintAddThread(tid);
     }
     Return(c, 1, 2);
 }
-uint32_t HostProcessAffinityMask();
-
-// Real affinity: the guest mask is applied to the calling thread and the previous mask is returned. Android keeps the
-// engine free to spread work across cores, so this only ever narrows to the CPUs the guest asked for.
-K(SetThreadAffinityMask) {
-    const uint32_t mask = Arg(c, 1);
-    cpu_set_t cpus;
-    CPU_ZERO(&cpus);
-    uint32_t applied = 0;
-    for (uint32_t i = 0; i < 32; ++i) {
-        if (mask & (1u << i)) {
-            CPU_SET(i, &cpus);
-            applied |= 1u << i;
-        }
-    }
-    const uint32_t previous = HostProcessAffinityMask();
-    if (applied && sched_setaffinity(0, sizeof(cpus), &cpus) != 0) {
-        Return(c, 0, 2);
-        return;
-    }
-    Return(c, previous, 2);
-}
+K(SetThreadAffinityMask) { Return(c, 1, 2); }
 
 uint32_t HostProcessAffinityMask() {
     cpu_set_t cpus;
@@ -881,9 +694,12 @@ K(GetProcessAffinityMask) {
     Return(c, 1, 3);
 }
 K(GetExitCodeThread) {
-    auto* t = static_cast<Thread*>(HandleObject(Arg(c, 0)));
-    std::lock_guard<std::mutex> lock(g_kernel_mutex);
-    W32(Arg(c, 1), t && t->type == KType::Thread ? t->exit_code : 0);
+    auto* t = static_cast<Thread*>(HandleObjectPinned(Arg(c, 0)));
+    {
+        std::lock_guard<std::mutex> lock(g_kernel_mutex);
+        W32(Arg(c, 1), t && t->type == KType::Thread ? t->exit_code : 0);
+    }
+    ReleasePinnedObject(t);
     Return(c, 1, 2);
 }
 K(TerminateThread) {
@@ -892,23 +708,9 @@ K(TerminateThread) {
 }
 K(ExitThread) { Fatal("ExitThread(%u): not supported yet", Arg(c, 0)); }
 K(Sleep) {
-    const uint32_t ms = Arg(c, 0);
-    if (ms == 0) {
-        // Sleep(0) means "give up the rest of my timeslice". A guest that calls it in a tight poll loop keeps its core
-        // runnable forever, which on Android shows up as a big core pinned at 100% (heat and battery) for no progress.
-        // After a burst of yields the thread backs off briefly so the core can actually idle.
-        static thread_local uint32_t yields = 0;
-        if (++yields < 64) {
-            std::this_thread::yield();
-        } else {
-            yields = 0;
-            std::this_thread::sleep_for(std::chrono::microseconds(200));
-        }
-    } else if (ms <= 2) {
-        std::this_thread::sleep_for(std::chrono::microseconds(ms * 1000));
-    } else {
-        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-    }
+    uint32_t ms = Arg(c, 0);
+    if (ms == 0) std::this_thread::yield();
+    else std::this_thread::sleep_for(std::chrono::milliseconds(ms));
     Return(c, 0, 1);
 }
 
@@ -958,65 +760,60 @@ K(TlsSetValue) {
 
 // ---- synchronization ----
 K(InitializeCriticalSection) {
-    CsReset(Arg(c, 0));
+    CriticalSection(Arg(c, 0));
     Return(c, 0, 1);
 }
-K(InitializeCriticalSectionAndSpinCount) {
-    CsReset(Arg(c, 0));
-    Return(c, 1, 2);
-}
-K(SetCriticalSectionSpinCount) { Return(c, Arg(c, 1), 2); }
-// The lock lives in the guest structure, so deleting it has nothing to free (the old host mutex leaked for the session).
-K(DeleteCriticalSection) {
-    CsReset(Arg(c, 0));
-    Return(c, 0, 1);
-}
+K(DeleteCriticalSection) { Return(c, 0, 1); }
 K(EnterCriticalSection) {
-    EnterCriticalSectionGuest(Arg(c, 0));
+    CriticalSection(Arg(c, 0))->lock();
     Return(c, 0, 1);
 }
 K(LeaveCriticalSection) {
-    LeaveCriticalSectionGuest(Arg(c, 0));
+    CriticalSection(Arg(c, 0))->unlock();
     Return(c, 0, 1);
 }
-K(TryEnterCriticalSection) { Return(c, TryEnterCriticalSectionGuest(Arg(c, 0)) ? 1 : 0, 1); }
+K(TryEnterCriticalSection) { Return(c, CriticalSection(Arg(c, 0))->try_lock() ? 1 : 0, 1); }
 
 K(CreateEventA) { Return(c, NewHandle(new Event(Arg(c, 1) != 0, Arg(c, 2) != 0)), 4); }
 K(SetEvent) {
-    auto* e = static_cast<Event*>(HandleObject(Arg(c, 0)));
-    if (!e || e->type != KType::Event) {
-        Return(c, 0, 1);
+    auto* e = static_cast<Event*>(HandleObjectPinned(Arg(c, 0)));
+    if (e && e->type == KType::Event) {
+        SignalEvent(e);
+        ReleasePinnedObject(e);
+        Return(c, 1, 1);
         return;
     }
-    e->signaled.store(1, std::memory_order_release);
-    FutexWake(&e->signaled, e->manual ? INT32_MAX : 1);
-    if (e->legacy_waiters.load(std::memory_order_relaxed)) {
-        std::lock_guard<std::mutex> lock(g_kernel_mutex);
-        if (e->manual) e->Notify();
-        else e->NotifyOne();
-    }
-    Return(c, 1, 1);
+    if (e) ReleasePinnedObject(e);
+    Return(c, 0, 1);
 }
 K(ResetEvent) {
-    auto* e = static_cast<Event*>(HandleObject(Arg(c, 0)));
-    if (e && e->type == KType::Event) e->signaled.store(0, std::memory_order_release);
-    Return(c, e ? 1 : 0, 1);
+    auto* e = static_cast<Event*>(HandleObjectPinned(Arg(c, 0)));
+    if (e && e->type == KType::Event) {
+        e->fast.Reset();
+        ReleasePinnedObject(e);
+        Return(c, 1, 1);
+        return;
+    }
+    if (e) ReleasePinnedObject(e);
+    Return(c, 0, 1);
 }
 K(CreateSemaphoreA) { Return(c, NewHandle(new Semaphore(int32_t(Arg(c, 1)), int32_t(Arg(c, 2)))), 4); }
 K(ReleaseSemaphore) {
-    auto* s = static_cast<Semaphore*>(HandleObject(Arg(c, 0)));
-    if (!s || s->type != KType::Semaphore) {
-        Return(c, 0, 3);
+    auto* s = static_cast<Semaphore*>(HandleObjectPinned(Arg(c, 0)));
+    if (s && s->type == KType::Semaphore) {
+        int32_t previous = 0;
+        const bool ok = s->fast.Release(int32_t(Arg(c, 1)), &previous);
+        if (Arg(c, 2)) W32(Arg(c, 2), uint32_t(previous));
+        if (ok && s->cv_waiters.load(std::memory_order_acquire) != 0) {
+            std::lock_guard<std::mutex> lock(g_kernel_mutex);
+            s->Notify();
+        }
+        ReleasePinnedObject(s);
+        Return(c, ok ? 1 : 0, 3);
         return;
     }
-    const uint32_t previous = s->count.fetch_add(Arg(c, 1), std::memory_order_acq_rel);
-    if (Arg(c, 2)) W32(Arg(c, 2), previous);
-    FutexWake(&s->count, INT32_MAX);
-    if (s->legacy_waiters.load(std::memory_order_relaxed)) {
-        std::lock_guard<std::mutex> lock(g_kernel_mutex);
-        s->Notify();
-    }
-    Return(c, 1, 3);
+    if (s) ReleasePinnedObject(s);
+    Return(c, 0, 3);
 }
 K(CreateMutexA) {
     auto* m = new Mutex();
@@ -1024,95 +821,62 @@ K(CreateMutexA) {
     Return(c, NewHandle(m), 3);
 }
 K(WaitForSingleObject) {
-    KObject* o = HandleObject(Arg(c, 0));
+    KObject* o = HandleObjectPinned(Arg(c, 0));
     if (!o) {
         SetLastError(ERROR_INVALID_HANDLE);
         Return(c, 0xffffffffu, 2);
         return;
     }
-    // Single-object wait on an event or semaphore: no process-wide lock at all. A waiter claims the object with a CAS
-    // on its own word and sleeps in the kernel only when the claim fails, so unrelated signals never block each other.
-    if (std::atomic<uint32_t>* word = o->WaitWord()) {
-        if (o->legacy_waiters.load(std::memory_order_relaxed) == 0) {
-            const uint32_t ms = Arg(c, 1);
-            const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms == 0xffffffffu ? 0 : ms);
-            const bool forever = ms == 0xffffffffu;
-            const bool auto_reset = o->type == KType::Event && !static_cast<Event*>(o)->manual;
-            for (;;) {
-                uint32_t observed = word->load(std::memory_order_acquire);
-                while (observed != 0) {
-                    if (auto_reset) {
-                        if (word->compare_exchange_weak(observed, 0, std::memory_order_acq_rel)) {
-                            Return(c, 0, 2);  // WAIT_OBJECT_0
-                            return;
-                        }
-                        continue;  // reloaded by compare_exchange_weak
-                    }
-                    if (o->type == KType::Semaphore) {
-                        if (word->compare_exchange_weak(observed, observed - 1, std::memory_order_acq_rel)) {
-                            Return(c, 0, 2);
-                            return;
-                        }
-                        continue;
-                    }
-                    Return(c, 0, 2);  // manual-reset event: stays signaled
-                    return;
-                }
-                if (ms == 0) {
-                    Return(c, 0x102, 2);  // WAIT_TIMEOUT
-                    return;
-                }
-                int64_t remaining = -1;
-                if (!forever) {
-                    const auto now = std::chrono::steady_clock::now();
-                    if (now >= deadline) {
-                        Return(c, 0x102, 2);
-                        return;
-                    }
-                    remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
-                }
-                FutexWait(word, 0, remaining);
-            }
-        }
+    const uint32_t ms = Arg(c, 1);
+    uint32_t result;
+    if (o->type == KType::Event) {
+        result = static_cast<Event*>(o)->fast.Wait(ms) ? 0u : 0x102u;
+    } else if (o->type == KType::Semaphore) {
+        result = static_cast<Semaphore*>(o)->fast.Wait(ms) ? 0u : 0x102u;
+    } else {
+        // Rare objects (threads, mutex handles, files) keep the generic path.
+        uint32_t tid = CurrentTid();
+        std::unique_lock<std::mutex> lock(g_kernel_mutex);
+        const bool ok = WaitKernel(lock, ms, &o, 1, [&] { return o->Signaled(tid); });
+        if (ok) o->Acquire(tid);
+        result = ok ? 0 : 0x102;  // WAIT_OBJECT_0 / WAIT_TIMEOUT
     }
-    uint32_t tid = CurrentTid();
-    std::unique_lock<std::mutex> lock(g_kernel_mutex);
-    bool ok = WaitKernel(lock, Arg(c, 1), &o, 1, [&] { return o->Signaled(tid); });
-    if (ok) o->Acquire(tid);
-    Return(c, ok ? 0 : 0x102, 2);  // WAIT_OBJECT_0 / WAIT_TIMEOUT
+    ReleasePinnedObject(o);
+    Return(c, result, 2);
 }
 K(WaitForMultipleObjects) {
     uint32_t n = Arg(c, 0), handles = Arg(c, 1), all = Arg(c, 2), ms = Arg(c, 3);
-    // Windows allows at most 64 handles here; the first 8 (every wait the engine makes) need no allocation at all.
-    constexpr uint32_t kInline = 8;
-    KObject* inline_objs[kInline];
-    std::vector<KObject*> heap_objs;
-    KObject** objs = inline_objs;
-    if (n > kInline) {
-        heap_objs.resize(n);
-        objs = heap_objs.data();
+    std::vector<KObject*> objs;
+    objs.reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+        // Pinned for the whole wait: the engine may CloseHandle one of these objects from
+        // another thread while this one sleeps, and an unpinned lookup would leave the wait
+        // touching freed memory.
+        objs.push_back(HandleObjectPinned(R32(handles + 4 * i)));
     }
-    for (uint32_t i = 0; i < n; ++i) objs[i] = HandleObject(R32(handles + 4 * i));
     uint32_t tid = CurrentTid();
     uint32_t which = 0x102;
-    std::unique_lock<std::mutex> lock(g_kernel_mutex);
-    WaitKernel(lock, ms, objs, n, [&] {
-        if (all) {
-            for (uint32_t i = 0; i < n; ++i)
-                if (!objs[i] || !objs[i]->Signaled(tid)) return false;
-            for (uint32_t i = 0; i < n; ++i) objs[i]->Acquire(tid);
-            which = 0;
-            return true;
-        }
-        for (uint32_t i = 0; i < n; ++i) {
-            if (objs[i] && objs[i]->Signaled(tid)) {
-                objs[i]->Acquire(tid);
-                which = i;
+    {
+        std::unique_lock<std::mutex> lock(g_kernel_mutex);
+        WaitKernel(lock, ms, objs.data(), objs.size(), [&] {
+            if (all) {
+                for (KObject* o : objs)
+                    if (!o || !o->Signaled(tid)) return false;
+                for (KObject* o : objs) o->Acquire(tid);
+                which = 0;
                 return true;
             }
-        }
-        return false;
-    });
+            for (uint32_t i = 0; i < objs.size(); ++i) {
+                if (objs[i] && objs[i]->Signaled(tid)) {
+                    objs[i]->Acquire(tid);
+                    which = i;
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
+    for (KObject* o : objs) ReleasePinnedObject(o);
     Return(c, which, 4);
 }
 K(CloseHandle) {
@@ -1165,43 +929,42 @@ K(CreateFileA) {
     }
     auto* f = new File();
     f->fd = fd;
-    // Item 51: tell the kernel how this stream will be read. The archives are read at scattered offsets (do not waste
-    // readahead on them); movies and loose audio/bink data are read straight through.
-    if (fd >= 0) {
-        std::string lowered = host;
-        for (char& ch : lowered) ch = char(tolower(static_cast<unsigned char>(ch)));
-        const bool movie = lowered.size() > 4 && lowered.compare(lowered.size() - 4, 4, ".bik") == 0;
-        const bool archive = lowered.find(".rcf") != std::string::npos || lowered.find(".p3d") != std::string::npos;
-        if (movie) posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
-        else if (archive) posix_fadvise(fd, 0, 0, POSIX_FADV_RANDOM);
-    }
     f->path = host;
     SetLastError((disposition == 2 || disposition == 4) && existed ? ERROR_ALREADY_EXISTS : 0);
     Return(c, NewHandle(f), 7);
 }
 File* FileOf(uint32_t h) {
-    KObject* o = HandleObject(h);
-    return o && o->type == KType::File ? static_cast<File*>(o) : nullptr;
+    // Pinned: the caller dereferences the File across the whole read/write syscall, and a
+    // concurrent CloseHandle from the engine's loader thread must not free it mid-operation.
+    KObject* o = HandleObjectPinned(h);
+    if (o && o->type == KType::File) return static_cast<File*>(o);
+    ReleasePinnedObject(o);
+    return nullptr;
 }
+
+// Drops the pin FileOf took. Callers follow the "return early with Return(...)" idiom, so an
+// explicit guard survives every early exit without a per-callsite release.
+struct FilePin {
+    File* file;
+    ~FilePin() { if (file) ReleasePinnedObject(file); }
+};
 // OVERLAPPED: [8] Offset, [12] OffsetHigh, [16] hEvent. I/O completes synchronously.
 void CompleteOverlapped(uint32_t ov, uint32_t bytes) {
     W32(ov, 0);
     W32(ov + 4, bytes);
     if (uint32_t ev = R32(ov + 16)) {
-        auto* e = static_cast<Event*>(HandleObject(ev & ~1u));
+        auto* e = static_cast<Event*>(HandleObjectPinned(ev & ~1u));
         if (e && e->type == KType::Event) {
-            e->signaled.store(1, std::memory_order_release);
-            FutexWake(&e->signaled, e->manual ? INT32_MAX : 1);
-            if (e->legacy_waiters.load(std::memory_order_relaxed)) {
-                std::lock_guard<std::mutex> lock(g_kernel_mutex);
-                if (e->manual) e->Notify();
-                else e->NotifyOne();
-            }
+            SignalEvent(e);
+            ReleasePinnedObject(e);
+        } else if (e) {
+            ReleasePinnedObject(e);
         }
     }
 }
 K(ReadFile) {
     File* f = FileOf(Arg(c, 0));
+    FilePin pin{f};  // holds the FileOf pin for this operation
     uint32_t buf = Arg(c, 1), n = Arg(c, 2), out = Arg(c, 3), ov = Arg(c, 4);
     if (!f) {
         if (DetailedDiagnosticsEnabled()) g_io.read_errors.fetch_add(1, std::memory_order_relaxed);
@@ -1210,17 +973,6 @@ K(ReadFile) {
         return;
     }
     const int64_t offset = ov ? int64_t(uint64_t(R32(ov + 8)) | (uint64_t(R32(ov + 12)) << 32)) : -1;
-    // Readahead: when the guest keeps reading forward, tell the kernel what comes next. posix_fadvise(WILLNEED) is
-    // advisory and costs one syscall per large step, not per read.
-    if (ov) {
-        if (offset == f->next) {
-            f->sequential = true;
-            if ((offset & 0x3ffff) == 0) posix_fadvise(f->fd, off_t(offset + 0x80000), 0x80000, POSIX_FADV_WILLNEED);
-        } else {
-            f->sequential = false;
-        }
-        f->next = offset + int64_t(n);
-    }
     const bool timing = DetailedDiagnosticsEnabled();
     const auto t0 = timing ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     ssize_t r = ov ? pread(f->fd, Ptr<void>(buf), n, off_t(offset)) : read(f->fd, Ptr<void>(buf), n);
@@ -1250,6 +1002,7 @@ K(ReadFile) {
 }
 K(WriteFile) {
     File* f = FileOf(Arg(c, 0));
+    FilePin pin{f};  // holds the FileOf pin for this operation
     uint32_t buf = Arg(c, 1), n = Arg(c, 2), out = Arg(c, 3), ov = Arg(c, 4);
     if (!f) {
         if (DetailedDiagnosticsEnabled()) g_io.write_errors.fetch_add(1, std::memory_order_relaxed);
@@ -1287,6 +1040,7 @@ K(WriteFile) {
 }
 K(SetFilePointer) {
     File* f = FileOf(Arg(c, 0));
+    FilePin pin{f};  // holds the FileOf pin for this operation
     int64_t dist = int32_t(Arg(c, 1));
     uint32_t high = Arg(c, 2);
     if (high) dist = int64_t((uint64_t(R32(high)) << 32) | Arg(c, 1));
@@ -1302,6 +1056,7 @@ K(SetFilePointer) {
 }
 K(GetFileSize) {
     File* f = FileOf(Arg(c, 0));
+    FilePin pin{f};  // holds the FileOf pin for this operation
     struct stat st;
     if (!f || fstat(f->fd, &st) != 0) {
         Return(c, 0xffffffffu, 2);
@@ -1312,11 +1067,13 @@ K(GetFileSize) {
 }
 K(SetEndOfFile) {
     File* f = FileOf(Arg(c, 0));
+    FilePin pin{f};  // holds the FileOf pin for this operation
     Return(c, f && ftruncate(f->fd, lseek(f->fd, 0, SEEK_CUR)) == 0 ? 1 : 0, 1);
 }
 K(FlushFileBuffers) { Return(c, 1, 1); }
 K(GetFileTime) {
     File* f = FileOf(Arg(c, 0));
+    FilePin pin{f};  // holds the FileOf pin for this operation
     struct stat st;
     if (!f || fstat(f->fd, &st) != 0) {
         Return(c, 0, 4);
@@ -1537,6 +1294,7 @@ ImportRegistrar g_kernel32(kKernel32);
 
 int DuplicateFileHandle(uint32_t h) {
     File* f = FileOf(h);
+    FilePin pin{f};  // holds the FileOf pin for this operation
     return f ? fcntl(f->fd, F_DUPFD_CLOEXEC, 0) : -1;
 }
 

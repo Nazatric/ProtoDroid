@@ -62,10 +62,8 @@ final class ModManager {
     }
 
     static File nativeLaunchDir(Context context) {
-        // Item 60: a stable path (it used to be a fresh random directory per launch) so the staged copies can be reused
-        // when the plugin sources have not changed. Disabled or removed plugins are still deleted from the staging tree
-        // below, so a stale copy can never survive a settings change.
-        return new File(context.getNoBackupFilesDir(), "mod-native-current");
+        // A fresh path prevents a failed cleanup from resurrecting a disabled or removed plugin on the next process.
+        return new File(context.getNoBackupFilesDir(), "mod-native-" + UUID.randomUUID());
     }
 
     static List<ModManifest> list(Context context) {
@@ -463,17 +461,6 @@ final class ModManager {
             if (stale != null) {
                 for (File old : stale) if (!old.equals(nativeRoot)) deleteTreeQuietly(old);
             }
-            // Plugins that are no longer enabled must not keep a staged copy in the stable directory.
-            Set<String> enabledIds = new HashSet<>();
-            for (ModManifest mod : list(context)) {
-                if (mod.enabled && !mod.plugin.isEmpty()) enabledIds.add(mod.id);
-            }
-            File[] stagedChildren = nativeRoot.listFiles();
-            if (stagedChildren != null) {
-                for (File child : stagedChildren) {
-                    if (child.isDirectory() && !enabledIds.contains(child.getName())) deleteTreeQuietly(child);
-                }
-            }
             if (!nativeRoot.mkdirs()) throw new IOException("Could not create private plugin launch directory");
             for (ModManifest mod : list(context)) {
                 if (!mod.enabled || mod.plugin.isEmpty()) continue;
@@ -482,14 +469,6 @@ final class ModManager {
                     if (!mod.error.isEmpty()) throw new IOException(mod.error);
                     File source = new File(mod.directory, "lib/arm64-v8a");
                     String entry = nativeDirRelative(source, mod.plugin);
-                    // Item 60: every launch used to delete the previous staging directory and copy every enabled plugin
-                    // tree again (a brand-new "mod-native-<uuid>" each time), costing hundreds of milliseconds to
-                    // seconds of main-thread I/O on slow storage. The staged copy lives under a stable name and is
-                    // reused while its size and modification time are unchanged.
-                    if (reusableStaging(source, destination, entry)) {
-                        continue;
-                    }
-                    deleteTreeQuietly(destination);
                     int[] count = {0};
                     copyNativeDirectory(source, destination, count);
                     if (!new File(destination, entry).isFile()) {
@@ -505,30 +484,6 @@ final class ModManager {
         } catch (IOException | ErrnoException | RuntimeException e) {
             Log.e(TAG, "Mod launch preparation failed", e);
         }
-    }
-
-    /** True when the previously staged copy is complete and the source has not changed since. */
-    private static boolean reusableStaging(File source, File destination, String entry) {
-        File staged = new File(destination, entry);
-        if (!staged.isFile()) return false;
-        long newestSource = 0L;
-        long totalSource = 0L;
-        java.util.ArrayDeque<File> queue = new java.util.ArrayDeque<>();
-        queue.add(source);
-        while (!queue.isEmpty()) {
-            File current = queue.removeFirst();
-            File[] children = current.listFiles();
-            if (children == null) return false;
-            for (File child : children) {
-                if (child.isDirectory()) {
-                    queue.addLast(child);
-                } else {
-                    newestSource = Math.max(newestSource, child.lastModified());
-                    totalSource += child.length();
-                }
-            }
-        }
-        return staged.lastModified() >= newestSource;
     }
 
     private static String nativeDirRelative(File nativeDir, String plugin) throws IOException {

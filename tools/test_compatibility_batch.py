@@ -72,11 +72,7 @@ assert "https://github.com/Nazatric/ProtoDroid/releases" in readme and "**VERSIO
 adapted_unlock = d3d9.split("bool AdaptedUnlock(void* tex", 1)[1].split("void ForgetResource", 1)[0]
 assert adapted_unlock.index("ModTexturesReplace") < adapted_unlock.index("DecodeDxt")
 assert adapted_unlock.index("DecodeDxt") < adapted_unlock.index("HeapFree(l.guest)")
-# The unlock entry is moved out of the map under the bridge lock and consumed outside it (the decode of a 1-2K DXT
-# level must not hold the mutex every other bridge call needs). The scratch still outlives every consumer, which is the
-# invariant this file cares about; the erase moved earlier because it can no longer reference the moved-from node.
-assert adapted_unlock.index("entry = std::move(it->second)") < adapted_unlock.index("AdaptedLock& l = entry;")
-assert "g_adapted_locks.erase(it)" in adapted_unlock.split("AdaptedLock& l = entry;", 1)[0]
+assert adapted_unlock.index("HeapFree(l.guest)") < adapted_unlock.index("g_adapted_locks.erase(it)")
 shadow_unlock = d3d9.split("void ShadowUnlock(void* object", 1)[1].split("void ForgetShadows", 1)[0]
 assert shadow_unlock.index("ModTexturesReplace") < shadow_unlock.index("D3D9ShadowCopyBack")
 assert shadow_unlock.index("D3D9ShadowCopyBack") < shadow_unlock.index("if (release_scratch)")

@@ -1,14 +1,9 @@
 // Host services for the recompiled code (runtime.h) in the native host: dispatch of computed calls, imports,
 // setjmp/longjmp, cpuid, traps.
-#include <algorithm>
-#include <atomic>
 #include <csetjmp>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
-#include <utility>
-#include <vector>
 
 #include "diagnostic_tour.h"
 #include "diagnostic_tour_probe.h"
@@ -37,56 +32,18 @@ struct HashSlot {
     uint32_t va;
     RecompFn fn;
 };
-// Published, not assigned in place: the table used to be stored into the global before it was filled, so a second
-// thread that reached a lookup while the first was still building saw a valid pointer to a half-built table and got a
-// null (or a miss) for a function that exists. That is a Fatal "neither recompiled nor an import" on whichever thread
-// loses the race. The build is serialised, the result is published with release, and readers take it with acquire.
-std::atomic<HashSlot*> g_hash{nullptr};
-std::mutex g_hash_build;
+HashSlot* g_hash = nullptr;
 
 uint32_t HashOf(uint32_t va) { return (va * 2654435761u) >> (32 - kHashBits); }
 
 void BuildHash() {
-    std::lock_guard<std::mutex> lock(g_hash_build);
-    if (g_hash.load(std::memory_order_acquire)) return;  // built while this thread waited
-    auto* table = static_cast<HashSlot*>(calloc(size_t(1) << kHashBits, sizeof(HashSlot)));
-    if (!table) Fatal("cannot allocate the recompiled-function dispatch hash");
+    g_hash = static_cast<HashSlot*>(calloc(size_t(1) << kHashBits, sizeof(HashSlot)));
+    if (!g_hash) Fatal("cannot allocate the recompiled-function dispatch hash");
     for (uint32_t i = 0; i < g_recomp_count; ++i) {
         uint32_t h = HashOf(g_recomp_table[i].va);
-        while (table[h].va) h = (h + 1) & ((1u << kHashBits) - 1);
-        table[h] = {g_recomp_table[i].va, g_recomp_table[i].fn};
+        while (g_hash[h].va) h = (h + 1) & ((1u << kHashBits) - 1);
+        g_hash[h] = {g_recomp_table[i].va, g_recomp_table[i].fn};
     }
-    g_hash.store(table, std::memory_order_release);
-}
-
-// Item 14: a monomorphic inline cache in front of the hash. C++ virtual calls and function-pointer tables in the engine
-// are overwhelmingly monomorphic per call site, so the second and later dispatches to the same target cost one
-// predictable load instead of a 4 MiB hash probe (kHashBits 18, ~48% load) that usually misses L2 on a phone.
-// The cache entry has to be read atomically with its tag. The first version was a plain shared array of {va, fn}: every
-// thread wrote it, so a reader could observe the tag of one target next to the function pointer of another and dispatch
-// guest code to the wrong address - a crash far away from the cause, and one that only appears once the engine runs
-// several threads. Entries are therefore immutable once published and reached through one atomic pointer per slot:
-// the tag and the function pointer always belong to each other, with no lock, no 16-byte atomic (not lock-free on
-// pre-LSE2 ARM64) and no per-thread copy (dynamic TLS costs a __tls_get_addr call per dispatch in a dlopen'd library).
-constexpr uint32_t kInlineCacheSize = 512;
-constexpr uint32_t kInlineRecords = 4096;  // published records; caching stops (correctly, just slower) when used up
-struct InlineCacheEntry {
-    uint32_t va;
-    RecompFn fn;
-};
-InlineCacheEntry g_inline_records[kInlineRecords];
-std::atomic<uint32_t> g_inline_next{0};
-std::atomic<const InlineCacheEntry*> g_inline_cache[kInlineCacheSize]{};
-
-inline void PublishInlineCache(uint32_t target, RecompFn fn) {
-    const uint32_t index = g_inline_next.fetch_add(1, std::memory_order_relaxed);
-    if (index >= kInlineRecords) return;
-    g_inline_records[index] = {target, fn};
-    g_inline_cache[(target >> 2) & (kInlineCacheSize - 1)].store(&g_inline_records[index], std::memory_order_release);
-}
-
-inline const InlineCacheEntry* InlineCacheSlot(uint32_t target) {
-    return g_inline_cache[(target >> 2) & (kInlineCacheSize - 1)].load(std::memory_order_acquire);
 }
 
 }  // namespace
@@ -100,58 +57,13 @@ uint32_t g_engine_lo = 0, g_engine_hi = 0;
 
 using namespace native;
 
-// Called once from startup (main.cpp) after the table is linked in. RecompLookup still builds the hash on first use if
-// something dispatches earlier, but the hot path no longer runs a std::call_once (an atomic acquire plus a branch) on
-// every indirect call.
-extern "C" void RecompInit() {
-    if (!g_hash.load(std::memory_order_acquire)) BuildHash();
-}
-
 extern "C" RecompFn RecompLookup(uint32_t target) {
-    if (const InlineCacheEntry* cached = InlineCacheSlot(target)) {
-        if (cached->va == target) return cached->fn;
-    }
-    const HashSlot* hash = g_hash.load(std::memory_order_acquire);
-    if (!hash) {
-        BuildHash();
-        hash = g_hash.load(std::memory_order_acquire);
-    }
-    for (uint32_t h = HashOf(target);; h = (h + 1) & ((1u << kHashBits) - 1)) {
-        if (hash[h].va == target) {
-            PublishInlineCache(target, hash[h].fn);
-            return hash[h].fn;
-        }
-        if (!hash[h].va) {
-            PublishInlineCache(target, nullptr);
-            return nullptr;
-        }
-    }
-}
-
-// Item 4: name a program counter from the recompilation table instead of the dynamic symbol table. The old approach
-// needed every recompiled function exported with dladdr() metadata; this needs nothing exported and no allocation.
-// Returns "f_<guest va>+0x<offset>" in a thread-local buffer, or null when the address is not inside the engine.
-extern "C" const char* RecompNameForAddress(uintptr_t pc) {
-    static thread_local char name[64];
-    if (!g_recomp_count) return nullptr;
-    // Sorted once by host address; only reached while formatting a crash or watchdog report.
     static std::once_flag once;
-    static std::vector<std::pair<uintptr_t, uint32_t>> sorted;
-    std::call_once(once, [] {
-        sorted.reserve(g_recomp_count);
-        for (uint32_t i = 0; i < g_recomp_count; ++i)
-            sorted.emplace_back(reinterpret_cast<uintptr_t>(g_recomp_table[i].fn), g_recomp_table[i].va);
-        std::sort(sorted.begin(), sorted.end());
-    });
-    auto it = std::upper_bound(sorted.begin(), sorted.end(), std::make_pair(pc, UINT32_MAX),
-                               [](const std::pair<uintptr_t, uint32_t>& a,
-                                  const std::pair<uintptr_t, uint32_t>& b) { return a.first < b.first; });
-    if (it == sorted.begin()) return nullptr;
-    --it;
-    const uintptr_t offset = pc - it->first;
-    if (offset > (1u << 20)) return nullptr;  // not plausibly inside that function
-    snprintf(name, sizeof(name), "f_%08x+0x%llx", it->second, (unsigned long long)offset);
-    return name;
+    std::call_once(once, BuildHash);
+    for (uint32_t h = HashOf(target);; h = (h + 1) & ((1u << kHashBits) - 1)) {
+        if (g_hash[h].va == target) return g_hash[h].fn;
+        if (!g_hash[h].va) return nullptr;
+    }
 }
 
 // Thunks are not recompiled (Ghidra marks them as such): `jmp dword ptr [iat]` and `jmp rel32` are followed here.

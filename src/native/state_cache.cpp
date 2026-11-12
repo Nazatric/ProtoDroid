@@ -36,7 +36,7 @@ bool CopyAtomically(const std::string& source, const std::string& target, bool d
     }
 
     bool ok = true;
-    unsigned char buffer[262144];  // fewer syscalls per megabyte than the old 16 KiB buffer
+    unsigned char buffer[16384];
     while (ok) {
         size_t count = fread(buffer, 1, sizeof(buffer), in);
         if (count && fwrite(buffer, 1, count, out) != count) ok = false;
@@ -117,18 +117,8 @@ StateCacheMigrationResult MigrateStateCache(const StateCacheMigration& migration
                                                                      : StateCacheMigrationResult::Failed;
 }
 
-bool SameFileContents(const std::string& source, const std::string& target) {
-    struct stat a {}, b {};
-    if (stat(source.c_str(), &a) != 0 || stat(target.c_str(), &b) != 0) return false;
-    return a.st_size == b.st_size && a.st_mtim.tv_sec == b.st_mtim.tv_sec;
-}
-
 bool BackupStateCache(const std::string& source, const std::string& target) {
     if (InspectStateCache(source) != StateCacheStatus::Populated) return false;
-    // The periodic backup used to rewrite the whole (multi-megabyte) cache every 30 s even when nothing had changed.
-    // DXVK only touches the state cache when it compiles a new pipeline, so size plus modification time is enough to
-    // skip the copies that would change nothing on the shared-storage side.
-    if (SameFileContents(source, target)) return true;
     // Periodic backups run on the engine thread. Atomic replacement protects the last good backup from process
     // interruption without adding an fsync stall to gameplay; startup migration above remains durable.
     return CopyAtomically(source, target, false);

@@ -2,11 +2,7 @@ package com.protodroid;
 
 import android.content.Context;
 import android.content.pm.ActivityInfo;
-import android.app.GameManager;
-import android.app.GameState;
-import android.os.Build;
 import android.os.Bundle;
-import android.view.Window;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.view.ViewGroup;
@@ -34,12 +30,6 @@ public class ProtoActivity extends SDLActivity {
      * libmain.so is built for ARMv8.2 with RCpc (LDAPR keeps the emulated x86 memory ordering cheap) and LSE atomics;
      * older cores (Cortex-A53/A73, e.g. Snapdragon 6xx) get libmain_v80.so, built for ARMv8.0. Every core must have
      * both features: big.LITTLE phones list each core's features separately.
-     *
-     * "ilrcpc" (RCpc2, ARMv8.3+) satisfies the RCpc requirement and uses the same load-acquire instructions, but the
-     * first version of this test only accepted the literal "lrcpc". A core whose line says "ilrcpc" therefore sent the
-     * whole phone to the baseline ARMv8.0 build, which has neither LDAPR nor LSE atomics - the exact path every guest
-     * lock, reference count and emulated x86 acquire load takes. Also accept "lrrcpc"/"ilrcpc2", the feature names
-     * used for the same capability on newer kernels.
      */
     private static boolean modernCpu() {
         int cores = 0;
@@ -47,10 +37,7 @@ public class ProtoActivity extends SDLActivity {
             for (String line; (line = r.readLine()) != null;) {
                 if (!line.startsWith("Features")) continue;
                 List<String> features = Arrays.asList(line.substring(line.indexOf(':') + 1).trim().split("\\s+"));
-                boolean atomics = features.contains("atomics");
-                boolean rcpc = features.contains("lrcpc") || features.contains("ilrcpc") || features.contains("lrrcpc")
-                        || features.contains("ilrcpc2");
-                if (!atomics || !rcpc) return false;
+                if (!features.contains("atomics") || !features.contains("lrcpc")) return false;
                 ++cores;
             }
         } catch (IOException e) {
@@ -69,13 +56,6 @@ public class ProtoActivity extends SDLActivity {
      * thread for the game thread to return, which the engine's shutdown can make long enough for an ANR, so a
      * finishing activity ends the process before that.
      */
-    @Override
-    protected void onPause() {
-        // Not loading, and no longer in gameplay: the platform may interrupt us.
-        updateGameState(false, GameState.MODE_NONE);
-        super.onPause();
-    }
-
     @Override
     protected void onDestroy() {
         if (isFinishing()) android.os.Process.killProcess(android.os.Process.myPid());
@@ -104,46 +84,6 @@ public class ProtoActivity extends SDLActivity {
         }
     }
 
-    /**
-     * Item 48: the app declares itself a game but never used the platform's game APIs. Telling the platform that the
-     * game is loading lets it put the power HAL into its game-loading mode (a CPU/IO boost) and telling it that the game
-     * is in uninterruptible gameplay keeps the per-game performance profile applied; sustained performance mode stops
-     * the system from quietly dropping the clocks mid-session.
-     *
-     * `GameManager.setGameState` landed in API 33 and takes a `GameState` object whose mode is one of GameState's own
-     * `MODE_*` constants - the first version of this method called it with an int on API 31, and the second used
-     * `GAME_STATE_*` names that exist only in Google's codelab enum, not in the platform class. Both failed javac.
-     * Everything here is best-effort: a device or OEM build without a usable game service must not change behaviour.
-     */
-    private void updateGameState(boolean loading, int state) {
-        if (Build.VERSION.SDK_INT < 33) return;
-        try {
-            GameManager manager = getSystemService(GameManager.class);
-            if (manager != null) manager.setGameState(new GameState(loading, state));
-        } catch (RuntimeException ignored) {
-            // OEM builds without a usable game service, or a GameState value it rejects
-        }
-    }
-
-    private void applySustainedPerformance() {
-        try {
-            Window window = getWindow();
-            if (window != null) window.setSustainedPerformanceMode(true);
-        } catch (RuntimeException ignored) {
-            // not supported on this device
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // Past the first resume the engine is running its intro/gameplay: uninterrupted gameplay state, not loading.
-        if (started) updateGameState(false, GameState.MODE_GAMEPLAY_UNINTERRUPTIBLE);
-        started = true;
-    }
-
-    private boolean started;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         int orientation = getSharedPreferences("controls", MODE_PRIVATE).getInt("display_orientation", 0);
@@ -152,9 +92,7 @@ public class ProtoActivity extends SDLActivity {
         } else if (orientation == 2) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE);
         }
-        applySustainedPerformance();
         prepareVulkanDriver();
-        updateGameState(true, GameState.MODE_NONE);  // loading: the platform may boost CPU/IO
         ModManager.prepareForLaunch(this);
         // The native side loads the bundled Vulkan driver (Turnip, on Adreno) from the extracted libraries.
         try {
@@ -164,8 +102,24 @@ public class ProtoActivity extends SDLActivity {
         }
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);  // no dimming while playing
-        // On-screen controls above SDL's surface; they feed SDL keyboard and mouse input.
-        addContentView(new TouchControls(this), new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (isDiagnosticTour() && "precompile".equals(Os.getenv("PROTODROID_TOUR_PURPOSE"))) {
+            // One-click shader precompile: the tour injects its own input, so the on-screen controls are
+            // replaced by the styled loading screen. The relaunch on completion is owned by SetupActivity
+            // in the launcher process; this tour process ends itself the moment the run finishes.
+            addContentView(new ShaderPrecompileOverlay(this), new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        } else {
+            // On-screen controls above SDL's surface; they feed SDL keyboard and mouse input.
+            addContentView(new TouchControls(this), new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            // In-game mod settings: the left-edge handle opens the live panel (only when mods
+            // with options are enabled). Passes touches through everywhere outside its controls.
+            addContentView(new ModPanel(this), new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+    }
+
+    private static boolean isDiagnosticTour() {
+        return "1".equals(Os.getenv("PROTODROID_DIAGNOSTIC_TOUR"));
     }
 }

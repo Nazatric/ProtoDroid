@@ -19,27 +19,11 @@ COMMON_FLAGS := -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -fsigne
 # -O2, matching the upstream port and avoiding the code-size/register-pressure regression of globally optimizing the
 # recompiled engine at -O3. Keep the established TSO ordering flags unchanged.
 RECOMP_OPT ?= -O1
-# Item 1: the 126,974 recompiled functions are spread over 192 separately compiled translation units, so without
-# link-time optimisation a two-instruction leaf function can never be inlined into a caller that lives in another part
-# file, and constants cannot cross the d3d9/kernel32/memory boundary. ThinLTO fixes exactly that; the cache directory
-# keeps rebuilds incremental. LTO=0 reproduces the previous build for A/B comparison.
-LTO ?= 1
-LTO_FLAGS := $(if $(filter 1,$(LTO)),-flto=thin -fuse-ld=lld -Wl,--thinlto-cache-dir=$(abspath ../../build)/lto-cache)
-# Item 2: profile-guided layout. Build with `make PGO=generate` on a device tour, merge the .profraw with
-# llvm-profdata, then build release with `make PGO_PROFILE=<file>.profdata`. Unprofiled code stays size-optimised
-# (-fprofile-partial-training), which is what the Makefile's own note about -O3 asked for.
-PGO ?=
-PGO_FLAGS := $(if $(filter generate,$(PGO)),-fprofile-instr-generate) \
-             $(if $(PGO_PROFILE),-fprofile-instr-use=$(PGO_PROFILE) -fprofile-partial-training)
-# Item 6: FP contraction (ARM64 fmla) for the two hot native kernels. Off by default so the shipped build keeps the
-# established bit-exact x86 SSE rounding; `make FAST_FP=1` enables it for A/B measurement.
-FAST_FP ?= 0
-FAST_FP_FLAGS := $(if $(filter 1,$(FAST_FP)),-ffp-contract=on,)
 RECOMP_CFLAGS = -std=c11 $(RECOMP_OPT) $(RECOMP_EXTRA) -g0 -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -w $(COMMON_FLAGS) \
-                $(TARGET_FLAGS) $(LTO_FLAGS) $(PGO_FLAGS)
+                $(TARGET_FLAGS)
 CXXFLAGS = -std=c++17 -O2 -g -Wall -Wextra -Wno-unused-parameter $(COMMON_FLAGS) $(TARGET_FLAGS) \
            -I$(DXVK)/include/native/directx -I$(DXVK)/include/native/windows -I$(DXVK)/include/native/wsi \
-           $(DEP_INCLUDES) $(LTO_FLAGS) $(PGO_FLAGS) $(FAST_FP_FLAGS)
+           $(DEP_INCLUDES)
 
 ifeq ($(PLATFORM),android)
 ABI ?= arm64-v8a
@@ -47,26 +31,14 @@ NDK ?= $(HOME)/Android/Sdk/ndk/28.2.13676358
 DEPS ?= $(HOME)/protodroid-data/android-deps/$(ABI)
 TRIPLE := $(if $(filter x86_64,$(ABI)),x86_64,aarch64)-linux-android26
 TOOLCHAIN := $(NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin
-# Item 67: the 192 recompiled translation units are regenerated only when the game image changes, so an ordinary
-# edit to src/native rebuilds all of them for nothing. CCACHE=1 routes the compiler through ccache in CI, where the
-# cache is restored between builds; a local build without ccache installed is unaffected because the default is 0.
-# ccache is optional in both directions: the workflow installs it and passes CCACHE=1, and a developer machine without
-# ccache simply gets an empty prefix instead of "make: ccache: No such file or directory".
-CCACHE ?= 0
-CCACHE_BIN := $(shell command -v ccache 2>/dev/null)
-CCACHE_PREFIX := $(if $(filter 1,$(CCACHE)),$(if $(CCACHE_BIN),ccache ,))
-CXX := $(CCACHE_PREFIX)$(TOOLCHAIN)/$(TRIPLE)-clang++
-CC := $(CCACHE_PREFIX)$(TOOLCHAIN)/$(TRIPLE)-clang
+CXX := $(TOOLCHAIN)/$(TRIPLE)-clang++
+CC := $(TOOLCHAIN)/$(TRIPLE)-clang
 OUT ?= ../../build/android/$(ABI)
 # arm64: ARMv8.2 + RCpc (Cortex-A55/A76/X1 and newer, i.e. phones from 2019 on): LDAPR for the TSO acquire loads,
 # inline LSE atomics. ARM_ARCH=armv8-a builds for older cores (Cortex-A53/A73), with outline atomics.
-# ARM_ARCH=armv8.4-a+rcpc is the modern tier (Cortex-A78/X1 and newer): RCpc2 gives unaligned load-acquire
-# (LDAPR) and store-release (STLUR), which removes the alignment test and memcpy fallback from every guest access
-# (runtime.h), plus dotprod and LSE atomics. armv8-a remains the low-end tier with outline atomics.
 ARM_ARCH ?= armv8.2-a+rcpc
 TARGET_FLAGS := -fPIC $(if $(filter arm64-v8a,$(ABI)),-march=$(ARM_ARCH) -mtune=cortex-a76 \
-                $(if $(filter armv8-a,$(ARM_ARCH)),-moutline-atomics)) \
-                -fvisibility=hidden -ffunction-sections -fdata-sections
+                $(if $(filter armv8-a,$(ARM_ARCH)),-moutline-atomics))
 RECOMP_OPT := -O2
 # Optional native mods use source-built static Dobby on Android; no additional shared library is packaged.
 COMMON_FLAGS += -DPROTODROID_DOBBY
@@ -76,13 +48,8 @@ RECOMP_EXTRA := $(if $(filter 1,$(TSO)),-DRECOMP_TSO)
 DEP_INCLUDES := -I$(DEPS)/include
 FFMPEG_LIBS := -Wl,--start-group $(DEPS)/lib/libavformat.a $(DEPS)/lib/libavcodec.a \
                $(DEPS)/lib/libswresample.a $(DEPS)/lib/libavutil.a -Wl,--end-group -lz -lm
-# Item 4: export only the entry points the Android side and SDL resolve by name. The recompiled functions used to be
-# exported (~127k dynamic symbols, megabytes of .dynsym/.dynstr) purely so dladdr() could name them in watchdog and
-# crash reports; runtime.cpp now answers that question from the recompilation table instead, so the calls are relaxed
-# to direct branches and the loader has far less relocation work at start-up.
-EXPORTS := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))libmain.map
-LDFLAGS := -shared -Wl,-Bsymbolic -static-libstdc++ -Wl,--no-undefined \
-           -Wl,--version-script=$(EXPORTS) -Wl,--gc-sections $(LTO_FLAGS) -L$(DEPS)/lib \
+# Keep symbol tables for crash stack traces (dladdr) even after strip: --export-dynamic preserves symbols in dynamic table
+LDFLAGS := -shared -Wl,-Bsymbolic -static-libstdc++ -Wl,--no-undefined -Wl,--export-dynamic -L$(DEPS)/lib \
            $(DEPS)/lib/libdobby.a -ldxvk_d3d9 -lFAudio -lSDL2 $(FFMPEG_LIBS) -llog -landroid -ldl
 # Adreno: Turnip and libadrenotools from android/build-turnip.sh (arm64 only; built without them otherwise).
 TURNIP ?= $(HOME)/protodroid-data/android-turnip
@@ -112,7 +79,7 @@ LDFLAGS := -rdynamic -pthread -L$(DXVK_LIB) -Wl,-rpath,$(DXVK_LIB) -ldxvk_d3d9 -
 BINARY := proto-native
 endif
 
-SRCS := main.cpp diagnostic_tour.cpp diagnostics.cpp memory.cpp loader.cpp imports.cpp runtime.cpp thread.cpp path.cpp save_path.cpp kernel32.cpp msvcr80.cpp user32.cpp \
+SRCS := main.cpp diagnostic_tour.cpp diagnostics.cpp memory.cpp loader.cpp imports.cpp runtime.cpp thread.cpp path.cpp save_path.cpp kernel32.cpp msvcr80.cpp user32.cpp prime_affinity.cpp \
         advapi32.cpp misc.cpp d3d9.cpp d3d9_dxt.cpp input.cpp xaudio2.cpp bink.cpp bink_media.cpp bink_blit.cpp dinput.cpp gamepad.cpp config.cpp watchdog.cpp hot_audio.cpp hot_skin.cpp \
         vulkan_driver.cpp perf_hint.cpp present_stats.cpp state_cache.cpp video_settings.cpp \
         mod_platform.cpp mod_files.cpp mod_textures.cpp mod_hook.cpp mod_features.cpp mod_plugins.cpp mod_settings.cpp \

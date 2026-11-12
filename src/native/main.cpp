@@ -7,7 +7,6 @@
 //   EngineTerminate()
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_main.h>  // Android: main() becomes SDL_main, called by SDLActivity
-#include <SDL2/SDL_syswm.h>
 #include <dlfcn.h>
 #include <sched.h>
 #include <signal.h>
@@ -27,7 +26,6 @@
 #include <cstdarg>
 #include <cstdlib>
 #include <cstring>
-#include <condition_variable>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -42,6 +40,7 @@
 #include "input.h"
 #include "mod_platform.h"
 #include "present_stats.h"
+#include "prime_affinity.h"
 #include "timing_window.h"
 #include "save_path.h"
 #include "state_cache.h"
@@ -57,7 +56,7 @@ const char* g_game_dir = nullptr;
 const char* g_data_dir = nullptr;  // Android: the app's external files folder (logs, ini, legacy saves)
 
 namespace {
-std::mutex g_log_mutex;         // serialises the queue and the synchronous fallback, never the file writes
+std::mutex g_log_mutex;
 FILE* g_log = nullptr;
 FILE* g_log_mirror = nullptr;  // Android 11+: /storage/emulated/0/Prototype/logs/
 std::string g_mirror_dir;
@@ -73,137 +72,35 @@ void WaitForMirrorCopy();
 
 // Forward for mirroring helper
 
-namespace {
-
-// ---- asynchronous log writer (item 52) ----
-// Log() used to take one process-wide mutex, format the line up to three times and then do a logd socket write plus
-// two write() calls - one of them to /storage/emulated/0 (FUSE) - for every line. Any thread logging from a warm path
-// (thread creation, texture adaptation, D3D9 fall-backs, Bink) could therefore stall the render thread for the length of
-// a FUSE write. Calling threads now format one line and hand it to a bounded queue; a single low-priority writer thread
-// owns the files and logcat. A full queue falls back to writing the line inline, so nothing is ever dropped.
-constexpr size_t kLogQueueLines = 512;
-constexpr size_t kLogLineMax = 512;
-struct LogLine {
-    char text[kLogLineMax];
-    uint16_t length;
-};
-LogLine g_log_queue[kLogQueueLines];
-size_t g_log_head = 0, g_log_count = 0;   // under g_log_mutex
-std::condition_variable g_log_cv;
-std::thread g_log_writer;
-std::atomic<bool> g_log_writer_running{false};
-std::atomic<bool> g_log_async{false};
-thread_local bool tl_log_writer = false;
-
-void WriteLogLine(const char* text, size_t length, bool mirror) {
-#ifdef __ANDROID__
-    __android_log_write(ANDROID_LOG_INFO, "protodroid", text);
-#else
-    fwrite(text, 1, length, stderr);
-    fputc('\n', stderr);
-#endif
-    if (g_log) {
-        fwrite(text, 1, length, g_log);
-        fputc('\n', g_log);
-        fflush(g_log);  // crash evidence: the primary log is always current
-    }
-    if (mirror && g_log_mirror) {
-        // The shared-storage mirror is the expensive one (FUSE). Write it, but leave flushing to the periodic sync.
-        fwrite(text, 1, length, g_log_mirror);
-        fputc('\n', g_log_mirror);
-    }
-}
-
-void LogWriterLoop() {
-    tl_log_writer = true;
-    auto last_flush = std::chrono::steady_clock::now();
-    for (;;) {
-        LogLine line;
-        {
-            std::unique_lock<std::mutex> lock(g_log_mutex);
-            g_log_cv.wait_for(lock, std::chrono::milliseconds(200),
-                              [] { return g_log_count > 0 || !g_log_async.load(std::memory_order_acquire); });
-            if (g_log_count > 0) {
-                line = g_log_queue[g_log_head];
-                g_log_head = (g_log_head + 1) % kLogQueueLines;
-                --g_log_count;
-            } else if (!g_log_async.load(std::memory_order_acquire)) {
-                break;
-            } else {
-                line.length = 0;
-            }
-        }
-        if (line.length) WriteLogLine(line.text, line.length, true);
-        const auto now = std::chrono::steady_clock::now();
-        if (now - last_flush >= std::chrono::seconds(2)) {
-            last_flush = now;
-            if (g_log_mirror) fflush(g_log_mirror);
-        }
-    }
-    if (g_log_mirror) fflush(g_log_mirror);
-    g_log_writer_running.store(false, std::memory_order_release);
-}
-
-void StartLogWriter() {
-    if (g_log_writer_running.exchange(true)) return;
-    g_log_async.store(true, std::memory_order_release);
-    g_log_writer = std::thread([] {
-        pthread_setname_np(pthread_self(), "proto-log");
-        LogWriterLoop();
-    });
-    g_log_writer.detach();
-}
-
-// Drains the queue before the process ends (exit, crash handler) so the last lines reach the files.
-void FlushLogQueue() {
-    for (;;) {
-        LogLine line;
-        {
-            std::lock_guard<std::mutex> lock(g_log_mutex);
-            if (!g_log_count) break;
-            line = g_log_queue[g_log_head];
-            g_log_head = (g_log_head + 1) % kLogQueueLines;
-            --g_log_count;
-        }
-        WriteLogLine(line.text, line.length, true);
-    }
-    if (g_log) fflush(g_log);
-    if (g_log_mirror) fflush(g_log_mirror);
-}
-
-}  // namespace
-
 void Log(const char* fmt, ...) {
-    char text[kLogLineMax];
-    // Prefix first, then the formatted message: both are produced without any lock.
+    std::lock_guard<std::mutex> lock(g_log_mutex);
     const double monotonic_seconds = double(MonotonicNanos()) / 1e9;
-    int prefix = snprintf(text, sizeof(text), "[mono=%.3f tid=%d] ", monotonic_seconds, int(gettid()));
-    if (prefix < 0) prefix = 0;
-    if (size_t(prefix) >= sizeof(text) - 1) prefix = int(sizeof(text)) - 1;
+    const int tid = int(gettid());
     va_list ap;
     va_start(ap, fmt);
-    const int body = vsnprintf(text + prefix, sizeof(text) - size_t(prefix), fmt, ap);
+#ifdef __ANDROID__
+    __android_log_vprint(ANDROID_LOG_INFO, "protodroid", fmt, ap);
+#else
+    vfprintf(stderr, fmt, ap);
+    fputc('\n', stderr);
+#endif
     va_end(ap);
-    size_t length = size_t(prefix) + (body > 0 ? size_t(body) : 0);
-    if (length >= sizeof(text)) length = sizeof(text) - 1;
-    if (tl_log_writer || !g_log_async.load(std::memory_order_acquire)) {
-        WriteLogLine(text, length, true);
-        return;
+    if (g_log) {
+        fprintf(g_log, "[mono=%.3f tid=%d] ", monotonic_seconds, tid);
+        va_start(ap, fmt);
+        vfprintf(g_log, fmt, ap);
+        va_end(ap);
+        fputc('\n', g_log);
+        fflush(g_log);
     }
-    {
-        std::unique_lock<std::mutex> lock(g_log_mutex, std::try_to_lock);
-        if (lock.owns_lock() && g_log_count < kLogQueueLines) {
-            LogLine& slot = g_log_queue[(g_log_head + g_log_count) % kLogQueueLines];
-            memcpy(slot.text, text, length);
-            slot.text[length] = 0;
-            slot.length = uint16_t(length);
-            ++g_log_count;
-            lock.unlock();
-            g_log_cv.notify_one();
-            return;
-        }
+    if (g_log_mirror) {
+        fprintf(g_log_mirror, "[mono=%.3f tid=%d] ", monotonic_seconds, tid);
+        va_start(ap, fmt);
+        vfprintf(g_log_mirror, fmt, ap);
+        va_end(ap);
+        fputc('\n', g_log_mirror);
+        fflush(g_log_mirror);
     }
-    WriteLogLine(text, length, true);  // queue busy or full: write inline rather than lose the line
 }
 
 void VulkanDriverAbandon();  // vulkan_driver.cpp
@@ -239,23 +136,18 @@ void CrashWrite(const char* text) {
 
 void DescribeAddress(char* out, size_t size, const char* what, uintptr_t address) {
     Dl_info info{};
-    // Guest code is named from the recompilation table (item 4): the recompiled functions are no longer exported, so
-    // dladdr can only describe host code here. The table lookup needs no symbol table, no allocation and no dlopen.
-    if (const char* guest_name = RecompNameForAddress(address)) {
-        snprintf(out, size, "crash: %s %#lx = %s (recompiled guest function)", what, (unsigned long)address, guest_name);
-        return;
-    }
     if (address && dladdr(reinterpret_cast<void*>(address), &info) && info.dli_fname) {
         const char* lib = strrchr(info.dli_fname, '/');
         const char* sym = info.dli_sname ? info.dli_sname : "?";
-        const uintptr_t offset = address - reinterpret_cast<uintptr_t>(info.dli_fbase);
-        const uintptr_t sym_offset = info.dli_saddr ? address - reinterpret_cast<uintptr_t>(info.dli_saddr) : offset;
+        // Use dladdr to get symbol + offset instead of (?) placeholder
+        uintptr_t offset = address - reinterpret_cast<uintptr_t>(info.dli_fbase);
+        uintptr_t sym_offset = info.dli_saddr ? address - reinterpret_cast<uintptr_t>(info.dli_saddr) : offset;
         if (info.dli_sname) {
-            snprintf(out, size, "crash: %s %#lx = %s+%#lx (%s+%#lx)", what, (unsigned long)address,
-                     lib ? lib + 1 : info.dli_fname, (unsigned long)offset, sym, (unsigned long)sym_offset);
+            snprintf(out, size, "crash: %s %#lx = %s+%#lx (%s+%#lx)", what, (unsigned long)address, lib ? lib + 1 : info.dli_fname,
+                     (unsigned long)offset, sym, (unsigned long)sym_offset);
         } else {
-            snprintf(out, size, "crash: %s %#lx = %s+%#lx (%s)", what, (unsigned long)address,
-                     lib ? lib + 1 : info.dli_fname, (unsigned long)offset, sym);
+            snprintf(out, size, "crash: %s %#lx = %s+%#lx (%s)", what, (unsigned long)address, lib ? lib + 1 : info.dli_fname,
+                     (unsigned long)offset, sym);
         }
     } else {
         snprintf(out, size, "crash: %s %#lx", what, (unsigned long)address);
@@ -374,22 +266,12 @@ static bool EnsureDir(const std::string& path) {
     // We set DXVK_LOG_PATH to mirror dir as well via env after MirrorInit
 }
 
-// Copies only when the source really changed: the periodic mirror used to rewrite identical bytes (the DXVK log and
-// the whole state cache) to /storage/emulated/0, a FUSE-mediated path, for the entire session.
-static bool FileChanged(const std::string& src, const std::string& dst) {
-    struct stat a {}, b {};
-    if (stat(src.c_str(), &a) != 0) return false;
-    if (stat(dst.c_str(), &b) != 0) return true;
-    return a.st_size != b.st_size || a.st_mtim.tv_sec != b.st_mtim.tv_sec;
-}
-
 static void CopyFile(const std::string& src, const std::string& dst) {
-    if (!FileChanged(src, dst)) return;
     FILE* in = fopen(src.c_str(), "rb");
     if (!in) return;
     FILE* out = fopen(dst.c_str(), "wb");
     if (!out) { fclose(in); return; }
-    char buf[262144];
+    char buf[8192];
     size_t n;
     while ((n = fread(buf, 1, sizeof(buf), in)) > 0) fwrite(buf, 1, n, out);
     fclose(in);
@@ -449,7 +331,6 @@ void Fatal(const char* fmt, ...) {
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     Log("FATAL: %s", buf);
-    FlushLogQueue();
     DiagnosticTourFail("fatal", buf);
     VulkanDriverAbandon();  // not the driver's fault: the next start keeps trying Turnip
     _exit(70);
@@ -471,7 +352,6 @@ void Fatal(const char* fmt, ...) {
     _exit(1);
 }
 
-void InitImportDispatch();  // imports.cpp
 uint32_t HostWindow();  // user32.cpp
 void InitClientSize(int window_w, int window_h);
 void StartWatchdog(std::atomic<uint64_t>* frames);  // watchdog.cpp
@@ -488,31 +368,6 @@ extern SDL_Window* g_sdl_window;
 // ---- frame limiter and presented-frame counters (read by the on-screen overlay through JNI) ----
 namespace native {
 std::atomic<int> g_fps_limit{0};  // 0 = no limit (the swap interval still applies)
-
-#ifdef __ANDROID__
-// Item 46: tell the display which frame rate the game is actually producing. Without this the panel stays at its
-// highest refresh rate for a 30/45 FPS cap, which costs power, and the compositor has no idea that frames are meant to
-// arrive every other vsync. Implementation is resolved at runtime so the build keeps its API-level floor.
-void ApplyDisplayFrameRate(SDL_Window* window, int fps) {
-    if (!window || fps <= 0) return;
-    SDL_SysWMinfo info;
-    SDL_VERSION(&info.version);
-    if (!SDL_GetWindowWMInfo(window, &info)) return;
-    ANativeWindow* native = info.info.android.window;
-    if (!native) return;
-    using SetFrameRateFn = int (*)(ANativeWindow*, float, int32_t);
-    static SetFrameRateFn set_frame_rate = [] {
-        void* lib = dlopen("libandroid.so", RTLD_NOW);
-        return lib ? reinterpret_cast<SetFrameRateFn>(dlsym(lib, "ANativeWindow_setFrameRate")) : nullptr;
-    }();
-    if (!set_frame_rate) return;
-    // ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE: the app deliberately paces itself to this rate.
-    set_frame_rate(native, float(fps), 1);
-    Log("display: requested a %.1f Hz frame rate", float(fps));
-}
-#else
-void ApplyDisplayFrameRate(SDL_Window*, int) {}
-#endif
 std::atomic<bool> g_unlock_menu_fps{true};
 
 bool MenuFpsUnlocked() { return g_unlock_menu_fps.load(std::memory_order_relaxed); }
@@ -619,10 +474,7 @@ int main(int argc, char** argv) {
     native::SetGuestClockDiagnosticTour(diagnostic_tour);
 #ifdef __ANDROID__
     RedirectStderrToLogcat();
-    // DXVK at info logs device/extension enumeration, state-cache traffic and compile notes for every user, through a
-    // line-buffered stderr pipe and its own file, including from shader-compile worker threads. Warn by default; the
-    // diagnostic tour and the Diagnostics screen opt back in.
-    setenv("DXVK_LOG_LEVEL", diagnostic_tour ? "info" : "warn", 0);
+    setenv("DXVK_LOG_LEVEL", "info", 0);
 #endif
     g_game_dir = argc > 1 ? argv[1] : getenv("PROTODROID_GAME");
 #ifdef __ANDROID__
@@ -646,6 +498,23 @@ int main(int argc, char** argv) {
                                      "The diagnostic tour could not create its isolated log/cache directories.",
                                      nullptr);
             return 1;
+        }
+        // Seed the tour's cache from the shared backup before DXVK opens it. The tour otherwise starts
+        // cold: every pipeline compiles live during the tour (slow, and serialized on Mali), and the
+        // cache it produces only lists what one scripted scenario reaches. Seeding makes the tour's
+        // cache a superset — the backup's entries plus whatever new material the tour exercises — and
+        // normal play migrates that superset, so the tour can only add coverage, never lose it.
+        {
+            std::vector<std::string> tour_cache_sources = {"/storage/emulated/0/Prototype/logs",
+                                                            "/storage/emulated/0/Prototype"};
+            native::StateCacheMigration tour_seed =
+                native::PlanStateCacheMigration(diagnostic_cache_dir, tour_cache_sources);
+            if (!tour_seed.source.empty()) {
+                if (native::MigrateStateCache(tour_seed) == native::StateCacheMigrationResult::Migrated)
+                    Log("tour cache seeded from %s", tour_seed.source.c_str());
+                else
+                    Log("tour cache seeding from %s failed: %s", tour_seed.source.c_str(), strerror(errno));
+            }
         }
         const std::string private_logs = std::string(base) + "/diagnostic-tour-logs";
         if (!native::EnsureDir(private_logs)) {
@@ -681,16 +550,6 @@ int main(int argc, char** argv) {
         }
     }
     setenv("DXVK_STATE_CACHE_PATH", cache_dir, 1);
-    // Item 41: the bundled Turnip (Mesa) driver was loaded through adrenotools with no MESA_SHADER_CACHE_DIR, so its
-    // NIR/ir3 compile results were discarded every launch and every first-use shader was compiled again. Point Mesa at
-    // an app-private cache with a bounded size, away from the FUSE-backed shared folder.
-    {
-        std::string mesa_cache = std::string(cache_dir) + "/mesa-shader-cache";
-        native::EnsureDir(mesa_cache);
-        setenv("MESA_SHADER_CACHE_DIR", mesa_cache.c_str(), 0);
-        setenv("MESA_SHADER_CACHE_MAX_SIZE", "512M", 0);
-        setenv("MESA_SHADER_CACHE_DISABLE", "false", 0);
-    }
     setenv("DXVK_LOG_PATH", diagnostic_tour ? kDiagnosticTourLogDir : base, 1);
     Log("DXVK state cache: %s", state_cache.c_str());
     // Attempt to find game dir across multiple locations (Issue 4)
@@ -736,10 +595,7 @@ int main(int argc, char** argv) {
     rename(native_log_path.c_str(), native_prev_log_path.c_str());
 #endif
     if (!g_log) g_log = fopen(native_log_path.c_str(), "w");
-    StartLogWriter();  // all later Log() calls are formatted on the caller and written by one low-priority thread
     InstallCrashHandler();
-    RecompInit();          // recompiled-function dispatch hash, built once off the hot path (item 14)
-    InitImportDispatch();  // import profiling/flag cache (item 15)
 #ifdef __ANDROID__
     if (diagnostic_tour && !g_log) StartupFailure("The diagnostic tour could not open its isolated private log.");
     if (diagnostic_tour && g_mirror_dir.empty())
@@ -747,44 +603,6 @@ int main(int argc, char** argv) {
 #endif
     Log("protodroid build %s %s", __DATE__, __TIME__);
     Log("protodroid source %s", PROTODROID_SOURCE_REVISION);
-    // Which engine build this is. The APK carries two: libmain.so (ARMv8.2 + LSE atomics + RCpc load-acquire) and
-    // libmain_v80.so (ARMv8.0, outline atomics, no LDAPR), and ProtoActivity picks one from /proc/cpuinfo. The log has
-    // to say which one is running: "why is this build slower than that one" is otherwise unanswerable from a device
-    // report, especially since the two differ in exactly the atomics every guest lock and reference count uses.
-#if defined(__aarch64__)
-#if defined(__ARM_FEATURE_ATOMICS) && defined(__ARM_FEATURE_RCPC)
-    Log("engine build: arm64 LSE atomics + RCpc (libmain.so, the modern tier)");
-#else
-    Log("engine build: arm64 baseline (libmain_v80.so, outline atomics, no LDAPR)");
-#endif
-#elif defined(__x86_64__)
-    Log("engine build: x86_64");
-#else
-    Log("engine build: other architecture");
-#endif
-#ifdef __ANDROID__
-    // What the launcher's own feature test reads, repeated here so a report shows both halves of the decision.
-    {
-        std::string cores;
-        if (FILE* f = fopen("/proc/cpuinfo", "r")) {
-            char line[512];
-            int index = 0;
-            while (fgets(line, sizeof(line), f)) {
-                if (strncmp(line, "Features", 8) != 0) continue;
-                const char* colon = strchr(line, ':');
-                if (!colon) continue;
-                const bool atomics = strstr(colon, "atomics") != nullptr;
-                const bool rcpc = strstr(colon, "lrcpc") != nullptr || strstr(colon, "ilrcpc") != nullptr;
-                char buf[64];
-                snprintf(buf, sizeof(buf), " core%d=%s%s", index++, atomics ? "atomics" : "-",
-                         rcpc ? (strstr(colon, "ilrcpc") ? "+ilrcpc" : "+lrcpc") : "-rcpc");
-                cores += buf;
-            }
-            fclose(f);
-        }
-        Log("engine features (cpuinfo)%s", cores.empty() ? " unavailable" : cores.c_str());
-    }
-#endif
 #ifdef __ANDROID__
     if (!g_mirror_dir.empty()) {
         Log("logs mirrored to %s", g_mirror_dir.c_str());
@@ -942,11 +760,19 @@ int main(int argc, char** argv) {
 
     // Apply last so stale user configuration cannot undo the official Prototype workaround. DXVK keys its own
     // profile to prototypef.exe, which never matches this native host process (app_process64 on Android).
+    int fps_limit = SettingInt("fps_limit", 0);
+    if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
     std::string dxvk_config = PrototypeDxvkConfig(getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "");
     dxvk_config = AaDxvkConfig(SettingInt("game_aa_level", kAaGameDefault), dxvk_config);
+    int dxvk_max_frame_latency = SettingInt("dxvk_max_frame_latency", 1);
+    if (dxvk_max_frame_latency < 0) dxvk_max_frame_latency = 0;
+    if (dxvk_max_frame_latency > 16) dxvk_max_frame_latency = 16;
+    dxvk_config = FramePacingDxvkConfig(dxvk_config, dxvk_max_frame_latency, fps_limit);
     setenv("DXVK_CONFIG", dxvk_config.c_str(), 1);
     if (fxaa) Log("AA policy: DXVK forced swapchain MSAA override pinned to 0");
     Log("game profile: Prototype DF formats disabled for dynamic shadows and effects");
+    if (dxvk_max_frame_latency > 0) Log("frame pacing: DXVK maxFrameLatency %d%s", dxvk_max_frame_latency,
+                                        fps_limit > 0 ? "" : "; limiter follows the display refresh rate");
 
     // The game window: DXVK's native WSI takes the SDL window as HWND.
 #ifdef __ANDROID__
@@ -972,7 +798,6 @@ int main(int argc, char** argv) {
     }
 #endif
     InitClientSize(window_w, window_h);
-    if (int configured = SettingInt("fps_limit", 0); configured > 0) ApplyDisplayFrameRate(g_sdl_window, configured);
     DiagnosticsStart();
 
     std::string dll = std::string(g_game_dir) + "/prototypeenginef.dll";
@@ -1034,17 +859,117 @@ int main(int argc, char** argv) {
     }
     static std::atomic<uint64_t> frames{0};
     StartWatchdog(&frames);
-    int fps_limit = SettingInt("fps_limit", 0);
-    if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
+    // fps_limit (with battery_saver policy) was resolved before the DXVK_CONFIG environment was assembled, so
+    // DXVK's maxFrameRate matches the host limiter exactly.
     g_fps_limit.store(fps_limit);
-    if (fps_limit > 0) ApplyDisplayFrameRate(g_sdl_window, fps_limit);
-    PerfHintStart(fps_limit);
+    ApplyGuestThreadAffinity(SettingInt("affinity_mode", 1));  // opt-in; see prime_affinity.h
+    // ADPF must chase the panel the same way the limiter does: with fps_limit=0 the swap interval
+    // governs, so a 120 Hz display needs an 8.33 ms hint instead of the 60 Hz fallback.
+    int adpf_target = fps_limit;
+    if (adpf_target <= 0 && g_sdl_window) {
+        SDL_DisplayMode mode{};
+        int display = SDL_GetWindowDisplayIndex(g_sdl_window);
+        if (display >= 0 && SDL_GetCurrentDisplayMode(display, &mode) == 0 && mode.refresh_rate > 1)
+            adpf_target = mode.refresh_rate;
+    }
+    PerfHintStart(adpf_target);
+    // ---- adaptive display pacing ----
+    // With FIFO vsync and no limit, a frame that misses a vblank waits for the next one: on a
+    // 120 Hz panel an engine hovering between 8.3 and 16.7 ms lands on 2 or 3 vblanks and the
+    // visible rate wobbles between 120/60/40 ("60+ but drops to 45, inconsistent"). When the
+    // engine's median frame cannot hold the full refresh rate but comfortably fits half of it,
+    // pacing frame starts to every other vblank makes every frame hit the same cadence: a flat
+    // 60 instead of 60/45 oscillation. Hysteresis on mode switches; the tour opts out (its 4x
+    // guest clock deliberately stresses the engine) and an explicit fps_limit always wins.
+    class AdaptivePacer {
+    public:
+        void Configure(int refresh_hz, bool enabled) {
+            if (refresh_hz > 1 && refresh_hz < 1000) {
+                hz_ = refresh_hz;
+                refresh_ns_ = 1000000000LL / refresh_hz;
+            }
+            enabled_ = enabled && refresh_ns_ > 0;
+        }
+        void ObserveService(int64_t service_ns) {
+            if (!enabled_ || service_ns <= 0) return;
+            window_[count_ % kWindow] = service_ns;
+            if (count_ < kWindow) ++count_;
+            else count_ = 1;  // wrap while keeping the window full
+        }
+        // Returns nanoseconds to sleep before this frame (0 = unpaced); *adpf_hz receives the
+        // new performance-hint target on a mode change, or 0 when nothing changed.
+        int64_t PacePeriod(std::chrono::steady_clock::time_point now,
+                           std::chrono::steady_clock::time_point last_frame_start, int64_t* adpf_hz) {
+            if (!enabled_ || refresh_ns_ <= 0) return 0;
+            if (now < next_eval_) return period_ns_ > 0 ? SleepTarget(last_frame_start, now) : 0;
+            next_eval_ = now + std::chrono::milliseconds(1500);
+            if (count_ < kWindow) return 0;  // not enough samples yet
+            int64_t sorted[kWindow];
+            std::copy(window_, window_ + kWindow, sorted);
+            std::sort(sorted, sorted + kWindow);
+            const int64_t p50 = sorted[kWindow / 2];
+            const int64_t full = refresh_ns_;
+            const int64_t half = refresh_ns_ * 2;
+            int want = 0;  // 0 = full/unpaced, 2 = half rate
+            if (p50 > full * 58 / 100 && p50 <= half * 92 / 100) want = 2;
+            if (want == pending_mode_) {
+                if (want != mode_ && --pending_confirm_ <= 0) {
+                    mode_ = want;
+                    Log("frame pacing: engine p50 %.2f ms; pacing to %s", double(p50) / 1e6,
+                        mode_ == 2 ? "every other vblank" : "the display rate");
+                    if (adpf_hz) *adpf_hz = mode_ == 2 ? hz_ / 2 : hz_;
+                }
+            } else {
+                pending_mode_ = want;
+                pending_confirm_ = 2;  // two consecutive evaluations before switching
+            }
+            period_ns_ = mode_ == 2 ? half : 0;
+            return period_ns_ > 0 ? SleepTarget(last_frame_start, now) : 0;
+        }
+        // One lightweight line per minute in ordinary play: present rate, frame time, and the
+        // engine median the pacer sees. Detailed diagnostics stay off; this is the minimum
+        // evidence needed to reason about reported frame rates.
+        void MaybeLogStats(uint64_t frame) {
+            if (!enabled_ || frame - last_stats_ < 6000) return;
+            last_stats_ = frame;
+            if (count_ < kWindow) return;
+            int64_t sorted[kWindow];
+            std::copy(window_, window_ + kWindow, sorted);
+            std::sort(sorted, sorted + kWindow);
+            const native::PresentStatsSnapshot ps = native::GetPresentStats();
+            Log("stats: present_fps %.1f frame_avg %.2fms frame_p99 %.2fms engine_p50 %.2fms pacing %s",
+                ps.fps, ps.average_ms, ps.p99_ms, double(sorted[kWindow / 2]) / 1e6,
+                mode_ == 2 ? "half-rate" : "display");
+        }
+
+    private:
+        int64_t SleepTarget(std::chrono::steady_clock::time_point last_frame_start,
+                            std::chrono::steady_clock::time_point now) const {
+            constexpr int64_t kWakeMarginNs = 700000;  // scheduler wake-up slack before the vblank
+            const auto due = last_frame_start + std::chrono::nanoseconds(period_ns_ - kWakeMarginNs);
+            if (now >= due) return 0;
+            return std::chrono::duration_cast<std::chrono::nanoseconds>(due - now).count();
+        }
+        enum : int { kWindow = 24 };
+        int64_t window_[kWindow] = {};
+        int count_ = 0;
+        int hz_ = 0;
+        int64_t refresh_ns_ = 0;
+        int64_t period_ns_ = 0;
+        std::chrono::steady_clock::time_point next_eval_{};
+        int mode_ = 0;
+        int pending_mode_ = -1;
+        int pending_confirm_ = 2;
+        uint64_t last_stats_ = 0;
+        bool enabled_ = false;
+    };
+    AdaptivePacer pacer;
+    pacer.Configure(adpf_target, !diagnostic_tour && fps_limit <= 0);
     using Clock = std::chrono::steady_clock;
     Clock::time_point frame_start = Clock::now();
     for (uint64_t frame = 0;; ++frame) {
         frames.store(frame, std::memory_order_relaxed);
         if (frame == 900) VulkanDriverConfirm();  // well past the intro movies: the driver survived startup
-        if (frame == 600) PerfHintAddNamedThreads();  // item 45: complete the ADPF session once threads exist
         // The limiter remains anchored to the engine loop. FPS, frame statistics, and ADPF are anchored only to real
         // D3D9 presents, so thousands of empty message-pump iterations cannot inflate them or skew CPU clocking.
         Clock::time_point now = Clock::now();
@@ -1054,6 +979,17 @@ int main(int argc, char** argv) {
             Clock::time_point due = frame_start + std::chrono::microseconds(1000000 / limit);
             if (now < due) {
                 std::this_thread::sleep_until(due);
+                now = Clock::now();
+            }
+            limiter_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - limiter_start).count();
+        } else {
+            // Adaptive display pacing: sleep until this frame's slot when half-rate mode is engaged.
+            const Clock::time_point limiter_start = now;
+            int64_t adpf_hz = 0;
+            const int64_t pace_ns = pacer.PacePeriod(now, frame_start, &adpf_hz);
+            if (adpf_hz > 0) native::PerfHintTarget(int(adpf_hz));
+            if (pace_ns > 0) {
+                std::this_thread::sleep_for(std::chrono::nanoseconds(pace_ns));
                 now = Clock::now();
             }
             limiter_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - limiter_start).count();
@@ -1091,9 +1027,11 @@ int main(int argc, char** argv) {
                 ForwardInput(e);
             }
         }
-        const int64_t service_start_ns = timing ? MonotonicNanos() : 0;
+        const int64_t service_start_ns = MonotonicNanos();
         bool keep = (GuestCall(service, {quit ? 1u : 0u, focused ? 0u : 1u}) & 0xff) != 0;
-        const int64_t service_end_ns = timing ? MonotonicNanos() : 0;
+        const int64_t service_end_ns = MonotonicNanos();
+        pacer.ObserveService(service_end_ns - service_start_ns);
+        pacer.MaybeLogStats(frame);
         GuestCall(focus, {focused ? 1u : 0u});
         if (timing) {
             const int64_t focus_end_ns = MonotonicNanos();

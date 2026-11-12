@@ -1,5 +1,9 @@
 #include "mod_platform.h"
 
+#ifdef __ANDROID__
+#include <jni.h>
+#endif
+
 #include <limits.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
@@ -19,6 +23,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <mutex>
 #include <vector>
 #include <unistd.h>
 
@@ -94,6 +99,8 @@ std::vector<std::unique_ptr<ScriptState>> g_states;
 std::vector<std::unique_ptr<ScriptHook>> g_hook_storage;
 std::array<ScriptHook*, kMaxScriptHooks> g_hooks{};
 std::deque<ScriptEvent> g_events;
+std::mutex g_reload_mutex;
+std::vector<std::string> g_reload_requests;
 ActiveHook* g_active_hook = nullptr;
 uint64_t g_hook_generation = 0;
 bool g_shutdown = false;
@@ -979,6 +986,22 @@ bool ModScriptsEmit(const std::string& name, const uint32_t* arguments, size_t c
     return QueueEvent(name, "native", arguments, count);
 }
 
+void ModScriptsRequestSettingsReload(const char* mod_id) {
+    if (!mod_id || !*mod_id || g_shutdown) return;
+    std::lock_guard<std::mutex> lock(g_reload_mutex);
+    if (g_reload_requests.size() < 32) g_reload_requests.emplace_back(mod_id);
+}
+
+#ifdef __ANDROID__
+extern "C" JNIEXPORT void JNICALL Java_com_protodroid_ModPanel_nativeSettingsChanged(JNIEnv* env, jclass, jstring mod_id) {
+    if (!env || !mod_id) return;
+    const char* id = env->GetStringUTFChars(mod_id, nullptr);
+    if (!id) return;
+    ModScriptsRequestSettingsReload(id);
+    env->ReleaseStringUTFChars(mod_id, id);
+}
+#endif
+
 void ModScriptsInitialize(const std::vector<ModEntry>& mods) {
     for (const ModEntry& mod : mods) if (!mod.script.empty()) LoadScript(mod);
     Log("mods: %zu sandboxed Lua package(s) initialized", g_states.size());
@@ -986,6 +1009,25 @@ void ModScriptsInitialize(const std::vector<ModEntry>& mods) {
 
 void ModScriptsFrame() {
     if (g_shutdown) return;
+    // The in-game settings panel writes a mod's protodroid-settings.ini and requests a reload from
+    // the UI thread; applying it here keeps every Lua state mutation on this dispatch thread.
+    std::vector<std::string> reloads;
+    {
+        std::lock_guard<std::mutex> lock(g_reload_mutex);
+        reloads.swap(g_reload_requests);
+    }
+    for (const std::string& id : reloads) {
+        for (auto& state : g_states) {
+            if (!state->mod || state->mod->id != id) continue;
+            std::string error;
+            if (ModSettingsLoad(*state->mod, &state->settings, &error)) {
+                static const std::vector<uint32_t> no_arguments;
+                InvokeEvent(state.get(), "protodroid.settings_changed", no_arguments);
+            } else {
+                Log("mods[%s] settings reload failed: %s", id.c_str(), error.c_str());
+            }
+        }
+    }
     static const std::vector<uint32_t> no_arguments;
     for (auto& state : g_states) InvokeEvent(state.get(), "frame", no_arguments);
     DispatchEvents();

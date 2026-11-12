@@ -680,7 +680,7 @@ class FunctionCompiler:
                 sign = "+" if base in ("add", "adc") else "-"
                 return self.write(ins, ops[0], f"({a} {sign} {b} {sign} {carry})")
             fn = "AddFlags" if base in ("add", "adc") else "SubFlags"
-            expr = f"{fn}(c, {a}, {b}, {carry}, {bits})"
+            expr = f"{fn}(c, {a}, {b}, {carry}, {bits}, {self.live_mask(ins)})"
             if base == "cmp":
                 return f"(void){expr};"
             return "{ uint32_t r = " + expr + "; " + self.write(ins, ops[0], "r") + " }"
@@ -694,7 +694,7 @@ class FunctionCompiler:
                 if base == "test":
                     return "/* test: flags dead */"
                 return self.write(ins, ops[0], f"({a} {op} {b})")
-            s = f"{{ uint32_t r = ({a} {op} {b}) & 0x{Mask(bits):x}u; RECOMP_FLAGS_LOGIC(c, r, {bits});"
+            s = f"{{ uint32_t r = ({a} {op} {b}) & 0x{Mask(bits):x}u; RECOMP_FLAGS_LOGIC(c, r, {bits}, {self.live_mask(ins)});"
             if base != "test":
                 s += " " + self.write(ins, ops[0], "r")
             return s + " }"
@@ -706,11 +706,13 @@ class FunctionCompiler:
         if base in ("inc", "dec"):
             a = self.read(ins, ops[0], bits)
             fn = "AddFlags" if base == "inc" else "SubFlags"
-            return ("{ uint8_t cf = c->cf; uint32_t r = " + f"{fn}(c, {a}, 1u, 0, {bits}); c->cf = cf; "
+            # CF survives inc/dec, and the mask keeps the helper from writing it: no save/restore needed.
+            return ("{ uint32_t r = " + f"{fn}(c, {a}, 1u, 0, {bits}, {self.live_mask(ins, 0x1e)}); "
                     + self.write(ins, ops[0], "r") + " }")
         if base == "neg":
             a = self.read(ins, ops[0], bits)
-            return ("{ uint32_t r = " + f"SubFlags(c, 0u, {a}, 0, {bits}); " + self.write(ins, ops[0], "r") + " }")
+            return ("{ uint32_t r = " + f"SubFlags(c, 0u, {a}, 0, {bits}, {self.live_mask(ins)}); "
+                    + self.write(ins, ops[0], "r") + " }")
         if base == "not":
             return self.write(ins, ops[0], f"~{self.read(ins, ops[0], bits)}")
         if base in ("shl", "sal", "shr", "sar") and self.flags_dead(ins):
@@ -729,17 +731,30 @@ class FunctionCompiler:
             a = self.read(ins, ops[0], bits)
             n = self.read(ins, ops[1], 8) if len(ops) > 1 else "1u"
             sign = 1 << (bits - 1)
+            lm = self.live_out.get(ins.address, ALL_FLAGS)
+            _CFb, _OFb, _ZFb, _SFb, _PFb = 0x01, 0x08, 0x02, 0x04, 0x10
             body = f"uint32_t n = ({n}) & 31u; uint32_t a = {a} & 0x{Mask(bits):x}u; if (n) {{ uint32_t r; "
             if base in ("shl", "sal"):
-                body += (f"r = (uint32_t)((uint64_t)a << n) & 0x{Mask(bits):x}u; c->cf = (uint32_t)(((uint64_t)a << n) "
-                         f">> {bits}) & 1u; c->of = ((r >> {bits - 1}) & 1u) ^ c->cf; ")
+                body += f"r = (uint32_t)((uint64_t)a << n) & 0x{Mask(bits):x}u; "
+                if lm & (_CFb | _OFb):
+                    body += f"uint32_t cfnew = (uint32_t)(((uint64_t)a << n) >> {bits}) & 1u; "
+                    body += "c->cf = cfnew; " if lm & _CFb else ""
+                    body += f"c->of = ((r >> {bits - 1}) & 1u) ^ cfnew; " if lm & _OFb else ""
             elif base == "shr":
-                body += f"r = a >> n; c->cf = (a >> (n - 1)) & 1u; c->of = (a >> {bits - 1}) & 1u; "
+                body += f"r = a >> n; "
+                if lm & (_CFb | _OFb):
+                    body += "c->cf = (a >> (n - 1)) & 1u; " if lm & _CFb else ""
+                    body += f"c->of = (a >> {bits - 1}) & 1u; " if lm & _OFb else ""
             else:
                 body += (f"int32_t sa = (int32_t)(a << {32 - bits}) >> {32 - bits}; r = (uint32_t)(n >= {bits} ? (sa >> "
-                         f"{bits - 1}) : (sa >> n)) & 0x{Mask(bits):x}u; c->cf = (uint32_t)(sa >> (n > {bits} ? {bits - 1} : n - 1)) & 1u; c->of = 0; ")
-            body += (f"c->zf = r == 0; c->sf = (r & 0x{sign:x}u) != 0; c->pf = Parity(r); "
-                     + self.write(ins, ops[0], "r") + " }")
+                         f"{bits - 1}) : (sa >> n)) & 0x{Mask(bits):x}u; ")
+                if lm & (_CFb | _OFb):
+                    body += "c->cf = (uint32_t)(sa >> (n > %d ? %d : n - 1)) & 1u; " % (bits, bits - 1) if lm & _CFb else ""
+                    body += "c->of = 0; " if lm & _OFb else ""
+            body += "c->zf = r == 0; " if lm & _ZFb else ""
+            body += f"c->sf = (r & 0x{sign:x}u) != 0; " if lm & _SFb else ""
+            body += "c->pf = Parity(r); " if lm & _PFb else ""
+            body += self.write(ins, ops[0], "r") + " }"
             return "{ " + body + " }"
         if base in ("rol", "ror"):
             a = self.read(ins, ops[0], bits)
@@ -860,9 +875,9 @@ class FunctionCompiler:
             rd = {4: "R32", 1: "R8", 2: "R16"}[width]
             step = f"(c->df ? -{width} : {width})"
             if base.startswith("cmps"):
-                one = f"(void)SubFlags(c, {rd}(c->esi), {rd}(c->edi), 0, {width * 8}); c->esi += {step}; c->edi += {step};"
+                one = f"(void)SubFlags(c, {rd}(c->esi), {rd}(c->edi), 0, {width * 8}, {self.live_mask(ins)}); c->esi += {step}; c->edi += {step};"
             else:
-                one = f"(void)SubFlags(c, c->eax, {rd}(c->edi), 0, {width * 8}); c->edi += {step};"
+                one = f"(void)SubFlags(c, c->eax, {rd}(c->edi), 0, {width * 8}, {self.live_mask(ins)}); c->edi += {step};"
             if rep:
                 return f"while (c->ecx) {{ {one} c->ecx--; if (!c->zf) break; }}"
             if repne:
@@ -876,7 +891,7 @@ class FunctionCompiler:
                 src = self.read(ins, ops[1])
                 return ("{ uint32_t expected = c->eax; uint32_t* p = (uint32_t*)G(" + addr + "); "
                         "uint32_t old = __sync_val_compare_and_swap(p, expected, " + src + "); "
-                        "(void)SubFlags(c, expected, old, 0, 32); if (!c->zf) c->eax = old; }")
+                        f"(void)SubFlags(c, expected, old, 0, 32, {self.live_mask(ins)}); if (!c->zf) c->eax = old; }}")
             raise Unsupported("cmpxchg reg")
         if base == "cld":
             return "c->df = 0;"
@@ -958,30 +973,30 @@ class FunctionCompiler:
         if bits != 32 or ops[0].type != X.X86_OP_MEM:
             if base == "xadd" and ops[0].type == X.X86_OP_REG:
                 a, b = self.read(ins, ops[0]), self.read(ins, ops[1])
-                return ("{ uint32_t a = " + a + ", b = " + b + "; uint32_t r = AddFlags(c, a, b, 0, 32); "
+                return ("{ uint32_t a = " + a + ", b = " + b + f"; uint32_t r = AddFlags(c, a, b, 0, 32, {self.live_mask(ins)}); "
                         + self.write(ins, ops[1], "a") + " " + self.write(ins, ops[0], "r") + " }")
             raise Unsupported(f"lock {base} {bits}-bit")
         p = f"(uint32_t*)G({self.address(ins, ops[0])})"
         if base == "xadd":
             src = self.read(ins, ops[1])
             return ("{ uint32_t b = " + src + "; uint32_t old = __sync_fetch_and_add(" + p + ", b); "
-                    "(void)AddFlags(c, old, b, 0, 32); " + self.write(ins, ops[1], "old") + " }")
+                    f"(void)AddFlags(c, old, b, 0, 32, {self.live_mask(ins)}); " + self.write(ins, ops[1], "old") + " }")
         if base in ("inc", "dec"):
             fn = "__sync_fetch_and_add" if base == "inc" else "__sync_fetch_and_sub"
             flags = "AddFlags" if base == "inc" else "SubFlags"
-            return ("{ uint8_t cf = c->cf; uint32_t old = " + fn + "(" + p + ", 1u); (void)" + flags
-                    + "(c, old, 1u, 0, 32); c->cf = cf; }")
+            return ("{ uint32_t old = " + fn + "(" + p + ", 1u); (void)" + flags
+                    + f"(c, old, 1u, 0, 32, {self.live_mask(ins, 0x1e)}); }}")
         if base in ("add", "sub"):
             v = self.read(ins, ops[1], 32)
             fn = "__sync_fetch_and_add" if base == "add" else "__sync_fetch_and_sub"
             flags = "AddFlags" if base == "add" else "SubFlags"
-            return "{ uint32_t b = " + v + "; uint32_t old = " + fn + "(" + p + ", b); (void)" + flags + "(c, old, b, 0, 32); }"
+            return "{ uint32_t b = " + v + "; uint32_t old = " + fn + "(" + p + ", b); (void)" + flags + f"(c, old, b, 0, 32, {self.live_mask(ins)}); }}"
         if base in ("or", "and", "xor"):
             v = self.read(ins, ops[1], 32)
             fn = {"or": "__sync_fetch_and_or", "and": "__sync_fetch_and_and", "xor": "__sync_fetch_and_xor"}[base]
             op = {"or": "|", "and": "&", "xor": "^"}[base]
             return ("{ uint32_t b = " + v + "; uint32_t old = " + fn + "(" + p + ", b); uint32_t r = old " + op
-                    + " b; RECOMP_FLAGS_LOGIC(c, r, 32); }")
+                    + f" b; RECOMP_FLAGS_LOGIC(c, r, 32, {self.live_mask(ins)}); }}")
         if base == "xchg":
             v = self.read(ins, ops[1], 32)
             return "{ uint32_t old = __sync_lock_test_and_set(" + p + ", " + v + "); " + self.write(ins, ops[1], "old") + " }"
@@ -1114,8 +1129,14 @@ class FunctionCompiler:
                 a, b, t = f"{self.xmm(ins, d)}.f[0]", self.f32(ins, s), "float"
             else:
                 a, b, t = f"{self.xmm(ins, d)}.d[0]", self.f64(ins, s), "double"
-            return (f"{{ {t} a = {a}, b = {b}; int un = a != a || b != b; c->zf = un || a == b; c->pf = un; "
-                    f"c->cf = un || a < b; c->of = c->sf = 0; }}")
+            lm = self.live_out.get(ins.address, ALL_FLAGS)
+            s = f"{{ {t} a = {a}, b = {b}; int un = a != a || b != b; "
+            s += "c->zf = un || a == b; " if lm & 0x02 else ""
+            s += "c->pf = un; " if lm & 0x10 else ""
+            s += "c->cf = un || a < b; " if lm & 0x01 else ""
+            s += "c->of = 0; " if lm & 0x08 else ""
+            s += "c->sf = 0; " if lm & 0x04 else ""
+            return s + "}"
         # ---- shuffles ----
         if base == "shufps":
             imm = ops[2].imm & 0xff
@@ -1234,7 +1255,7 @@ class FunctionCompiler:
         if base in ("fcomi", "fcomip", "fucomi", "fucomip", "fcompi", "fucompi"):
             i = self.sti(ins, ops[-1]) if ops else 1
             pop = " X87Pop(c);" if base.endswith("p") or base.endswith("pi") else ""
-            return f"X87CompareFlags(c, {st(0)}, {st(i)});{pop}"
+            return f"X87CompareFlags(c, {st(0)}, {st(i)}, {self.live_mask(ins)});{pop}"
         if base in ("fcom", "fcomp", "fucom", "fucomp", "ficom", "ficomp"):
             pops = " X87Pop(c);" if base.endswith("p") else ""
             if not ops:
@@ -1336,6 +1357,11 @@ class FunctionCompiler:
 
     def flags_dead(self, ins):
         return (self.flag_defs.get(ins.address, ALL_FLAGS) & self.live_out.get(ins.address, ALL_FLAGS)) == 0
+
+    def live_mask(self, ins, keep=0x3f):
+        """Hex literal of the flags still read before their next write (CF ZF SF OF PF AF). The flag helpers
+        (runtime.h) guard every write with this mask; a literal folds the guards away at -O2."""
+        return f"0x{self.live_out.get(ins.address, ALL_FLAGS) & keep:x}u"
 
     def compile(self):
         labels = self.targets()

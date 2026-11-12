@@ -27,28 +27,6 @@ case $ABI in
     *) echo "unknown ABI $ABI" >&2; exit 2 ;;
 esac
 
-# Item 5: every dependency used to be built with CMake/Meson defaults (no tuning for the phone's cores). DXVK's
-# command-stream and state code, SDL2's event loop and FAudio's mixer all sit on the frame path, so they are built with
-# -O3 and codegen tuned for the Cortex-A76 (mtune only: the binary must still run on every supported core). `-mtune` is
-# dropped on x86_64, where it would only add noise.
-#
-# The flags go into CMAKE_<LANG>_FLAGS_RELEASE, never into CMAKE_<LANG>_FLAGS: the NDK toolchain file assembles the
-# target triple, -DANDROID and -fPIC into CMAKE_<LANG>_FLAGS, and overriding that variable from the command line is how
-# a dependency build silently loses its Android target. Release flags are appended after the base flags, so nothing is
-# overridden.
-#
-# Link-time optimisation of the dependencies is deliberately not enabled here. DXVK is built by meson in a separate
-# step where a full LTO link is one enormous job, and the CMake dependencies plus FFmpeg already rebuild from scratch
-# in CI whenever this script changes; the compile-time risk is not worth an unmeasured gain. `b_ndebug=true` (asserts
-# out of the release library) and `b_lto` are set for DXVK only through the cross file below when LTO_DEPS=1.
-if [ "$CPU_FAMILY" = aarch64 ]; then
-    TUNE_FLAGS="-O3 -mtune=cortex-a76 -fomit-frame-pointer"
-else
-    TUNE_FLAGS="-O3 -fomit-frame-pointer"
-fi
-DEPS_CFLAGS="$TUNE_FLAGS -ffunction-sections -fdata-sections -fno-math-errno"
-LTO_DEPS=${LTO_DEPS:-0}
-
 fetch() {  # fetch <dir> <url> <tag>
     [ -d "$SRC/$1" ] || git clone -q --depth 1 --branch "$3" --recurse-submodules --shallow-submodules "$2" "$SRC/$1"
 }
@@ -74,9 +52,15 @@ PATCH_DIR=$(realpath "$(dirname "${BASH_SOURCE[0]}")/patches")
 for proj in SDL2 FAudio dxvk Dobby; do
     for p in "$PATCH_DIR/${proj,,}"-*.patch; do
         [ -e "$p" ] || continue
-        echo "applying $(basename "$p") to $proj"
-        git -C "$SRC/$proj" apply --check "$p"
-        git -C "$SRC/$proj" apply "$p"
+        if git -C "$SRC/$proj" apply --check "$p" 2>/dev/null; then
+            echo "applying $(basename "$p") to $proj"
+            git -C "$SRC/$proj" apply "$p"
+        elif git -C "$SRC/$proj" apply --reverse --check "$p" 2>/dev/null; then
+            echo "already applied: $(basename "$p")"
+        else
+            echo "FATAL: $(basename "$p") neither applies nor is already applied" >&2
+            exit 1
+        fi
     done
 done
 # Fail closed if the pinned Android compatibility patch is absent from a reused source tree.
@@ -111,9 +95,7 @@ install -m 644 "$SRC/build/Dobby-$ABI/libdobby.a" "$PREFIX/lib/libdobby.a"
 install -m 644 "$SRC/Dobby/include/dobby.h" "$PREFIX/include/dobby.h"
 
 # SDL2 (also installs SDL2.pc, which DXVK's meson build looks up).
-cmake -S "$SRC/SDL2" -B "$SRC/build/SDL2-$ABI" "${CMAKE_ANDROID[@]}" -DSDL_STATIC=OFF -DSDL_TEST=OFF \
-      -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS_RELEASE="$DEPS_CFLAGS" \
-      -DCMAKE_CXX_FLAGS_RELEASE="$DEPS_CFLAGS"
+cmake -S "$SRC/SDL2" -B "$SRC/build/SDL2-$ABI" "${CMAKE_ANDROID[@]}" -DSDL_STATIC=OFF -DSDL_TEST=OFF
 cmake --build "$SRC/build/SDL2-$ABI" -j "$JOBS"
 cmake --install "$SRC/build/SDL2-$ABI"
 # Bind the installed native library to the exact C/Java source version. The APK packager verifies this manifest
@@ -125,9 +107,7 @@ test -s "$PREFIX/lib/protodroid-sdl2-version.txt"
 
 # FAudio on SDL2.
 cmake -S "$SRC/FAudio" -B "$SRC/build/FAudio-$ABI" "${CMAKE_ANDROID[@]}" -DBUILD_SDL3=OFF -DBUILD_SHARED_LIBS=ON \
-      -DSDL2_DIR="$PREFIX/lib/cmake/SDL2" \
-      -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS_RELEASE="$DEPS_CFLAGS" \
-      -DCMAKE_CXX_FLAGS_RELEASE="$DEPS_CFLAGS"
+      -DSDL2_DIR="$PREFIX/lib/cmake/SDL2"
 cmake --build "$SRC/build/FAudio-$ABI" -j "$JOBS"
 cmake --install "$SRC/build/FAudio-$ABI"
 
@@ -150,8 +130,7 @@ if [ "$ABI" = arm64-v8a ]; then FFMPEG_ARCH=aarch64; fi
         --disable-autodetect --enable-pthreads --disable-w32threads --disable-os2threads --disable-x86asm \
         --disable-avdevice --disable-avfilter --disable-swscale --disable-postproc --disable-everything \
         --enable-avformat --enable-avcodec --enable-avutil --enable-swresample \
-        --enable-demuxer=bink --enable-decoder=bink,binkaudio_rdft,binkaudio_dct \
-        --enable-neon --enable-optimizations
+        --enable-demuxer=bink --enable-decoder=bink,binkaudio_rdft,binkaudio_dct
     make -j "$JOBS"
     make install
 )
@@ -160,8 +139,6 @@ for archive in libavformat.a libavcodec.a libavutil.a libswresample.a; do
 done
 
 # DXVK native, d3d9 only.
-TUNE_ARGV=$(printf "'%s', " $TUNE_FLAGS | sed 's/, $//')
-LTO_MESON=$( [ "$LTO_DEPS" = 1 ] && echo true || echo false )
 CROSS=$SRC/build/android-$ABI.cross
 cat > "$CROSS" <<EOF
 [binaries]
@@ -184,15 +161,8 @@ endian = 'little'
 [built-in options]
 # Meson must not silently turn this into a desktop Unix build. DXVK uses
 # __ANDROID__ to select libSDL2.so, libvulkan.so and Android surface WSI.
-# Item 5: release tuning for the device cores, LTO across DXVK's translation units and no assertions in the shipped
-# library (`b_ndebug`); `buildtype=release` alone was still -O2 with asserts and no LTO.
-buildtype = 'release'
-# Meson combos are strings here, not booleans: `b_ndebug = true` is rejected with "Value True (of type boolean) for
-# option b_ndebug is not one of the choices ... true, false, if-release".
-b_lto = '$LTO_MESON'
-b_ndebug = 'true'
-c_args = ['-D__ANDROID__=1', $TUNE_ARGV]
-cpp_args = ['-D__ANDROID__=1', $TUNE_ARGV]
+c_args = ['-D__ANDROID__=1']
+cpp_args = ['-D__ANDROID__=1']
 EOF
 rm -rf "$SRC/build/dxvk-$ABI"
 meson setup "$SRC/build/dxvk-$ABI" "$SRC/dxvk" --cross-file "$CROSS" --buildtype release --prefix "$PREFIX" \

@@ -560,9 +560,7 @@ void DiagnosticsWorker() {
     std::unique_lock<std::mutex> lock(g_lifecycle_mutex);
     auto next_emit = detailed ? std::chrono::steady_clock::now() + std::chrono::seconds(1)
                               : std::chrono::steady_clock::time_point::max();
-    // Backups are change-detected now, so the periodic wake-up is only a safety net: 30 s -> 5 min. The pause/exit
-    // path still mirrors synchronously.
-    auto next_mirror = std::chrono::steady_clock::now() + std::chrono::seconds(300);
+    auto next_mirror = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     while (g_active.load(std::memory_order_acquire)) {
         const auto now = std::chrono::steady_clock::now();
         if (now >= next_emit) {
@@ -575,7 +573,7 @@ void DiagnosticsWorker() {
             lock.unlock();
             MirrorCopyDXVKLogsAsync();
             lock.lock();
-            next_mirror = std::chrono::steady_clock::now() + std::chrono::seconds(300);
+            next_mirror = std::chrono::steady_clock::now() + std::chrono::seconds(30);
         }
         const auto wake = std::min(next_emit, next_mirror);
         g_wake.wait_until(lock, wake, [] { return !g_active.load(std::memory_order_acquire); });

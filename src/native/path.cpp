@@ -5,8 +5,6 @@
 
 #include <cstring>
 #include <mutex>
-#include <shared_mutex>
-#include <unordered_map>
 #include <string>
 #include <vector>
 
@@ -30,55 +28,19 @@ std::string HostRootFor(char drive) {
 }
 
 // Finds `name` in `dir` ignoring case; returns the real name or `name` itself when nothing matches.
-// Item 50: the result is cached per (directory, name). The engine opens the same game files over and over with
-// Windows-style casing against lower-case asset names, so every open used to cost one stat() plus, on a miss, a full
-// opendir/readdir/strcasecmp scan of the directory - each of those a FUSE round trip. A directory's case mapping only
-// changes when files are added or renamed, and the game's read-only asset tree does not, so the cache is only dropped
-// for the writable folders (saves, logs) when an entry is not found.
-namespace {
-struct CaseCacheKey {
-    std::string dir, name;
-    bool operator==(const CaseCacheKey& o) const { return dir == o.dir && name == o.name; }
-};
-struct CaseCacheHash {
-    size_t operator()(const CaseCacheKey& k) const {
-        return std::hash<std::string>()(k.dir) * 1099511628211ull ^ std::hash<std::string>()(k.name);
-    }
-};
-std::shared_mutex g_case_mutex;
-std::unordered_map<CaseCacheKey, std::string, CaseCacheHash> g_case_cache;
-
-bool WritablePath(const std::string& dir) {
-    return dir.find("/Saves") != std::string::npos || dir.find("saves") != std::string::npos ||
-           dir.find("/logs") != std::string::npos || dir.find("native_c") != std::string::npos;
-}
-}  // namespace
-
 std::string MatchCase(const std::string& dir, const std::string& name) {
-    const CaseCacheKey key{dir, name};
-    {
-        std::shared_lock<std::shared_mutex> lock(g_case_mutex);
-        auto it = g_case_cache.find(key);
-        if (it != g_case_cache.end()) return it->second;
-    }
-    std::string found = name;
     struct stat st;
-    if (stat((dir + "/" + name).c_str(), &st) != 0) {
-        if (DIR* d = opendir(dir.c_str())) {
-            while (dirent* e = readdir(d)) {
-                if (strcasecmp(e->d_name, name.c_str()) == 0) {
-                    found = e->d_name;
-                    break;
-                }
-            }
-            closedir(d);
+    if (stat((dir + "/" + name).c_str(), &st) == 0) return name;
+    DIR* d = opendir(dir.c_str());
+    if (!d) return name;
+    std::string found = name;
+    while (dirent* e = readdir(d)) {
+        if (strcasecmp(e->d_name, name.c_str()) == 0) {
+            found = e->d_name;
+            break;
         }
     }
-    {
-        std::unique_lock<std::shared_mutex> lock(g_case_mutex);
-        if (g_case_cache.size() > 65536) g_case_cache.clear();  // bound, in case of a pathological stream of names
-        if (!WritablePath(dir) || found != name) g_case_cache[key] = found;
-    }
+    closedir(d);
     return found;
 }
 

@@ -105,20 +105,25 @@ static inline void X87CompareStatus(Ctx* c, double a, double b) {
     c->fpu_sw = (uint16_t)((c->fpu_sw & ~0x4700u) | cc);
 }
 
-/* fcomi family: ZF PF CF = 000 greater, 001 less, 100 equal, 111 unordered. */
-static inline void X87CompareFlags(Ctx* c, double a, double b) {
+/* fcomi family: ZF PF CF = 000 greater, 001 less, 100 equal, 111 unordered. `live` is the caller's per-flag
+ * liveness mask (runtime.h RECOMP_F_*): dead writes fold away because every call site passes a literal. */
+static inline void X87CompareFlags(Ctx* c, double a, double b, uint32_t live) {
     int un = a != a || b != b;
-    c->zf = un || a == b;
-    c->pf = un;
-    c->cf = un || a < b;
-    c->of = c->sf = c->af = 0;
+    if (live & RECOMP_F_ZF) c->zf = un || a == b;
+    if (live & RECOMP_F_PF) c->pf = un;
+    if (live & RECOMP_F_CF) c->cf = un || a < b;
+    if (live & RECOMP_F_OF) c->of = 0;
+    if (live & RECOMP_F_SF) c->sf = 0;
+    if (live & RECOMP_F_AF) c->af = 0;
 }
-static inline void X87CompareFlagsL(RFlags* c, double a, double b) {
+static inline void X87CompareFlagsL(RFlags* c, double a, double b, uint32_t live) {
     int un = a != a || b != b;
-    c->zf = un || a == b;
-    c->pf = un;
-    c->cf = un || a < b;
-    c->of = c->sf = c->af = 0;
+    if (live & RECOMP_F_ZF) c->zf = un || a == b;
+    if (live & RECOMP_F_PF) c->pf = un;
+    if (live & RECOMP_F_CF) c->cf = un || a < b;
+    if (live & RECOMP_F_OF) c->of = 0;
+    if (live & RECOMP_F_SF) c->sf = 0;
+    if (live & RECOMP_F_AF) c->af = 0;
 }
 
 /* 80-bit extended values, converted to/from double. */

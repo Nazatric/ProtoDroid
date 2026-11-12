@@ -6,14 +6,10 @@
 #include "perf_hint_session.h"
 
 #ifdef __ANDROID__
-#include <dirent.h>
 #include <dlfcn.h>
 #include <unistd.h>
 
 #include <atomic>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <mutex>
 #include <vector>
 
@@ -88,39 +84,6 @@ void PerfHintStart(int fps_target) {
 // (Android 14+).
 // Threads may register before the session exists (the engine raises its render thread during EngineInitialize,
 // before the main loop starts the session): they are kept and join it then.
-// Item 45: only the threads the engine marked HIGHEST/TIME_CRITICAL joined the ADPF session, so DXVK's command-stream,
-// submit and queue-submit threads (often the second busiest in the process) and the job workers ran at normal priority
-// with no clock guidance. Every guest thread is named now (thread.cpp/kernel32.cpp), so the session is completed from
-// /proc once the engine has created its threads.
-void PerfHintAddNamedThreads() {
-    if (!g_session_active.load(std::memory_order_acquire)) return;
-    DIR* dir = opendir("/proc/self/task");
-    if (!dir) return;
-    std::vector<int> found;
-    while (dirent* e = readdir(dir)) {
-        char* end = nullptr;
-        const long tid = strtol(e->d_name, &end, 10);
-        if (!end || *end || tid <= 0) continue;
-        char path[96], name[32] = {};
-        snprintf(path, sizeof(path), "/proc/self/task/%ld/comm", tid);
-        if (FILE* f = fopen(path, "r")) {
-            if (fgets(name, sizeof(name), f)) {
-                const size_t len = strcspn(name, "\n");
-                name[len] = 0;
-            }
-            fclose(f);
-        }
-        // Frame-critical: the DXVK worker threads, the guest engine threads and the audio feeder. Shader-compile and
-        // asset-loading work deliberately stays out of the session so it cannot pull clocks up needlessly.
-        if (strncmp(name, "dxvk", 4) == 0 || strncmp(name, "proto-guest", 11) == 0 || strncmp(name, "proto-audio", 11) == 0) {
-            found.push_back(int(tid));
-        }
-    }
-    closedir(dir);
-    for (int tid : found) PerfHintAddThread(tid);
-    if (!found.empty()) Log("perf hint: session extended with %zu engine/DXVK threads", found.size());
-}
-
 void PerfHintAddThread(int tid) {
     std::lock_guard<std::mutex> lock(g_mutex);
     for (int32_t t : g_tids)
@@ -169,7 +132,6 @@ namespace native {
 
 void PerfHintStart(int) {}
 void PerfHintAddThread(int) {}
-void PerfHintAddNamedThreads() {}
 void PerfHintTarget(int) {}
 void PerfHintFrame(int64_t) {}
 PerfHintSnapshot GetPerfHintStats() { return {}; }

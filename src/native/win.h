@@ -26,24 +26,19 @@ struct KObject {
     // Waitable objects: signaled state and the side effect of a successful wait (auto-reset, count, ownership).
     virtual bool Signaled(uint32_t /*thread_id*/) { return false; }
     virtual void Acquire(uint32_t /*thread_id*/) {}
-    // The word a single-object wait blocks on with futex (kernel32.cpp): 0 = not signaled, otherwise signaled (a
-    // semaphore holds its count). Null for objects that only support the multi-object path.
-    virtual std::atomic<uint32_t>* WaitWord() { return nullptr; }
     // Wakes the threads waiting for this object; g_kernel_mutex is held.
     void Notify() {
         for (KWaiter* w : waiters) w->cv.notify_one();
     }
-    // Auto-reset objects have exactly one waitable unit, so waking one waiter is enough (the rest would only wake up
-    // to find it taken and go back to sleep).
-    void NotifyOne() {
-        if (!waiters.empty()) waiters.front()->cv.notify_one();
-    }
     KType type;
-    // Reference count, atomic because a close on one thread races lookups and waits on another (kernel32.cpp defers
-    // the delete so an object fetched just before a close is never freed under its user).
+    // Atomic because the lock-free fast paths pin an object against a concurrent CloseHandle
+    // (see HandleObjectPinned in kernel32.cpp); every reference transition happens under
+    // g_handles_mutex, which is what makes object lifetime exact.
     std::atomic<int> refs{1};
-    std::vector<KWaiter*> waiters;     // under g_kernel_mutex
-    std::atomic<uint32_t> legacy_waiters{0};  // threads using the multi-object path, so the fast path can be skipped
+    std::vector<KWaiter*> waiters;  // under g_kernel_mutex
+    // Generic sleepers registered by WaitKernel; nonzero makes the lock-free signalers take
+    // g_kernel_mutex and forward a Notify so the generic path cannot miss a wake.
+    std::atomic<int> cv_waiters{0};
 };
 
 // All waitable state changes happen under this lock and Notify() the object (g_kernel_cv: thread resumption).
