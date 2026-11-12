@@ -982,7 +982,7 @@ jobs:
 
       - name: Recompile engine (recomp.py) if DLL present
         if: env.HAS_DLL == '1' && steps.cache-recomp.outputs.cache-hit != 'true' && hashFiles('build/recomp/native/table.c') == ''
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: |
           set -euo pipefail
           export PATH=$HOME/.local/bin:$PATH
@@ -996,12 +996,18 @@ jobs:
           mkdir -p build/recomp/native
           ls -lh re/functions.csv re/extra_functions.txt || true
           python3 -c "import capstone, pefile; print('capstone', capstone.__version__)"
-          timeout 600 bash -c 'PROTODROID_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
-          cat /tmp/recomp.log | tail -n 100
+          timeout 1800 bash -c 'PROTODROID_ENGINE="$DLL_PATH" python3 -u tools/recomp/recomp.py --functions all --base 0x7c000000 --split 400 --out build/recomp/native 2>&1 | tee /tmp/recomp.log; echo "exit ${PIPESTATUS[0]}" > /tmp/recomp_exit'
+          tail -n 100 /tmp/recomp.log
           test -f /tmp/recomp_exit && cat /tmp/recomp_exit
-          if [ "$(awk '{print $2}' /tmp/recomp_exit)" != "0" ]; then
-            echo "recomp failed, log:"
-            cat /tmp/recomp.log
+          RECOMP_EXIT=$(awk '{print $2}' /tmp/recomp_exit)
+          if [ "$RECOMP_EXIT" != "0" ]; then
+            echo "recomp failed (exit $RECOMP_EXIT), log tail:"
+            tail -n 40 /tmp/recomp.log
+            if [ "$RECOMP_EXIT" = "124" ]; then
+              echo "::error::recomp.py hit its 30-minute wall clock before finishing"
+            else
+              echo "::error::recomp.py exited $RECOMP_EXIT: $(grep -v '^Release' /tmp/recomp.log | tail -n 12 | tr '\n' '|' | cut -c1-900)"
+            fi
             exit 1
           fi
           ls -lh build/recomp/native | head -n 40
