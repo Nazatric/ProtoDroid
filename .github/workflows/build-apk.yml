@@ -172,8 +172,9 @@ jobs:
       - name: Compile and run CPU affinity tests
         run: |
           set -euo pipefail
-          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
-          g++ $CXXFLAGS src/native/tests/cpu_affinity_test.cpp -o /tmp/cpu_affinity_test
+          # prime_affinity.cpp supplies the cluster mask the test checks; it needs the guest base the engine is built with.
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull"
+          g++ $CXXFLAGS src/native/tests/cpu_affinity_test.cpp src/native/prime_affinity.cpp -o /tmp/cpu_affinity_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/cpu_affinity_test
 
@@ -597,8 +598,8 @@ jobs:
       - name: Compile and run native ARM64 CPU affinity tests
         run: |
           set -euo pipefail
-          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
-          g++ $CXXFLAGS src/native/tests/cpu_affinity_test.cpp -o /tmp/cpu_affinity_test_arm64
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull"
+          g++ $CXXFLAGS src/native/tests/cpu_affinity_test.cpp src/native/prime_affinity.cpp -o /tmp/cpu_affinity_test_arm64
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/cpu_affinity_test_arm64
 
