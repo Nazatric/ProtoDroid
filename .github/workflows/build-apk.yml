@@ -988,7 +988,7 @@ jobs:
           export PATH=$HOME/.local/bin:$PATH
           if [ -f build/recomp/native/table.c ]; then
             echo "recomp output already present (committed), skipping generation"
-            ls -lh build/recomp/native | head -n 20
+            ls -lh build/recomp/native | sed -n '1,20p'
             echo "files $(ls build/recomp/native/*.c | wc -l) bytes $(du -sh build/recomp/native | cut -f1)"
             exit 0
           fi
@@ -1017,15 +1017,15 @@ jobs:
             echo "::error::recomp.py exited 0 but wrote no table.c"
             exit 1
           fi
-          ls -lh build/recomp/native | head -n 40
+          ls -lh build/recomp/native | sed -n '1,40p'
           echo "Recompilation done, files $(ls build/recomp/native | wc -l) bytes $(du -sh build/recomp/native | cut -f1)"
-          df -h | head -n 20
-          free -h | head -n 20
+          df -h | sed -n '1,20p'
+          free -h | sed -n '1,20p'
 
       - name: Verify recomp cache (fallback)
         if: env.HAS_DLL == '1'
         run: |
-          ls -lh build/recomp/native | head -n 20
+          ls -lh build/recomp/native | sed -n '1,20p'
           echo "recomp files: $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
           if [ ! -f build/recomp/native/table.c ]; then
             echo "ERROR: table.c missing - recomp failed and no cache"
