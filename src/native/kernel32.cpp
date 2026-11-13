@@ -230,10 +230,19 @@ struct Semaphore : KObject {
     void Acquire(uint32_t) override { fast.TryConsume(); }
 };
 
+// protodroid.ini: sync_futex=0 routes every event and semaphore wait and signal through the generic condition-variable
+// path instead of the lock-free primitives. The fast path is the shipped default; the switch exists because a stall
+// with every worker parked in one primitive is the one failure mode the device log cannot adjudicate on its own, and a
+// single build that can be flipped between the two paths turns that question into one launch instead of one bisect.
+bool FutexSync() {
+    static const bool enabled = SettingInt("sync_futex", 1) != 0;
+    return enabled;
+}
+
 // Signals an event through the fast path, forwarding a Notify for generic sleepers.
 void SignalEvent(Event* e) {
     e->fast.Set();
-    if (e->cv_waiters.load(std::memory_order_acquire) != 0) {
+    if (!FutexSync() || e->cv_waiters.load(std::memory_order_acquire) != 0) {
         std::lock_guard<std::mutex> lock(g_kernel_mutex);
         e->Notify();
     }
@@ -804,7 +813,7 @@ K(ReleaseSemaphore) {
         int32_t previous = 0;
         const bool ok = s->fast.Release(int32_t(Arg(c, 1)), &previous);
         if (Arg(c, 2)) W32(Arg(c, 2), uint32_t(previous));
-        if (ok && s->cv_waiters.load(std::memory_order_acquire) != 0) {
+        if (ok && (!FutexSync() || s->cv_waiters.load(std::memory_order_acquire) != 0)) {
             std::lock_guard<std::mutex> lock(g_kernel_mutex);
             s->Notify();
         }
@@ -829,9 +838,9 @@ K(WaitForSingleObject) {
     }
     const uint32_t ms = Arg(c, 1);
     uint32_t result;
-    if (o->type == KType::Event) {
+    if (o->type == KType::Event && FutexSync()) {
         result = static_cast<Event*>(o)->fast.Wait(ms) ? 0u : 0x102u;
-    } else if (o->type == KType::Semaphore) {
+    } else if (o->type == KType::Semaphore && FutexSync()) {
         result = static_cast<Semaphore*>(o)->fast.Wait(ms) ? 0u : 0x102u;
     } else {
         // Rare objects (threads, mutex handles, files) keep the generic path.

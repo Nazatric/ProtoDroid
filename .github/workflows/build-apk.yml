@@ -58,6 +58,17 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/input_lookup_test
 
+      - name: Compile and run the futex synchronization stress test
+        run: |
+          set -euo pipefail
+          # The engine's job system parks and wakes workers millions of times per run, and a lost wakeup freezes the
+          # game with every worker asleep. This is the gate for that class of bug: bounded waits, so a missing wakeup
+          # fails the run instead of stalling it.
+          CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native -pthread"
+          g++ $CXXFLAGS src/native/tests/sync_futex_test.cpp -o /tmp/sync_futex_test
+          export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/sync_futex_test
+
       - name: Compile and run graphics UBSAN tests
         run: |
           set -euo pipefail
