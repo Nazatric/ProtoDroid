@@ -84,8 +84,17 @@ assert "GuestCall(terminate, {});" in ordinary_exit, "Normal Play must retain En
 
 watchdog = (ROOT / "src/native/watchdog.cpp").read_text(encoding="utf-8")
 assert "if (now == g_frames->load()) DiagnosticTourWatchdogStalled(now, seconds);" in watchdog, (
-    "The watchdog must recheck progress after backtrace capture before ending a tour"
-)
+    "The watchdog must recheck progress after backtrace capture before ending a tour")
+assert "next_report = still + seconds" in watchdog, (
+    "A stall must be sampled again while it lasts: one snapshot cannot tell a stuck thread from a thread that runs "
+    "without presenting, and the frozen runs on the device only ever logged the first one")
+assert "GuestCallTotal()" in watchdog and "guest calls/s" in watchdog, (
+    "Stall reports must include how much guest code retired per second")
+runtime_source = (ROOT / "src/native/runtime.cpp").read_text(encoding="utf-8")
+assert "std::atomic<uint64_t> g_guest_calls{0};" in runtime_source and "GuestCallTotal()" in runtime_source
+assert "if (++tl_call_batch >= 4096) {" in runtime_source, (
+    "The progress counter must stay off the hot path: batch the shared update")
+assert "uint64_t GuestCallTotal();" in (ROOT / "src/native/guest.h").read_text(encoding="utf-8")
 tour_source = (ROOT / "src/native/diagnostic_tour.cpp").read_text(encoding="utf-8")
 plan_source = (ROOT / "src/native/diagnostic_tour_plan.h").read_text(encoding="utf-8")
 enum_body = plan_source.split("enum class TourInput : uint8_t {", 1)[1].split("};", 1)[0]

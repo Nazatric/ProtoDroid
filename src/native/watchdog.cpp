@@ -64,19 +64,31 @@ void OnSignal(int) {
 void Run(int seconds) {
     uint64_t last = g_frames->load();
     int still = 0;
-    bool reported = false;
+    int sample = 0;
+    int next_report = seconds;
+    uint64_t calls = GuestCallTotal();
     for (;;) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         uint64_t now = g_frames->load();
+        const uint64_t calls_now = GuestCallTotal();
+        const uint64_t calls_per_second = calls_now - calls;
+        calls = calls_now;
         if (now != last) {
             last = now;
             still = 0;
-            reported = false;
+            sample = 0;
+            next_report = seconds;
             continue;
         }
-        if (++still < seconds || reported) continue;
-        reported = true;
-        Log("watchdog: no frame for %d s (frame %llu), guest thread backtraces:", seconds, (unsigned long long)now);
+        if (++still < next_report) continue;
+        // Repeat while the stall lasts, slower each time. One snapshot cannot distinguish "stuck in one place" from
+        // "executing far too slowly" (a loading script that never yields); consecutive snapshots with the same
+        // symbols and the same frame count prove the first, different positions prove the second. A single snapshot
+        // is all a frozen app used to log, because the app was closed before the next report was due.
+        next_report = still + seconds * (sample == 0 ? 3 : 6);
+        ++sample;
+        Log("watchdog: no frame for %d s (frame %llu), sample %d, %llu guest calls/s, guest thread backtraces:",
+            still, (unsigned long long)now, sample, (unsigned long long)calls_per_second);
         std::vector<Registered> threads;
         {
             std::lock_guard<std::mutex> lock(g_mutex);

@@ -3,6 +3,7 @@
 #include <csetjmp>
 #include <cstdlib>
 #include <cstring>
+#include <atomic>
 #include <mutex>
 
 #include "diagnostic_tour.h"
@@ -26,6 +27,12 @@ uint8_t* RecompMemoryBase = nullptr;
 namespace native {
 
 namespace {
+
+// Progress counter for the hang diagnostics. One relaxed increment per computed call plus a shared update every
+// 4096 calls: a sample of how much guest code is actually running, independent of what the backtraces show. Zero
+// dispatches while a thread sits in one function means a loop inside that function; millions per second means the
+// engine is running, just not presenting (see watchdog.cpp).
+std::atomic<uint64_t> g_guest_calls{0};
 
 constexpr int kHashBits = 18;
 struct HashSlot {
@@ -81,7 +88,17 @@ static uint32_t FollowThunks(uint32_t target) {
     return target;
 }
 
+namespace {
+thread_local uint32_t tl_call_batch = 0;
+}
+
+uint64_t GuestCallTotal() { return g_guest_calls.load(std::memory_order_relaxed); }
+
 extern "C" void RecompDispatch(Ctx* ctx, uint32_t target) {
+    if (++tl_call_batch >= 4096) {
+        tl_call_batch = 0;
+        g_guest_calls.fetch_add(4096, std::memory_order_relaxed);
+    }
     if (RecompDiagnosticTour) {
         // Vtable thunks are recompiled and use RecompDirect on Android, so checking only their final task addresses
         // here misses the normal gameplay route. The cold tour-only classifier recognizes both forms.
