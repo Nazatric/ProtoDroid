@@ -124,6 +124,21 @@ uint32_t ImportThunk(const char* dll, const char* name) {
     return addr;
 }
 
+namespace {
+
+// A guest loop that makes no progress shows up as one thread calling the same import over and over with nothing in
+// between (the engine polls BinkWait for a movie frame, or a job counter, instead of blocking). A run that freezes
+// then says so in its own log instead of only stopping to present frames. One thread-local compare on the hot path;
+// the report threshold is high enough that ordinary per-frame calls never reach it.
+struct CallStorm {
+    const char* name = nullptr;
+    uint64_t same = 0;
+};
+thread_local CallStorm tl_storm;
+constexpr uint64_t kStormReport = 2000000;
+
+}  // namespace
+
 bool DispatchImport(Ctx* ctx, uint32_t target) {
     if (!g_thunk_base || target < g_thunk_base || target >= g_thunk_base + kThunkSize) return false;
     Ctx* saved = tl_ctx;
@@ -137,6 +152,15 @@ bool DispatchImport(Ctx* ctx, uint32_t target) {
     if (!s.fn) {
         Fatal("unimplemented import %s!%s (called from %08x, args %08x %08x %08x %08x)", s.dll.c_str(),
               s.name.c_str(), R32(ctx->esp), Arg(ctx, 0), Arg(ctx, 1), Arg(ctx, 2), Arg(ctx, 3));
+    }
+    const char* called = s.name.c_str();
+    if (called != tl_storm.name) {
+        tl_storm.name = called;
+        tl_storm.same = 0;
+    } else if (++tl_storm.same >= kStormReport) {
+        Log("imports: thread %d called %s %llu times with no other import in between (guest poll loop, no progress)",
+            int(gettid()), called, (unsigned long long)tl_storm.same);
+        tl_storm.same = 0;
     }
     if (ImportProfiling() && s.name != "SwitchToFiber") {  // a fiber switch does not return until switched back
         ProfiledCall(s, index, ctx);

@@ -213,6 +213,11 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private final RectF textRect = new RectF(), bindRect = new RectF(), hideRect = new RectF(), removeRect = new RectF();
     private Button selected;          // the button (or stick) the size buttons act on
     private boolean selectedStick, removeArmed;
+    // MENU/GAME and the settings gear are controls too: the editor moves and resizes them like a button, and their
+    // geometry is persisted next to the button layout. chrome: 0 none, 1 the MENU/GAME pill, 2 the gear.
+    private int chrome, chromeDrag = -1;
+    private float modeCustomX = -1, modeCustomY = -1, modeSize = 1;
+    private float gearCustomX = -1, gearCustomY = -1, gearSize = 1;
     private Button bindingTarget;
     private boolean bindingNew;
     private float stickSize = 1;
@@ -388,6 +393,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         stickCustomY = prefs.getFloat("stick_y", -1);
         stickSize = prefs.getFloat("stick_size", 1);
         stickHidden = prefs.getBoolean("stick_hidden", false);
+        modeCustomX = prefs.getFloat("mode_x", -1);
+        modeCustomY = prefs.getFloat("mode_y", -1);
+        modeSize = prefs.getFloat("mode_size", 1);
+        gearCustomX = prefs.getFloat("gear_x", -1);
+        gearCustomY = prefs.getFloat("gear_y", -1);
+        gearSize = prefs.getFloat("gear_size", 1);
         customButtons.clear();
         long maxId = 0;
         List<CustomButtonStore.Entry> entries = CustomButtonStore.decode(
@@ -423,6 +434,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         }
         ed.putFloat("stick_size", stickSize).putBoolean("stick_hidden", stickHidden);
         if (stickCustomX >= 0) ed.putFloat("stick_x", stickHomeX / w).putFloat("stick_y", stickHomeY / h);
+        ed.putFloat("mode_size", modeSize).putFloat("gear_size", gearSize);
+        if (modeCustomX >= 0) ed.putFloat("mode_x", modeRect.left / w).putFloat("mode_y", modeRect.top / h);
+        if (gearCustomX >= 0) ed.putFloat("gear_x", gearRect.left / w).putFloat("gear_y", gearRect.top / h);
         ed.apply();
         saveCustomButtons();
     }
@@ -451,10 +465,16 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         stickCustomX = stickCustomY = -1;
         stickSize = 1;
         stickHidden = false;
+        modeCustomX = modeCustomY = gearCustomX = gearCustomY = -1;
+        modeSize = gearSize = 1;
         selected = null;
         selectedStick = false;
+        chrome = 0;
+        chromeDrag = -1;
         removeArmed = false;
-        ed.remove("stick_x").remove("stick_y").remove("stick_size").remove("stick_hidden").apply();
+        ed.remove("stick_x").remove("stick_y").remove("stick_size").remove("stick_hidden")
+                .remove("mode_x").remove("mode_y").remove("mode_size")
+                .remove("gear_x").remove("gear_y").remove("gear_size").apply();
         saveCustomButtons();
         cache.clear();
         layoutButtons(getWidth(), getHeight());
@@ -500,6 +520,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         dragPointer = modePointer = gearPointer = -1;
         dragButton = null;
         dragStick = false;
+        chromeDrag = -1;
         clearSnap();
         removeArmed = false;
         layoutButtons(w, h);
@@ -529,8 +550,16 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         }
         stickX = knobX = stickHomeX;
         stickY = knobY = stickHomeY;
-        modeRect.set(14 * density, 14 * density, 110 * density, 52 * density);
-        gearRect.set(w - 58 * density, 12 * density, w - 14 * density, 56 * density);
+        // Defaults reproduce the stock corners (14,14 + 96x38 for MENU/GAME; a 44 dp square for the gear); the editor
+        // stores a position in fractions of the view and a size factor instead.
+        float modeW = 96 * density * modeSize, modeH = 38 * density * modeSize;
+        float modeX = modeCustomX >= 0 ? modeCustomX * w : 14 * density;
+        float modeY = modeCustomY >= 0 ? modeCustomY * h : 14 * density;
+        modeRect.set(modeX, modeY, modeX + modeW, modeY + modeH);
+        float gearUnit = 44 * density * gearSize;
+        float gearX = gearCustomX >= 0 ? gearCustomX * w : w - 58 * density;
+        float gearY = gearCustomY >= 0 ? gearCustomY * h : 12 * density;
+        gearRect.set(gearX, gearY, gearX + gearUnit, gearY + gearUnit);
         float pw = Math.min(w * 0.92f, 860 * density), ph = Math.min(h * 0.94f, 500 * density);
         panel.set((w - pw) / 2, (h - ph) / 2, (w + pw) / 2, (h + ph) / 2);
         keyboard.layout(w, h);
@@ -687,6 +716,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         removeArmed = false;
         clearSnap();
         panelOpen = false;
+        chrome = 0;
+        chromeDrag = -1;
         editing = true;
     }
 
@@ -711,6 +742,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void finishEditing() {
         saveLayout();
         removeArmed = false;
+        chrome = 0;
+        chromeDrag = -1;
         buzz();
         if (layoutOnly) {
             // Stay in the editor until the activity is gone; a final normal frame must not touch SDL/FPS natives.
@@ -951,10 +984,15 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     buzz();
                     break;
                 }
-                if ((selected != null || selectedStick) && (smallerRect.contains(x, y) || biggerRect.contains(x, y))) {
+                if ((selected != null || selectedStick || chrome != 0)
+                        && (smallerRect.contains(x, y) || biggerRect.contains(x, y))) {
                     removeArmed = false;
                     float step = biggerRect.contains(x, y) ? 0.1f : -0.1f;
-                    if (selected != null) {
+                    if (chrome == 1) {
+                        modeSize = Math.max(0.6f, Math.min(2f, modeSize + step));
+                    } else if (chrome == 2) {
+                        gearSize = Math.max(0.6f, Math.min(2f, gearSize + step));
+                    } else if (selected != null) {
                         selected.size = Math.max(0.6f, Math.min(2f, selected.size + step));
                     } else {
                         stickSize = Math.max(0.6f, Math.min(2f, stickSize + step));
@@ -971,6 +1009,21 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                 // Opaque editor chrome owns its touches; never drag a control hidden underneath it.
                 if (editorBar.contains(x, y) || selectionBar.contains(x, y)) {
                     removeArmed = false;
+                    break;
+                }
+                // The MENU/GAME pill and the settings gear are draggable too, and they win over a button parked on top
+                // of them: otherwise a control dropped over the gear could never be moved off it again.
+                if (modeRect.contains(x, y) || gearRect.contains(x, y)) {
+                    chrome = modeRect.contains(x, y) ? 1 : 2;
+                    chromeDrag = id;
+                    selected = null;
+                    selectedStick = false;
+                    removeArmed = false;
+                    clearSnap();
+                    RectF r = chrome == 1 ? modeRect : gearRect;
+                    dragDx = r.centerX() - x;
+                    dragDy = r.centerY() - y;
+                    buzz();
                     break;
                 }
                 for (Button b : allButtons) {
@@ -993,12 +1046,39 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     dragPointer = id;
                     selected = dragButton;
                     selectedStick = dragStick;
+                    chrome = 0;
                     removeArmed = false;
                     clearSnap();
                     buzz();
+                } else {
+                    // A tap on empty space clears the selection, so the option panel stops covering the controls
+                    // underneath it while the rest of the layout is rearranged.
+                    selected = null;
+                    selectedStick = false;
+                    chrome = 0;
+                    removeArmed = false;
+                    clearSnap();
                 }
                 break;
             case MotionEvent.ACTION_MOVE: {
+                int ci = chromeDrag >= 0 ? e.findPointerIndex(chromeDrag) : -1;
+                if (ci >= 0) {
+                    float viewW = getWidth(), viewH = getHeight();
+                    RectF moving = chrome == 1 ? modeRect : gearRect;
+                    float chromeX = clampCenter(e.getX(ci) + dragDx, moving.width() / 2f, viewW);
+                    float chromeY = clampCenter(e.getY(ci) + dragDy, moving.height() / 2f, viewH);
+                    float left = chromeX - 0.5f * moving.width(), top = chromeY - 0.5f * moving.height();
+                    if (chrome == 1) {
+                        modeCustomX = left / viewW;
+                        modeCustomY = top / viewH;
+                    } else {
+                        gearCustomX = left / viewW;
+                        gearCustomY = top / viewH;
+                    }
+                    layoutButtons((int) viewW, (int) viewH);
+                    invalidate();
+                    break;
+                }
                 int i = e.findPointerIndex(dragPointer);
                 if (i < 0) {
                     clearSnap();
@@ -1027,6 +1107,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP:
             case MotionEvent.ACTION_CANCEL:
+                if (id == chromeDrag || action == MotionEvent.ACTION_CANCEL) {
+                    chromeDrag = -1;
+                }
                 if (action == MotionEvent.ACTION_CANCEL || id == dragPointer) {
                     dragPointer = -1;
                     dragButton = null;
@@ -1431,6 +1514,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         for (Button b : allButtons) {
             if (visible(b)) drawButton(c, b);
         }
+        // MENU/GAME and the gear are part of the layout, so they are drawn and selectable here as well.
+        drawPill(c, modeRect, gameMode ? "GAME" : "MENU", gameMode);
+        drawGear(c);
         if (selected != null || selectedStick) {
             float sx = selected != null ? selected.cx : stickHomeX;
             float sy = selected != null ? selected.cy : stickHomeY;
@@ -1438,6 +1524,13 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             edge.setStrokeWidth(2.5f * density);
             edge.setColor(0xffffffff);
             c.drawCircle(sx, sy, sr + 6 * density, edge);
+        }
+        if (chrome != 0) {
+            RectF r = chrome == 1 ? modeRect : gearRect;
+            float pad = 6 * density;
+            edge.setStrokeWidth(2.5f * density);
+            edge.setColor(0xffffffff);
+            c.drawRect(r.left - pad, r.top - pad, r.right + pad, r.bottom + pad, edge);
         }
         if (snapXActive || snapYActive) {
             edge.setStyle(Paint.Style.STROKE);
@@ -1447,9 +1540,14 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             if (snapYActive) c.drawLine(0, snapGuideY, getWidth(), snapGuideY, edge);
         }
 
+        // The editor's own chrome sits at the bottom. It used to be a bar across the top of the screen, which owned
+        // every touch in that strip and made the player's top-row controls (the power row, F1/F2, ENTER/ESC)
+        // impossible to drag. Those controls now belong to the player everywhere.
         float margin = 10 * density;
-        float top = 8 * density;
-        editorBar.set(margin, top, getWidth() - margin, top + 64 * density);
+        float gap = 6 * density;
+        float barHeight = 44 * density;
+        float barBottom = getHeight() - 8 * density;
+        editorBar.set(margin, barBottom - barHeight, getWidth() - margin, barBottom);
         fill.setStyle(Paint.Style.FILL);
         fill.setColor(0xf5100d0f);
         c.drawRect(editorBar, fill);
@@ -1457,44 +1555,34 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         edge.setColor(0x88504a4d);
         c.drawRect(editorBar, edge);
         edge.setColor(RED);
-        c.drawLine(editorBar.left, editorBar.bottom, editorBar.right, editorBar.bottom, edge);
+        c.drawLine(editorBar.left, editorBar.top, editorBar.right, editorBar.top, edge);
 
-        float gap = 6 * density;
-        float actionsWidth = Math.min(312 * density, editorBar.width() * 0.70f);
-        float actionW = (actionsWidth - gap * 3) / 4f;
-        float actionRight = editorBar.right - 10 * density;
-        float actionTop = editorBar.top + 10 * density;
-        float actionBottom = actionTop + 44 * density;
-        doneRect.set(actionRight - actionW, actionTop, actionRight, actionBottom);
+        float actionW = (editorBar.width() - gap * 3) / 4f;
+        float actionTop = editorBar.top + 4 * density;
+        float actionBottom = editorBar.bottom - 4 * density;
+        doneRect.set(editorBar.right - actionW, actionTop, editorBar.right, actionBottom);
         resetRect.set(doneRect.left - gap - actionW, actionTop, doneRect.left - gap, actionBottom);
         stickRect.set(resetRect.left - gap - actionW, actionTop, resetRect.left - gap, actionBottom);
         addRect.set(stickRect.left - gap - actionW, actionTop, stickRect.left - gap, actionBottom);
 
-        float titleLeft = editorBar.left + 14 * density;
-        float titleWidth = Math.max(1f, addRect.left - titleLeft - 10 * density);
-        text.setTextAlign(Paint.Align.LEFT);
-        text.setColor(0xffffeee8);
-        text.setTextSize(15 * density);
-        while (text.measureText("TOUCH LAYOUT") > titleWidth && text.getTextSize() > 10 * density) {
-            text.setTextSize(text.getTextSize() - density);
-        }
-        c.drawText("TOUCH LAYOUT", titleLeft, editorBar.top + 25 * density, text);
-        if (titleWidth > 105 * density) {
-            text.setTextSize(10 * density);
-            text.setColor(0xffb8aaa5);
-            c.drawText("Drag to move • tap for options", titleLeft, editorBar.top + 45 * density, text);
-        }
         text.setTextAlign(Paint.Align.CENTER);
         drawPill(c, addRect, customButtons.size() >= CustomButtonStore.MAX_BUTTONS ? "MAX 24" : "ADD", false);
         drawPill(c, stickRect, stickHidden ? "ADD STICK" : "STICK", false);
         drawPill(c, resetRect, "RESET", false);
         drawPill(c, doneRect, "DONE", true);
+        if (selected == null && !selectedStick && chrome == 0) {
+            text.setTextSize(10 * density);
+            text.setColor(0xe0b8aaa5);
+            c.drawText("DRAG ANY CONTROL TO MOVE IT  \u2022  TAP FOR OPTIONS  \u2022  DONE SAVES",
+                    editorBar.centerX(), editorBar.top - 9 * density, text);
+        }
 
-        if (selected != null || selectedStick) {
+        if (selected != null || selectedStick || chrome != 0) {
             float panelWidth = Math.min(getWidth() - margin * 2, 620 * density);
             float panelLeft = (getWidth() - panelWidth) / 2f;
-            selectionBar.set(panelLeft, getHeight() - 98 * density,
-                    panelLeft + panelWidth, getHeight() - 10 * density);
+            float panelHeight = 82 * density;
+            selectionBar.set(panelLeft, editorBar.top - gap * 2 - panelHeight,
+                    panelLeft + panelWidth, editorBar.top - gap * 2);
             fill.setStyle(Paint.Style.FILL);
             fill.setColor(0xf7100d0f);
             c.drawRect(selectionBar, fill);
@@ -1504,10 +1592,12 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             edge.setColor(RED);
             c.drawLine(selectionBar.left, selectionBar.top, selectionBar.right, selectionBar.top, edge);
 
-            float size = selected != null ? selected.size : stickSize;
-            String name = selected != null ? selected.label : "STICK";
-            String binding = selected != null ? selected.bindingText() : "MOVE";
-            boolean hidden = selected != null ? selected.hidden : stickHidden;
+            float size = chrome == 1 ? modeSize : chrome == 2 ? gearSize
+                    : selected != null ? selected.size : stickSize;
+            String name = chrome == 1 ? "MENU/GAME" : chrome == 2 ? "GEAR"
+                    : selected != null ? selected.label : "STICK";
+            String binding = chrome != 0 ? "UI" : selected != null ? selected.bindingText() : "MOVE";
+            boolean hidden = chrome != 0 ? false : selected != null ? selected.hidden : stickHidden;
             text.setTextSize(13 * density);
             text.setColor(0xffffe0dc);
             c.drawText(name + "  •  " + binding + "  •  SIZE " + Math.round(size * 100) + "%",
@@ -1515,9 +1605,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
 
             boolean custom = selected != null && selected.custom;
             boolean hasText = selected != null;
-            int count = custom ? 6 : hasText ? 4 : 3;
+            int count = chrome != 0 ? 2 : custom ? 6 : hasText ? 4 : 3;
             float rowWidth = Math.min(selectionBar.width() - 20 * density,
-                    (custom ? 590 : hasText ? 390 : 310) * density);
+                    (chrome != 0 ? 200 : custom ? 590 : hasText ? 390 : 310) * density);
             float itemWidth = (rowWidth - gap * (count - 1)) / count;
             float x = selectionBar.centerX() - rowWidth / 2f;
             float y = selectionBar.top + 34 * density;
@@ -1541,12 +1631,16 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             } else {
                 bindRect.setEmpty();
             }
-            hideRect.set(x + (itemWidth + gap) * next, y,
-                    x + (itemWidth + gap) * next + itemWidth, bottom);
             drawPill(c, smallerRect, "\u2212", false);
             drawPill(c, biggerRect, "+", false);
-            drawPill(c, hideRect, hidden ? "SHOW" : "HIDE", false);
-            next++;
+            if (chrome != 0) {
+                hideRect.setEmpty();
+            } else {
+                hideRect.set(x + (itemWidth + gap) * next, y,
+                        x + (itemWidth + gap) * next + itemWidth, bottom);
+                drawPill(c, hideRect, hidden ? "SHOW" : "HIDE", false);
+                next++;
+            }
             if (custom) {
                 removeRect.set(x + (itemWidth + gap) * next, y,
                         x + (itemWidth + gap) * next + itemWidth, bottom);
