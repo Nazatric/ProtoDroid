@@ -92,7 +92,9 @@ namespace {
 thread_local uint32_t tl_call_batch = 0;
 }
 
+namespace native {
 uint64_t GuestCallTotal() { return g_guest_calls.load(std::memory_order_relaxed); }
+}  // namespace native
 
 extern "C" void RecompDispatch(Ctx* ctx, uint32_t target) {
     if (++tl_call_batch >= 4096) {
