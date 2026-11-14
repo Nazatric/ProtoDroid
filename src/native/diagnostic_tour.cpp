@@ -12,6 +12,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <thread>
 #include <cstring>
 #include <string>
 #include <time.h>
@@ -72,10 +73,32 @@ uint64_t g_tour_present_start = 0;
 int64_t g_engine_ready_ns = 0;
 int64_t g_last_progress_ns = 0;
 int64_t g_tour_deadline_ns = 0;
+std::atomic<int64_t> g_last_pump_ns{0};   // watchdog input: the main loop answers the pump
+char g_cache_path[512] = {};              // the isolated run's DXVK state cache
+int64_t g_cache_baseline = -1;            // its size when the tour armed (the seeded backup included)
+// Menu confirmation: the front-end dispatches the same InGameState task the gameplay detector keys on,
+// so the dispatch alone cannot prove real gameplay. The tour presses Enter until the DXVK state cache
+// grows — actual pipeline compilation — which only happens once the city is loading/rendering.
+bool g_menu_key_down = false;
+int g_menu_presses = 0;
+int64_t g_menu_next_ns = 0;
+int64_t g_menu_press_next_ns = 0;
+uint64_t g_menu_settle_present = 0;
 
-constexpr int64_t kGameplayTimeoutNs = 120ll * 1000 * 1000 * 1000;
+constexpr int64_t kGameplayTimeoutNs = 240ll * 1000 * 1000 * 1000;
 constexpr int64_t kPresentStallTimeoutNs = 30ll * 1000 * 1000 * 1000;
 constexpr int64_t kTourTimeoutNs = 20ll * 60 * 1000 * 1000 * 1000;
+constexpr int64_t kMenuCacheGrowthBytes = 8192;  // real gameplay compiles hundreds of pipelines; menus ~19
+constexpr int64_t kWatchdogSilenceNs = 120ll * 1000 * 1000 * 1000;
+
+int64_t CacheSizeBytes() {
+    struct stat st {};
+    return stat(g_cache_path, &st) == 0 ? int64_t(st.st_size) : -1;
+}
+
+bool CacheGrew(int64_t min_growth) {
+    return g_cache_baseline >= 0 && CacheSizeBytes() >= g_cache_baseline + min_growth;
+}
 
 int64_t ProcessCpuNanos() {
     timespec time {};
@@ -189,6 +212,7 @@ const char* InputName(TourInput input) {
         case TourInput::F: return "F";
         case TourInput::LeftMouse: return "LeftMouse";
         case TourInput::RightMouse: return "RightMouse";
+        case TourInput::Return: return "Enter";
         default: return "None";
     }
 }
@@ -212,6 +236,7 @@ SDL_Scancode Scancode(TourInput input) {
         case TourInput::Q: return SDL_SCANCODE_Q;
         case TourInput::E: return SDL_SCANCODE_E;
         case TourInput::F: return SDL_SCANCODE_F;
+        case TourInput::Return: return SDL_SCANCODE_RETURN;
         default: return SDL_SCANCODE_UNKNOWN;
     }
 }
@@ -298,8 +323,9 @@ void BeginPhase(size_t index) {
         const TourPhase& phase = kTourPhases[index];
         g_phase_name.store(phase.name, std::memory_order_release);
         char marker[1024];
-        snprintf(marker, sizeof(marker), "phase=%s\nindex=%zu\nstatus=requested\npresent=%llu\ncoverage=%s\n",
-                 phase.name, index, (unsigned long long)PresentedFrameCount(), phase.coverage);
+        snprintf(marker, sizeof(marker), "phase=%s\nindex=%zu\nstatus=requested\npresent=%llu\nsize_kb=%lld\ncoverage=%s\n",
+                 phase.name, index, (unsigned long long)PresentedFrameCount(), (long long)CacheSizeBytes() / 1024,
+                 phase.coverage);
         if (!WriteMarker(g_phase_path, marker)) {
             Log("diagnostic tour: could not write durable phase marker %s: %s", g_phase_path, strerror(errno));
             Record("phase=%s status=failed reason=durable phase marker write failed", true, phase.name);
@@ -404,6 +430,8 @@ bool DiagnosticTourStart(const char* isolated_cache_dir) {
     snprintf(g_phase_path, sizeof(g_phase_path), "%s/phase.txt", kDiagnosticTourLogDir);
     snprintf(g_result_path, sizeof(g_result_path), "%s/result.txt", kDiagnosticTourLogDir);
     snprintf(g_crash_path, sizeof(g_crash_path), "%s/crash.log", kDiagnosticTourLogDir);
+    snprintf(g_cache_path, sizeof(g_cache_path), "%s/prototypeenginef.dll.dxvk-cache", isolated_cache_dir);
+    g_cache_baseline = CacheSizeBytes();
     char previous[600];
     snprintf(previous, sizeof(previous), "%s/journal.prev.log", kDiagnosticTourLogDir);
     rename(g_journal_path, previous);
@@ -411,6 +439,11 @@ bool DiagnosticTourStart(const char* isolated_cache_dir) {
     rename(g_crash_path, previous);
     snprintf(previous, sizeof(previous), "%s/result.prev.txt", kDiagnosticTourLogDir);
     rename(g_result_path, previous);
+    // Publish "running" immediately so a watcher that races this startup can never mistake a
+    // previous session's completed result for this run's verdict (the reported "finished in a
+    // second"): the launcher deletes the stale file before launching too, and this marker makes
+    // the window safe even when the delete fails.
+    WriteMarker(g_result_path, "result=running\nphase=startup\n", false);
 
     g_journal_fd = open(g_journal_path, O_WRONLY | O_CREAT | O_EXCL | O_APPEND | O_CLOEXEC, 0644);
     if (g_journal_fd < 0) {
@@ -433,6 +466,34 @@ bool DiagnosticTourStart(const char* isolated_cache_dir) {
     g_started.store(true, std::memory_order_release);
     RecompDiagnosticTour = 1;
     g_phase_name.store("startup", std::memory_order_release);
+    // A frozen engine stops calling the pump, which is where every other failure path lives: without
+    // this watchdog a deadlocked run would sit on "result=running" until the user kills the app, with
+    // nothing in the logs. The tour process is isolated, so ending it here is safe and diagnosable.
+    std::thread([] {
+        for (;;) {
+            std::this_thread::sleep_for(std::chrono::seconds(10));
+            if (!g_started.load(std::memory_order_acquire)) continue;
+            if (g_finished.load(std::memory_order_acquire)) return;
+            const int64_t last = g_last_pump_ns.load(std::memory_order_acquire);
+            const int64_t now = MonotonicNanos();
+            if (last <= 0 || now - last <= kWatchdogSilenceNs) continue;
+            if (g_finished.exchange(true, std::memory_order_acq_rel)) return;
+            g_result.store(2, std::memory_order_release);
+            RecompDiagnosticTour = 0;
+            char marker[512];
+            snprintf(marker, sizeof(marker),
+                     "result=failed\nreason=engine stopped answering the tour pump (watchdog)\nphase=%s\n"
+                     "present=%llu\ncache_bytes=%lld\n",
+                     g_phase_name.load(std::memory_order_relaxed), (unsigned long long)PresentedFrameCount(),
+                     (long long)CacheSizeBytes());
+            WriteMarker(g_result_path, marker, false);
+            snprintf(marker, sizeof(marker), "phase=%s\nstatus=failed\nreason=watchdog-engine-silence\ncache_bytes=%lld\n",
+                     g_phase_name.load(std::memory_order_relaxed), (long long)CacheSizeBytes());
+            WriteMarker(g_phase_path, marker);
+            Log("diagnostic tour watchdog: engine stopped answering the pump; ending the frozen process");
+            _exit(9);
+        }
+    }).detach();
     Record("run status=requested source=%s command_line=%s logs=%s saves=%s cache=%s", true, PROTODROID_SOURCE_REVISION,
            kDiagnosticTourCommandLine, kDiagnosticTourLogDir, kDiagnosticTourSaveDir, isolated_cache_dir);
     Record("policy normal_play_unchanged=true normal_save_migration=false normal_cache_migration=false "
@@ -487,18 +548,48 @@ void DiagnosticTourGameplayObserved(uint32_t target) {
     g_gameplay_observed.store(true, std::memory_order_release);
 }
 
+// Injected menu confirmation: a press/release Enter pair every 4 s while the front-end is up, with the
+// live cache size mirrored into phase.txt so the launcher's overlay can show real progress.
+void MenuConfirmPump(int64_t now) {
+    const uint64_t presented = PresentedFrameCount();
+    if (g_menu_settle_present == 0) g_menu_settle_present = presented + 240;  // let the front-end come up
+    if (presented < g_menu_settle_present) return;
+    if (g_menu_key_down) {
+        if (now >= g_menu_next_ns) {  // reused as the release deadline while a press is held
+            InjectKey(Scancode(TourInput::Return), false);
+            g_menu_key_down = false;
+        }
+        return;
+    }
+    if (now >= g_menu_press_next_ns && g_menu_presses < 24) {
+        InjectKey(Scancode(TourInput::Return), true);
+        g_menu_key_down = true;
+        ++g_menu_presses;
+        g_menu_next_ns = now + 150000000ll;         // release in 150 ms
+        g_menu_press_next_ns = now + 4000000000ll;  // next press in 4 s
+        char marker[1024];
+        snprintf(marker, sizeof(marker),
+                 "phase=gameplay_wait\nstatus=running\nwait=menu-confirm+cache-growth\nmenu_presses=%d\n"
+                 "cache_bytes=%lld\nbaseline_bytes=%lld\n",
+                 g_menu_presses, (long long)CacheSizeBytes(), g_cache_baseline);
+        WriteMarker(g_phase_path, marker);
+        Record("menu_confirm press=%d cache_bytes=%lld", false, g_menu_presses, (long long)CacheSizeBytes());
+    }
+}
+
 bool DiagnosticTourPump() {
     if (!g_started.load(std::memory_order_acquire)) return true;
     if (g_finished.load(std::memory_order_acquire)) return false;
     if (!g_engine_ready) return true;
     const int64_t now = MonotonicNanos();
+    g_last_pump_ns.store(now, std::memory_order_release);
     if (!g_save_ready) {
         DiagnosticTourFail("startup", "engine initialized without verified isolated saves");
         return false;
     }
     if (!g_gameplay_observed.load(std::memory_order_acquire)) {
         if (now - g_engine_ready_ns > kGameplayTimeoutNs)
-            FailFromPump("InGameState dispatch was not observed within 120 seconds");
+            FailFromPump("InGameState dispatch was not observed within 240 seconds");
         return !g_finished.load(std::memory_order_acquire);
     }
     if (!g_gameplay_logged) {
@@ -508,6 +599,16 @@ bool DiagnosticTourPump() {
         Record("gameplay status=observed InGameState_target=%08x note=dispatch-is-not-visual-verification", true, target);
     }
     if (!g_running) {
+        // The front-end dispatches the same InGameState task, so the dispatch alone cannot gate the plan:
+        // the original tour "played" the main menu and built a menu-sized cache. Real gameplay is proven by
+        // DXVK actually compiling gameplay pipelines, i.e. the isolated state cache growing. Until then,
+        // confirm the menu with injected Enter presses (NEW GAME is the highlighted default entry).
+        if (!CacheGrew(kMenuCacheGrowthBytes)) {
+            MenuConfirmPump(now);
+            if (now - g_engine_ready_ns > kGameplayTimeoutNs)
+                FailFromPump("gameplay shader compilation (state-cache growth) was not observed within 240 seconds");
+            return !g_finished.load(std::memory_order_acquire);
+        }
         g_running = true;
         g_present_cursor = PresentedFrameCount();
         g_last_progress_ns = now;
@@ -515,8 +616,9 @@ bool DiagnosticTourPump() {
         g_tour_started_ns = now;
         g_tour_cpu_start_ns = ProcessCpuNanos();
         g_tour_present_start = g_present_cursor;
-        Record("tour status=running start_present=%llu guest_clock_scale=%u import_profile=enabled", true,
-               (unsigned long long)g_present_cursor, kDiagnosticTourGuestClockScale);
+        Record("tour status=running start_present=%llu cache_bytes=%lld menu_presses=%d guest_clock_scale=%u "
+               "import_profile=enabled", true, (unsigned long long)g_present_cursor, (long long)CacheSizeBytes(),
+               g_menu_presses, kDiagnosticTourGuestClockScale);
         BeginPhase(0);
         return !g_finished.load(std::memory_order_acquire);
     }

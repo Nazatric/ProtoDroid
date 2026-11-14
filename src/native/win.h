@@ -1,6 +1,7 @@
 // Shared pieces of the Win32 emulation layer of the native host: kernel object handles, paths, last error.
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
@@ -30,8 +31,14 @@ struct KObject {
         for (KWaiter* w : waiters) w->cv.notify_one();
     }
     KType type;
-    int refs = 1;
+    // Atomic because the lock-free fast paths pin an object against a concurrent CloseHandle
+    // (see HandleObjectPinned in kernel32.cpp); every reference transition happens under
+    // g_handles_mutex, which is what makes object lifetime exact.
+    std::atomic<int> refs{1};
     std::vector<KWaiter*> waiters;  // under g_kernel_mutex
+    // Generic sleepers registered by WaitKernel; nonzero makes the lock-free signalers take
+    // g_kernel_mutex and forward a Notify so the generic path cannot miss a wake.
+    std::atomic<int> cv_waiters{0};
 };
 
 // All waitable state changes happen under this lock and Notify() the object (g_kernel_cv: thread resumption).
