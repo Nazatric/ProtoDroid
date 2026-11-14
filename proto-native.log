@@ -1,152 +1,353 @@
-[mono=117336.617 tid=27932] protodroid build Nov  6 2026 08:44:12
-[mono=117336.619 tid=27932] protodroid source b59dacdf9b96466a9cf9327eab516f464b103782
-[mono=117336.619 tid=27932] logs mirrored to /storage/emulated/0/Prototype/logs
-protodroid build Nov  6 2026 08:44:12
-protodroid source b59dacdf9b96466a9cf9327eab516f464b103782
-[mono=117336.619 tid=27932] DXVK logs mirrored to /storage/emulated/0/Prototype/logs
-[mono=117336.625 tid=27932] DXVK state cache: /storage/emulated/0/Android/data/com.protodroid/files/prototypeenginef.dll.dxvk-cache (before=missing, after=populated)
-[mono=117336.625 tid=27932] DXVK state cache restored from /storage/emulated/0/Prototype/logs/prototypeenginef.dll.dxvk-cache
-[mono=117336.626 tid=27932] game dir: /storage/emulated/0/Prototype
-[mono=117336.626 tid=27932] data dir: /storage/emulated/0/Android/data/com.protodroid/files
-[mono=117336.643 tid=27932] save dir: /storage/emulated/0/Prototype/Saves
-[mono=117336.644 tid=27932] config: loaded protodroid.ini
-[mono=117336.644 tid=27932] config: render_height = 1080
-[mono=117336.644 tid=27932] config: texture_skip_mips = 0
-[mono=117336.644 tid=27932] config: decode_16bit = 0
-[mono=117336.644 tid=27932] config: game_shadow_detail = 2
-[mono=117336.644 tid=27932] config: game_graphic_quality = 2
-[mono=117336.644 tid=27932] config: max_anisotropy = 2
-[mono=117336.644 tid=27932] config: unlock_dev_menu = 1
-[mono=117336.648 tid=27932] memory: guest window at 1000000000, arena 2000 MiB
-[mono=117336.649 tid=27932] samplers: effective DXVK forwarding maximum 2x
-[mono=117336.650 tid=27932] vulkan: requested driver mode auto
-[mono=117336.650 tid=27932] vulkan: system vkGetInstanceProcAddr resolved (RTLD_GLOBAL)
-[mono=117336.651 tid=27932] vulkan: system driver sees Mali-G720 MC7 (profile mali-immortalis, device Vulkan 1.3.278, requested 1.3, loader 1.4, usable 1.3, driver 0c401000, driverID 9, vendor 13b5 device c8700010)
-[mono=117336.651 tid=27932] vulkan: Auto keeps the direct system Vulkan 1.3 path
-[mono=117336.651 tid=27932] present mode: FIFO (vsync), interval 1 for CreateDevice and Reset
-[mono=117336.651 tid=27932] anisotropy: bridge/DXVK maximum 2x
-[mono=117336.651 tid=27932] game profile: Prototype DF formats disabled for dynamic shadows and effects
-[mono=117336.656 tid=27932] render size 2400x1080 (window 2712x1220)
-[mono=117336.656 tid=27932] diagnostics: detailed metrics disabled; shared log mirroring remains active
-[mono=117336.695 tid=27932] loader: rebased to 7c000000 (418563 fixups)
-[mono=117336.696 tid=27932] loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
-[mono=117336.699 tid=27932] timing: LoadImage 42.922 ms (success=1)
-[mono=117336.700 tid=27932] mods: 0 active package(s), root /storage/emulated/0/Prototype/mods
-[mono=117336.700 tid=27932] mods: 0 loose-file overlay source(s)
-[mono=117336.700 tid=27932] mods: texture replacement disabled, 0 key(s), dumping=0
-[mono=117336.717 tid=27932] mods: developer-menu build type changed at 7ce0f3ac
-[mono=117336.717 tid=27932] mods: 0 sandboxed Lua package(s) initialized
-[mono=117336.717 tid=27932] DllMain(PROCESS_ATTACH)
-[mono=117336.719 tid=27932] DllMain returned 1 after 1.906 ms
-[mono=117336.719 tid=27932] engine command line: (empty)
-[mono=117336.719 tid=27932] EngineInitialize
-[mono=117336.719 tid=27932] SetThreadPriority(0) -> nice 0 on tid 27932
-[mono=117336.720 tid=27932] SetThreadPriority(2) -> nice -4 on tid 27938
-[mono=117336.720 tid=27932] perf hint: thread 27938 queued for session creation (registered=1)
-[mono=117336.720 tid=27932] process affinity: reporting mask 000000ff (8 low CPUs) to the engine
-[mono=117336.721 tid=27932] SetThreadPriority(0) -> nice 0 on tid 27939
-[mono=117336.722 tid=27932] SetThreadPriority(0) -> nice 0 on tid 27940
-[mono=117336.723 tid=27932] SetThreadPriority(0) -> nice 0 on tid 27941
-[mono=117336.724 tid=27932] SetThreadPriority(0) -> nice 0 on tid 27942
-[mono=117336.724 tid=27932] SetThreadPriority(0) -> nice 0 on tid 27943
-[mono=117336.724 tid=27932] SetThreadPriority(0) -> nice 0 on tid 27944
-[mono=117336.724 tid=27932] SetThreadPriority(0) -> nice 0 on tid 27945
-[mono=117336.725 tid=27932] SetThreadPriority(15) -> nice -10 on tid 27946
-[mono=117336.725 tid=27932] perf hint: thread 27946 queued for session creation (registered=2)
-[mono=117336.730 tid=27932] SetThreadPriority(1) -> nice -2 on tid 27947
-[mono=117336.733 tid=27932] SetThreadPriority(1) -> nice -2 on tid 27948
-[mono=117336.734 tid=27932] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
-[mono=117336.742 tid=27932] Direct3DCreate9(32) -> 0xb400007db00b3f50 in 8.061 ms
-[mono=117336.742 tid=27932] GPU BC (DXT) textures: not supported, decoding on
-[mono=117336.827 tid=27932] CreateDevice 2400x1080 fmt 22 windowed 1 msaa 0/0 interval 1 swap 1 buffers 1 behavior 00000044 adapters 1 -> 00000000 in 85.391 ms
-[mono=117336.836 tid=27932] textures: skip 0 mip level(s) of textures >= 512, decode DXT on
-[mono=117336.911 tid=27932] perf hint: thread 27932 queued for session creation (registered=3)
-[mono=117336.927 tid=27932] SetThreadPriority(0) -> nice 0 on tid 27958
-[mono=117336.941 tid=27932] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
-[mono=117336.941 tid=27932] dinput: CreateDevice(Keyboard)
-[mono=117336.941 tid=27932] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
-[mono=117336.941 tid=27932] dinput: CreateDevice(Mouse)
-[mono=117336.947 tid=27932] xaudio2: Initialize(flags 0) -> 0
-[mono=117336.991 tid=27932] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) created retained output -> 0 in 43.781 ms
-[mono=117336.991 tid=27932] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
-[mono=117336.991 tid=27932] SetThreadPriority(15) -> nice -10 on tid 27963
-[mono=117336.991 tid=27932] perf hint: thread 27963 queued for session creation (registered=4)
-[mono=117336.991 tid=27932] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.001 ms
-[mono=117336.991 tid=27932] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
-[mono=117336.992 tid=27932] SetThreadPriority(15) -> nice -10 on tid 27965
-[mono=117336.992 tid=27932] perf hint: thread 27965 queued for session creation (registered=5)
-[mono=117336.993 tid=27962] perf hint: thread 27962 queued for session creation (registered=6)
-[mono=117336.998 tid=27932] SetThreadPriority(15) -> nice -10 on tid 27966
-[mono=117336.998 tid=27932] perf hint: thread 27966 queued for session creation (registered=7)
-[mono=117337.025 tid=27932] SetThreadPriority(1) -> nice -2 on tid 27967
-[mono=117337.060 tid=27932] SetThreadPriority(1) -> nice -2 on tid 27968
-[mono=117337.082 tid=27932] video settings: Shadow Detail = 2 (GameDB setter returned)
-[mono=117337.082 tid=27932] video settings: Graphic Quality = 2 (GameDB setter returned)
-[mono=117337.164 tid=27932] EngineInitialize returned 1 after 445.014 ms
-[mono=117337.166 tid=27932] perf hint: native frame thread 27951 (dxvk-submit)
-[mono=117337.166 tid=27932] perf hint: native frame thread 27953 (dxvk-cs)
-[mono=117337.169 tid=27932] perf hint: session (target 16.7 ms, 8 threads)
-[mono=117337.169 tid=27932] fps limit: target=0 (successful-Present pacing; FIFO/display timing remains independent)
-[mono=117337.169 tid=27932] frame 0
-[mono=117337.194 tid=27932] Reset 2400x1080 msaa 0/0 interval 1 -> 00000000 in 13.682 ms
-[mono=117337.207 tid=27932] frame 1
-[mono=117337.225 tid=27932] frame 2
-[mono=117337.227 tid=27958] perf hint: thread 27958 added to active session (registered=9, update_status=0, stale_pruned=0)
-[mono=117337.231 tid=27932] frame 4
-[mono=117337.251 tid=27932] frame 8
-[mono=117337.324 tid=27932] frame 16
-[mono=117337.331 tid=27932] frame 32
-[mono=117337.331 tid=27932] frame 64
-[mono=117337.332 tid=27932] frame 128
-[mono=117337.333 tid=27932] frame 256
-[mono=117337.333 tid=27932] frame 512
-[mono=117337.782 tid=27932] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.001 ms
-[mono=117337.783 tid=27932] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
-[mono=117337.783 tid=27932] SetThreadPriority(15) -> nice -10 on tid 27971
-[mono=117337.784 tid=27932] perf hint: thread 27971 added to active session (registered=9, update_status=0, stale_pruned=1)
-[mono=117337.819 tid=27932] Reset 2400x1080 msaa 0/0 interval 1 -> 00000000 in 32.966 ms
-[mono=117337.844 tid=27932] frame 1024
-[mono=117337.844 tid=27932] frame 2048
-[mono=117337.847 tid=27932] frame 4096
-[mono=117338.624 tid=27932] frame 8192
-[mono=117338.776 tid=27932] frame 16384
-[mono=117339.079 tid=27932] frame 32768
-[mono=117342.003 tid=27962] audio: 236 passes, max gap 30.4 ms, guest 24.5 ms (max 1.37), refill requests 233, underruns 1, submits 964
-[mono=117345.116 tid=27958] [bink] SDL movie audio: 48000 Hz, stereo float
-
-[mono=117345.330 tid=27967] [bink] indexed 18044 RCF paths from 11 archives
-
-[mono=117345.330 tid=27967] [bink] RCF input movies/activisionRadicalLogos.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik +841885696 (21244780 bytes)
-
-[mono=117345.339 tid=27967] [bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: 21244780 bytes, AVIO 256 KiB
-
-[mono=117345.361 tid=27967] [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: 1280x720, 427 frames, 4 audio tracks, video threads=1 type=0x0 active=0x0, wait=paced
-
-[mono=117345.407 tid=27958] [bink] first audio /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik track=0 stream=1: 48000 Hz -> 48000 Hz, 1920 samples, output=yes ring=1920
-
-[mono=117345.409 tid=27958] [bink] first audio /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik track=1 stream=2: 48000 Hz -> 48000 Hz, 1920 samples, output=yes ring=1920
-
-[mono=117345.410 tid=27958] [bink] first audio /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik track=2 stream=3: 48000 Hz -> 48000 Hz, 1920 samples, output=yes ring=1920
-
-[mono=117345.411 tid=27958] [bink] first audio /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik track=3 stream=4: 48000 Hz -> 48000 Hz, 1920 samples, output=yes ring=1920
-
-[mono=117345.416 tid=27958] [bink] first frame ready /storage/emulated/0/Prototype/movies.rcf:movies/activisionradicallogos.bik: frame=1, 1280x720, format=yuv420p, packet=36712, planes=uploaded
-
-[mono=117346.421 tid=27967] [bink] RCF input movies/fe_ambientMovie_start.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik +1016276992 (13275304 bytes)
-
-[mono=117346.431 tid=27967] [bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 13275304 bytes, AVIO 256 KiB
-
-[mono=117346.435 tid=27967] [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: 1280x720, 612 frames, 0 audio tracks, video threads=1 type=0x0 active=0x0, wait=non-blocking menu
-
-[mono=117346.510 tid=27958] [bink] first frame ready /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_start.bik: frame=1, 1280x720, format=yuv420p, packet=53780, planes=uploaded
-
-[mono=117348.006 tid=27967] [bink] RCF input movies/fe_ambientMovie_1.bik -> /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik +958214144 (58061816 bytes)
-
-[mono=117348.010 tid=27967] [bink] host direct input /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 58061816 bytes, AVIO 256 KiB
-
-[mono=117348.014 tid=27967] [bink] opened /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: 1280x720, 1808 frames, 0 audio tracks, video threads=1 type=0x0 active=0x0, wait=non-blocking menu
-
-[mono=117348.083 tid=27958] [bink] first frame ready /storage/emulated/0/Prototype/movies.rcf:movies/fe_ambientmovie_1.bik: frame=1, 1280x720, format=yuv420p, packet=380, planes=uploaded
-
-[mono=117359.666 tid=27948] textures: 1024 created, 0 reduced, 942 decoded; cumulative top levels 246 MiB -> 470 MiB (not resident)
-[mono=117360.018 tid=27932] frame 65536
+[mono=53124.724 tid=18843] protodroid build Nov 13 2026 11:22:22
+[mono=53124.725 tid=18843] protodroid source 589991d915a5559f595f6d1fdb6aa5a80ee783ca
+[mono=53124.725 tid=18843] logs mirrored to /storage/emulated/0/Prototype/diagnostic-tour/logs
+protodroid build Nov 13 2026 11:22:22
+protodroid source 589991d915a5559f595f6d1fdb6aa5a80ee783ca
+[mono=53124.725 tid=18843] DXVK logs mirrored to /storage/emulated/0/Prototype/diagnostic-tour/logs
+[mono=53124.725 tid=18843] game dir: /storage/emulated/0/Prototype
+[mono=53124.725 tid=18843] data dir: /storage/emulated/0/Android/data/com.protodroid/files
+[mono=53124.739 tid=18843] diagnostic tour save isolation verified: /storage/emulated/0/Prototype/diagnostic-tour/saves; no user saves migrated or selected
+[mono=53124.739 tid=18843] save dir: /storage/emulated/0/Prototype/diagnostic-tour/saves
+[mono=53124.739 tid=18843] diagnostic tour: guest/import profiling enabled; 4x guest elapsed clocks, real-time host metrics
+[mono=53124.739 tid=18843] DXVK pipeline trace enabled (diagnostic tour)
+[mono=53124.741 tid=18843] config: loaded protodroid.ini
+[mono=53124.741 tid=18843] config: render_height = 1080
+[mono=53124.741 tid=18843] config: texture_skip_mips = 0
+[mono=53124.741 tid=18843] config: decode_16bit = 0
+[mono=53124.741 tid=18843] config: game_shadow_detail = 2
+[mono=53124.741 tid=18843] config: game_graphic_quality = 2
+[mono=53124.741 tid=18843] config: max_anisotropy = 2
+[mono=53124.741 tid=18843] memory: guest window at 1000000000, arena 2000 MiB
+[mono=53124.742 tid=18843] vulkan: requested driver mode auto
+[mono=53124.742 tid=18843] vulkan: system vkGetInstanceProcAddr resolved (RTLD_GLOBAL)
+[mono=53124.743 tid=18843] vulkan: system driver sees Mali-G720 MC7 (profile mali-immortalis, device Vulkan 1.3.278, requested 1.3, loader 1.4, usable 1.3, driver 0c401000, driverID 9, vendor 13b5 device c8700010)
+[mono=53124.743 tid=18843] vulkan: Auto keeps the direct system Vulkan 1.3 path
+[mono=53124.743 tid=18843] present mode: FIFO (vsync), interval 1 for CreateDevice and Reset
+[mono=53124.743 tid=18843] anisotropy: bridge/DXVK maximum 2x
+[mono=53124.743 tid=18843] game profile: Prototype DF formats disabled for dynamic shadows and effects
+[mono=53124.743 tid=18843] frame pacing: DXVK maxFrameLatency 1; limiter follows the display refresh rate
+[mono=53124.747 tid=18843] render size 2400x1080 (window 2712x1220)
+[mono=53124.747 tid=18843] device: model=2412DPC0AI device=rodin soc=MT6899 platform=mt6899 hardware=mt6899 android=16 sdk=36 abi=arm64-v8a
+[mono=53124.748 tid=18843] host: online_cpus=8 configured_cpus=8 page_size=4096 clk_tck=100 native_abi=arm64
+[mono=53124.748 tid=18843] display: current=2712x1220 refresh=120Hz format=15151002
+[mono=53124.749 tid=18843] memory capacity: total=11312 MiB available=6057 MiB
+[mono=53124.749 tid=18843] cpu maximum frequencies: unavailable
+[mono=53124.749 tid=18843] diagnostics: enabled; window=1s; native/DXVK timestamps are monotonic seconds with thread IDs; Present wall is not GPU time
+[mono=53124.751 tid=18849] diagnostics health APIs: thermal_manager=yes status_api=yes headroom_api=yes cpu_headroom_api=yes gpu_headroom_api=yes
+[mono=53124.787 tid=18843] loader: rebased to 7c000000 (418563 fixups)
+[mono=53124.789 tid=18843] loader: /storage/emulated/0/Prototype/prototypeenginef.dll at 7c000000-7d424000, 368 imports, entry 7ca888c5
+[mono=53124.791 tid=18843] timing: LoadImage 41.997 ms (success=1)
+[mono=53124.792 tid=18843] mods: 0 active package(s), root /storage/emulated/0/Prototype/mods
+[mono=53124.792 tid=18843] mods: 0 loose-file overlay source(s)
+[mono=53124.792 tid=18843] mods: texture replacement disabled, 0 key(s), dumping=0
+[mono=53124.792 tid=18843] mods: 0 sandboxed Lua package(s) initialized
+[mono=53124.792 tid=18843] DllMain(PROCESS_ATTACH)
+[mono=53124.802 tid=18843] DllMain returned 1 after 10.209 ms
+[mono=53124.802 tid=18843] engine command line: Level=manhattanTest NoAutoSave
+[mono=53124.802 tid=18843] EngineInitialize
+[mono=53124.802 tid=18843] SetThreadPriority(0) -> nice 0 on tid 18843
+[mono=53124.803 tid=18851] affinity: pinned tid 18851 to prime cluster mask 000000f0 (affinity_mode=1)
+[mono=53124.803 tid=18843] SetThreadPriority(2) -> nice -4 on tid 18851
+[mono=53124.803 tid=18843] process affinity: reporting mask 000000ff (8 low CPUs) to the engine
+[mono=53124.804 tid=18843] SetThreadPriority(0) -> nice 0 on tid 18852
+[mono=53124.804 tid=18843] SetThreadPriority(0) -> nice 0 on tid 18853
+[mono=53124.807 tid=18843] SetThreadPriority(0) -> nice 0 on tid 18854
+[mono=53124.809 tid=18843] SetThreadPriority(0) -> nice 0 on tid 18856
+[mono=53124.809 tid=18843] SetThreadPriority(0) -> nice 0 on tid 18857
+[mono=53124.809 tid=18843] SetThreadPriority(0) -> nice 0 on tid 18858
+[mono=53124.809 tid=18843] SetThreadPriority(0) -> nice 0 on tid 18859
+[mono=53124.811 tid=18843] SetThreadPriority(15) -> nice -10 on tid 18860
+[mono=53124.818 tid=18843] SetThreadPriority(1) -> nice -2 on tid 18861
+[mono=53124.818 tid=18843] SetThreadPriority(1) -> nice -2 on tid 18862
+[mono=53124.818 tid=18843] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+[mono=53124.824 tid=18843] Direct3DCreate9(32) -> 0xb4000079f5e3b6b0 in 5.743 ms
+[mono=53124.824 tid=18843] GPU BC (DXT) textures: not supported, decoding on
+[mono=53124.902 tid=18843] CreateDevice 2400x1080 fmt 22 windowed 1 msaa 0/0 interval 1 swap 1 buffers 1 behavior 00000044 adapters 1 -> 00000000 in 76.991 ms
+[mono=53124.915 tid=18843] textures: skip 0 mip level(s) of textures >= 512, decode DXT on
+[mono=53125.023 tid=18843] SetThreadPriority(0) -> nice 0 on tid 18872
+[mono=53125.031 tid=18843] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+[mono=53125.031 tid=18843] dinput: CreateDevice(Keyboard)
+[mono=53125.031 tid=18843] CoCreateInstance({4590f811-1d3a-11d0-891f-...}): class not available
+[mono=53125.031 tid=18843] dinput: CreateDevice(Mouse)
+[mono=53125.037 tid=18843] xaudio2: Initialize(flags 0) -> 0
+[mono=53125.085 tid=18843] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) created retained output -> 0 in 47.870 ms
+[mono=53125.085 tid=18843] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+[mono=53125.085 tid=18843] SetThreadPriority(15) -> nice -10 on tid 18877
+[mono=53125.086 tid=18843] xaudio2: CreateMasteringVoice(0 ch, 0 Hz, device 0) reused retained output -> 0 in 0.001 ms
+[mono=53125.086 tid=18843] xaudio2: CreateSourceVoice(tag 65534, 2 ch, 48000 Hz, 16 bit) -> 0
+[mono=53125.086 tid=18843] SetThreadPriority(15) -> nice -10 on tid 18879
+[mono=53125.118 tid=18843] SetThreadPriority(15) -> nice -10 on tid 18880
+[mono=53125.152 tid=18843] SetThreadPriority(1) -> nice -2 on tid 18881
+[mono=53125.181 tid=18843] SetThreadPriority(1) -> nice -2 on tid 18882
+[mono=53125.215 tid=18843] video settings: Shadow Detail = 2 (GameDB setter returned)
+[mono=53125.215 tid=18843] video settings: Graphic Quality = 2 (GameDB setter returned)
+[mono=53125.307 tid=18843] EngineInitialize returned 1 after 505.012 ms
+[mono=53125.327 tid=18843] perf hint: session (target 8.3 ms, 6 threads)
+[mono=53125.327 tid=18843] frame 0
+[mono=53125.351 tid=18843] Reset 2400x1080 msaa 0/0 interval 1 -> 00000000 in 17.321 ms
+[mono=53125.356 tid=18872] samplers: effective DXVK forwarding maximum 2x
+[mono=53125.373 tid=18843] frame 1
+[mono=53125.398 tid=18843] frame 2
+[mono=53125.445 tid=18843] frame 4
+[mono=53125.479 tid=18843] frame 8
+[mono=53125.540 tid=18843] frame 16
+[mono=53125.673 tid=18843] frame 32
+[mono=53125.752 tid=18849] diag: window=1.001s loops=41 rate=40.94/s fps_limit=0; present_fps=51.918 intervals n=40 avg=19.261 p50=8.313 p95=43.319 p99=378.142 max=378.142 ms; gt8.5/17/34/50/100/250/1000ms=15/4/3/1/1/1/0
+[mono=53125.753 tid=18849] diag: present worst: 378.142ms@mono=53125.398 tid=18872 | 45.241ms@mono=53125.443 tid=18872 | 43.319ms@mono=53125.020 tid=18843 | 25.777ms@mono=53125.472 tid=18872
+[mono=53125.753 tid=18849] diag: EngineService n=41 avg=10.209 p50=8.138 p95=27.470 p99=46.111 max=46.111 ms; gt8.5/17/34/50/100/250/1000ms=14/5/2/0/0/0/0; worst: 46.111ms@mono=53125.373 tid=18843 | 44.324ms@mono=53125.445 tid=18843
+[mono=53125.753 tid=18849] diag: event pump n=41 avg=0.021 p95=0.035 max=0.183 ms; limiter wait n=41 avg=0.000 p95=0.000 max=0.000 ms; focus n=41 avg=0.001 p95=0.002 max=0.002 ms
+[mono=53125.753 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=41 avg=8.425 p50=7.045 p95=18.144 p99=43.278 max=43.278 ms; gt8.5/17/34/50/100/250/1000ms=5/3/2/0/0/0/0; worst: 43.278ms@mono=53125.020 tid=18843 | 41.698ms@mono=53125.443 tid=18872
+[mono=53125.753 tid=18849] diag: texture dxt n=271 total=2.19ms avg=0.01 max=0.41 gt10/50/100=0/0/0; create n=169 total=40.57 avg=0.24 max=13.61 gt10/50/100=1/0/0; upload n=283 total=0.03 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53125.753 tid=18849] diag: io opens=35 open_errors=15; reads=60 bytes=15903715 (15.167 MiB) total=31.63ms avg=0.527ms max=7.20ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53125.753 tid=18849] diag: memory rss=682MiB peak=682MiB virtual=24396MiB anon=230MiB file=449MiB shmem=2MiB swap=32MiB; system_available=5618MiB; arena 360 MiB (peak 360), up to 17880000
+[mono=53125.753 tid=18849] diag: cpu process_cpu=0.00% of_one_core delta=0.0ms user=0.0ms system=0.0ms last_core=7; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=1000 cpu1=1000 cpu2=1000 cpu3=1000 cpu4=2900 cpu5=2900 cpu6=2900 cpu7=2800
+[mono=53125.755 tid=18849] diag: threads=72 new=72 top=17480:SDLActivity delta=0.0ms total=780.0ms state=S core=7 new | 18800:RenderThread delta=0.0ms total=720.0ms state=S core=4 new | 18843:SDLThread delta=0.0ms total=460.0ms state=S core=6 new | 18862:SDLThread delta=0.0ms total=300.0ms state=R core=7 new | 18789:binder:17480_3 delta=0.0ms total=60.0ms state=S core=7 new | 18807:mali-event-hand delta=0.0ms total=60.0ms state=S core=5 new
+[mono=53125.760 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53125.761 tid=18849] diag: thermal transition unsupported(-2) -> none(0)
+[mono=53125.761 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=40 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53125.940 tid=18843] frame 64
+[mono=53126.472 tid=18843] frame 128
+[mono=53126.761 tid=18849] diag: window=1.009s loops=121 rate=119.98/s fps_limit=0; present_fps=120.069 intervals n=121 avg=8.329 p50=8.302 p95=9.206 p99=11.278 max=21.389 ms; gt8.5/17/34/50/100/250/1000ms=43/1/0/0/0/0/0
+[mono=53126.761 tid=18849] diag: present worst: 21.389ms@mono=53126.310 tid=18872 | 11.278ms@mono=53126.491 tid=18872 | 9.334ms@mono=53126.007 tid=18872 | 9.332ms@mono=53125.807 tid=18872
+[mono=53126.761 tid=18849] diag: EngineService n=121 avg=8.301 p50=8.221 p95=9.603 p99=11.787 max=21.492 ms; gt8.5/17/34/50/100/250/1000ms=49/1/0/0/0/0/0; worst: 21.492ms@mono=53126.310 tid=18843 | 11.787ms@mono=53126.400 tid=18843
+[mono=53126.761 tid=18849] diag: event pump n=121 avg=0.018 p95=0.028 max=0.158 ms; limiter wait n=121 avg=0.000 p95=0.000 max=0.000 ms; focus n=121 avg=0.003 p95=0.002 max=0.252 ms
+[mono=53126.761 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=121 avg=7.318 p50=7.310 p95=8.496 p99=9.068 max=20.884 ms; gt8.5/17/34/50/100/250/1000ms=6/1/0/0/0/0/0; worst: 20.884ms@mono=53126.310 tid=18872 | 9.068ms@mono=53126.491 tid=18872
+[mono=53126.761 tid=18849] diag: texture dxt n=575 total=18.89ms avg=0.03 max=6.17 gt10/50/100=0/0/0; create n=279 total=74.38 avg=0.27 max=12.74 gt10/50/100=1/0/0; upload n=575 total=0.22 avg=0.00 max=0.11 gt10/50/100=0/0/0
+[mono=53126.761 tid=18849] diag: io opens=0 open_errors=0; reads=15 bytes=7257672 (6.921 MiB) total=23.52ms avg=1.568ms max=3.58ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53126.761 tid=18849] diag: memory rss=828MiB peak=828MiB virtual=24800MiB anon=260MiB file=566MiB shmem=2MiB swap=32MiB; system_available=5477MiB; arena 360 MiB (peak 360), up to 17880000
+[mono=53126.762 tid=18849] diag: cpu process_cpu=142.78% of_one_core delta=1440.0ms user=1190.0ms system=250.0ms last_core=7; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=700 cpu1=700 cpu2=700 cpu3=700 cpu4=2900 cpu5=2900 cpu6=2900 cpu7=2800
+[mono=53126.763 tid=18849] diag: threads=72 new=0 top=18862:SDLThread delta=830.0ms total=1130.0ms state=R core=7 | 18843:SDLThread delta=140.0ms total=600.0ms state=S core=4 | 18872:SDLThread delta=70.0ms total=100.0ms state=R core=5 | 18866:dxvk-submit delta=70.0ms total=80.0ms state=S core=4 | 18863:mali-event-hand delta=50.0ms total=60.0ms state=S core=4 | 18868:dxvk-cs delta=30.0ms total=70.0ms state=S core=5
+[mono=53126.765 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53126.765 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=161 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53127.542 tid=18843] frame 256
+[mono=53127.765 tid=18849] diag: window=1.004s loops=120 rate=119.47/s fps_limit=0; present_fps=120.051 intervals n=121 avg=8.330 p50=8.320 p95=9.409 p99=11.037 max=16.150 ms; gt8.5/17/34/50/100/250/1000ms=36/0/0/0/0/0/0
+[mono=53127.766 tid=18849] diag: present worst: 16.150ms@mono=53127.654 tid=18872 | 11.037ms@mono=53127.524 tid=18872 | 10.161ms@mono=53126.982 tid=18872 | 9.612ms@mono=53127.056 tid=18872
+[mono=53127.766 tid=18849] diag: EngineService n=120 avg=8.319 p50=8.257 p95=10.131 p99=13.633 max=22.377 ms; gt8.5/17/34/50/100/250/1000ms=48/1/0/0/0/0/0; worst: 22.377ms@mono=53127.654 tid=18843 | 13.633ms@mono=53126.971 tid=18843
+[mono=53127.766 tid=18849] diag: event pump n=120 avg=0.026 p95=0.049 max=0.267 ms; limiter wait n=120 avg=0.000 p95=0.000 max=0.000 ms; focus n=120 avg=0.001 p95=0.003 max=0.005 ms
+[mono=53127.766 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=121 avg=6.942 p50=7.323 p95=8.204 p99=9.074 max=9.325 ms; gt8.5/17/34/50/100/250/1000ms=4/0/0/0/0/0/0; worst: 9.325ms@mono=53126.982 tid=18872 | 9.074ms@mono=53127.056 tid=18872
+[mono=53127.766 tid=18849] diag: texture dxt n=720 total=18.56ms avg=0.03 max=1.01 gt10/50/100=0/0/0; create n=75 total=42.22 avg=0.56 max=15.14 gt10/50/100=1/0/0; upload n=730 total=0.10 avg=0.00 max=0.01 gt10/50/100=0/0/0
+[mono=53127.766 tid=18849] diag: io opens=3 open_errors=3; reads=47 bytes=24012298 (22.900 MiB) total=76.04ms avg=1.618ms max=5.96ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53127.766 tid=18849] diag: memory rss=952MiB peak=952MiB virtual=24897MiB anon=287MiB file=662MiB shmem=2MiB swap=32MiB; system_available=5399MiB; arena 362 MiB (peak 362), up to 17a10000
+[mono=53127.767 tid=18849] diag: cpu process_cpu=152.33% of_one_core delta=1530.0ms user=1160.0ms system=370.0ms last_core=6; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=1200 cpu1=1200 cpu2=1200 cpu3=1200 cpu4=2900 cpu5=2900 cpu6=2900 cpu7=2700
+[mono=53127.773 tid=18849] diag: threads=72 new=0 top=18862:SDLThread delta=710.0ms total=1840.0ms state=R core=5 | 18843:SDLThread delta=200.0ms total=800.0ms state=S core=6 | 18872:SDLThread delta=80.0ms total=180.0ms state=S core=4 | 18866:dxvk-submit delta=80.0ms total=160.0ms state=S core=4 | 18863:mali-event-hand delta=60.0ms total=120.0ms state=R core=1 | 18879:SDLThread delta=50.0ms total=90.0ms state=S core=6
+[mono=53127.775 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53127.775 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=282 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53128.775 tid=18849] diag: window=1.010s loops=102 rate=101.00/s fps_limit=0; present_fps=101.059 intervals n=102 avg=9.895 p50=8.283 p95=18.133 p99=73.860 max=99.923 ms; gt8.5/17/34/50/100/250/1000ms=36/6/3/2/0/0/0
+[mono=53128.775 tid=18849] diag: present worst: 99.923ms@mono=53127.979 tid=18872 | 73.860ms@mono=53128.687 tid=18872 | 35.006ms@mono=53128.764 tid=18872 | 26.067ms@mono=53127.815 tid=18872
+[mono=53128.776 tid=18849] diag: EngineService n=102 avg=9.836 p50=8.054 p95=16.168 p99=81.144 max=107.018 ms; gt8.5/17/34/50/100/250/1000ms=41/5/3/3/1/0/0; worst: 107.018ms@mono=53127.979 tid=18843 | 81.144ms@mono=53128.687 tid=18843
+[mono=53128.776 tid=18849] diag: event pump n=102 avg=0.089 p95=0.076 max=4.922 ms; limiter wait n=102 avg=0.000 p95=0.000 max=0.000 ms; focus n=102 avg=0.003 p95=0.005 max=0.010 ms
+[mono=53128.776 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=102 avg=5.678 p50=6.332 p95=7.868 p99=17.696 max=22.070 ms; gt8.5/17/34/50/100/250/1000ms=2/2/0/0/0/0/0; worst: 22.070ms@mono=53128.729 tid=18872 | 17.696ms@mono=53127.855 tid=18872
+[mono=53128.776 tid=18849] diag: texture dxt n=1807 total=50.37ms avg=0.03 max=2.18 gt10/50/100=0/0/0; create n=191 total=202.57 avg=1.06 max=103.58 gt10/50/100=3/1/1; upload n=1807 total=0.49 avg=0.00 max=0.21 gt10/50/100=0/0/0
+[mono=53128.776 tid=18849] diag: io opens=1 open_errors=1; reads=41 bytes=19621376 (18.712 MiB) total=62.99ms avg=1.536ms max=5.81ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53128.776 tid=18849] diag: memory rss=1286MiB peak=1286MiB virtual=25218MiB anon=300MiB file=982MiB shmem=2MiB swap=32MiB; system_available=5137MiB; arena 365 MiB (peak 365), up to 17df0000
+[mono=53128.777 tid=18849] diag: cpu process_cpu=172.22% of_one_core delta=1740.0ms user=1250.0ms system=490.0ms last_core=7; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=800 cpu1=800 cpu2=800 cpu3=800 cpu4=2900 cpu5=2900 cpu6=2900 cpu7=2700
+[mono=53128.779 tid=18849] diag: threads=72 new=0 top=18862:SDLThread delta=720.0ms total=2560.0ms state=R core=7 | 18843:SDLThread delta=290.0ms total=1090.0ms state=S core=7 | 18866:dxvk-submit delta=110.0ms total=270.0ms state=S core=5 | 18872:SDLThread delta=100.0ms total=280.0ms state=R core=5 | 18863:mali-event-hand delta=60.0ms total=180.0ms state=S core=1 | 18868:dxvk-cs delta=50.0ms total=150.0ms state=S core=2
+[mono=53128.780 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53128.781 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=384 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53129.692 tid=18843] diagnostic tour gameplay signal: InGameState dispatch target=7c4e4ad0
+[mono=53129.781 tid=18849] diag: window=1.006s loops=97 rate=96.45/s fps_limit=0; present_fps=97.586 intervals n=98 avg=10.247 p50=8.234 p95=17.448 p99=157.814 max=157.814 ms; gt8.5/17/34/50/100/250/1000ms=37/6/2/1/1/0/0
+[mono=53129.781 tid=18849] diag: present worst: 157.814ms@mono=53129.028 tid=18872 | 48.048ms@mono=53129.776 tid=18872 | 29.787ms@mono=53129.134 tid=18872 | 27.981ms@mono=53129.692 tid=18872
+[mono=53129.781 tid=18849] diag: EngineService n=97 avg=9.605 p50=8.090 p95=13.910 p99=164.144 max=164.144 ms; gt8.5/17/34/50/100/250/1000ms=31/4/3/1/1/0/0; worst: 164.144ms@mono=53129.028 tid=18843 | 46.491ms@mono=53129.134 tid=18843
+[mono=53129.781 tid=18849] diag: event pump n=97 avg=0.072 p95=0.066 max=3.549 ms; limiter wait n=97 avg=0.000 p95=0.000 max=0.000 ms; focus n=97 avg=0.002 p95=0.004 max=0.008 ms
+[mono=53129.781 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=98 avg=5.937 p50=6.488 p95=9.666 p99=15.970 max=15.970 ms; gt8.5/17/34/50/100/250/1000ms=7/0/0/0/0/0/0; worst: 15.970ms@mono=53129.104 tid=18872 | 15.576ms@mono=53129.170 tid=18872
+[mono=53129.781 tid=18849] diag: texture dxt n=505 total=20.39ms avg=0.04 max=3.49 gt10/50/100=0/0/0; create n=56 total=179.47 avg=3.20 max=159.70 gt10/50/100=1/1/1; upload n=511 total=0.17 avg=0.00 max=0.09 gt10/50/100=0/0/0
+[mono=53129.781 tid=18849] diag: io opens=5 open_errors=5; reads=65 bytes=33763328 (32.199 MiB) total=104.68ms avg=1.610ms max=8.64ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53129.782 tid=18849] diag: memory rss=1637MiB peak=1637MiB virtual=25539MiB anon=330MiB file=1304MiB shmem=2MiB swap=31MiB; system_available=4811MiB; arena 386 MiB (peak 386), up to 19260000
+[mono=53129.782 tid=18849] diag: cpu process_cpu=155.18% of_one_core delta=1560.0ms user=980.0ms system=580.0ms last_core=2; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=1200 cpu1=1200 cpu2=1200 cpu3=1200 cpu4=2900 cpu5=2900 cpu6=2900 cpu7=2700
+[mono=53129.786 tid=18849] diag: threads=72 new=0 top=18862:SDLThread delta=590.0ms total=3150.0ms state=R core=7 | 18843:SDLThread delta=290.0ms total=1380.0ms state=R core=7 | 18866:dxvk-submit delta=100.0ms total=370.0ms state=S core=0 | 18872:SDLThread delta=90.0ms total=370.0ms state=S core=6 | 18863:mali-event-hand delta=60.0ms total=240.0ms state=S core=3 | 18851:SDLThread delta=60.0ms total=160.0ms state=S core=4
+[mono=53129.787 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53129.787 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=481 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53130.049 tid=18843] frame 512
+[mono=53130.104 tid=18875] audio: 235 passes, max gap 23.9 ms, guest 19.7 ms (max 0.78), refill requests 233, underruns 1, submits 955
+[mono=53130.788 tid=18849] diag: window=1.007s loops=60 rate=59.58/s fps_limit=0; present_fps=104.272 intervals n=60 avg=9.590 p50=8.575 p95=19.665 p99=34.390 max=34.390 ms; gt8.5/17/34/50/100/250/1000ms=31/4/1/0/0/0/0
+[mono=53130.788 tid=18849] diag: present worst: 34.390ms@mono=53129.843 tid=18872 | 25.975ms@mono=53130.104 tid=18872 | 23.288ms@mono=53130.150 tid=18872 | 19.665ms@mono=53129.808 tid=18872
+[mono=53130.788 tid=18849] diag: EngineService n=60 avg=10.537 p50=7.760 p95=23.652 p99=74.124 max=74.124 ms; gt8.5/17/34/50/100/250/1000ms=25/6/1/1/0/0/0; worst: 74.124ms@mono=53129.787 tid=18843 | 29.403ms@mono=53129.851 tid=18843
+[mono=53130.788 tid=18849] diag: event pump n=60 avg=0.021 p95=0.029 max=0.041 ms; limiter wait n=60 avg=0.000 p95=0.000 max=0.000 ms; focus n=60 avg=0.001 p95=0.002 max=0.004 ms
+[mono=53130.788 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=60 avg=3.045 p50=0.051 p95=9.852 p99=25.837 max=25.837 ms; gt8.5/17/34/50/100/250/1000ms=4/2/0/0/0/0/0; worst: 25.837ms@mono=53129.843 tid=18872 | 21.807ms@mono=53130.104 tid=18872
+[mono=53130.788 tid=18849] diag: texture dxt n=1771 total=32.34ms avg=0.02 max=4.21 gt10/50/100=0/0/0; create n=198 total=98.08 avg=0.50 max=31.15 gt10/50/100=1/0/0; upload n=1771 total=0.62 avg=0.00 max=0.25 gt10/50/100=0/0/0
+[mono=53130.789 tid=18849] diag: io opens=2 open_errors=2; reads=33 bytes=18341888 (17.492 MiB) total=52.20ms avg=1.582ms max=9.25ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53130.789 tid=18849] diag: memory rss=1732MiB peak=1732MiB virtual=25603MiB anon=360MiB file=1369MiB shmem=2MiB swap=32MiB; system_available=4739MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53130.790 tid=18849] diag: cpu process_cpu=121.12% of_one_core delta=1220.0ms user=890.0ms system=330.0ms last_core=5; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=400 cpu1=400 cpu2=400 cpu3=400 cpu4=800 cpu5=800 cpu6=800 cpu7=1000
+[mono=53130.793 tid=18849] diag: threads=72 new=0 top=18843:SDLThread delta=320.0ms total=1700.0ms state=S core=5 | 18862:SDLThread delta=270.0ms total=3420.0ms state=S core=6 | 18872:SDLThread delta=80.0ms total=450.0ms state=S core=6 | 18866:dxvk-submit delta=50.0ms total=420.0ms state=S core=6 | 18868:dxvk-cs delta=50.0ms total=240.0ms state=S core=1 | 18879:SDLThread delta=50.0ms total=220.0ms state=S core=4
+[mono=53130.795 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53130.795 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53131.795 tid=18849] diag: window=1.007s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53131.796 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53131.796 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53131.796 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53131.796 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53131.796 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53131.797 tid=18849] diag: memory rss=1722MiB peak=1732MiB virtual=25596MiB anon=356MiB file=1363MiB shmem=2MiB swap=28MiB; system_available=4737MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53131.798 tid=18849] diag: cpu process_cpu=18.85% of_one_core delta=190.0ms user=130.0ms system=60.0ms last_core=4; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=400 cpu1=400 cpu2=400 cpu3=400 cpu4=800 cpu5=800 cpu6=800 cpu7=1000
+[mono=53131.802 tid=18849] diag: threads=72 new=0 top=18879:SDLThread delta=90.0ms total=310.0ms state=S core=6 | 17480:SDLActivity delta=20.0ms total=870.0ms state=S core=4 | 18872:SDLThread delta=20.0ms total=470.0ms state=S core=6 | 18875:FAudioMix delta=20.0ms total=40.0ms state=S core=3 | 18874:SDLAudioP2 delta=10.0ms total=40.0ms state=S core=3 | 18782:HeapTaskDaemon delta=10.0ms total=10.0ms state=S core=4
+[mono=53131.806 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53131.806 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53132.806 tid=18849] diag: window=1.011s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53132.806 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53132.806 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53132.807 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53132.807 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53132.807 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53132.808 tid=18849] diag: memory rss=1722MiB peak=1732MiB virtual=25596MiB anon=356MiB file=1363MiB shmem=2MiB swap=28MiB; system_available=4736MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53132.809 tid=18849] diag: cpu process_cpu=24.72% of_one_core delta=250.0ms user=190.0ms system=60.0ms last_core=1; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=1200 cpu1=1200 cpu2=1200 cpu3=1200 cpu4=2000 cpu5=2000 cpu6=2000 cpu7=2000
+[mono=53132.813 tid=18849] diag: threads=72 new=0 top=18879:SDLThread delta=150.0ms total=460.0ms state=S core=5 | 17480:SDLActivity delta=30.0ms total=900.0ms state=S core=2 | 18875:FAudioMix delta=20.0ms total=60.0ms state=S core=2 | 18800:RenderThread delta=10.0ms total=740.0ms state=S core=6 | 18872:SDLThread delta=10.0ms total=480.0ms state=S core=6 | 18874:SDLAudioP2 delta=10.0ms total=50.0ms state=S core=1
+[mono=53132.814 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53132.815 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53133.815 tid=18849] diag: window=1.009s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53133.815 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53133.815 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53133.816 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53133.816 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53133.816 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53133.817 tid=18849] diag: memory rss=1722MiB peak=1732MiB virtual=25596MiB anon=356MiB file=1363MiB shmem=2MiB swap=28MiB; system_available=4712MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53133.818 tid=18849] diag: cpu process_cpu=30.74% of_one_core delta=310.0ms user=250.0ms system=60.0ms last_core=2; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=300 cpu1=300 cpu2=300 cpu3=300 cpu4=500 cpu5=500 cpu6=500 cpu7=1000
+[mono=53133.824 tid=18849] diag: threads=72 new=0 top=18879:SDLThread delta=210.0ms total=670.0ms state=S core=4 | 17480:SDLActivity delta=30.0ms total=930.0ms state=S core=2 | 18800:RenderThread delta=20.0ms total=760.0ms state=S core=6 | 18872:SDLThread delta=20.0ms total=500.0ms state=S core=5 | 18875:FAudioMix delta=20.0ms total=80.0ms state=S core=2 | 18874:SDLAudioP2 delta=10.0ms total=60.0ms state=S core=3
+[mono=53133.827 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53133.827 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53134.828 tid=18849] diag: window=1.013s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53134.828 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53134.828 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53134.828 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53134.828 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53134.828 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53134.829 tid=18849] diag: memory rss=1721MiB peak=1732MiB virtual=25579MiB anon=356MiB file=1362MiB shmem=2MiB swap=28MiB; system_available=4645MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53134.830 tid=18849] diag: cpu process_cpu=32.59% of_one_core delta=330.0ms user=250.0ms system=80.0ms last_core=1; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=600 cpu1=600 cpu2=600 cpu3=600 cpu4=1500 cpu5=1500 cpu6=1500 cpu7=2700
+[mono=53134.836 tid=18849] diag: threads=71 new=0 top=18879:SDLThread delta=200.0ms total=870.0ms state=S core=6 | 17480:SDLActivity delta=50.0ms total=980.0ms state=S core=1 | 18800:RenderThread delta=20.0ms total=780.0ms state=S core=4 | 18875:FAudioMix delta=20.0ms total=100.0ms state=S core=1 | 18872:SDLThread delta=10.0ms total=510.0ms state=S core=5 | 18874:SDLAudioP2 delta=10.0ms total=70.0ms state=S core=3
+[mono=53134.838 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53134.838 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53135.024 tid=18872] imports tid 18872: guest 3% | Sleep 51% (5006) IDirect3DDevice9::Present 34% (541) IDirect3DVertexBuffer9::Lock 4% (606) EnterCriticalSection 3% (28665) WaitForSingleObject 3% (12225) ReleaseSemaphore 1% (6937) _stat64 0% (2) IDirect3DDevice9::DrawPrimitive 0% (606) LeaveCriticalSection 0% (28665) IDirect3DDevice9::DrawIndexedPrimitive 0% (39)
+[mono=53135.098 tid=18879] imports tid 18879: guest 9% | WaitForSingleObject 90% (3011) memcpy 0% (47947) ReleaseSemaphore 0% (1139) EnterCriticalSection 0% (16492) IXAudio2SourceVoice#19 0% (1871) QueryPerformanceCounter 0% (9644) LeaveCriticalSection 0% (16492) CloseHandle 0% (33) memset 0% (11376) _CIpow 0% (135)
+[mono=53135.120 tid=18875] imports tid 18875: guest 100% | ReleaseSemaphore 0% (1876)
+[mono=53135.838 tid=18849] diag: window=1.011s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53135.839 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53135.839 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53135.839 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53135.839 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53135.839 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53135.839 tid=18849] diag: memory rss=1739MiB peak=1739MiB virtual=25595MiB anon=363MiB file=1373MiB shmem=2MiB swap=28MiB; system_available=4544MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53135.840 tid=18849] diag: cpu process_cpu=27.73% of_one_core delta=280.0ms user=200.0ms system=80.0ms last_core=1; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=1200 cpu1=1200 cpu2=1200 cpu3=1200 cpu4=2600 cpu5=2600 cpu6=2600 cpu7=1900
+[mono=53135.842 tid=18849] diag: threads=71 new=0 top=18879:SDLThread delta=140.0ms total=1010.0ms state=S core=4 | 17480:SDLActivity delta=60.0ms total=1040.0ms state=S core=1 | 18800:RenderThread delta=20.0ms total=800.0ms state=S core=5 | 18872:SDLThread delta=20.0ms total=530.0ms state=S core=7 | 18875:FAudioMix delta=20.0ms total=120.0ms state=R core=1 | 18874:SDLAudioP2 delta=10.0ms total=80.0ms state=S core=5
+[mono=53135.845 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53135.845 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53136.845 tid=18849] diag: window=1.007s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53136.846 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53136.846 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53136.846 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53136.846 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53136.846 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53136.847 tid=18849] diag: memory rss=1739MiB peak=1739MiB virtual=25595MiB anon=363MiB file=1373MiB shmem=2MiB swap=28MiB; system_available=4731MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53136.848 tid=18849] diag: cpu process_cpu=24.81% of_one_core delta=250.0ms user=190.0ms system=60.0ms last_core=1; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=500 cpu1=500 cpu2=500 cpu3=500 cpu4=700 cpu5=700 cpu6=700 cpu7=1000
+[mono=53136.852 tid=18849] diag: threads=71 new=0 top=18879:SDLThread delta=170.0ms total=1180.0ms state=S core=5 | 17480:SDLActivity delta=20.0ms total=1060.0ms state=S core=1 | 18872:SDLThread delta=20.0ms total=550.0ms state=S core=4 | 18875:FAudioMix delta=10.0ms total=130.0ms state=S core=3 | 18874:SDLAudioP2 delta=10.0ms total=90.0ms state=S core=3 | 18849:SDLThread delta=10.0ms total=60.0ms state=R core=6
+[mono=53136.854 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53136.855 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53137.855 tid=18849] diag: window=1.010s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53137.855 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53137.855 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53137.855 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53137.855 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53137.855 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53137.856 tid=18849] diag: memory rss=1738MiB peak=1738MiB virtual=25595MiB anon=363MiB file=1373MiB shmem=2MiB swap=28MiB; system_available=4649MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53137.856 tid=18849] diag: cpu process_cpu=28.75% of_one_core delta=290.0ms user=240.0ms system=50.0ms last_core=1; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=1000 cpu1=1000 cpu2=1000 cpu3=1000 cpu4=1100 cpu5=1100 cpu6=1100 cpu7=1000
+[mono=53137.860 tid=18849] diag: threads=71 new=0 top=18879:SDLThread delta=180.0ms total=1360.0ms state=S core=5 | 17480:SDLActivity delta=30.0ms total=1090.0ms state=S core=1 | 18872:SDLThread delta=20.0ms total=570.0ms state=S core=5 | 18875:FAudioMix delta=20.0ms total=150.0ms state=S core=4 | 18874:SDLAudioP2 delta=20.0ms total=110.0ms state=S core=2 | 18862:SDLThread delta=0.0ms total=3420.0ms state=S core=6
+[mono=53137.862 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53137.862 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53138.862 tid=18849] diag: window=1.007s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53138.863 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53138.863 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53138.863 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53138.863 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53138.863 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53138.863 tid=18849] diag: memory rss=1739MiB peak=1739MiB virtual=25609MiB anon=363MiB file=1373MiB shmem=2MiB swap=28MiB; system_available=4558MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53138.864 tid=18849] diag: cpu process_cpu=44.66% of_one_core delta=450.0ms user=330.0ms system=120.0ms last_core=5; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=1000 cpu1=1000 cpu2=1000 cpu3=1000 cpu4=1000 cpu5=1000 cpu6=1000 cpu7=1000
+[mono=53138.868 tid=18849] diag: threads=71 new=0 top=18879:SDLThread delta=150.0ms total=1510.0ms state=S core=5 | 17480:SDLActivity delta=130.0ms total=1220.0ms state=S core=5 | 18800:RenderThread delta=110.0ms total=910.0ms state=S core=7 | 18872:SDLThread delta=20.0ms total=590.0ms state=S core=7 | 18875:FAudioMix delta=10.0ms total=160.0ms state=S core=7 | 18874:SDLAudioP2 delta=10.0ms total=120.0ms state=S core=7
+[mono=53138.870 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53138.870 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53139.870 tid=18849] diag: window=1.008s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53139.870 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53139.870 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53139.871 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53139.871 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53139.871 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53139.871 tid=18849] diag: memory rss=1739MiB peak=1739MiB virtual=25609MiB anon=363MiB file=1373MiB shmem=2MiB swap=28MiB; system_available=4524MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53139.872 tid=18849] diag: cpu process_cpu=42.65% of_one_core delta=430.0ms user=270.0ms system=160.0ms last_core=0; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=1000 cpu1=1000 cpu2=1000 cpu3=1000 cpu4=1000 cpu5=1000 cpu6=1000 cpu7=1000
+[mono=53139.876 tid=18849] diag: threads=71 new=0 top=17480:SDLActivity delta=140.0ms total=1360.0ms state=S core=0 | 18800:RenderThread delta=120.0ms total=1030.0ms state=S core=6 | 18879:SDLThread delta=90.0ms total=1600.0ms state=R core=6 | 18872:SDLThread delta=20.0ms total=610.0ms state=R core=6 | 18875:FAudioMix delta=10.0ms total=170.0ms state=R core=6 | 18824:binder:17480_4 delta=10.0ms total=100.0ms state=S core=4
+[mono=53139.878 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53139.878 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53140.878 tid=18849] diag: window=1.008s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53140.879 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53140.880 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53140.880 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53140.880 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53140.880 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53140.880 tid=18849] diag: memory rss=1739MiB peak=1739MiB virtual=25609MiB anon=364MiB file=1373MiB shmem=2MiB swap=28MiB; system_available=4713MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53140.881 tid=18849] diag: cpu process_cpu=29.73% of_one_core delta=300.0ms user=220.0ms system=80.0ms last_core=1; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=600 cpu1=600 cpu2=600 cpu3=600 cpu4=700 cpu5=700 cpu6=700 cpu7=1000
+[mono=53140.887 tid=18849] diag: threads=71 new=0 top=18879:SDLThread delta=140.0ms total=1740.0ms state=S core=6 | 17480:SDLActivity delta=70.0ms total=1430.0ms state=S core=1 | 18800:RenderThread delta=50.0ms total=1080.0ms state=S core=4 | 18872:SDLThread delta=20.0ms total=630.0ms state=S core=5 | 18875:FAudioMix delta=10.0ms total=180.0ms state=S core=0 | 18874:SDLAudioP2 delta=10.0ms total=130.0ms state=S core=0
+[mono=53140.889 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53140.890 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53141.328 tid=18883] watchdog: no frame for 10 s (frame 541), sample 1, 172032 guest calls/s, guest thread backtraces:
+[mono=53141.357 tid=18843] watchdog: thread 18843: syscall+0x1c _ZN10protodroid9FastEvent4WaitEj+0xc8 0x77e8264684 _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d400+0xf0 f_7c658610+0x12c f_7c659690+0x164 f_7c659f70+0xe8 f_7c65a070+0x2b8 f_7c7e75f0+0x7f4 f_7c85df80+0x680 RecompDispatch+0x364 f_7c838ed0+0x950 f_7c85eb20+0x28c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc SDL_main+0x4244 Java_org_libsdl_app_SDLActivity_nativeRunMain+0x2c4
+[mono=53141.546 tid=18851] watchdog: thread 18851: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7c652790+0x150 RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53141.741 tid=18852] watchdog: thread 18852: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7cb82400+0x1b4 f_7cb7ee70+0x11c RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53141.890 tid=18849] diag: window=1.012s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53141.891 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53141.891 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53141.891 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53141.891 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53141.891 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53141.891 tid=18849] diag: memory rss=1749MiB peak=1749MiB virtual=25608MiB anon=364MiB file=1382MiB shmem=2MiB swap=28MiB; system_available=4661MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53141.893 tid=18849] diag: cpu process_cpu=38.57% of_one_core delta=390.0ms user=290.0ms system=100.0ms last_core=1; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=300 cpu1=300 cpu2=300 cpu3=300 cpu4=700 cpu5=700 cpu6=700 cpu7=1000
+[mono=53141.897 tid=18849] diag: threads=71 new=0 top=18879:SDLThread delta=200.0ms total=1940.0ms state=S core=6 | 17480:SDLActivity delta=40.0ms total=1470.0ms state=S core=1 | 18875:FAudioMix delta=30.0ms total=210.0ms state=S core=3 | 18800:RenderThread delta=20.0ms total=1100.0ms state=S core=5 | 18872:SDLThread delta=20.0ms total=650.0ms state=S core=5 | 18851:SDLThread delta=20.0ms total=200.0ms state=S core=4
+[mono=53141.900 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53141.900 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53141.938 tid=18853] watchdog: thread 18853: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7cb82400+0x1b4 f_7cb7ee70+0x11c RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53142.140 tid=18854] watchdog: thread 18854: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7cb82400+0x1b4 f_7cb7ee70+0x11c RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53142.342 tid=18856] watchdog: thread 18856: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7cb82400+0x1b4 f_7cb7ee70+0x11c RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53142.540 tid=18857] watchdog: thread 18857: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7cb82400+0x1b4 f_7cb7ee70+0x11c RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53142.744 tid=18858] watchdog: thread 18858: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7cb82400+0x1b4 f_7cb7ee70+0x11c RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53142.900 tid=18849] diag: window=1.010s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53142.901 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53142.901 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53142.901 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53142.901 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53142.901 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53142.902 tid=18849] diag: memory rss=1749MiB peak=1749MiB virtual=25608MiB anon=364MiB file=1382MiB shmem=2MiB swap=28MiB; system_available=4588MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53142.903 tid=18849] diag: cpu process_cpu=34.64% of_one_core delta=350.0ms user=280.0ms system=70.0ms last_core=2; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=300 cpu1=300 cpu2=300 cpu3=300 cpu4=400 cpu5=400 cpu6=400 cpu7=1000
+[mono=53142.910 tid=18849] diag: threads=71 new=0 top=18879:SDLThread delta=200.0ms total=2140.0ms state=R core=5 | 17480:SDLActivity delta=30.0ms total=1500.0ms state=S core=2 | 18875:FAudioMix delta=20.0ms total=230.0ms state=S core=3 | 18874:SDLAudioP2 delta=20.0ms total=160.0ms state=S core=2 | 18800:RenderThread delta=10.0ms total=1110.0ms state=S core=5 | 18872:SDLThread delta=10.0ms total=660.0ms state=S core=4
+[mono=53142.912 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53142.912 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53142.944 tid=18859] watchdog: thread 18859: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7cb82400+0x1b4 f_7cb7ee70+0x11c RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53143.160 tid=18860] watchdog: thread 18860: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7c8831e0+0x354 RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53143.353 tid=18861] watchdog: thread 18861: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7c60bd40+0x180 f_7c60be30+0x40 RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53143.539 tid=18862] watchdog: thread 18862: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7c607ef0+0x17c f_7c6082a0+0x40 RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53143.754 tid=18872] watchdog: thread 18872: nanosleep+0x8 _ZNSt6__ndk111this_thread9sleep_forERKNS_6chrono8durationIxNS_5ratioILl1ELl1000000000EEEEE+0x64 0x77e826361c _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c644b40+0x5c f_7c860890+0x1a8 f_7c861050+0x21c RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53143.913 tid=18849] diag: window=1.012s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53143.913 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53143.913 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53143.913 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53143.913 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53143.914 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53143.914 tid=18849] diag: memory rss=1749MiB peak=1749MiB virtual=25608MiB anon=364MiB file=1382MiB shmem=2MiB swap=28MiB; system_available=4521MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53143.916 tid=18849] diag: cpu process_cpu=38.52% of_one_core delta=390.0ms user=290.0ms system=100.0ms last_core=6; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=300 cpu1=300 cpu2=300 cpu3=300 cpu4=400 cpu5=400 cpu6=400 cpu7=1000
+[mono=53143.923 tid=18849] diag: threads=71 new=0 top=18879:SDLThread delta=220.0ms total=2360.0ms state=S core=4 | 18872:SDLThread delta=40.0ms total=700.0ms state=S core=6 | 17480:SDLActivity delta=30.0ms total=1530.0ms state=S core=6 | 18861:SDLThread delta=20.0ms total=50.0ms state=S core=6 | 18800:RenderThread delta=10.0ms total=1120.0ms state=S core=6 | 18875:FAudioMix delta=10.0ms total=240.0ms state=S core=0
+[mono=53143.927 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53143.927 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53144.156 tid=18879] watchdog: thread 18879: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7cac2c90+0x16c RecompDispatch+0x364 f_7c5c2360+0x14c RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53144.356 tid=18880] watchdog: thread 18880: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7c5ca690+0x25c RecompDispatch+0x364 f_7c5c2360+0x14c RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53144.546 tid=18875] watchdog: thread 18875: syscall+0x20 0x7bcea90534 pthread_cond_timedwait+0x88 SDL_CondWaitTimeout+0xa4 0x77f2be1d50 0x77f2cd3e98 0x77f2d48e4c 0x7bcea9f390 0x7bcea918b4
+[mono=53144.756 tid=18881] watchdog: thread 18881: syscall+0x1c _ZN10protodroid13FastSemaphore4WaitEj+0x178 0x77e82645fc _ZN6native14DispatchImportEP3Ctxj+0x2a0 RecompDispatch+0x104 f_7c63d2f0+0x8c f_7c5a0ac0+0xd4 RecompDispatch+0x364 f_7c644ca0+0x15c _ZN6native9GuestCallEjSt16initializer_listIjEjPj+0x1bc 0x77e82686cc 0x7bcea9f390 0x7bcea918b4
+[mono=53144.928 tid=18849] diag: window=1.015s loops=0 rate=0.00/s fps_limit=0; present_fps=0.000 intervals n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0
+[mono=53144.928 tid=18849] diag: EngineService n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53144.928 tid=18849] diag: event pump n=0 avg=0.000 p95=0.000 max=0.000 ms; limiter wait n=0 avg=0.000 p95=0.000 max=0.000 ms; focus n=0 avg=0.000 p95=0.000 max=0.000 ms
+[mono=53144.928 tid=18849] diag: Present wall (includes FIFO/vsync, not GPU time) n=0 avg=0.000 p50=0.000 p95=0.000 p99=0.000 max=0.000 ms; gt8.5/17/34/50/100/250/1000ms=0/0/0/0/0/0/0; worst: none
+[mono=53144.929 tid=18849] diag: texture dxt n=0 total=0.00ms avg=0.00 max=0.00 gt10/50/100=0/0/0; create n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0; upload n=0 total=0.00 avg=0.00 max=0.00 gt10/50/100=0/0/0
+[mono=53144.929 tid=18849] diag: io opens=0 open_errors=0; reads=0 bytes=0 (0.000 MiB) total=0.00ms avg=0.000ms max=0.00ms errors=0; writes=0 bytes=0 total=0.00ms avg=0.000ms max=0.00ms errors=0; io_gt10/50/100ms=0/0/0
+[mono=53144.929 tid=18849] diag: memory rss=1750MiB peak=1750MiB virtual=25608MiB anon=364MiB file=1383MiB shmem=2MiB swap=28MiB; system_available=4494MiB; arena 409 MiB (peak 409), up to 1a950000
+[mono=53144.930 tid=18849] diag: cpu process_cpu=36.46% of_one_core delta=370.0ms user=300.0ms system=70.0ms last_core=1; device_cpu_busy=unavailable; cores_busy%=baseline/unavailable; current_MHz=cpu0=300 cpu1=300 cpu2=300 cpu3=300 cpu4=500 cpu5=500 cpu6=500 cpu7=1000
+[mono=53144.937 tid=18849] diag: threads=71 new=0 top=18879:SDLThread delta=230.0ms total=2590.0ms state=S core=5 | 18875:FAudioMix delta=40.0ms total=280.0ms state=S core=0 | 17480:SDLActivity delta=30.0ms total=1560.0ms state=S core=1 | 18800:RenderThread delta=10.0ms total=1130.0ms state=S core=6 | 18872:SDLThread delta=10.0ms total=710.0ms state=S core=6 | 18874:SDLAudioP2 delta=10.0ms total=180.0ms state=S core=0
+[mono=53144.940 tid=18849] diag: health thermal=none(0) headroom=0.000 forecast10s=0.000 cpu_headroom=unsupported gpu_headroom=unsupported
+[mono=53144.941 tid=18849] diag: adpf session=yes target=8.333ms threads=6 reports_total=541 report_errors_total=0 target_updates_total=1 target_errors_total=0
+[mono=53145.024 tid=18872] imports tid 18872: guest 0% | Sleep 99% (8295) WaitForSingleObject 0% (8295) EnterCriticalSection 0% (8295) LeaveCriticalSection 0% (8295)
+[mono=53145.102 tid=18879] imports tid 18879: guest 17% | WaitForSingleObject 82% (3752) memcpy 0% (49712) ReleaseSemaphore 0% (1876) EnterCriticalSection 0% (15008) IXAudio2SourceVoice#19 0% (1876) QueryPerformanceCounter 0% (15008) LeaveCriticalSection 0% (15008) memset 0% (11256)
+[mono=53145.125 tid=18875] imports tid 18875: guest 99% | ReleaseSemaphore 1% (1876)
+[mono=53145.439 tid=18883] diagnostic tour failed: main-loop frame 541 did not advance for 10 seconds; watchdog backtraces captured; scripted completion is not visual verification
+[mono=53145.439 tid=18883] diagnostic tour watchdog: ending the failed isolated process without EngineTerminate
