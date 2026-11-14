@@ -85,6 +85,7 @@ def _mask(kinds):
     return m
 
 
+_FPU_GROUP = X.X86_GRP_FPU  # x87 group: its capstone flag metadata is the x87 condition codes, not eflags
 _DEF_BITS = _mask(("MODIFY", "RESET", "SET", "UNDEFINED"))
 _USE_BITS = _mask(("TEST", "PRIOR"))
 STATUS = 0b111111  # CF ZF SF OF PF AF
@@ -113,11 +114,30 @@ for _cc, _u in _COND_USES.items():
         MANUAL_USES.setdefault(_prefix + _cc, _u)
 
 
+# Capstone's "this instruction writes flag X" metadata is only believed for these mnemonics, whose flag effects are
+# plain architecture. For anything else a claimed write is ignored and only the table above can add one.
+#
+# Why: capstone reports the x87 condition codes C0-C3 as the integer flags, so `fstp st(0)` "writes CF" and `fxch`
+# "writes OF", and the x87 stack instructions are not even tagged with a group that would let this be filtered by unit
+# (`fstp` belongs to no capstone group at all). A wrong write bit is unsound here: it makes the liveness analysis drop
+# the real definition of a flag that a following `lahf`, `adc`, `setcc` or `jcc` reads, the write is folded away, and
+# the branch uses a stale value. The engine's script comparison is literally
+# `fucompi st(1); fstp st(0); lahf; test ah,0x44; jp`, so this is the hot path of the ActionScript VM. The opposite
+# mistake, a missing write, is harmless: the flag stays live, the helper writes it, and later reads see a fresh value.
+_VETTED_DEFS = frozenset("""
+    add adc sub sbb cmp and or xor test inc dec neg not mul imul div idiv mull imull divl idivl
+    shl sal shr sar rol ror rcl rcr shld shrd bt bts btr btc bsf bsr popcnt lzcnt tzcnt
+    cmpxchg xadd cmpxchg8b adcx adox daa das aaa aas aam aad sahf popfd
+    comiss ucomiss comisd ucomisd
+""".split())
+
+
 def flag_sets(ins):
     """(defs, uses) as bit sets over FLAG_NAMES."""
     base = ins.mnemonic.split()[-1]
     e = ins.eflags
-    defs = sum(1 << b for b, m in _DEF_BITS.items() if e & m)
+    defs = sum(1 << b for b, m in _DEF_BITS.items() if e & m) if base in _VETTED_DEFS else 0
+    # Uses are believed for every instruction: over-reporting a read only keeps a flag live a little longer.
     uses = sum(1 << b for b, m in _USE_BITS.items() if e & m)
     defs |= MANUAL_DEFS.get(base, 0)
     uses |= MANUAL_USES.get(base, 0)

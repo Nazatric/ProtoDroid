@@ -48,7 +48,12 @@ jobs:
         with:
           # zlib.h builds the Bink media test; glslangValidator compiles the FXAA shader; neither ships with the image.
           packages: zlib1g-dev glslang-tools
-          python_modules: yaml
+          # capstone and pefile are what the recompiler's flag-metadata checks disassemble with; the same modules the
+          # APK job installs to generate the engine.
+          python_modules: yaml capstone pefile
+
+      - name: Check the recompiler's instruction flag metadata
+        run: python3 tools/test_recomp_flag_masks.py
 
       - name: Compile and run native input-lookup tests
         run: |
