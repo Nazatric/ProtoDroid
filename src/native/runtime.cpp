@@ -5,6 +5,9 @@
 #include <cstring>
 #include <atomic>
 #include <mutex>
+#include <vector>
+
+#include <unistd.h>
 
 #include "diagnostic_tour.h"
 #include "diagnostic_tour_probe.h"
@@ -33,6 +36,37 @@ namespace {
 // dispatches while a thread sits in one function means a loop inside that function; millions per second means the
 // engine is running, just not presenting (see watchdog.cpp).
 std::atomic<uint64_t> g_guest_calls{0};
+
+// Ring of the last computed calls each guest thread made. A stall that keeps the main thread busy (rather than parked
+// in a wait) leaves nothing in the log that says where it is: backtraces through recompiled code attribute frames to
+// the nearest preceding symbol, which for these functions is often the wrong function entirely. The ring is written on
+// every dispatch - two stores - and dumped by the watchdog, so the repeating cycle of targets names the loop.
+constexpr int kTraceDepth = 64;
+struct ThreadTrace {
+    uint32_t target[kTraceDepth];
+    std::atomic<uint32_t> pos{0};
+    Ctx* ctx = nullptr;
+    int tid = 0;
+};
+thread_local ThreadTrace tl_trace;
+thread_local uint32_t tl_trace_pos = 0;
+thread_local bool tl_trace_registered = false;
+std::mutex g_trace_mutex;
+std::vector<ThreadTrace*> g_traces;
+
+// protodroid.ini: dispatch_trace=0 turns the ring off. It is on by default because the ring is the only thing that
+// names a guest loop that never parks, and a run that stalls without it has to be repeated.
+bool TraceDispatch() {
+    static const bool enabled = SettingInt("dispatch_trace", 1) != 0;
+    return enabled;
+}
+
+void RegisterTrace(ThreadTrace* trace) {
+    std::lock_guard<std::mutex> lock(g_trace_mutex);
+    trace->tid = int(gettid());
+    g_traces.push_back(trace);
+    tl_trace_registered = true;
+}
 
 constexpr int kHashBits = 18;
 struct HashSlot {
@@ -92,6 +126,38 @@ namespace {
 thread_local uint32_t tl_call_batch = 0;
 }
 
+// Dumps the dispatch rings of every registered guest thread. Called by the watchdog while a stall is being reported;
+// the reads race the threads that are still running, which is acceptable for a diagnostic that only ever writes to the
+// log (aligned 32-bit loads cannot tear on the supported targets).
+void LogGuestDispatchTraces() {
+    std::vector<ThreadTrace*> traces;
+    {
+        std::lock_guard<std::mutex> lock(g_trace_mutex);
+        traces = g_traces;
+    }
+    constexpr uint32_t kShown = 24;
+    for (ThreadTrace* trace : traces) {
+        const uint32_t end = trace->pos.load(std::memory_order_relaxed);
+        const uint32_t count = end < kTraceDepth ? end : kTraceDepth;
+        if (!count) continue;
+        char line[512];
+        int len = snprintf(line, sizeof(line), "watchdog: thread %d last %u guest calls:", trace->tid,
+                           static_cast<unsigned>(count < kShown ? count : kShown));
+        for (uint32_t i = count > kShown ? count - kShown : 0; i < count; ++i) {
+            const uint32_t va = trace->target[i & (kTraceDepth - 1)];
+            if (i && va == trace->target[(i - 1) & (kTraceDepth - 1)]) continue;  // a self-loop is one entry
+            len += snprintf(line + len, sizeof(line) - size_t(len), " %08x", va);
+            if (len >= int(sizeof(line)) - 16) break;
+        }
+        Log("%s", line);
+        if (Ctx* c = trace->ctx) {
+            Log("watchdog: thread %d registers eax=%08x ecx=%08x edx=%08x ebx=%08x esp=%08x ebp=%08x esi=%08x "
+                "edi=%08x cf=%u zf=%u sf=%u of=%u", trace->tid, c->eax, c->ecx, c->edx, c->ebx, c->esp, c->ebp,
+                c->esi, c->edi, c->cf, c->zf, c->sf, c->of);
+        }
+    }
+}
+
 namespace native {
 uint64_t GuestCallTotal() { return g_guest_calls.load(std::memory_order_relaxed); }
 }  // namespace native
@@ -100,6 +166,12 @@ extern "C" void RecompDispatch(Ctx* ctx, uint32_t target) {
     if (++tl_call_batch >= 4096) {
         tl_call_batch = 0;
         g_guest_calls.fetch_add(4096, std::memory_order_relaxed);
+    }
+    if (TraceDispatch()) {
+        if (!tl_trace_registered) RegisterTrace(&tl_trace);
+        tl_trace.target[tl_trace_pos & (kTraceDepth - 1)] = target;
+        tl_trace.ctx = ctx;
+        tl_trace.pos.store(++tl_trace_pos, std::memory_order_relaxed);
     }
     if (RecompDiagnosticTour) {
         // Vtable thunks are recompiled and use RecompDirect on Android, so checking only their final task addresses

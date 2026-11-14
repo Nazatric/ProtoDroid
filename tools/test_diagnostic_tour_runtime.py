@@ -95,6 +95,13 @@ assert "std::atomic<uint64_t> g_guest_calls{0};" in runtime_source and "GuestCal
 assert "if (++tl_call_batch >= 4096) {" in runtime_source, (
     "The progress counter must stay off the hot path: batch the shared update")
 assert "uint64_t GuestCallTotal();" in (ROOT / "src/native/guest.h").read_text(encoding="utf-8")
+# A stall that keeps a thread running names nothing in a backtrace through recompiled code, so the dispatch ring is
+# what identifies the loop; the watchdog must dump it, and the ring must stay off the hot path when disabled.
+assert "LogGuestDispatchTraces();" in watchdog
+assert "void LogGuestDispatchTraces();" in (ROOT / "src/native/guest.h").read_text(encoding="utf-8")
+assert "if (TraceDispatch()) {" in runtime_source
+assert 'SettingInt("dispatch_trace", 1)' in runtime_source
+assert "tl_trace.ctx = ctx;" in runtime_source and "last %u guest calls:" in runtime_source
 tour_source = (ROOT / "src/native/diagnostic_tour.cpp").read_text(encoding="utf-8")
 plan_source = (ROOT / "src/native/diagnostic_tour_plan.h").read_text(encoding="utf-8")
 enum_body = plan_source.split("enum class TourInput : uint8_t {", 1)[1].split("};", 1)[0]
