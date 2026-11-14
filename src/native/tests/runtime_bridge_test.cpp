@@ -66,6 +66,14 @@ void CheckImportCall(Ctx* c, uint32_t target, Ctx* outer) {
     Check(c->esp == initial_esp + 20, "stdcall stack cleanup changed");
 }
 
+// The watchdog reads these two through guest.h, which declares them in namespace native. A definition that drifts to
+// global scope still compiles here and only fails at link time in the APK build, so the test references them by hand.
+void CheckDiagnosticCounters() {
+    const uint64_t before = native::GuestCallTotal();
+    native::LogGuestDispatchTraces();
+    Check(native::GuestCallTotal() >= before, "guest call counter went backwards");
+}
+
 void CheckRecompiledCall(Ctx* c, uint32_t target, Ctx* outer) {
     memset(c, 0, sizeof(*c));
     c->esp = 0x8000;
@@ -268,6 +276,7 @@ std::string HostPath(const char*) { return {}; }
 }  // namespace native
 
 int main() {
+    CheckDiagnosticCounters();
     using namespace native;
     RecompMemoryBase = g_memory.data();
     g_engine_lo = 0x110000;

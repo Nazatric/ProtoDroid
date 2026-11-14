@@ -129,6 +129,7 @@ thread_local uint32_t tl_call_batch = 0;
 // Dumps the dispatch rings of every registered guest thread. Called by the watchdog while a stall is being reported;
 // the reads race the threads that are still running, which is acceptable for a diagnostic that only ever writes to the
 // log (aligned 32-bit loads cannot tear on the supported targets).
+namespace native {
 void LogGuestDispatchTraces() {
     std::vector<ThreadTrace*> traces;
     {
@@ -157,6 +158,7 @@ void LogGuestDispatchTraces() {
         }
     }
 }
+}  // namespace native
 
 namespace native {
 uint64_t GuestCallTotal() { return g_guest_calls.load(std::memory_order_relaxed); }
