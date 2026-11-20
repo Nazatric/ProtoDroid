@@ -1699,6 +1699,9 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             }
         }
         if (!layoutOnly) {
+            // Re-read the launcher's UI settings here as well as in the constructor: this view is created once per
+            // Activity, and the overlay (Show FPS, opacity, button size) must follow a change made while it existed.
+            applyUiSettings();
             removeCallbacks(fpsRefresh);
             removeCallbacks(uiShotPoll);
             postDelayed(fpsRefresh, 500);
