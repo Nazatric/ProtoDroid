@@ -7,7 +7,7 @@ info:    d3d9.supportDFFormats = False
 info:    d3d9.presentInterval = 1
 info:    d3d9.samplerAnisotropy = 1
 info:    d3d9.maxFrameLatency = 1
-info:  Vulkan: Found vkGetInstanceProcAddr in libvulkan.so @ 0x7bed1e1d00
+info:  Vulkan: Found vkGetInstanceProcAddr in libvulkan.so @ 0x79b76a1d00
 info:  Built-in extension providers:
 info:    Platform WSI
 info:  Enabled instance extensions:
@@ -184,7 +184,7 @@ info:    Sparse   : n/a
 info:  DXVK: Serializing Vulkan pipeline compilation on ARM
 info:  DXVK: ARM pipeline trace disabled; set PROTODROID_PIPELINE_TRACE=1 or pipeline_trace = 1 to enable
 info:  Memory type mask for buffer resources: 0x3, usage: 0x1b7
-info:  DXVK: Read 3 valid state cache entries
+info:  DXVK: Read 20 valid state cache entries
 info:  DXVK: Graphics pipeline libraries not supported
 info:  DxvkUnboundResources: pre-created dummy sampler, buffer, and all 14 image views
 info:  DxvkUnboundResources: dummy image GPU initialization complete
@@ -204,7 +204,6 @@ info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
 info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
 info:    Buffer size:  2712x1220
 info:    Image count:  6
-err:   validateGammaRamp: ramp inverted or flat
 info:  DXVK: Capping ARM compiler threads at 2
 info:  DXVK: Using 2 compiler threads
 info:  Presenter: Actual swap chain properties:
@@ -230,7 +229,6 @@ info:    Color space:  VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
 info:    Present mode: VK_PRESENT_MODE_FIFO_KHR (dynamic: yes)
 info:    Buffer size:  2712x1220
 info:    Image count:  6
-err:   validateGammaRamp: ramp inverted or flat
 info:  Device reset
 warn:  D3D9Cursor::ResetCursor: Not supported on current platform.
 info:  D3D9DeviceEx::ResetSwapChain:
