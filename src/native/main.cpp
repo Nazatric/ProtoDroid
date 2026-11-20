@@ -171,6 +171,23 @@ void OnCrash(int sig, siginfo_t* info, void* context) {
     // PCs above are the only information available at this point.
     snprintf(line, sizeof(line), "crash: fault addr %p", info->si_addr);
     CrashWrite(line);
+    // A fault inside the guest window is the recompiled engine touching guest memory: name what that address was.
+    // "unbacked page of the free range" points at the guest code that wrote there, "committed allocation" means the
+    // mapping was fine and the write itself was wrong, and the allocator history below shows the block's lifetime.
+    const uintptr_t fault = reinterpret_cast<uintptr_t>(info->si_addr);
+    if (fault >= native::kGuestBase && fault < native::kGuestBase + 0x100000000ull) {
+        char what[256];
+        native::DescribeGuestAddress(uint32_t(fault - native::kGuestBase), what, sizeof(what));
+        snprintf(line, sizeof(line), "crash: guest %08x: %s", uint32_t(fault - native::kGuestBase), what);
+        CrashWrite(line);
+        for (int i = 0; i < 24; ++i) {
+            native::MemEvent event{};
+            if (!native::MemoryHistoryAt(i, &event)) break;
+            snprintf(line, sizeof(line), "crash: mem[-%02d] %c addr %08x size %u caller %08x tid %u", i, event.kind,
+                     event.addr, event.size, event.caller, event.tid);
+            CrashWrite(line);
+        }
+    }
 #elif defined(__x86_64__)
     DescribeAddress(line, sizeof(line), "pc", static_cast<ucontext_t*>(context)->uc_mcontext.gregs[REG_RIP]);
     CrashWrite(line);

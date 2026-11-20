@@ -139,6 +139,11 @@ constexpr uint64_t kStormReport = 2000000;
 
 }  // namespace
 
+uint32_t CurrentImportCaller() {
+    // Inside an import esp points at the guest return address: the guest instruction that asked for the allocation.
+    return tl_ctx ? R32(tl_ctx->esp) : 0;
+}
+
 bool DispatchImport(Ctx* ctx, uint32_t target) {
     if (!g_thunk_base || target < g_thunk_base || target >= g_thunk_base + kThunkSize) return false;
     Ctx* saved = tl_ctx;

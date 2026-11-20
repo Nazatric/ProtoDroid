@@ -25,11 +25,31 @@ void InitGuestMemory();
 // Page-granular allocation (VirtualAlloc). `at` != 0 requests a fixed address. Returns 0 on failure.
 uint32_t PageAlloc(uint32_t size, uint32_t at = 0);
 void PageFree(uint32_t addr);
+// VirtualFree(MEM_DECOMMIT): drops the backing of a reservation (zeroed again by the next commit). `addr` must be the
+// allocation base, as on Windows. Returns false when the address is not the base of a live allocation.
+bool PageDecommit(uint32_t addr, uint32_t size);
 // Byte-granular heap (malloc, HeapAlloc, operator new of the host-side shims).
 uint32_t HeapAlloc(uint32_t size);
 void HeapFree(uint32_t addr);
 uint32_t HeapSize(uint32_t addr);
 uint32_t HeapRealloc(uint32_t addr, uint32_t size);
+
+// Allocator history and fault-address description for the crash report (memory.cpp). The ring is fixed-size and
+// lock-free for readers: MemoryHistoryAt(0) is the most recent operation.
+//   kind: 'P' page alloc, 'p' page free, 'D' page decommit, 'H' heap alloc, 'h' heap free, 'R' heap realloc
+struct MemEvent {
+    uint64_t ns;      // steady_clock nanoseconds since boot
+    uint32_t addr;    // guest address (allocation base for alloc events, the block for free events)
+    uint32_t size;    // bytes requested
+    uint32_t caller;  // guest return address of the import that asked, 0 for a host-side allocation
+    uint32_t tid;
+    char kind;
+};
+int MemoryHistoryCount();
+bool MemoryHistoryAt(int index, MemEvent* out);
+void DescribeGuestAddress(uint32_t a, char* out, size_t size);
+// The guest return address of the import call running on this thread, or 0 outside an import (imports.cpp).
+uint32_t CurrentImportCaller();
 
 // Guest address <-> host pointer. The guest's NULL stays nullptr (host code tests optional arguments for null).
 constexpr uint64_t kGuestBase = RECOMP_GUEST_BASE;

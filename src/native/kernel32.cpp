@@ -507,7 +507,17 @@ K(VirtualAlloc) {
     Return(c, r, 4);
 }
 K(VirtualFree) {
-    if (Arg(c, 2) & 0x8000) PageFree(Arg(c, 0));  // MEM_RELEASE; MEM_DECOMMIT keeps the pages
+    const uint32_t flags = Arg(c, 2);
+    if (flags & 0x8000) {  // MEM_RELEASE
+        PageFree(Arg(c, 0));
+        Return(c, 1, 3);
+        return;
+    }
+    if (flags & 0x4000) {  // MEM_DECOMMIT: the reservation stays, the pages stop being backed and read zero after
+                           // the next commit, as on Windows
+        Return(c, PageDecommit(Arg(c, 0), Arg(c, 1)) ? 1 : 0, 3);
+        return;
+    }
     Return(c, 1, 3);
 }
 K(GetProcessHeap) { Return(c, 0x00ee0000u); }
