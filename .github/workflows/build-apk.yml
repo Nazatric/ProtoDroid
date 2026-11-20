@@ -55,6 +55,9 @@ jobs:
       - name: Check the recompiler's instruction flag metadata
         run: python3 tools/test_recomp_flag_masks.py
 
+      - name: Check every launcher engine option has a native reader
+        run: python3 tools/test_launcher_settings.py
+
       - name: Compile and run native input-lookup tests
         run: |
           set -euo pipefail
@@ -88,6 +91,8 @@ jobs:
           trap 'echo "::error::runtime tests: line $LINENO failed: $BASH_COMMAND"' ERR
           bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test 2>&1 | tee /tmp/runtime-bridge.log
           bash src/native/tests/run_memory_test.sh /tmp/memory_test 2>&1 | tee /tmp/memory.log
+          # protodroid.ini precedence: the launcher's file must win, hand-written shared-storage keys must survive.
+          bash src/native/tests/run_config_test.sh /tmp/config_test 2>&1 | tee /tmp/config.log
 
       - name: Report runtime test failure
         if: failure()
@@ -95,6 +100,7 @@ jobs:
           # A sanitizer abort reports only exit 134 to the check run, and the workflow log is not always retrievable.
           python3 tools/annotate_log.py /tmp/runtime-bridge.log runtime-bridge --tail 25
           python3 tools/annotate_log.py /tmp/memory.log runtime-memory --tail 25
+          python3 tools/annotate_log.py /tmp/config.log runtime-config --tail 25
 
       - name: Compile and run Prototype Fix policy tests
         run: |
