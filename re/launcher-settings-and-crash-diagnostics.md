@@ -90,6 +90,17 @@ kind, address, size, the **guest return address of the import that asked**, and 
 With `crash: mem[-NN] ...` lines next to `crash: guest <addr>: ...`, the next log names the call site that freed (or
 never allocated) the memory the flush routine wrote to, instead of only the faulting frame.
 
+The report also carries `crash: guest calls <addr> ...`, the crashing thread's last 24 guest call targets, read from
+its own dispatch ring without the global trace lock (`CurrentDispatchTrace`, persisted by the ring test in
+`runtime_bridge_test.cpp`). The `pc` in a crash report is a host address inside a recompiled function, and the two
+device crashes reported `f_7c6a7750+0x1f0`, which is not an instruction boundary in this build, so guest addresses are
+the only reliable frame identity.
+
+Where the flush context comes from, for whoever reads the next report: `f_7c6a7750`'s `esi` is its second argument,
+which `f_7c663780` passes as a pointer into the *caller's* frame (`lea ecx,[esp+0x1c]`). The bitset at `[esi+0x2080]`
+and the queue at `[esi+0x2084]` are fields of that ~0x2088-byte context, so a garbage cursor comes from a context that
+was filled by an outer function - the guest call chain in the report is what identifies it.
+
 ## 5. Open
 
 The crash itself is not proven fixed. The evidence points at a guest-side lifetime error around the dirty-handle queue
