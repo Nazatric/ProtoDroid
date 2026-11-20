@@ -187,6 +187,17 @@ void OnCrash(int sig, siginfo_t* info, void* context) {
                      event.addr, event.size, event.caller, event.tid);
             CrashWrite(line);
         }
+        // The guest call chain that led here, as guest addresses (the pc above is a host address inside a recompiled
+        // function and does not map back without the generated table).
+        uint32_t trace[24];
+        const int trace_count = native::CurrentDispatchTrace(trace, 24);
+        if (trace_count > 0) {
+            int len = snprintf(line, sizeof(line), "crash: guest calls");
+            for (int i = 0; i < trace_count && len < int(sizeof(line)) - 12; ++i) {
+                len += snprintf(line + len, sizeof(line) - size_t(len), " %08x", trace[i]);
+            }
+            CrashWrite(line);
+        }
     }
 #elif defined(__x86_64__)
     DescribeAddress(line, sizeof(line), "pc", static_cast<ucontext_t*>(context)->uc_mcontext.gregs[REG_RIP]);

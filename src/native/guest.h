@@ -74,6 +74,9 @@ struct GuestThread {
 GuestThread* CurrentThread();
 // Creates the guest state for the calling host thread (main thread or a thread started by CreateThread).
 GuestThread* AttachThread(uint32_t stack_size);
+// The calling thread's last guest call targets, oldest first, written without taking the global trace lock so the
+// crash handler can use it (runtime.cpp). Returns how many entries were written.
+int CurrentDispatchTrace(uint32_t* out, int max);
 // Hang diagnostics (watchdog.cpp): guest threads register themselves; the watchdog watches the frame counter.
 void RegisterGuestThread();
 // Count of computed guest calls retired so far (runtime.cpp), sampled by the watchdog to tell a stuck thread from a

@@ -162,6 +162,19 @@ void LogGuestDispatchTraces() {
 
 namespace native {
 uint64_t GuestCallTotal() { return g_guest_calls.load(std::memory_order_relaxed); }
+
+// The crashing thread's own ring, without the global trace mutex: the crash handler runs on that thread and may not
+// be able to take a lock. Returns the number of guest targets written, oldest first.
+int CurrentDispatchTrace(uint32_t* out, int max) {
+    if (!out || max <= 0) return 0;
+    const uint32_t end = tl_trace_pos;
+    const uint32_t count = end < uint32_t(kTraceDepth) ? end : uint32_t(kTraceDepth);
+    const uint32_t shown = count < uint32_t(max) ? count : uint32_t(max);
+    for (uint32_t i = 0; i < shown; ++i) {
+        out[i] = tl_trace.target[(end - shown + i) & (kTraceDepth - 1)];
+    }
+    return int(shown);
+}
 }  // namespace native
 
 extern "C" void RecompDispatch(Ctx* ctx, uint32_t target) {

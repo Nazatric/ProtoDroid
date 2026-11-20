@@ -74,6 +74,15 @@ void CheckDiagnosticCounters() {
     Check(native::GuestCallTotal() >= before, "guest call counter went backwards");
 }
 
+// The crash handler reads the ring through this entry point without the trace lock; it has to see the targets this
+// thread just dispatched, oldest first.
+void CheckDispatchTrace(uint32_t dispatched) {
+    uint32_t trace[24] = {};
+    const int count = native::CurrentDispatchTrace(trace, 24);
+    Check(count > 0, "dispatch trace is empty after a dispatch");
+    Check(trace[count - 1] == dispatched, "dispatch trace does not end with the newest target");
+}
+
 void CheckRecompiledCall(Ctx* c, uint32_t target, Ctx* outer) {
     memset(c, 0, sizeof(*c));
     c->esp = 0x8000;
@@ -297,6 +306,7 @@ int main() {
     // A normal computed guest call still reaches the recompiled-function table.
     CheckRecompiledCall(&ctx, 0x110100u, &outer);
     Check(g_recompiled_calls == 1, "direct recompiled target was not dispatched exactly once");
+    CheckDispatchTrace(0x110100u);
 
     // An unresolved engine near-jump thunk still resolves to a recompiled target.
     W8(0x110000, 0xe9);
