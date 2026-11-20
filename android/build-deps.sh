@@ -52,9 +52,15 @@ PATCH_DIR=$(realpath "$(dirname "${BASH_SOURCE[0]}")/patches")
 for proj in SDL2 FAudio dxvk Dobby; do
     for p in "$PATCH_DIR/${proj,,}"-*.patch; do
         [ -e "$p" ] || continue
-        echo "applying $(basename "$p") to $proj"
-        git -C "$SRC/$proj" apply --check "$p"
-        git -C "$SRC/$proj" apply "$p"
+        if git -C "$SRC/$proj" apply --check "$p" 2>/dev/null; then
+            echo "applying $(basename "$p") to $proj"
+            git -C "$SRC/$proj" apply "$p"
+        elif git -C "$SRC/$proj" apply --reverse --check "$p" 2>/dev/null; then
+            echo "already applied: $(basename "$p")"
+        else
+            echo "FATAL: $(basename "$p") neither applies nor is already applied" >&2
+            exit 1
+        fi
     done
 done
 # Fail closed if the pinned Android compatibility patch is absent from a reused source tree.

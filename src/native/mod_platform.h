@@ -62,6 +62,10 @@ void ModScriptsInitialize(const std::vector<ModEntry>& mods);
 void ModScriptsFrame();
 void ModScriptsShutdown();
 bool ModScriptsEmit(const std::string& name, const uint32_t* arguments, size_t count);
+// Ask the script runtime to re-read one mod's protodroid-settings.ini on the next engine frame
+// and notify that mod with a protodroid.settings_changed event. Thread-safe (the in-game
+// settings panel calls it from the UI thread); every pd.settings read becomes live afterwards.
+void ModScriptsRequestSettingsReload(const char* mod_id);
 
 // Built-in optional fixes. No original function is hooked when its corresponding setting is off.
 void ModFeaturesInitialize();

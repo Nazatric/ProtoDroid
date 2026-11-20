@@ -29,6 +29,7 @@ enum class TourInput : uint8_t {
     F,
     LeftMouse,
     RightMouse,
+    Return,
 };
 
 enum class TourActionType : uint8_t { KeyDown, KeyUp, MouseMove };

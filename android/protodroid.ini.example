@@ -88,3 +88,11 @@ unlock_menu_fps = 1
 #vram_report_mb = 2048
 # Dump original-format top-level DDS textures and textures.ini under Prototype/texture-dump (or app-specific storage).
 #dump_textures = 1
+
+# --- 0.16 performance settings ---
+# DXVK presenter queue depth for the single-main-thread engine. 1 (default) keeps the
+# Android FIFO swapchain from stuffing behind a slow frame; 0 restores DXVK defaults.
+#dxvk_max_frame_latency = 1
+# Pin engine threads to the fastest CPU cluster (found from cpufreq, never hardcoded).
+# Only engages on SoCs with a real big.LITTLE hierarchy; 0 restores v0.15 scheduling.
+#affinity_mode = 1

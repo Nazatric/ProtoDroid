@@ -56,6 +56,11 @@ GuestThread* CurrentThread();
 GuestThread* AttachThread(uint32_t stack_size);
 // Hang diagnostics (watchdog.cpp): guest threads register themselves; the watchdog watches the frame counter.
 void RegisterGuestThread();
+// Count of computed guest calls retired so far (runtime.cpp), sampled by the watchdog to tell a stuck thread from a
+// thread that is running but not presenting.
+uint64_t GuestCallTotal();
+// Logs each guest thread's most recent computed calls (runtime.cpp), which is what names a loop that never parks.
+void LogGuestDispatchTraces();
 
 // ---- calls into guest code ----
 // Calls the recompiled function at `va` with stdcall/cdecl arguments on the current guest thread's stack; returns

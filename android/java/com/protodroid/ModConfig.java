@@ -320,7 +320,7 @@ final class ModConfig {
         }
     }
 
-    private static String decimal(double value) {
+    static String decimal(double value) {
         if (!finite(value)) throw new IllegalArgumentException("Non-finite mod option");
         return BigDecimal.valueOf(value).stripTrailingZeros().toPlainString();
     }

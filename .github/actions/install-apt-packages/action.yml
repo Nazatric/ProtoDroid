@@ -1,0 +1,81 @@
+name: Install apt packages
+description: >
+  Install host packages with retries and a mirror fallback. The hosted runners' apt mirror has repeatedly answered
+  "Temporary failure resolving 'azure.archive.ubuntu.com'" (or exit 100) while github.com resolved normally in the same
+  job, which fails a run before any repository code is executed. Retrying, then repointing the sources at the public
+  archive, keeps that infrastructure flake from being reported as a failure of this project, while a genuinely missing
+  package still fails the step and is annotated with apt's own output.
+
+inputs:
+  packages:
+    description: Space-separated package names.
+    required: true
+  python_modules:
+    description: >
+      Space-separated Python modules that must import from python3 (for example "yaml"). They are installed with pip if
+      the apt attempt did not provide them.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install apt packages
+      shell: bash
+      env:
+        PROTODROID_APT_PACKAGES: ${{ inputs.packages }}
+        PROTODROID_PY_MODULES: ${{ inputs.python_modules }}
+      run: |
+        set +e
+        log=/tmp/host-deps.log
+        : > "$log"
+        missing_packages() {
+          local missing=""
+          for package in $PROTODROID_APT_PACKAGES; do
+            dpkg -s "$package" >/dev/null 2>&1 || missing="$missing $package"
+          done
+          printf '%s' "$missing"
+        }
+        missing_modules() {
+          local missing=""
+          for module in $PROTODROID_PY_MODULES; do
+            python3 -c "import $module" >/dev/null 2>&1 || missing="$missing $module"
+          done
+          printf '%s' "$missing"
+        }
+        apt_try() {
+          echo "=== apt ($1): $PROTODROID_APT_PACKAGES ===" >> "$log"
+          sudo apt-get update -o Acquire::Retries=3 >> "$log" 2>&1
+          # shellcheck disable=SC2086
+          sudo apt-get install -y --no-install-recommends $PROTODROID_APT_PACKAGES >> "$log" 2>&1
+        }
+        use_public_archive() {
+          # The image's sources point at mirror+file:/etc/apt/apt-mirrors.txt, whose host is the one that fails to
+          # resolve. The public archive is a different name and has been reachable in the affected runs.
+          echo "=== switching apt sources to archive.ubuntu.com ===" >> "$log"
+          sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|http://archive.ubuntu.com/ubuntu|' \
+            /etc/apt/sources.list.d/*.sources 2>>"$log"
+        }
+        for attempt in 1 2 3; do
+          test -z "$(missing_packages)" && break
+          apt_try "image mirror, attempt $attempt"
+          test -z "$(missing_packages)" && break
+          use_public_archive
+          apt_try "public archive, attempt $attempt"
+          test -z "$(missing_packages)" && break
+          sleep $((attempt * 20))
+        done
+        for module in $(missing_modules); do
+          echo "=== pip: $module ===" >> "$log"
+          python3 -m pip install --user --break-system-packages --quiet "$module" >> "$log" 2>&1
+        done
+        set -e
+        missing="$(missing_packages)"
+        modules="$(missing_modules)"
+        if test -n "$missing$modules"; then
+          echo "::error::host dependencies unavailable:$missing$modules (apt could not install them)"
+          python3 "$GITHUB_WORKSPACE/tools/annotate_log.py" "$log" apt || true
+          tail -n 40 "$log" || true
+          exit 1
+        fi
+        echo "host dependencies present: $PROTODROID_APT_PACKAGES$PROTODROID_PY_MODULES"

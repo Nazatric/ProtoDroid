@@ -102,8 +102,24 @@ public class ProtoActivity extends SDLActivity {
         }
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);  // no dimming while playing
-        // On-screen controls above SDL's surface; they feed SDL keyboard and mouse input.
-        addContentView(new TouchControls(this), new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (isDiagnosticTour() && "precompile".equals(Os.getenv("PROTODROID_TOUR_PURPOSE"))) {
+            // One-click shader precompile: the tour injects its own input, so the on-screen controls are
+            // replaced by the styled loading screen. The relaunch on completion is owned by SetupActivity
+            // in the launcher process; this tour process ends itself the moment the run finishes.
+            addContentView(new ShaderPrecompileOverlay(this), new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        } else {
+            // On-screen controls above SDL's surface; they feed SDL keyboard and mouse input.
+            addContentView(new TouchControls(this), new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            // In-game mod settings: the left-edge handle opens the live panel (only when mods
+            // with options are enabled). Passes touches through everywhere outside its controls.
+            addContentView(new ModPanel(this), new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+    }
+
+    private static boolean isDiagnosticTour() {
+        return "1".equals(Os.getenv("PROTODROID_DIAGNOSTIC_TOUR"));
     }
 }

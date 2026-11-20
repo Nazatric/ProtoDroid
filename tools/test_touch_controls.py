@@ -107,6 +107,19 @@ assert "for (int i = 0; i < buttons.length; i++)" in touch, "built-in index pers
 assert "allButtons.addAll(customButtons);" in touch, "custom records reindexed the built-in array"
 assert "private final RectF editorBar" in touch and "selectionBar" in touch
 assert "editorBar.contains(x, y) || selectionBar.contains(x, y)" in touch
+# The editor chrome is at the bottom: a bar across the top owned every touch in that strip, which made the player's
+# own top-row controls (the power row, F1/F2, ENTER/ESC) impossible to drag.
+assert "editorBar.set(margin, barBottom - barHeight, getWidth() - margin, barBottom)" in touch
+assert "editorBar.set(margin, top, getWidth() - margin, top + 64 * density)" not in touch
+assert 'c.drawText("TOUCH LAYOUT"' not in touch
+# MENU/GAME and the gear are layout controls: draggable, resizable, persisted and reset with the layout.
+assert "modeRect.contains(x, y) || gearRect.contains(x, y)" in touch
+assert 'prefs.getFloat("mode_x", -1)' in touch and 'ed.putFloat("mode_x", modeRect.left / w)' in touch
+assert 'prefs.getFloat("gear_x", -1)' in touch and 'ed.putFloat("gear_x", gearRect.left / w)' in touch
+assert 'prefs.getFloat("mode_size", 1)' in touch and 'prefs.getFloat("gear_size", 1)' in touch
+assert "chromeDrag = id" in touch and "modeCustomX = left / viewW" in touch
+assert 'remove("mode_x").remove("mode_y").remove("mode_size")' in touch
+assert "chrome = 0;" in touch
 assert "if (editing && b != selected) opacity *= 0.52f;" in touch
 assert 'prefs.getString("label" + i, "")' in touch and 'putString("label" + i, b.label)' in touch
 assert 'remove("label" + i)' in touch and "defaultButtonText" in touch

@@ -183,13 +183,25 @@ static inline uint8_t Parity(uint32_t v) {
     return (uint8_t)(~v & 1);
 }
 
-#define RECOMP_FLAGS_LOGIC(c, r, bits)                                   \
+/* Per-flag liveness masks passed by the generated code (tools/recomp/recomp.py computes, per instruction, which
+ * flags are read before their next write). A zero bit lets the compiler drop that flag's computation: every call
+ * site passes a literal, so the guard folds away. Bits follow recomp.py's FLAG_NAMES order. AF is never written by
+ * these helpers (only BCD instructions use it; the engine has none), so the masks cover CF ZF SF OF PF. */
+#define RECOMP_F_CF 0x01u
+#define RECOMP_F_ZF 0x02u
+#define RECOMP_F_SF 0x04u
+#define RECOMP_F_OF 0x08u
+#define RECOMP_F_PF 0x10u
+#define RECOMP_F_AF 0x20u
+#define RECOMP_F_STATUS 0x3fu
+
+#define RECOMP_FLAGS_LOGIC(c, r, bits, live)                             \
     do {                                                                 \
-        (c)->cf = 0;                                                     \
-        (c)->of = 0;                                                     \
-        (c)->zf = ((r) & (uint32_t)((1ull << (bits)) - 1)) == 0;         \
-        (c)->sf = (((r) >> ((bits) - 1)) & 1);                           \
-        (c)->pf = Parity(r);                                             \
+        if ((live) & RECOMP_F_CF) (c)->cf = 0;                           \
+        if ((live) & RECOMP_F_OF) (c)->of = 0;                           \
+        if ((live) & RECOMP_F_ZF) (c)->zf = ((r) & (uint32_t)((1ull << (bits)) - 1)) == 0; \
+        if ((live) & RECOMP_F_SF) (c)->sf = (((r) >> ((bits) - 1)) & 1); \
+        if ((live) & RECOMP_F_PF) (c)->pf = Parity(r);                   \
     } while (0)
 
 static inline uint32_t Mask(int bits) { return bits == 32 ? 0xffffffffu : ((1u << bits) - 1); }
@@ -204,28 +216,28 @@ typedef struct RFlags {
     uint8_t cf, zf, sf, of, pf, df, af;
 } RFlags;
 #define RECOMP_FLAG_FUNCS(S, T) \
-    static inline uint32_t AddFlags##S(T* c, uint32_t a, uint32_t b, uint32_t carry, int bits) { \
+    static inline uint32_t AddFlags##S(T* c, uint32_t a, uint32_t b, uint32_t carry, int bits, uint32_t live) { \
         uint64_t wide = (uint64_t)(a & Mask(bits)) + (b & Mask(bits)) + carry; \
         uint32_t r = (uint32_t)wide & Mask(bits); \
         uint32_t sign = 1u << (bits - 1); \
-        c->cf = (wide >> bits) & 1; \
-        c->zf = r == 0; \
-        c->sf = (r & sign) != 0; \
-        c->of = ((~(a ^ b) & (a ^ r)) & sign) != 0; \
-        c->pf = Parity(r); \
+        if ((live) & RECOMP_F_CF) c->cf = (wide >> bits) & 1; \
+        if ((live) & RECOMP_F_ZF) c->zf = r == 0; \
+        if ((live) & RECOMP_F_SF) c->sf = (r & sign) != 0; \
+        if ((live) & RECOMP_F_OF) c->of = ((~(a ^ b) & (a ^ r)) & sign) != 0; \
+        if ((live) & RECOMP_F_PF) c->pf = Parity(r); \
         return r; \
     } \
      \
-    static inline uint32_t SubFlags##S(T* c, uint32_t a, uint32_t b, uint32_t borrow, int bits) { \
+    static inline uint32_t SubFlags##S(T* c, uint32_t a, uint32_t b, uint32_t borrow, int bits, uint32_t live) { \
         uint32_t am = a & Mask(bits), bm = b & Mask(bits); \
         uint64_t wide = (uint64_t)am - bm - borrow; \
         uint32_t r = (uint32_t)wide & Mask(bits); \
         uint32_t sign = 1u << (bits - 1); \
-        c->cf = (uint64_t)am < (uint64_t)bm + borrow; \
-        c->zf = r == 0; \
-        c->sf = (r & sign) != 0; \
-        c->of = (((a ^ b) & (a ^ r)) & sign) != 0; \
-        c->pf = Parity(r); \
+        if ((live) & RECOMP_F_CF) c->cf = (uint64_t)am < (uint64_t)bm + borrow; \
+        if ((live) & RECOMP_F_ZF) c->zf = r == 0; \
+        if ((live) & RECOMP_F_SF) c->sf = (r & sign) != 0; \
+        if ((live) & RECOMP_F_OF) c->of = (((a ^ b) & (a ^ r)) & sign) != 0; \
+        if ((live) & RECOMP_F_PF) c->pf = Parity(r); \
         return r; \
     } \
      \

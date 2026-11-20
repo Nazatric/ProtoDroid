@@ -53,11 +53,10 @@ void DecodeColorPalette(const uint8_t* b, bool dxt1, uint8_t pal[4][4]) {
     Rgb565(c0, pal[0]);
     Rgb565(c1, pal[1]);
     if (c0 > c1 || !dxt1) {
-        for (int k = 0; k < 3; ++k) {
+        for (int k = 0; k < 4; ++k) {
             pal[2][k] = uint8_t((2 * pal[0][k] + pal[1][k] + 1) / 3);
             pal[3][k] = uint8_t((pal[0][k] + 2 * pal[1][k] + 1) / 3);
         }
-        pal[2][3] = pal[3][3] = 255;
     } else {
         for (int k = 0; k < 4; ++k) pal[2][k] = uint8_t((pal[0][k] + pal[1][k]) / 2);
         pal[3][0] = pal[3][1] = pal[3][2] = pal[3][3] = 0;  // transparent black
@@ -199,62 +198,6 @@ void DecodeDxt1To32(const uint8_t* src, uint32_t pitch, uint32_t w, uint32_t h, 
     }
 }
 
-
-// Decode DXT2-5 colour and alpha directly into BGRA rows, without an intermediate 16-pixel tile.
-void DecodeDxt35To32(uint32_t f, const uint8_t* src, uint32_t pitch, uint32_t w, uint32_t h, uint8_t* dst,
-                     int32_t dst_pitch) {
-    const uint32_t bw = (w + 3) / 4, bh = (h + 3) / 4, bytes = BlockBytes(f);
-    for (uint32_t by = 0; by < bh; ++by) {
-        for (uint32_t bx = 0; bx < bw; ++bx) {
-            const uint8_t* block = src + by * pitch + bx * bytes;
-            uint8_t palette[4][4];
-            DecodeColorPalette(block + 8, false, palette);
-            uint32_t colors[4];
-            for (int i = 0; i < 4; ++i) {
-                memcpy(&colors[i], palette[i], 4);
-                colors[i] &= 0x00ffffffu;
-            }
-            uint8_t alpha[16];
-            if (f == kDxt2 || f == kDxt3) {
-                for (int i = 0; i < 16; ++i)
-                    alpha[i] = uint8_t(((block[i / 2] >> (4 * (i & 1))) & 15) * 17);
-            } else {
-                uint8_t a[8] = {block[0], block[1]};
-                if (a[0] > a[1]) {
-                    for (int i = 1; i < 7; ++i) a[i + 1] = uint8_t(((7 - i) * a[0] + i * a[1] + 3) / 7);
-                } else {
-                    for (int i = 1; i < 5; ++i) a[i + 1] = uint8_t(((5 - i) * a[0] + i * a[1] + 2) / 5);
-                    a[6] = 0;
-                    a[7] = 255;
-                }
-                uint64_t bits = 0;
-                for (int i = 0; i < 6; ++i) bits |= uint64_t(block[2 + i]) << (8 * i);
-                for (int i = 0; i < 16; ++i) alpha[i] = a[(bits >> (3 * i)) & 7];
-            }
-            const uint32_t idx = uint32_t(block[12] | block[13] << 8 | block[14] << 16 | uint32_t(block[15]) << 24);
-            if (bx * 4 + 4 <= w && by * 4 + 4 <= h) {
-                uint8_t* out = dst + int32_t(by * 4) * dst_pitch + bx * 16;
-                for (uint32_t y = 0; y < 4; ++y) {
-                    uint32_t row[4];
-                    for (uint32_t x = 0; x < 4; ++x) {
-                        const uint32_t i = y * 4 + x;
-                        row[x] = colors[(idx >> (2 * i)) & 3] | uint32_t(alpha[i]) << 24;
-                    }
-                    memcpy(out + int32_t(y) * dst_pitch, row, sizeof(row));
-                }
-                continue;
-            }
-            for (uint32_t y = 0; y < 4 && by * 4 + y < h; ++y) {
-                for (uint32_t x = 0; x < 4 && bx * 4 + x < w; ++x) {
-                    const uint32_t i = y * 4 + x;
-                    const uint32_t pixel = colors[(idx >> (2 * i)) & 3] | uint32_t(alpha[i]) << 24;
-                    memcpy(dst + int32_t(by * 4 + y) * dst_pitch + (bx * 4 + x) * 4, &pixel, 4);
-                }
-            }
-        }
-    }
-}
-
 }  // namespace
 
 void DecodeDxt(uint32_t f, const uint8_t* src, uint32_t pitch, uint32_t w, uint32_t h, uint8_t* dst,
@@ -262,10 +205,6 @@ void DecodeDxt(uint32_t f, const uint8_t* src, uint32_t pitch, uint32_t w, uint3
     if (f == kDxt1) {
         if (dst_format == kA1R5G5B5) DecodeDxt1To16(src, pitch, w, h, dst, dst_pitch);
         else DecodeDxt1To32(src, pitch, w, h, dst, dst_pitch);
-        return;
-    }
-    if (dst_format != kA1R5G5B5) {
-        DecodeDxt35To32(f, src, pitch, w, h, dst, dst_pitch);
         return;
     }
     const bool packed16 = dst_format == kA1R5G5B5;
