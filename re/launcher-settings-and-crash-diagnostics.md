@@ -101,7 +101,17 @@ which `f_7c663780` passes as a pointer into the *caller's* frame (`lea ecx,[esp+
 and the queue at `[esi+0x2084]` are fields of that ~0x2088-byte context, so a garbage cursor comes from a context that
 was filled by an outer function - the guest call chain in the report is what identifies it.
 
-## 5. Open
+## 5. What to check in the next device log
+
+1. `config: loaded ...` lines now name **every** file that existed, and each is followed by `N key(s) used, M repeated
+   line(s)`. The launcher's file must appear first; if the only file is `/storage/emulated/0/Prototype/protodroid.ini`,
+   the settings page has not been opened since installing this build, which is expected until a toggle is changed.
+2. `config: <key> = <value>` lines repeat the values the engine will use. A launcher toggle that "does nothing" is now
+   visible either here (the value the engine uses) or absent (the launcher did not write it).
+3. After a crash, `crash: guest <addr>: ...`, `crash: mem[-NN] ...` and `crash: guest calls ...` describe what the
+   faulting address was, which guest call freed or allocated it, and the call chain that led there.
+
+## 6. Open
 
 The crash itself is not proven fixed. The evidence points at a guest-side lifetime error around the dirty-handle queue
 during level load (the crash follows `textures: 1024 created ... 218 MiB`, after the front-end movies), and the new
