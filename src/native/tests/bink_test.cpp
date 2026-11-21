@@ -81,7 +81,9 @@ void HeapFree(uint32_t) {}
 uint32_t HeapSize(uint32_t) { return 0; }
 uint32_t HeapRealloc(uint32_t old, uint32_t size) { (void)old; return HeapAlloc(size); }
 uint32_t PageAlloc(uint32_t size, uint32_t at) { (void)at; return HeapAlloc(size); }
-void PageFree(uint32_t) {}
+bool PageFree(uint32_t) { return true; }
+uint32_t PageReserve(uint32_t size, uint32_t at) { (void)at; return HeapAlloc(size); }
+bool PageDecommit(uint32_t, uint32_t) { return true; }
 uint32_t GuestStrdup(const char* s) {
     uint32_t a = HeapAlloc(static_cast<uint32_t>(strlen(s) + 1));
     if (a) memcpy(Ptr<void>(a), s, strlen(s) + 1);

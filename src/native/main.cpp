@@ -201,7 +201,7 @@ void OnCrash(int sig, siginfo_t* info, void* context) {
         // The guest registers and the memory the faulting function indexed. A recompiled function keeps the guest
         // registers in one Ctx per call, so its fields are the arguments of the frame that faulted: for the
         // dirty-handle flush this names the context (esi) and shows whether its queue pointer or cursor is stale.
-        if (native::Ctx* guest = native::CurrentGuestContext()) {
+        if (Ctx* guest = native::CurrentGuestContext()) {
             snprintf(line, sizeof(line), "crash: guest regs eax=%08x ecx=%08x edx=%08x ebx=%08x esp=%08x ebp=%08x "
                                          "esi=%08x edi=%08x",
                      guest->eax, guest->ecx, guest->edx, guest->ebx, guest->esp, guest->ebp, guest->esi, guest->edi);
