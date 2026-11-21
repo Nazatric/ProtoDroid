@@ -307,6 +307,7 @@ int main() {
     CheckRecompiledCall(&ctx, 0x110100u, &outer);
     Check(g_recompiled_calls == 1, "direct recompiled target was not dispatched exactly once");
     CheckDispatchTrace(0x110100u);
+    Check(native::CurrentGuestContext() == &ctx, "the crash report cannot see the running guest context");
 
     // An unresolved engine near-jump thunk still resolves to a recompiled target.
     W8(0x110000, 0xe9);

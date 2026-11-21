@@ -144,6 +144,19 @@ int main() {
     Check(MemoryHistoryAt(3, &event) && event.kind == 'H', "the heap allocation before that is missing");
     Check(!MemoryHistoryAt(MemoryHistoryCount(), &event), "history returned an event past the end");
 
-    puts("Guest large-page release, small-block reuse, decommit and re-commit checks passed");
+    // The crash report only dereferences guest pointers it has cleared through this check.
+    Check(GuestRangeReadable(probe, 64), "a live allocation was not reported readable");
+    // The heap carves size-class blocks out of 64 KiB chunks, so a range slightly past one block is still inside
+    // committed memory. A range past the whole chunk must not be readable.
+    // Page-backed: the same check against a released page must fail, and against a live one must pass.
+    const uint32_t live_page = PageAlloc(kPageBytes);
+    Check(GuestRangeReadable(live_page, kPageBytes), "a live page was not reported readable");
+    Check(!GuestRangeReadable(live_page, kPageBytes * 2), "a range past a live page was reported readable");
+    PageFree(live_page);
+    Check(!GuestRangeReadable(page_probe, kPageBytes), "a released page was reported readable");
+    Check(!GuestRangeReadable(pool, kPageBytes), "a decommitted page was reported readable");
+    Check(!GuestRangeReadable(0, 16), "the null address was reported readable");
+
+    puts("Guest large-page release, small-block reuse, decommit, readability and re-commit checks passed");
     return 0;
 }

@@ -48,6 +48,8 @@ struct MemEvent {
 int MemoryHistoryCount();
 bool MemoryHistoryAt(int index, MemEvent* out);
 void DescribeGuestAddress(uint32_t a, char* out, size_t size);
+// True when [a, a + size) is committed guest memory (no decommitted hole): a crash report may read it safely.
+bool GuestRangeReadable(uint32_t a, uint32_t size);
 // The guest return address of the import call running on this thread, or 0 outside an import (imports.cpp).
 uint32_t CurrentImportCaller();
 
@@ -77,6 +79,9 @@ GuestThread* AttachThread(uint32_t stack_size);
 // The calling thread's last guest call targets, oldest first, written without taking the global trace lock so the
 // crash handler can use it (runtime.cpp). Returns how many entries were written.
 int CurrentDispatchTrace(uint32_t* out, int max);
+// The guest context of this thread's current guest call (runtime.cpp): its register fields are the ones the
+// recompiled code saved at its last dispatch, which is what a crash report needs to name the frames' arguments.
+Ctx* CurrentGuestContext();  // Ctx is defined by ../recomp/runtime.h
 // Hang diagnostics (watchdog.cpp): guest threads register themselves; the watchdog watches the frame counter.
 void RegisterGuestThread();
 // Count of computed guest calls retired so far (runtime.cpp), sampled by the watchdog to tell a stuck thread from a

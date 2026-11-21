@@ -412,6 +412,24 @@ uint32_t GuestStrdup(const char* s) {
 }
 
 
+// Whether [a, a + size) is committed guest memory that can be read without faulting. Used by the crash report before
+// it touches a guest pointer it does not trust.
+bool GuestRangeReadable(uint32_t a, uint32_t size) {
+    if (!a || !size) return false;
+    const uint64_t end = uint64_t(a) + size;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    auto u = g_used.upper_bound(a);
+    if (u == g_used.begin()) return false;
+    --u;
+    if (end > uint64_t(u->first) + u->second) return false;
+    auto d = g_decommitted.upper_bound(a);
+    if (d != g_decommitted.begin()) {
+        --d;
+        if (end > d->first && a < uint64_t(d->first) + d->second) return false;
+    }
+    return true;
+}
+
 // ---- fault and allocator history (crash handler) ----
 int MemoryHistoryCount() { return kHistory; }
 

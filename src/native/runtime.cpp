@@ -163,6 +163,8 @@ void LogGuestDispatchTraces() {
 namespace native {
 uint64_t GuestCallTotal() { return g_guest_calls.load(std::memory_order_relaxed); }
 
+Ctx* CurrentGuestContext() { return tl_trace.ctx; }
+
 // The crashing thread's own ring, without the global trace mutex: the crash handler runs on that thread and may not
 // be able to take a lock. Returns the number of guest targets written, oldest first.
 int CurrentDispatchTrace(uint32_t* out, int max) {
