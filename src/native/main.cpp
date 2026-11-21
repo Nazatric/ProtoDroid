@@ -207,15 +207,14 @@ void OnCrash(int sig, siginfo_t* info, void* context) {
                      guest->eax, guest->ecx, guest->edx, guest->ebx, guest->esp, guest->ebp, guest->esi, guest->edi);
             CrashWrite(line);
             const uint32_t esi = guest->esi;
-            (void)esi;
             if (native::GuestRangeReadable(esi, 0x2088)) {
-                const uint32_t bitset = native::R32(esi + 0x2080), queue = native::R32(esi + 0x2084);
+                const uint32_t bitset = R32(esi + 0x2080), queue = R32(esi + 0x2084);
                 snprintf(line, sizeof(line), "crash: guest ctx %08x: bitset %08x queue %08x", esi, bitset, queue);
                 CrashWrite(line);
                 if (native::GuestRangeReadable(queue, 0x10)) {
                     snprintf(line, sizeof(line), "crash: guest queue %08x: base %08x cursor %08x capacity-end "
                                                  "base+1000",
-                             queue, native::R32(queue + 8), native::R32(queue + 0xc));
+                             queue, R32(queue + 8), R32(queue + 0xc));
                     CrashWrite(line);
                 }
             }
