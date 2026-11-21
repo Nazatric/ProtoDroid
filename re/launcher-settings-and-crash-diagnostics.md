@@ -70,6 +70,14 @@ destroyed (use after free) or the queue buffer had been released while the queue
   used to wrap, turning a huge request into a small size class — a caller then wrote far past a tiny block and
   corrupted whatever followed it in the heap.
 * `HeapRealloc` of a block whose header is not ours now returns `0` instead of reinterpreting foreign memory.
+* `VirtualAlloc(MEM_RESERVE)` without `MEM_COMMIT` stayed in the free map, where nothing was mapped: the guest's first
+  touch of its own reservation faulted. Windows makes reserved memory readable and owned by the process. `PageReserve`
+  now maps it, keeps it out of the general arena, adopts it when a commit covers it, and `VirtualFree(MEM_RELEASE)`
+  of a reservation succeeds instead of silently doing nothing.
+* `PageFree` unmapped the pages at once. Windows keeps freed heap memory committed and owned by the heap, so a stale
+  store damages dead memory instead of killing the process; here the same store produced this crash. Freed pages stay
+  mapped, zeroed and un-reusable in a bounded 64 MiB diagnostic window (oldest released first), which also turns a
+  use-after-free into something the crash report can describe.
 
 Tests: `src/native/tests/memory_test.cpp` covers decommit → commit zeroing, interior commits, impossible sizes and the
 address descriptions.
