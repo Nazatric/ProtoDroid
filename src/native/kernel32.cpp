@@ -501,16 +501,21 @@ K(InterlockedExchange) { Return(c, __atomic_exchange_n(Ptr<uint32_t>(Arg(c, 0)),
 K(InterlockedDecrement) { Return(c, __atomic_sub_fetch(Ptr<uint32_t>(Arg(c, 0)), 1, __ATOMIC_SEQ_CST), 1); }
 
 K(VirtualAlloc) {
-    uint32_t addr = Arg(c, 0), size = Arg(c, 1);
-    uint32_t r = PageAlloc(size, addr);
+    // flAllocationType: MEM_COMMIT 0x1000, MEM_RESERVE 0x2000, MEM_RESET 0x80000. Windows treats RESERVE alone and
+    // RESERVE|COMMIT differently: a plain reservation is readable memory the process owns (committed on first touch
+    // in practice), while a commit makes it backed right away. Both must be usable immediately - a reservation that
+    // this port left unmapped was one real way a guest access faulted with no Windows equivalent.
+    const uint32_t addr = Arg(c, 0), size = Arg(c, 1), type = Arg(c, 3);
+    const bool reserve = (type & 0x2000) != 0;
+    const bool commit = (type & 0x1000) != 0 || (type & 0x80000) != 0;
+    uint32_t r = (reserve && !commit) ? PageReserve(size, addr) : PageAlloc(size, addr);
     if (!r) SetLastError(8);  // ERROR_NOT_ENOUGH_MEMORY
     Return(c, r, 4);
 }
 K(VirtualFree) {
     const uint32_t flags = Arg(c, 2);
     if (flags & 0x8000) {  // MEM_RELEASE
-        PageFree(Arg(c, 0));
-        Return(c, 1, 3);
+        Return(c, PageFree(Arg(c, 0)) ? 1 : 0, 3);
         return;
     }
     if (flags & 0x4000) {  // MEM_DECOMMIT: the reservation stays, the pages stop being backed and read zero after

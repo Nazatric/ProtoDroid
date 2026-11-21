@@ -24,7 +24,10 @@ void Log(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 void InitGuestMemory();
 // Page-granular allocation (VirtualAlloc). `at` != 0 requests a fixed address. Returns 0 on failure.
 uint32_t PageAlloc(uint32_t size, uint32_t at = 0);
-void PageFree(uint32_t addr);
+// VirtualFree(MEM_RELEASE). Returns false when `addr` is not an allocation or reservation base.
+bool PageFree(uint32_t addr);
+// VirtualAlloc(MEM_RESERVE): keeps the range readable and out of the general arena until it is committed or released.
+uint32_t PageReserve(uint32_t size, uint32_t at = 0);
 // VirtualFree(MEM_DECOMMIT): drops the backing of a reservation (zeroed again by the next commit). `addr` must be the
 // allocation base, as on Windows. Returns false when the address is not the base of a live allocation.
 bool PageDecommit(uint32_t addr, uint32_t size);

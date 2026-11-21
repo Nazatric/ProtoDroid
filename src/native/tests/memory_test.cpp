@@ -128,12 +128,14 @@ int main() {
     HeapFree(probe);
     DescribeGuestAddress(probe, description, sizeof(description));
     Check(strstr(description, "freed by guest") != nullptr, "freed heap block was not described as freed");
-    // A freed *page* is reported as unbacked rather than as a live allocation.
+    // A freed *page* is described as released-but-still-mapped: that is the behaviour Windows has, and the report
+    // says so instead of claiming the mapping is at fault.
     const uint32_t page_probe = PageAlloc(kPageBytes);
     Check(page_probe != 0, "page probe allocation failed");
     PageFree(page_probe);
     DescribeGuestAddress(page_probe, description, sizeof(description));
-    Check(strstr(description, "unbacked page") != nullptr, "freed page range was not described as unbacked");
+    Check(strstr(description, "released block") != nullptr, "freed page range was not described as released");
+    Check(GuestRangeReadable(page_probe, kPageBytes), "a quarantined page was reported unreadable");
 
     // The history ring records the operations most recent first, so the crash report can replay a block's lifetime.
     native::MemEvent event{};
@@ -146,17 +148,40 @@ int main() {
 
     // The crash report only dereferences guest pointers it has cleared through this check.
     Check(GuestRangeReadable(probe, 64), "a live allocation was not reported readable");
-    // The heap carves size-class blocks out of 64 KiB chunks, so a range slightly past one block is still inside
-    // committed memory. A range past the whole chunk must not be readable.
-    // Page-backed: the same check against a released page must fail, and against a live one must pass.
-    const uint32_t live_page = PageAlloc(kPageBytes);
-    Check(GuestRangeReadable(live_page, kPageBytes), "a live page was not reported readable");
-    Check(!GuestRangeReadable(live_page, kPageBytes * 2), "a range past a live page was reported readable");
-    PageFree(live_page);
-    Check(!GuestRangeReadable(page_probe, kPageBytes), "a released page was reported readable");
-    Check(!GuestRangeReadable(pool, kPageBytes), "a decommitted page was reported readable");
     Check(!GuestRangeReadable(0, 16), "the null address was reported readable");
 
-    puts("Guest large-page release, small-block reuse, decommit, readability and re-commit checks passed");
+    // Never-allocated arena space is genuinely unbacked (the window is reserved PROT_NONE there): a fault there is a
+    // real mapping fault, and the report must say so.
+    const uint32_t never = 0x20000000u;  // 512 MiB: inside the arena, no allocation made by this test
+    Check(!GuestRangeReadable(never, kPageBytes), "never-allocated arena space was reported readable");
+
+    // A released guest block stays mapped for diagnosis and for stale writes (Windows keeps freed heap memory
+    // committed), so it reads as acceptable; a decommitted page does not, because Windows faults there too.
+    const uint32_t released = PageAlloc(kPageBytes);
+    Check(released != 0, "release probe allocation failed");
+    PageFree(released);
+    Check(GuestRangeReadable(released, kPageBytes), "a released block left mapped was reported unreadable");
+    const uint32_t committed = PageAlloc(kPageBytes);
+    Check(PageDecommit(committed, 0), "probe decommit was refused");
+    Check(!GuestRangeReadable(committed, kPageBytes), "a decommitted page was reported readable");
+    PageFree(committed);
+
+    // VirtualAlloc(MEM_RESERVE) then a plain access: Windows makes reserved memory readable, so a reservation that
+    // this port left unmapped was a fault with no Windows equivalent. The range must also stay out of the arena, so a
+    // later allocation cannot be handed the same pages.
+    constexpr uint32_t kReserveBytes = 4u << 16;
+    const uint32_t reserved = PageReserve(kReserveBytes);
+    Check(reserved != 0, "reservation failed");
+    Check(GuestRangeReadable(reserved, kReserveBytes), "reserved memory was not readable");
+    memset(Ptr<void>(reserved), 0x5a, kReserveBytes);  // a commit-less reservation is usable on Windows
+    const uint32_t elsewhere = PageAlloc(kReserveBytes);
+    Check(elsewhere != reserved && (elsewhere + kReserveBytes <= reserved || elsewhere >= reserved + kReserveBytes),
+          "a new allocation overlapped a live reservation");
+    // A commit over the reservation adopts it instead of failing (the guest still owns the address).
+    Check(PageAlloc(kReserveBytes, reserved) == reserved, "commit of a reserved range failed");
+    Check(PageFree(reserved), "release of the committed range failed");
+    PageFree(elsewhere);
+
+    puts("Guest large-page release, small-block reuse, decommit, reservation, readability and re-commit checks passed");
     return 0;
 }

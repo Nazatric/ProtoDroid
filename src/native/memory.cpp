@@ -16,6 +16,9 @@
 
 #include <algorithm>
 #include <atomic>
+#include <deque>
+#include <utility>
+#include <vector>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
@@ -39,6 +42,10 @@ std::mutex g_mutex;
 std::map<uint32_t, uint32_t> g_free;  // start -> size, page ranges available
 std::map<uint32_t, uint32_t> g_used;  // start -> size, allocated page ranges
 std::map<uint32_t, uint32_t> g_decommitted;  // start -> size, committed-but-unbacked sub-ranges inside g_used
+// Ranges the guest reserved with VirtualAlloc(MEM_RESERVE). Windows makes a reservation readable (it is committed
+// there when the allocation type is MEM_RESERVE|MEM_COMMIT, which is what the engine uses); nothing may fault merely
+// because the guest touched memory it reserved itself.
+std::map<uint32_t, uint32_t> g_reserved;
 
 // A page-rounded size, or 0 when rounding would wrap. Callers treat 0 as "cannot allocate": a request that overflows
 // 32 bits must fail like it does on Windows, not become a small allocation that the caller then overruns.
@@ -90,8 +97,85 @@ void UnmapGuest(uint32_t a, uint32_t size) {
 }
 
 void CommitDecommittedLocked(uint32_t lo, uint64_t hi);
+void QuarantineLocked(uint32_t a, uint32_t size);
+bool QuarantinedLocked(uint32_t a, uint32_t* start, uint32_t* size);
+void QuarantineForgetLocked(uint32_t a, uint32_t size);
+bool ReserveCoversLocked(uint32_t a, uint32_t size);
+void TakeReservedLocked(uint32_t a, uint32_t size);
 int ClassFor(uint32_t total);
 uint32_t HeapAllocLocked(uint32_t size);
+
+
+// Whether [a, a + size) lies inside ranges the guest reserved.
+bool ReserveCoversLocked(uint32_t a, uint32_t size) {
+    auto it = g_reserved.upper_bound(a);
+    if (it == g_reserved.begin()) return false;
+    --it;
+    return a >= it->first && uint64_t(a) + size <= uint64_t(it->first) + it->second;
+}
+
+// Drops [a, a + size) from the reservation map (the caller commits it into g_used).
+void TakeReservedLocked(uint32_t a, uint32_t size) {
+    auto it = g_reserved.upper_bound(a);
+    if (it == g_reserved.begin()) return;
+    --it;
+    const uint32_t start = it->first, end = it->first + it->second;
+    if (a < start || uint64_t(a) + size > end) return;
+    g_reserved.erase(it);
+    if (a > start) g_reserved[start] = a - start;
+    if (end > a + size) g_reserved[a + size] = end - (a + size);
+}
+
+// A freed guest block keeps its pages mapped (zeroed, and not reused) for a while: Windows keeps freed heap memory
+// committed and owned by the heap, so code that writes through a stale pointer there silently damages freed memory
+// instead of faulting. Unmapping on free, as this port did, turns that same stale write into SIGSEGV hours into a
+// level load. The window is bounded (64 MiB, oldest released first) so a long session cannot grow it without limit.
+struct Quarantined {
+    uint32_t addr, size;
+    uint64_t released_ns;
+};
+std::deque<Quarantined> g_quarantine;
+constexpr uint64_t kQuarantineBytes = 64ull << 20;
+
+void QuarantineLocked(uint32_t a, uint32_t size) {
+    g_quarantine.push_back({a, size, NowNs()});
+    uint64_t held = 0;
+    for (const auto& q : g_quarantine) held += q.size;
+    while (held > kQuarantineBytes && !g_quarantine.empty()) {
+        // Only the oldest ranges go back; the pages are unmapped there, so a crash report still explains any store
+        // into a range that left the window.
+        const Quarantined q = g_quarantine.front();
+        g_quarantine.pop_front();
+        held -= q.size;
+        UnmapGuest(q.addr, q.size);
+    }
+}
+
+// A range that is handed out again stops being quarantined: the mapping is fresh (mapped on allocation) and the
+// diagnostic window must not claim the new block is a leftover.
+void QuarantineForgetLocked(uint32_t a, uint32_t size) {
+    for (auto it = g_quarantine.begin(); it != g_quarantine.end();) {
+        const uint32_t s0 = it->addr, e0 = it->addr + it->size;
+        if (e0 <= a || s0 >= a + size) {
+            ++it;
+            continue;
+        }
+        it = g_quarantine.erase(it);
+    }
+}
+
+// Whether `a` is inside a quarantined (released but still mapped) range, for the crash report and the readability
+// check. The window is short, so a linear scan over a few dozen entries is fine.
+bool QuarantinedLocked(uint32_t a, uint32_t* start, uint32_t* size) {
+    for (const auto& q : g_quarantine) {
+        if (a >= q.addr && a < q.addr + q.size) {
+            if (start) *start = q.addr;
+            if (size) *size = q.size;
+            return true;
+        }
+    }
+    return false;
+}
 
 // The arena (g_free) is mapped page range by page range as the guest allocates it.
 uint32_t PageAllocLocked(uint32_t size, uint32_t at) {
@@ -111,6 +195,17 @@ uint32_t PageAllocLocked(uint32_t size, uint32_t at) {
                 return at;
             }
         }
+        // A reservation the guest made before this commit: those pages must be backing memory, and the range stops
+        // being general arena space. Reserving and then reading or writing without an explicit commit of the exact
+        // same range is legal on Windows (the reservation is already committed there); leaving the range in the free
+        // map, as this did, made the access fault. That is one real way a guest store lands in an unmapped page.
+        if (uint64_t(at) + size <= kArenaHi && ReserveCoversLocked(at, size)) {
+            (void)MapGuest(at, size);
+            TakeReservedLocked(at, size);
+            QuarantineForgetLocked(at, size);
+            g_used[at] = size;
+            return at;
+        }
         auto f = g_free.upper_bound(at);
         if (f == g_free.begin()) {
             return 0;
@@ -121,6 +216,7 @@ uint32_t PageAllocLocked(uint32_t size, uint32_t at) {
             return 0;
         }
         if (!MapGuest(at, size)) return 0;
+        QuarantineForgetLocked(at, size);
         g_free.erase(f);
         if (at > fs) {
             g_free[fs] = at - fs;
@@ -135,6 +231,7 @@ uint32_t PageAllocLocked(uint32_t size, uint32_t at) {
         if (f->second < size) continue;
         uint32_t a = f->first, rest = f->second - size;
         if (!MapGuest(a, size)) return 0;
+        QuarantineForgetLocked(a, size);
         g_free.erase(f);
         if (rest) {
             g_free[a + size] = rest;
@@ -241,8 +338,15 @@ void CommitDecommittedLocked(uint32_t lo, uint64_t hi) {
 }
 
 // Drops [a, a + size) back to the reservation: inaccessible now, zero on the next commit (VirtualAlloc's guarantee).
-void ReleaseLocked(uint32_t a, uint32_t size) {
-    UnmapGuest(a, size);
+// `keep_mapped` leaves the pages backed and zeroed for the quarantine (see QuarantineLocked), which is what a guest
+// free does so a stale store behaves as it does on Windows.
+void ReleaseLocked(uint32_t a, uint32_t size, bool keep_mapped = false) {
+    if (keep_mapped) {
+        (void)MapGuest(a, size);  // a fresh anonymous mapping: zeroed, and it cannot be handed out again
+        QuarantineLocked(a, size);
+    } else {
+        UnmapGuest(a, size);
+    }
     auto next = g_free.find(a + size);
     if (next != g_free.end()) {
         size += next->second;
@@ -261,23 +365,70 @@ void ReleaseLocked(uint32_t a, uint32_t size) {
 
 }  // namespace
 
-void PageFree(uint32_t addr) {
+bool PageFree(uint32_t addr) {
     uint32_t size = 0;
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         auto u = g_used.find(addr);
-        if (u == g_used.end()) {
-            return;
+        if (u != g_used.end()) {
+            size = u->second;
+            g_used.erase(u);
+            for (auto d = g_decommitted.lower_bound(addr); d != g_decommitted.end();) {
+                if (d->first >= addr + size) break;
+                d = g_decommitted.erase(d);
+            }
+            ReleaseLocked(addr, size, /*keep_mapped=*/true);
+        } else if (ReserveCoversLocked(addr, 0)) {
+            // VirtualFree(MEM_RELEASE) of space that was only reserved: nothing was backed, so nothing to unmap -
+            // but it must leave the reservation map, or a later commit would treat it as guest-owned.
+            TakeReservedLocked(addr, 0);
+            return true;
+        } else {
+            return false;
         }
-        size = u->second;
-        g_used.erase(u);
-        for (auto d = g_decommitted.lower_bound(addr); d != g_decommitted.end();) {
-            if (d->first >= addr + size) break;
-            d = g_decommitted.erase(d);
-        }
-        ReleaseLocked(addr, size);
     }
     RecordEvent(kPageFreeEvent, addr, size);
+    return true;
+}
+
+// VirtualAlloc(MEM_RESERVE): the range becomes a reservation that must not fault when the guest uses it. Windows has
+// already committed it (the engine reserves and commits in one call), and a plain reserve is still readable there, so
+// the pages are mapped and kept out of the general arena: this port used to leave the range in the free map, where
+// nothing was mapped, and a guest read or write there faulted as a mapping error that no Windows code can produce.
+uint32_t PageReserve(uint32_t size, uint32_t at) {
+    if (!size || size > kMaxRequest) return 0;
+    size = RoundUp(size, kPage);
+    if (!size) return 0;
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        if (at) {
+            at &= ~(kPage - 1);
+            if (at < kArenaLo || uint64_t(at) + size > kArenaHi) return 0;
+            auto f = g_free.upper_bound(at);
+            if (f == g_free.begin()) return 0;
+            --f;
+            const uint32_t fs = f->first, fsz = f->second;
+            if (at < fs || uint64_t(at) + size > uint64_t(fs) + fsz) return 0;
+            if (!MapGuest(at, size)) return 0;
+            QuarantineForgetLocked(at, size);
+            g_free.erase(f);
+            if (at > fs) g_free[fs] = at - fs;
+            if (at + size < fs + fsz) g_free[at + size] = fs + fsz - (at + size);
+            g_reserved[at] = size;
+            return at;
+        }
+        for (auto f = g_free.begin(); f != g_free.end(); ++f) {
+            if (f->second < size) continue;
+            const uint32_t a = f->first, rest = f->second - size;
+            if (!MapGuest(a, size)) return 0;
+            QuarantineForgetLocked(a, size);
+            g_free.erase(f);
+            if (rest) g_free[a + size] = rest;
+            g_reserved[a] = size;
+            return a;
+        }
+        return 0;
+    }
 }
 
 // VirtualFree(MEM_DECOMMIT): the reservation stays, the pages stop being backed, and the next commit over them reads
@@ -297,6 +448,10 @@ bool PageDecommit(uint32_t addr, uint32_t size) {
                 UnmapGuest(addr, released);
                 g_decommitted[addr] = released;
             }
+        } else {
+            // A reservation can be decommitted too; Windows keeps the reservation and faults until the next commit.
+            found = ReserveCoversLocked(addr, 0);
+            released = found ? size : 0;
         }
     }
     if (released) RecordEvent(kPageDecommitEvent, addr, released);
@@ -419,15 +574,27 @@ bool GuestRangeReadable(uint32_t a, uint32_t size) {
     const uint64_t end = uint64_t(a) + size;
     std::lock_guard<std::mutex> lock(g_mutex);
     auto u = g_used.upper_bound(a);
-    if (u == g_used.begin()) return false;
-    --u;
-    if (end > uint64_t(u->first) + u->second) return false;
-    auto d = g_decommitted.upper_bound(a);
-    if (d != g_decommitted.begin()) {
-        --d;
-        if (end > d->first && a < uint64_t(d->first) + d->second) return false;
+    if (u != g_used.begin()) {
+        --u;
+        if (end <= uint64_t(u->first) + u->second) {
+            // Committed allocation: readable unless it holds a decommitted hole.
+            auto d = g_decommitted.upper_bound(a);
+            if (d != g_decommitted.begin()) {
+                --d;
+                if (end > d->first && a < uint64_t(d->first) + d->second) return false;
+            }
+            return true;
+        }
     }
-    return true;
+    // Reserved by the guest (VirtualAlloc MEM_RESERVE) and still mapped: readable, exactly as on Windows.
+    if (auto r = g_reserved.upper_bound(a); r != g_reserved.begin()) {
+        --r;
+        if (end <= uint64_t(r->first) + r->second) return true;
+    }
+    // Released but still mapped for diagnosis (see QuarantineLocked): readable, and the report says why.
+    uint32_t qs = 0, qn = 0;
+    if (QuarantinedLocked(a, &qs, &qn)) return end <= uint64_t(qs) + qn;
+    return false;
 }
 
 // ---- fault and allocator history (crash handler) ----
@@ -507,6 +674,23 @@ void DescribeGuestAddress(uint32_t a, char* out, size_t size) {
                 g_mutex.unlock();
                 return;
             }
+        }
+        if (auto r = g_reserved.upper_bound(a); r != g_reserved.begin()) {
+            --r;
+            if (a < r->first + r->second) {
+                snprintf(out, size, "within a guest reservation [%08x,%08x): reserved and mapped, so an access here "
+                                    "should not fault%s", r->first, r->first + r->second, block);
+                g_mutex.unlock();
+                return;
+            }
+        }
+        uint32_t qs = 0, qn = 0;
+        if (QuarantinedLocked(a, &qs, &qn)) {
+            snprintf(out, size, "released block [%08x,%08x) still mapped for diagnosis: the guest is using memory it "
+                                "already freed, which Windows tolerates because freed heap memory stays committed%s",
+                     qs, qs + qn, block);
+            g_mutex.unlock();
+            return;
         }
         auto f = g_free.upper_bound(a);
         if (f != g_free.begin()) {
