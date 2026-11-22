@@ -904,6 +904,14 @@ jobs:
           echo "count $(ls build/recomp/native/*.c 2>/dev/null | wc -l)"
           test -f build/recomp/native/table.c && echo "table.c exists" || echo "table.c MISSING - will generate"
 
+      - name: Restore v0.15 generated sources if cache is empty
+        if: env.HAS_DLL == '1' && hashFiles('build/recomp/native/table.c') == ''
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin refs/tags/protodroid-v0.15
+          git archive --format=tar FETCH_HEAD build/recomp/native | tar -xf - -C .
+          test -f build/recomp/native/table.c
+
       - name: Recompile engine (recomp.py) if DLL present
         if: env.HAS_DLL == '1' && steps.cache-recomp.outputs.cache-hit != 'true' && hashFiles('build/recomp/native/table.c') == ''
         timeout-minutes: 15
