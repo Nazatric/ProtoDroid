@@ -604,7 +604,8 @@ jobs:
         id: hot
         run: |
           set -euo pipefail
-          git fetch --depth 1 origin TestingFiles
+          # Pin the engine fixture by immutable commit rather than a scratch branch that may be removed.
+          git fetch --depth 1 origin 9fa845ee1fee1485ba04e04dc365b9d782b82d29
           git show FETCH_HEAD:prototypeenginef.dll > /tmp/protodroid-hot-engine.dll
           test "$(stat -c%s /tmp/protodroid-hot-engine.dll)" = 20205568
           python3 -m venv /tmp/protodroid-hot-venv
