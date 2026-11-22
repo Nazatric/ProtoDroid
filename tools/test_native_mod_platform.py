@@ -23,14 +23,12 @@ spec.loader.exec_module(module)
 part = ROOT / "build/recomp/native/part_0089.c"
 if part.is_file():
     patched = part.read_text()
-    require(patched.count(module.NEW) == 1 and module.OLD not in patched,
-            "generated tick gate is not patched exactly once")
-    require("0x3a98u" in patched and "7c897bf8: jb" in patched, "original tick compare/evidence comment was lost")
 else:
-    # Generated recomp sources are not tracked (they go stale against runtime.h); CI regenerates them in the APK job
-    # before running this patch. Exercise the same contract here on a fixture carrying the tool's own anchors.
+    # Generated recomp sources are not tracked on the current baseline; exercise the patch contract with its anchors.
     patched = f"void f_7c897bf0(Ctx* c) {{\n    /* 0x3a98u */\n{module.NEW}\n}}\n"
     print("generated sources absent; exercised the tick-gate patch on a fixture")
+require(patched.count(module.NEW) == 1 and module.OLD not in patched, "committed tick gate is not patched exactly once")
+require("0x3a98u" in patched and "7c897bf8: jb" in patched, "original tick compare/evidence comment was lost")
 
 with tempfile.TemporaryDirectory(prefix="protodroid-tick-test-") as directory:
     root = Path(directory)
@@ -111,6 +109,9 @@ scripts = text("src/native/mod_scripts.cpp")
 for marker in ("lua_newstate", "kLuaMemoryLimit", "kInstructionLimit", "luaL_loadbufferx",
                "ModSymbolResolve", "GuestCallArray", "ModHookInstall", "ModScriptsEmit"):
     require(marker in scripts, f"sandboxed script runtime path missing: {marker}")
+script_frame = scripts.split("void ModScriptsFrame()", 1)[1].split("void ModScriptsShutdown()", 1)[0]
+require("g_states.empty() && g_events.empty()" in script_frame,
+        "empty script/event dispatch must stay off the per-frame path")
 require("mod_scripts.cpp" in text("src/native/Makefile") and "mod_symbols.inc" in text("src/native/Makefile"),
         "script runtime or generated symbols are absent from real native builds")
 textures = text("src/native/mod_textures.cpp")

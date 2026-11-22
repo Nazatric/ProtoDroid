@@ -84,6 +84,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         float fx, fy;
         float cx, cy, r;
         int pointer = -1;
+        String bindingCache;  // bindingText(), rebuilt when the binding changes (invalidated in finishBinding)
 
         Button(String label, int keycode, int mouseButton, boolean fromRight, float dx, boolean fromBottom, float dy,
                 float sizeDp, boolean gameOnly) {
@@ -199,10 +200,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private InputManager inputManager;
     private boolean padConnected;
     private boolean panelOpen = false;
-    // Pointer that opened the mod panel, so the UP of that same finger (which lands outside the panel) does not close it
-    // again. The v1.1 archive's TouchControls.java uses this field but no longer declares it, which made javac fail with
-    // "cannot find symbol: variable panelOpener" for the whole APK.
-    private int panelOpener = -1;
     private final RectF panel = new RectF(), closeRect = new RectF(), layoutRect = new RectF();
 
     // ---- layout editor ----
@@ -318,6 +315,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     // Glowing shapes are rendered once into bitmaps (blur needs the software pipeline) and then only blitted.
     private final Map<String, Bitmap> cache = new HashMap<>();
     private final Paint blit = new Paint(Paint.FILTER_BITMAP_FLAG);
+    // Last text drawn by drawPerf and the values behind it; rebuilt only when one of the numbers changes.
+    private String perfText;
+    private int perfFps = Integer.MIN_VALUE, perfAverage = Integer.MIN_VALUE;
+    private int perfPercentile = Integer.MIN_VALUE, perfMemory = Integer.MIN_VALUE;
 
     private interface Painter {
         void paint(Canvas c, float cx, float cy);
@@ -555,11 +556,17 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         float modeW = 96 * density * modeSize, modeH = 38 * density * modeSize;
         float modeX = modeCustomX >= 0 ? modeCustomX * w : 14 * density;
         float modeY = modeCustomY >= 0 ? modeCustomY * h : 14 * density;
-        modeRect.set(modeX, modeY, modeX + modeW, modeY + modeH);
+        float modeCx = clampCenter(modeX + modeW / 2f, modeW / 2f, w);
+        float modeCy = clampCenter(modeY + modeH / 2f, modeH / 2f, h);
+        modeRect.set(modeCx - modeW / 2f, modeCy - modeH / 2f,
+                modeCx + modeW / 2f, modeCy + modeH / 2f);
         float gearUnit = 44 * density * gearSize;
         float gearX = gearCustomX >= 0 ? gearCustomX * w : w - 58 * density;
         float gearY = gearCustomY >= 0 ? gearCustomY * h : 12 * density;
-        gearRect.set(gearX, gearY, gearX + gearUnit, gearY + gearUnit);
+        float gearCenterX = clampCenter(gearX + gearUnit / 2f, gearUnit / 2f, w);
+        float gearCenterY = clampCenter(gearY + gearUnit / 2f, gearUnit / 2f, h);
+        gearRect.set(gearCenterX - gearUnit / 2f, gearCenterY - gearUnit / 2f,
+                gearCenterX + gearUnit / 2f, gearCenterY + gearUnit / 2f);
         float pw = Math.min(w * 0.92f, 860 * density), ph = Math.min(h * 0.94f, 500 * density);
         panel.set((w - pw) / 2, (h - ph) / 2, (w + pw) / 2, (h + ph) / 2);
         keyboard.layout(w, h);
@@ -818,6 +825,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             bindingTarget.keycode = first;
             bindingTarget.secondKeycode = second;
             bindingTarget.mouseButton = mouseButton;
+            bindingTarget.bindingCache = null;  // its label text is derived from the binding
             if (!bindingTarget.labelEdited) bindingTarget.label = ControlKeys.bindingLabel(first, second, mouseButton);
             selected = bindingTarget;
             selectedStick = false;
@@ -928,7 +936,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         switch (action) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
-                if (dragPointer >= 0) break;
+                if (dragPointer >= 0 || chromeDrag >= 0) break;
                 if (doneRect.contains(x, y)) {
                     finishEditing();
                     break;
@@ -1135,12 +1143,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             return true;
         }
         if (panelOpen) {
-            if (action == MotionEvent.ACTION_UP) {
-                if (id == panelOpener) panelOpener = -1;  // opening on DOWN means this UP lands outside the
-                else panelTap(x, y);                      // panel and would instantly close it again
-            } else if (action == MotionEvent.ACTION_CANCEL) {
-                panelOpener = -1;
-            }
+            if (action == MotionEvent.ACTION_UP) panelTap(x, y);
             invalidate();
             return true;
         }
@@ -1221,7 +1224,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     if (gearRect.contains(x, y)) {
                         releaseAll();
                         panelOpen = true;
-                        panelOpener = id;  // the finger that opened it: its UP must not close the panel again
                         buzz();
                     }
                 } else if (id == modePointer) {
@@ -1255,7 +1257,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void panelTap(float x, float y) {
         if (closeRect.contains(x, y) || !panel.contains(x, y)) {
             panelOpen = false;
-            panelOpener = -1;
             return;
         }
         if (layoutRect.contains(x, y)) {
@@ -1311,7 +1312,11 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             c.drawLine(b.cx, b.cy, b.fx, b.fy, edge);
             c.drawCircle(b.fx, b.fy, 10 * density, edge);
         }
-        Bitmap bmp = cached(b.label + ":" + b.bindingText() + (editing ? ":E" : ":N")
+        // The cache key is built per button per frame; the binding text behind it is a formatted string that only
+        // changes when the button is rebound, so it is kept on the button instead of being rebuilt (and discarded)
+        // every frame.
+        if (b.bindingCache == null) b.bindingCache = b.bindingText();
+        Bitmap bmp = cached(b.label + ":" + b.bindingCache + (editing ? ":E" : ":N")
                         + (down ? ":1:" : ":0:") + (b.hidden ? ":H:" : ":V:") + b.r,
                 b.r + 12 * density, (cc, x, y) -> paintButton(cc, b, x, y, down));
         float savedOpacity = opacity;
@@ -1439,11 +1444,24 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         } catch (UnsatisfiedLinkError e) {
             return;
         }
-        String line = String.format("%.0f FPS  AVG %.1f  P99 %.1f MS  %d MB", fps, ms, p99, mem);
+        // The overlay is redrawn at least twice a second and the numbers only change at that rate, so the string is
+        // reused: formatting it per frame put an allocation and a locale-aware format in the draw pass for nothing.
+        final int rounded = Math.round(fps);
+        final int average = Math.round(ms * 10f);
+        final int percentile = Math.round(p99 * 10f);
+        if (perfText == null || perfFps != rounded || perfAverage != average || perfPercentile != percentile
+                || perfMemory != mem) {
+            perfFps = rounded;
+            perfAverage = average;
+            perfPercentile = percentile;
+            perfMemory = mem;
+            perfText = String.format("%d FPS  AVG %.1f  P99 %.1f MS  %d MB", rounded, average / 10f,
+                    percentile / 10f, mem);
+        }
         text.setTextSize(13 * density);
         text.setTextAlign(Paint.Align.LEFT);
         text.setColor(fps >= 50 ? 0xff7dff7a : fps >= 28 ? 0xffffd060 : 0xffff5a4a);
-        c.drawText(line, 16 * density, 74 * density, text);
+        c.drawText(perfText, 16 * density, 74 * density, text);
         text.setTextAlign(Paint.Align.CENTER);
     }
 

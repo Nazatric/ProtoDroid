@@ -20,6 +20,15 @@ assert frame.index("g_session_active.load") < frame.index("std::lock_guard<std::
 assert "g_session_active.store(g_session != nullptr" in perf
 print("No-session ADPF fast-path checks passed")
 
+present = (ROOT / "src/native/present_stats.cpp").read_text(encoding="utf-8")
+record = present.split("int64_t RecordPresent()", 1)[1].split("uint64_t PresentedFrameCount()", 1)[0]
+ordinary = record.split("LightWindow& window", 1)[1]
+assert "g_present_mode.load" in record and "if (mode & 1u)" in record
+assert "g_stats_mutex" not in ordinary, "ordinary Present bookkeeping must not take the detailed stats lock"
+assert "window.us[window.next]" in ordinary and "FinishLightWindow(window, now)" in ordinary
+assert "window.generation != generation" in ordinary, "diagnostic mode transitions must rebase ordinary stats"
+print("Ordinary Present lock-free/bounded-window checks passed")
+
 driver = (ROOT / "src/native/vulkan_driver.cpp").read_text(encoding="utf-8")
 failed = driver.split("else if (std::string why = FailedBefore()", 1)[1].split("const std::string model", 1)[0]
 assert "AutomaticSystemDevice();" in failed, "failed Auto Turnip must enter the fresh direct/wrapper policy"
