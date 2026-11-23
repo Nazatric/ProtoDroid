@@ -6,6 +6,7 @@
 #include <string>
 
 #include "win.h"
+#include "render_resolution.h"
 
 namespace native {
 
@@ -132,18 +133,20 @@ ImportRegistrar g_user32(kUser32);
 
 uint32_t HostWindow() { return kMainWindow; }
 
-// The engine renders at the size of the window's client area. Setting render_height (default 720 on Android, 0 = the
-// real window size elsewhere) makes it render smaller, keeping the window's aspect ratio; DXVK scales the frame to
-// the window when presenting.
+// The engine renders at the size of the window's client area. Android render_height selects a fixed 16:9 target
+// (720p is exactly 1280x720) instead of expanding width to match an ultrawide device; DXVK scales that target when
+// presenting to the fullscreen SDL window. A zero/invalid height keeps the real window size.
 void InitClientSize(int window_w, int window_h) {
 #ifdef __ANDROID__
     int rh = SettingInt("render_height", 720);
 #else
     int rh = SettingInt("render_height", 0);
 #endif
-    if (rh > 0 && window_h > 0) {
-        g_height = rh;
-        g_width = (rh * window_w / window_h + 4) & ~7;
+    int render_width = 0, render_height = 0;
+    if (rh > 0 && window_w > 0 && window_h > 0
+        && RenderDimensionsForHeight(rh, &render_width, &render_height)) {
+        g_width = render_width;
+        g_height = render_height;
     } else {
         g_width = window_w;
         g_height = window_h;

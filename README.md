@@ -137,13 +137,13 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 
 | Key | What it does |
 | --- | --- |
-| `render_height` | Internal render height. Android defaults to 720; width follows the display aspect ratio. |
+| `render_height` | Internal 16:9 render size; Android defaults to 720 (1280×720). 1080 is 1920×1080, independent of ultrawide display width. |
 | `texture_skip_mips` | `0` full textures, `1` half resolution, `2` quarter resolution. |
 | `texture_skip_min_size` | Minimum texture size eligible for mip reduction. |
 | `decode_16bit` | On decoded DXT1 textures, `0` keeps full 32-bit color and `1` uses the lower-bandwidth 16-bit path. |
 | `max_anisotropy` | Texture anisotropy: 1, 2, 4, 8, or another supported value. |
 | `game_aa_level` | `-1` Game default, `0` Off, `1` 2x MSAA, `2` 4x MSAA, `3` FXAA. FXAA keeps GameDB/present MSAA at zero and applies on the next Play. |
-| `fps_limit` | Host frame limit: `0` disables it; positive values use the existing limiter. The UI offers 30–1000, without promising the resulting frame rate. |
+| `fps_limit` | Host frame limit: defaults to 30; `0` selects Off. The UI retains Off and 30–1000 choices; a cap does not promise that FPS. |
 | `battery_saver` | Enables the battery-saving frame policy. |
 | `unlock_menu_fps` | `1` keeps menu movies responsive without blocking waits. Default: `1`. |
 | `audio_driver` | `aaudio` or `openslES`. |

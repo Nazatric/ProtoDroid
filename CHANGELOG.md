@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16
+
+- Set Android's default selectable FPS cap to 30 while retaining Off and all higher choices. Cap DXVK's D3D9 in-flight latency at one frame while retaining FIFO presentation; no physical-device FPS or frame-time result is claimed.
+- Made Android render targets fixed 16:9 sizes: 720p is exactly 1280×720 and 1080p is 1920×1080, regardless of an ultrawide panel's pixel width. The lower target pixel count on ultrawide devices is an expected workload reduction, not a measured FPS gain.
+- Replaced the developer-menu option's full-image string scan with a guarded patch at the supported Steam engine's build-type RVA. Exact signature and padding checks refuse unknown engine data; the menu's on-device appearance remains unverified.
+- Slightly zoomed the square Prototype launcher artwork and regenerated the setup, legacy, and adaptive icon sizes from a checked-in master; kept adaptive artwork centered in its mask-safe area.
+- Set Android `versionName` to `0.16` and `versionCode` to `16`.
+
 ## 0.15
 
 - Restored the original pre-WebView native Android launcher and its `javac`/`d8`/`aapt2` packaging, removing the rejected Compose/Web presentation stack without changing game settings, drivers, mods, saves, touch editing, updates, or the diagnostic-tour gesture. A native **Diagnostics** screen retains read-only logs and factual About/device information.

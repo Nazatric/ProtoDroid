@@ -366,7 +366,7 @@ extern SDL_Window* g_sdl_window;
 
 // ---- frame limiter and presented-frame counters (read by the on-screen overlay through JNI) ----
 namespace native {
-std::atomic<int> g_fps_limit{0};  // 0 = no limit (the swap interval still applies)
+std::atomic<int> g_fps_limit{30};  // Android default; 0 remains the user-selectable no-limit choice
 std::atomic<bool> g_unlock_menu_fps{true};
 
 bool MenuFpsUnlocked() { return g_unlock_menu_fps.load(std::memory_order_relaxed); }
@@ -742,7 +742,14 @@ int main(int argc, char** argv) {
 
     // Apply last so stale user configuration cannot undo the official Prototype workaround. DXVK keys its own
     // profile to prototypef.exe, which never matches this native host process (app_process64 on Android).
-    std::string dxvk_config = PrototypeDxvkConfig(getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "");
+    std::string dxvk_config = getenv("DXVK_CONFIG") ? getenv("DXVK_CONFIG") : "";
+#ifdef __ANDROID__
+    // Keep only one queued D3D9 frame. The engine's selectable FPS limiter controls frame starts; this prevents
+    // DXVK's default queue depth from adding avoidable input latency behind Android FIFO presentation.
+    dxvk_config = AndroidFramePacingDxvkConfig(dxvk_config);
+    Log("frame pacing: D3D9 maximum frame latency set to 1");
+#endif
+    dxvk_config = PrototypeDxvkConfig(dxvk_config);
     dxvk_config = AaDxvkConfig(SettingInt("game_aa_level", kAaGameDefault), dxvk_config);
     setenv("DXVK_CONFIG", dxvk_config.c_str(), 1);
     if (fxaa) Log("AA policy: DXVK forced swapchain MSAA override pinned to 0");
@@ -833,7 +840,7 @@ int main(int argc, char** argv) {
     }
     static std::atomic<uint64_t> frames{0};
     StartWatchdog(&frames);
-    int fps_limit = SettingInt("fps_limit", 0);
+    int fps_limit = SettingInt("fps_limit", 30);
     if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
     g_fps_limit.store(fps_limit);
     PerfHintStart(fps_limit);

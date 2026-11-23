@@ -10,6 +10,16 @@ namespace native {
 // resolved by the last value. This disables broken DF16/DF24 format exposure
 // without changing shadow resolution, texture quality, AA, or render scale.
 // https://github.com/doitsujin/dxvk/pull/4011
+inline std::string AndroidFramePacingDxvkConfig(std::string config) {
+  for (char& c : config) {
+    if (c == ',') c = ';';
+  }
+  size_t end = config.find_last_not_of(" \t\r\n");
+  if (end != std::string::npos && config[end] != ';') config += ';';
+  config += "d3d9.maxFrameLatency = 1";
+  return config;
+}
+
 inline std::string PrototypeDxvkConfig(std::string config) {
   for (char& c : config) {
     if (c == ',') c = ';';

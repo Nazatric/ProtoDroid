@@ -2,6 +2,8 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <vector>
 
 namespace {
 
@@ -17,6 +19,42 @@ void Dimensions(int selected, uint32_t width, uint32_t height, uint32_t expected
     uint32_t actual_width = 0, actual_height = 0;
     Check(native::ModScaleShadowResolution(selected, width, height, &actual_width, &actual_height), message);
     Check(actual_width == expected_width && actual_height == expected_height, message);
+}
+
+void DeveloperMenuPatch() {
+    using native::kDeveloperMenuBuildTypeRva;
+    using native::ModPatchDeveloperMenuBuildType;
+    constexpr char original[] = "RAD_FINAL";
+    constexpr char replacement[] = "RAD_RELEASE";
+    constexpr size_t image_size = kDeveloperMenuBuildTypeRva + 32;
+
+    std::vector<uint8_t> image(image_size, 0x5a);
+    std::memcpy(image.data() + kDeveloperMenuBuildTypeRva, original, sizeof(original));
+    image[kDeveloperMenuBuildTypeRva + sizeof(original)] = 0;
+    image[kDeveloperMenuBuildTypeRva + sizeof(original) + 1] = 0;
+    Check(ModPatchDeveloperMenuBuildType(image.data(), image.size()), "supported build-type string was not patched");
+    Check(std::memcmp(image.data() + kDeveloperMenuBuildTypeRva, replacement, sizeof(replacement)) == 0,
+          "replacement string or terminator is incorrect");
+    Check(image[kDeveloperMenuBuildTypeRva + sizeof(replacement)] == 0x5a,
+          "patch overwrote adjacent non-padding engine data");
+
+    std::vector<uint8_t> wrong(image_size, 0x5a);
+    std::memcpy(wrong.data() + kDeveloperMenuBuildTypeRva, original, sizeof(original));
+    wrong[kDeveloperMenuBuildTypeRva] = 'X';
+    Check(!ModPatchDeveloperMenuBuildType(wrong.data(), wrong.size()), "wrong engine signature was accepted");
+    Check(wrong[kDeveloperMenuBuildTypeRva] == 'X', "signature refusal modified the engine image");
+
+    std::vector<uint8_t> unpadded(image_size, 0x5a);
+    std::memcpy(unpadded.data() + kDeveloperMenuBuildTypeRva, original, sizeof(original));
+    unpadded[kDeveloperMenuBuildTypeRva + sizeof(original)] = 1;
+    Check(!ModPatchDeveloperMenuBuildType(unpadded.data(), unpadded.size()), "nonzero adjacent byte was overwritten");
+    Check(std::memcmp(unpadded.data() + kDeveloperMenuBuildTypeRva, original, sizeof(original)) == 0,
+          "padding refusal modified the original string");
+
+    std::vector<uint8_t> truncated(kDeveloperMenuBuildTypeRva + sizeof(original), 0);
+    std::memcpy(truncated.data() + kDeveloperMenuBuildTypeRva, original, sizeof(original));
+    Check(!ModPatchDeveloperMenuBuildType(truncated.data(), truncated.size()), "truncated image was accepted");
+    Check(!ModPatchDeveloperMenuBuildType(nullptr, image_size), "null engine image was accepted");
 }
 
 }  // namespace
@@ -43,6 +81,8 @@ int main() {
     Check(!ModScaleShadowResolution(8192, 16385, 1024, &width, &height), "corrupt dimension rejected");
     Check(!ModScaleShadowResolution(8192, 1024, 1024, nullptr, &height), "null output rejected");
     Check(width == 7 && height == 9, "failed calls leave outputs untouched");
+
+    DeveloperMenuPatch();
     std::puts("mod feature policy tests passed");
     return 0;
 }

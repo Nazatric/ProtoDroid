@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Source regressions for the 0.15 controls, texture-quality, and orientation batch."""
+"""Source regressions for Android resolution, controls, texture-quality, and orientation policies."""
 
 from pathlib import Path
 
@@ -12,6 +12,8 @@ manifest = (ROOT / "android/AndroidManifest.xml").read_text(encoding="utf-8")
 d3d9 = (ROOT / "src/native/d3d9.cpp").read_text(encoding="utf-8")
 main = (ROOT / "src/native/main.cpp").read_text(encoding="utf-8")
 readme = (ROOT / "README.md").read_text(encoding="utf-8")
+resolution_policy = (ROOT / "src/native/render_resolution.h").read_text(encoding="utf-8")
+user32 = (ROOT / "src/native/user32.cpp").read_text(encoding="utf-8")
 
 # Saved custom layouts are index-based: every new action must follow the existing last button.
 ordered = ['new Button("ALEX"', 'new Button("123"', 'new Button("ABC"', 'new Button("DESCEND"']
@@ -67,6 +69,11 @@ on_create = activity.split("protected void onCreate", 1)[1]
 assert "orientation == 0" not in on_create, "Auto must retain the manifest sensorLandscape behavior"
 assert 'android:screenOrientation="sensorLandscape"' in manifest
 assert "https://github.com/Nazatric/ProtoDroid/releases" in readme and "**VERSIONS**" in readme
+assert "RenderDimensionsForHeight" in resolution_policy and "RenderDimensionsForHeight(rh" in user32
+assert "RenderDimensionsForHeight(h" in d3d9 and "cw) / UINT(ch)" not in d3d9
+assert "width follows the display aspect ratio" not in readme
+assert '"fps_limit"' in settings and '"fps_limit"' in settings.split("int defaultIndex()", 1)[1].split("static boolean isLiveEngineSetting", 1)[0]
+assert "d3d9.maxFrameLatency = 1" in (ROOT / "src/native/dxvk_config.h").read_text(encoding="utf-8")
 
 # Static-texture scratch is released only after every consumer. Ordinary/dynamic shadows keep their reuse policy.
 adapted_unlock = d3d9.split("bool AdaptedUnlock(void* tex", 1)[1].split("void ForgetResource", 1)[0]

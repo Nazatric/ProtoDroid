@@ -170,6 +170,13 @@ void TestPresentationInterval() {
 
 void TestPrototypeDxvkProfile() {
     const std::string workaround = "d3d9.supportDFFormats = False";
+    const std::string latency = "d3d9.maxFrameLatency = 1";
+    const std::string paced = AndroidFramePacingDxvkConfig("d3d9.maxFrameLatency = 4,d3d9.presentInterval = 1");
+    Check(paced.find("d3d9.maxFrameLatency = 4;d3d9.presentInterval = 1") == 0,
+          "Android pacing changed unrelated DXVK settings");
+    Check(paced.rfind(latency) == paced.size() - latency.size(),
+          "Android did not force a one-frame D3D9 queue after user config");
+    Check(AndroidFramePacingDxvkConfig("") == latency, "empty Android DXVK config lost the frame-latency cap");
     Check(PrototypeDxvkConfig("") == workaround, "empty DXVK config lost the Prototype profile");
     std::string config = PrototypeDxvkConfig(
         "d3d9.presentInterval = 1,d3d9.samplerAnisotropy = 16,d3d9.supportDFFormats = True");

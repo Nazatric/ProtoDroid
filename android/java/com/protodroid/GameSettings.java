@@ -70,8 +70,8 @@ final class GameSettings {
         int defaultIndex() {
             // Defaults live beside their setting, so adding an option cannot misalign a parallel defaults array.
             if (key.equals("render_height") || key.equals("texture_skip_mips") || key.equals("decode_16bit")
-                    || key.equals("unlock_menu_fps") || key.equals("ui_scale") || key.equals("ui_vibrate")
-                    || key.equals("fix_button_tap_tick_rate")) {
+                    || key.equals("fps_limit") || key.equals("unlock_menu_fps") || key.equals("ui_scale")
+                    || key.equals("ui_vibrate") || key.equals("fix_button_tap_tick_rate")) {
                 return 1;
             }
             if (key.equals("ui_cam") || key.equals("ui_opacity") || key.equals("fov_offset")) return 2;
@@ -92,11 +92,11 @@ final class GameSettings {
     /** Short, on-demand explanations; the settings page shows these only for the active row. */
     static String helpFor(Setting setting) {
         switch (setting.key) {
-            case "render_height": return "Internal render height. Applies the next time you play.";
+            case "render_height": return "Fixed 16:9 internal render size (720p is 1280×720). Applies the next time you play.";
             case "texture_skip_mips": return "Full keeps every texture level. Lower choices save memory on the next Play.";
             case "decode_16bit": return "Decoded DXT1 color on GPUs without BC. 32-bit preserves more color; 16-bit saves memory and bandwidth. Applies on the next Play.";
             case "max_anisotropy": return "Texture sharpness at glancing angles. Applies on the next Play.";
-            case "fps_limit": return "Caps the engine loop. Your display and FIFO still pace presented frames.";
+            case "fps_limit": return "Caps the engine loop. Defaults to 30 FPS; Off and higher limits remain selectable.";
             case "battery_saver": return "Limits the engine to 30 FPS when the selected cap is higher or unlimited.";
             case "unlock_menu_fps": return "Keeps silent menu movies responsive. Audio-backed movies retain their normal pacing.";
             case "vulkan_driver": return "Auto is recommended. Change drivers from the Drivers screen when recovery is needed.";
@@ -119,7 +119,7 @@ final class GameSettings {
             case "remove_tick_rate_limit": return "Removes the identified simulation wait for high-refresh play. Leave Off for ordinary behavior.";
             case "fix_button_tap_tick_rate": return "Adjusts button-tap timing only when Remove tick limit is enabled.";
             case "prefer_loose_files": return "Prefers eligible unpacked game data while keeping saves and write paths unchanged.";
-            case "unlock_dev_menu": return "Experimental developer-menu patch. Ambiguous engine data is refused and logged.";
+            case "unlock_dev_menu": return "Experimental patch for the supported engine build type; applies on the next Play.";
             case "vram_report_mb": return "Changes the memory amount reported to the game; it does not add physical memory.";
             case "dump_textures": return "Writes original DDS textures and replacement keys for mod authors. Uses extra storage.";
             default: return "Changes save automatically. Engine options apply on the next Play.";

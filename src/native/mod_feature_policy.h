@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 namespace native {
 
@@ -28,6 +30,25 @@ inline bool ModScaleShadowResolution(int selected, uint32_t width, uint32_t heig
     };
     *output_width = scaled(width);
     *output_height = scaled(height);
+    return true;
+}
+
+// The supported Steam engine stores RAD_FINAL at this RVA, followed by three NUL bytes. Check both the literal and
+// the extra padding before writing the longer RAD_RELEASE string; unfamiliar engine builds remain unchanged.
+constexpr size_t kDeveloperMenuBuildTypeRva = 0x00e0f3ac;
+inline bool ModPatchDeveloperMenuBuildType(uint8_t* image, size_t image_size) {
+    static constexpr char original[] = "RAD_FINAL";
+    static constexpr char replacement[] = "RAD_RELEASE";
+    if (!image || kDeveloperMenuBuildTypeRva > image_size
+        || sizeof(replacement) > image_size - kDeveloperMenuBuildTypeRva) {
+        return false;
+    }
+    uint8_t* field = image + kDeveloperMenuBuildTypeRva;
+    if (std::memcmp(field, original, sizeof(original)) != 0
+        || field[sizeof(original)] != 0 || field[sizeof(original) + 1] != 0) {
+        return false;
+    }
+    std::memcpy(field, replacement, sizeof(replacement));
     return true;
 }
 

@@ -29,6 +29,16 @@ assert "window.us[window.next]" in ordinary and "FinishLightWindow(window, now)"
 assert "window.generation != generation" in ordinary, "diagnostic mode transitions must rebase ordinary stats"
 print("Ordinary Present lock-free/bounded-window checks passed")
 
+main = (ROOT / "src/native/main.cpp").read_text(encoding="utf-8")
+settings = (ROOT / "android/java/com/protodroid/GameSettings.java").read_text(encoding="utf-8")
+assert "AndroidFramePacingDxvkConfig(dxvk_config)" in main
+assert 'SettingInt("fps_limit", 30)' in main and "g_fps_limit{30}" in main
+fps_setting = settings.split('new Setting("FPS limit"', 1)[1].split("new Setting(", 1)[0]
+assert 'new String[] {"Off", "30", "45", "60", "90", "120", "144", "240", "500", "1000"}' in fps_setting
+assert 'new int[] {0, 30, 45, 60, 90, 120, 144, 240, 500, 1000}' in fps_setting
+assert 'key.equals("fps_limit")' in settings.split("int defaultIndex()", 1)[1].split("static boolean isLiveEngineSetting", 1)[0]
+print("Selectable 30 FPS default and one-frame Android D3D9 queue checks passed")
+
 driver = (ROOT / "src/native/vulkan_driver.cpp").read_text(encoding="utf-8")
 failed = driver.split("else if (std::string why = FailedBefore()", 1)[1].split("const std::string model", 1)[0]
 assert "AutomaticSystemDevice();" in failed, "failed Auto Turnip must enter the fresh direct/wrapper policy"

@@ -62,6 +62,11 @@ for value in (512, 1024, 2048, 4096, 8192):
     require(f"value == {value}" in feature_policy, f"documented shadow override {value} is missing")
 require("ModScaleShadowResolution" in features and "4096.0" not in features,
         "shadow detour does not use the complete bounded scaling policy")
+require("ModPatchDeveloperMenuBuildType" in features
+        and "kDeveloperMenuBuildTypeRva" in feature_policy
+        and "0x00e0f3ac" in feature_policy
+        and "RAD_RELEASE" in feature_policy,
+        "developer-menu option is not connected to the guarded supported-build patch")
 main_source = text("src/native/main.cpp")
 bink_source = text("src/native/bink.cpp")
 require('SettingInt("unlock_menu_fps", 1)' in main_source and
