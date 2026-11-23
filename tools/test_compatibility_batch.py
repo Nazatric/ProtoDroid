@@ -69,10 +69,11 @@ on_create = activity.split("protected void onCreate", 1)[1]
 assert "orientation == 0" not in on_create, "Auto must retain the manifest sensorLandscape behavior"
 assert 'android:screenOrientation="sensorLandscape"' in manifest
 assert "https://github.com/Nazatric/ProtoDroid/releases" in readme and "**VERSIONS**" in readme
-assert "RenderDimensionsForHeight" in resolution_policy and "RenderDimensionsForHeight(rh" in user32
-assert "RenderDimensionsForHeight(h" in d3d9 and "cw) / UINT(ch)" not in d3d9
-assert "width follows the display aspect ratio" not in readme
-assert '"fps_limit"' in settings and '"fps_limit"' in settings.split("int defaultIndex()", 1)[1].split("static boolean isLiveEngineSetting", 1)[0]
+assert "RenderDimensionsForHeight" in resolution_policy
+assert "RenderDimensionsForHeight(rh, window_w, window_h" in user32
+assert "RenderDimensionsForHeight(h, cw, ch" in d3d9
+assert "fullscreen display aspect ratio" in readme and "avoid stretching" in readme
+assert '"fps_limit"' not in settings.split("int defaultIndex()", 1)[1].split("static boolean isLiveEngineSetting", 1)[0]
 assert "d3d9.maxFrameLatency = 1" in (ROOT / "src/native/dxvk_config.h").read_text(encoding="utf-8")
 
 # Static-texture scratch is released only after every consumer. Ordinary/dynamic shadows keep their reuse policy.

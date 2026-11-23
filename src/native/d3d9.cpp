@@ -638,8 +638,8 @@ void AdaptDesc(const TexAdapt& a, UINT level, D3DSURFACE_DESC* d) {
 
 // ---- display modes ----
 // With override_modes (default on Android) the engine sees modes of the render target instead of the physical screen:
-// the current client size first, then fixed 16:9 540p/720p/900p/1080p targets. Its default fullscreen choice and
-// back buffer therefore agree with the selected internal dimensions, independent of ultrawide display dimensions.
+// the current client size first, then 540p/720p/900p/1080p heights using the fullscreen window's aspect ratio. The
+// back buffer therefore fills the display without stretching the scene on ultrawide devices.
 bool OverrideModes() {
 #ifdef __ANDROID__
     static const bool on = SettingInt("override_modes", 1) != 0;
@@ -657,7 +657,7 @@ std::vector<D3DDISPLAYMODE> Modes() {
         modes.push_back({UINT(cw), UINT(ch), 60, D3DFMT_X8R8G8B8});
         for (int h : {540, 720, 900, 1080}) {
             int w = 0, exact_height = 0;
-            if (RenderDimensionsForHeight(h, &w, &exact_height) && exact_height != ch)
+            if (RenderDimensionsForHeight(h, cw, ch, &w, &exact_height) && exact_height != ch)
                 modes.push_back({UINT(w), UINT(exact_height), 60, D3DFMT_X8R8G8B8});
         }
     }

@@ -70,7 +70,7 @@ final class GameSettings {
         int defaultIndex() {
             // Defaults live beside their setting, so adding an option cannot misalign a parallel defaults array.
             if (key.equals("render_height") || key.equals("texture_skip_mips") || key.equals("decode_16bit")
-                    || key.equals("fps_limit") || key.equals("unlock_menu_fps") || key.equals("ui_scale")
+                    || key.equals("unlock_menu_fps") || key.equals("ui_scale")
                     || key.equals("ui_vibrate") || key.equals("fix_button_tap_tick_rate")) {
                 return 1;
             }
@@ -92,11 +92,11 @@ final class GameSettings {
     /** Short, on-demand explanations; the settings page shows these only for the active row. */
     static String helpFor(Setting setting) {
         switch (setting.key) {
-            case "render_height": return "Fixed 16:9 internal render size (720p is 1280×720). Applies the next time you play.";
+            case "render_height": return "Vertical render height; width follows the fullscreen aspect ratio to avoid stretching. Lower choices may improve performance.";
             case "texture_skip_mips": return "Full keeps every texture level. Lower choices save memory on the next Play.";
             case "decode_16bit": return "Decoded DXT1 color on GPUs without BC. 32-bit preserves more color; 16-bit saves memory and bandwidth. Applies on the next Play.";
             case "max_anisotropy": return "Texture sharpness at glancing angles. Applies on the next Play.";
-            case "fps_limit": return "Caps the engine loop. Defaults to 30 FPS; Off and higher limits remain selectable.";
+            case "fps_limit": return "Off leaves the engine uncapped; Android FIFO still paces presentation. Set a cap to reduce heat or battery use.";
             case "battery_saver": return "Limits the engine to 30 FPS when the selected cap is higher or unlimited.";
             case "unlock_menu_fps": return "Keeps silent menu movies responsive. Audio-backed movies retain their normal pacing.";
             case "vulkan_driver": return "Auto is recommended. Change drivers from the Drivers screen when recovery is needed.";

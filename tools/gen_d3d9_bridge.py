@@ -37,7 +37,7 @@ MANUAL = {
     "IDirect3DTexture9::GetLevelDesc", "IDirect3DTexture9::GetLevelCount", "IDirect3DTexture9::GetSurfaceLevel",
     "IDirect3DCubeTexture9::GetLevelDesc", "IDirect3DCubeTexture9::GetLevelCount",
     "IDirect3DCubeTexture9::GetCubeMapSurface",
-    # display modes use fixed 16:9 sizes for render_height choices
+    # display modes preserve the fullscreen window aspect for render_height choices
     "IDirect3D9::GetAdapterDisplayMode", "IDirect3D9::GetAdapterModeCount", "IDirect3D9::EnumAdapterModes",
     "IDirect3DDevice9::GetDisplayMode",
 }
