@@ -34,6 +34,20 @@ constexpr GpuProfile GetGpuProfile(uint32_t vendor_id) {
     return {GpuFamily::Other, "other", false, false, 0};
 }
 
+struct DxvkFeatureRequirements {
+    bool shader_clip_distance;
+    bool shader_cull_distance;
+    bool shader_demote_to_helper_invocation;
+};
+
+// Mirror DXVK's Android D3D9 shader fallbacks, not the Vulkan API version. Mali omits clip/cull-distance shader paths
+// and uses OpKill instead of OpDemoteToHelperInvocation; other vendors still require those reported capabilities.
+// This changes only what the app requires, never what a Vulkan implementation is assumed to support.
+constexpr DxvkFeatureRequirements GetDxvkFeatureRequirements(uint32_t vendor_id) {
+    const bool mali_compatibility = GetGpuProfile(vendor_id).mali_compatibility;
+    return {!mali_compatibility, !mali_compatibility, !mali_compatibility};
+}
+
 // Negotiate no higher than the proven 1.3 path. A 1.2 result requires DXVK's extension-equivalent compatibility
 // path; anything older is rejected before DXVK receives a null command or an incomplete feature chain.
 constexpr uint32_t NegotiateVulkanApi(uint32_t instance_api, uint32_t device_api) {

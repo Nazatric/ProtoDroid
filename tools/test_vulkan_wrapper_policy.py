@@ -36,11 +36,37 @@ assert "TurnipWorksInChild(driver)" in try_wrapper, "wrapper probe must remain i
 assert "ConfigureWrapperLogging(false);" in try_wrapper, "in-process wrapper lacks the effective-version override"
 assert "compatibility_wrapper = false" in loader and "bool compatibility_wrapper = false" in loader
 assert 'app.pEngineName = "DXVK";' in loader, "DXVK request no longer selects Mesa's real lowering path"
-assert "ProbeRequiredDxvkFeatures(gipa, instance, device, p.apiVersion, report)" in loader, (
-    "effective wrapper features are no longer queried"
+assert "ProbeRequiredDxvkFeatures(gipa, instance, device, p.apiVersion," in loader and "p.vendorID, info.driver_id, report)" in loader, (
+    "effective wrapper feature requirements must include the physical GPU and driver profiles"
 )
 assert "if (effective_api < kVulkanApi12)" in loader, "base-version-only devices must still fail closed"
 assert "wrapper missing required features" in loader and "wrapper missing required device extensions" in loader
+
+# Vulkan API 1.2 does not imply that optional VkPhysicalDeviceFeatures / Vulkan12 feature bits are true. Match the
+# exact D3D9 request, including Mali's documented shader fallbacks, rather than trusting DXVK's enabled-feature dump.
+assert "const DxvkFeatureRequirements shader_requirements = GetDxvkFeatureRequirements(vendor_id);" in loader
+assert 'DXVK\'s "Device features" dump is its enable request, not physical-device support' in loader
+assert "get_features(device, &core);" in loader
+for feature, policy in (
+    ("shaderClipDistance", "shader_clip_distance"),
+    ("shaderCullDistance", "shader_cull_distance"),
+):
+    assert f'{{"{feature}", shader_requirements.{policy}, core.features.{feature}}}' in loader, (
+        f"Mali fallback still requires {feature}"
+    )
+assert '{"shaderDemoteToHelperInvocation", shader_requirements.shader_demote_to_helper_invocation, demote}' in loader
+assert '{"fillModeNonSolid", true, core.features.fillModeNonSolid}' in loader
+assert '{"multiViewport", true, core.features.multiViewport}' in loader
+assert '{"maintenance4", !compatibility12 && !amd_driver, maintenance4}' in loader, (
+    "maintenance4 is optional on Vulkan 1.2 and AMD's Vulkan 1.3 path"
+)
+assert '{"extendedDynamicState", compatibility12, extended12.extendedDynamicState}' in loader
+assert "if (feature.required && !feature.supported)" in loader
+assert "shader_requirements.shader_demote_to_helper_invocation &&" in loader
+assert "driver_id == VK_DRIVER_ID_AMD_OPEN_SOURCE" in loader
+assert "driver_id == VK_DRIVER_ID_AMD_PROPRIETARY" in loader
+assert "VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME" in loader
+assert "mali_shader_fallback=%u" in loader
 
 system = driver.split("uint32_t SystemDriverApi", 1)[1].split("void LogSystemExtensions", 1)[0]
 assert "ConfigureWrapperLogging" not in system and "WRAPPER_VK_VERSION" not in system, (

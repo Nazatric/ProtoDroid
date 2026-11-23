@@ -35,11 +35,14 @@ inline void AppendProbeReport(std::string& report, const std::string& line) {
 }
 
 // Required by the patched DXVK 2.5.3 actually shipped here: D3D9DeviceEx::GetDeviceFeatures plus the unconditional
-// core device enables in DxvkAdapter::createDevice. The Android patch makes BC optional (native DXT decoding) and
-// clamps robustness2 (dummy resources replace null descriptors), so those are reported but not grounds for rejection.
+// core device enables in DxvkAdapter::createDevice. A Vulkan 1.2/1.3 API version does not imply that optional feature
+// bits are true; query each one. The Android patch makes BC optional (native DXT decoding) and clamps robustness2
+// (dummy resources replace null descriptors), so those are reported but not grounds for rejection. Its Mali shader
+// fallbacks also omit clip/cull distances and shader demote, so do not require those three bits on ARM GPUs.
 // Query the effective wrapper device rather than inferring support from its base driver or advertised API number.
 inline bool ProbeRequiredDxvkFeatures(PFN_vkGetInstanceProcAddr gipa, VkInstance instance, VkPhysicalDevice device,
-                                      uint32_t effective_api, std::string& report) {
+                                      uint32_t effective_api, uint32_t vendor_id, uint32_t driver_id,
+                                      std::string& report) {
     if (effective_api < kVulkanApi12) {
         AppendProbeReport(report, "vulkan: wrapper effective device remains below Vulkan 1.2");
         return false;
@@ -131,49 +134,56 @@ inline bool ProbeRequiredDxvkFeatures(PFN_vkGetInstanceProcAddr gipa, VkInstance
         robust.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
         append_feature(&robust);
     }
+    // DXVK's "Device features" dump is its enable request, not physical-device support. Query the physical device
+    // directly here so a requested 1 bit cannot be mistaken for a supported feature.
     get_features(device, &core);
 
+    const bool mali_compatibility = GetGpuProfile(vendor_id).mali_compatibility;
+    const DxvkFeatureRequirements shader_requirements = GetDxvkFeatureRequirements(vendor_id);
     const VkBool32 dynamic_rendering = compatibility12 ? dynamic12.dynamicRendering : f13.dynamicRendering;
     const VkBool32 synchronization2 = compatibility12 ? synchronization12.synchronization2 : f13.synchronization2;
     const VkBool32 demote = compatibility12 ? demote12.shaderDemoteToHelperInvocation : f13.shaderDemoteToHelperInvocation;
     const VkBool32 maintenance4 = compatibility12 ? maintenance12.maintenance4 : f13.maintenance4;
-    struct Required { const char* name; VkBool32 supported; };
+    const bool amd_driver = driver_id == VK_DRIVER_ID_AMD_OPEN_SOURCE || driver_id == VK_DRIVER_ID_AMD_PROPRIETARY;
+    struct Required { const char* name; bool required; VkBool32 supported; };
     const Required required[] = {
-        {"robustBufferAccess", core.features.robustBufferAccess},
-        {"multiDrawIndirect", core.features.multiDrawIndirect},
-        {"geometryShader", core.features.geometryShader},
-        {"imageCubeArray", core.features.imageCubeArray},
-        {"depthClamp", core.features.depthClamp},
-        {"depthBiasClamp", core.features.depthBiasClamp},
-        {"fillModeNonSolid", core.features.fillModeNonSolid},
-        {"sampleRateShading", core.features.sampleRateShading},
-        {"shaderClipDistance", core.features.shaderClipDistance},
-        {"shaderCullDistance", core.features.shaderCullDistance},
-        {"occlusionQueryPrecise", core.features.occlusionQueryPrecise},
-        {"multiViewport", core.features.multiViewport},
-        {"independentBlend", core.features.independentBlend},
-        {"fullDrawIndexUint32", core.features.fullDrawIndexUint32},
-        {"shaderDrawParameters", f11.shaderDrawParameters},
-        {"samplerMirrorClampToEdge", f12.samplerMirrorClampToEdge},
-        {"vulkanMemoryModel", f12.vulkanMemoryModel},
-        {"hostQueryReset", f12.hostQueryReset},
-        {"timelineSemaphore", f12.timelineSemaphore},
-        {"shaderDemoteToHelperInvocation", demote},
-        {"synchronization2", synchronization2},
-        {"dynamicRendering", dynamic_rendering},
-        // DXVK makes maintenance4 optional only on its explicit 1.2 compatibility path.
-        {"maintenance4", compatibility12 || maintenance4},
-        // Extended dynamic state is a required extension/feature only on that 1.2 path.
-        {"extendedDynamicState", !compatibility12 || extended12.extendedDynamicState},
+        {"robustBufferAccess", true, core.features.robustBufferAccess},
+        {"multiDrawIndirect", true, core.features.multiDrawIndirect},
+        {"geometryShader", true, core.features.geometryShader},
+        {"imageCubeArray", true, core.features.imageCubeArray},
+        {"depthClamp", true, core.features.depthClamp},
+        {"depthBiasClamp", true, core.features.depthBiasClamp},
+        {"fillModeNonSolid", true, core.features.fillModeNonSolid},
+        {"sampleRateShading", true, core.features.sampleRateShading},
+        {"shaderClipDistance", shader_requirements.shader_clip_distance, core.features.shaderClipDistance},
+        {"shaderCullDistance", shader_requirements.shader_cull_distance, core.features.shaderCullDistance},
+        {"occlusionQueryPrecise", true, core.features.occlusionQueryPrecise},
+        {"multiViewport", true, core.features.multiViewport},
+        {"independentBlend", true, core.features.independentBlend},
+        {"fullDrawIndexUint32", true, core.features.fullDrawIndexUint32},
+        {"shaderDrawParameters", true, f11.shaderDrawParameters},
+        {"samplerMirrorClampToEdge", true, f12.samplerMirrorClampToEdge},
+        {"vulkanMemoryModel", true, f12.vulkanMemoryModel},
+        {"hostQueryReset", true, f12.hostQueryReset},
+        {"timelineSemaphore", true, f12.timelineSemaphore},
+        {"shaderDemoteToHelperInvocation", shader_requirements.shader_demote_to_helper_invocation, demote},
+        {"synchronization2", true, synchronization2},
+        {"dynamicRendering", true, dynamic_rendering},
+        // DXVK makes maintenance4 optional on Vulkan 1.2 and skips it for AMD drivers on Vulkan 1.3.
+        {"maintenance4", !compatibility12 && !amd_driver, maintenance4},
+        // Extended dynamic state is a required extension/feature only on the Vulkan 1.2 path.
+        {"extendedDynamicState", compatibility12, extended12.extendedDynamicState},
     };
     std::string missing;
     for (const auto& feature : required) {
-        if (!feature.supported) append_name(missing, feature.name);
+        if (feature.required && !feature.supported) append_name(missing, feature.name);
     }
     std::string missing_extensions;
     if (!has_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
         append_name(missing_extensions, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     if (compatibility12) {
+        // These Vulkan 1.3 promotions are not guaranteed by a Vulkan 1.2 API version. DXVK's 1.2 path requires the
+        // listed extension commands/features; maintenance4 and the other optional promotions retain DXVK fallbacks.
         const char* required_extensions[] = {
             VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
             VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
@@ -183,13 +193,19 @@ inline bool ProbeRequiredDxvkFeatures(PFN_vkGetInstanceProcAddr gipa, VkInstance
         for (const char* name : required_extensions) {
             if (!has_extension(name)) append_name(missing_extensions, name);
         }
+        // Vulkan 1.2 does not include shader demote in core. Non-Mali D3D9 uses OpDemote; Mali's patched shader path
+        // uses OpKill and therefore does not require this extension or its feature bit.
+        if (shader_requirements.shader_demote_to_helper_invocation &&
+            !has_extension(VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME)) {
+            append_name(missing_extensions, VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME);
+        }
     }
 
     char line[1024];
     snprintf(line, sizeof(line),
-             "vulkan: wrapper effective features: required=%s robustness2ext=%u robustBufferAccess2=%u "
-             "nullDescriptor=%u robustImageAccess2=%u textureCompressionBC=%u maintenance4=%u",
-             missing.empty() && missing_extensions.empty() ? "yes" : "NO",
+             "vulkan: wrapper effective features: required=%s mali_shader_fallback=%u robustness2ext=%u "
+             "robustBufferAccess2=%u nullDescriptor=%u robustImageAccess2=%u textureCompressionBC=%u maintenance4=%u",
+             missing.empty() && missing_extensions.empty() ? "yes" : "NO", mali_compatibility ? 1u : 0u,
              has_extension(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME) ? 1u : 0u, robust.robustBufferAccess2 ? 1u : 0u,
              robust.nullDescriptor ? 1u : 0u, robust.robustImageAccess2 ? 1u : 0u,
              core.features.textureCompressionBC ? 1u : 0u, maintenance4 ? 1u : 0u);
@@ -299,7 +315,8 @@ inline std::string ProbeDevice(PFN_vkGetInstanceProcAddr gipa, const char* drive
                  info.driver_id, p.vendorID, p.deviceID);
         report = line;
         if (compatibility_wrapper) {
-            info.required_features_ok = ProbeRequiredDxvkFeatures(gipa, instance, device, p.apiVersion, report);
+            info.required_features_ok = ProbeRequiredDxvkFeatures(gipa, instance, device, p.apiVersion,
+                                                                  p.vendorID, info.driver_id, report);
             if (!info.required_features_ok) name.clear();
         }
     } else {

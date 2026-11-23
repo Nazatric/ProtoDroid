@@ -16,6 +16,16 @@ static_assert(native::GetGpuProfile(native::kVendorArm).mali_compatibility, "ARM
 static_assert(native::GetGpuProfile(native::kVendorArm).max_compiler_threads == 2, "Mali compiler cap changed");
 static_assert(native::GetGpuProfile(native::kVendorQualcomm).prefer_turnip, "Adreno must prefer Turnip in auto mode");
 static_assert(!native::GetGpuProfile(native::kVendorQualcomm).mali_compatibility, "Adreno received Mali quirks");
+static_assert(!native::GetDxvkFeatureRequirements(native::kVendorArm).shader_clip_distance,
+              "Mali fallback still requires shaderClipDistance");
+static_assert(!native::GetDxvkFeatureRequirements(native::kVendorArm).shader_cull_distance,
+              "Mali fallback still requires shaderCullDistance");
+static_assert(!native::GetDxvkFeatureRequirements(native::kVendorArm).shader_demote_to_helper_invocation,
+              "Mali OpKill fallback still requires shader demote");
+static_assert(native::GetDxvkFeatureRequirements(native::kVendorQualcomm).shader_clip_distance &&
+                  native::GetDxvkFeatureRequirements(native::kVendorQualcomm).shader_cull_distance &&
+                  native::GetDxvkFeatureRequirements(native::kVendorQualcomm).shader_demote_to_helper_invocation,
+              "non-Mali DXVK shader requirements were weakened");
 static_assert(native::NegotiateVulkanApi(native::kVulkanApi13, native::kVulkanApi13) == native::kVulkanApi13,
               "Vulkan 1.3 must remain preferred");
 static_assert(native::NegotiateVulkanApi(native::kVulkanApi13, native::kVulkanApi12) == native::kVulkanApi12,
