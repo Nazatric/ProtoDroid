@@ -77,12 +77,17 @@ jobs:
           bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test
           bash src/native/tests/run_memory_test.sh /tmp/memory_test
 
-      - name: Compile and run Prototype Fix policy tests
+      - name: Compile and run layered INI and Prototype Fix policy tests
         run: |
           set -euo pipefail
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          CONFIG_FLAGS="$CXXFLAGS -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull"
+          g++ $CXXFLAGS src/native/tests/config_policy_test.cpp -o /tmp/config_policy_test
+          g++ $CONFIG_FLAGS src/native/config.cpp src/native/tests/config_loading_test.cpp -o /tmp/config_loading_test
           g++ $CXXFLAGS src/native/tests/mod_feature_policy_test.cpp -o /tmp/mod_feature_policy_test
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/config_policy_test
+          /tmp/config_loading_test
           /tmp/mod_feature_policy_test
 
       - name: Compile and run keyed texture-mod tests
@@ -502,12 +507,17 @@ jobs:
           bash src/native/tests/run_runtime_bridge_test.sh /tmp/runtime_bridge_test_arm64
           bash src/native/tests/run_memory_test.sh /tmp/memory_test_arm64
 
-      - name: Compile and run native ARM64 Prototype Fix policy tests
+      - name: Compile and run native ARM64 layered INI and Prototype Fix policy tests
         run: |
           set -euo pipefail
           CXXFLAGS="-std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all -Isrc/native"
+          CONFIG_FLAGS="$CXXFLAGS -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull"
+          g++ $CXXFLAGS src/native/tests/config_policy_test.cpp -o /tmp/config_policy_test_arm64
+          g++ $CONFIG_FLAGS src/native/config.cpp src/native/tests/config_loading_test.cpp -o /tmp/config_loading_test_arm64
           g++ $CXXFLAGS src/native/tests/mod_feature_policy_test.cpp -o /tmp/mod_feature_policy_test_arm64
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+          /tmp/config_policy_test_arm64
+          /tmp/config_loading_test_arm64
           /tmp/mod_feature_policy_test_arm64
 
       - name: Compile and run native ARM64 keyed texture-mod tests

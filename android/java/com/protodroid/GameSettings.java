@@ -119,7 +119,7 @@ final class GameSettings {
             case "remove_tick_rate_limit": return "Removes the identified simulation wait for high-refresh play. Leave Off for ordinary behavior.";
             case "fix_button_tap_tick_rate": return "Adjusts button-tap timing only when Remove tick limit is enabled.";
             case "prefer_loose_files": return "Prefers eligible unpacked game data while keeping saves and write paths unchanged.";
-            case "unlock_dev_menu": return "Experimental patch for the supported engine build type; applies on the next Play.";
+            case "unlock_dev_menu": return "Experimental patch for the supported Steam engine build; other builds are left unchanged. Applies on the next Play.";
             case "vram_report_mb": return "Changes the memory amount reported to the game; it does not add physical memory.";
             case "dump_textures": return "Writes original DDS textures and replacement keys for mod authors. Uses extra storage.";
             default: return "Changes save automatically. Engine options apply on the next Play.";

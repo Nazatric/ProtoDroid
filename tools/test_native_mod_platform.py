@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Source/signature tests for the optional native mod platform; no device-validation claim."""
 from pathlib import Path
+import hashlib
 import importlib.util
+import struct
 import subprocess
 import tempfile
 
@@ -65,8 +67,46 @@ require("ModScaleShadowResolution" in features and "4096.0" not in features,
 require("ModPatchDeveloperMenuBuildType" in features
         and "kDeveloperMenuBuildTypeRva" in feature_policy
         and "0x00e0f3ac" in feature_policy
+        and "kDeveloperMenuSupportedImageSize" in feature_policy
         and "RAD_RELEASE" in feature_policy,
         "developer-menu option is not connected to the guarded supported-build patch")
+require("developer-menu patch disabled" in features and "developer-menu patch refused" in features
+        and "RAD_FINAL -> RAD_RELEASE" in features,
+        "developer-menu logs do not distinguish disabled, refused and applied states")
+config = text("src/native/config.cpp")
+require("MergeConfigLayer(effective, layer)" in config and "g_data_dir" in config
+        and "SameFile(primary_path, path)" in config,
+        "launcher engine settings are not layered over the selected base INI")
+require("The first readable file remains the base" in config
+        and "launcher choices win" in config,
+        "layered INI behavior is not documented")
+
+engine_path = ROOT / "prototypeenginef.dll"
+engine = engine_path.read_bytes()
+expected_engine_sha256 = "d331be205bdde99897952ee88261ab7e63c5c65e36a4660e2a367886a3537071"
+require(hashlib.sha256(engine).hexdigest() == expected_engine_sha256,
+        "checked-in supported Steam engine fingerprint changed")
+pe = struct.unpack_from("<I", engine, 0x3C)[0]
+require(engine[pe:pe + 4] == b"PE\0\0", "supported engine PE signature is missing")
+file_header = pe + 4
+machine, section_count = struct.unpack_from("<HH", engine, file_header)
+optional_size = struct.unpack_from("<H", engine, file_header + 16)[0]
+optional = file_header + 20
+magic = struct.unpack_from("<H", engine, optional)[0]
+image_size = struct.unpack_from("<I", engine, optional + 56)[0]
+require(machine == 0x14C and magic == 0x10B and image_size == 0x01424000,
+        "developer-menu patch image-size guard does not match the supported PE32 build")
+rva = 0x00E0F3AC
+section_table = optional + optional_size
+patch_offset = None
+for index in range(section_count):
+    section = section_table + index * 40
+    virtual_size, virtual_address, raw_size, raw_pointer = struct.unpack_from("<IIII", engine, section + 8)
+    if virtual_address <= rva < virtual_address + max(virtual_size, raw_size):
+        patch_offset = raw_pointer + rva - virtual_address
+        break
+require(patch_offset is not None and engine[patch_offset:patch_offset + 12] == b"RAD_FINAL\0\0\0",
+        "guarded developer-menu signature/padding does not match the supported engine at the target RVA")
 main_source = text("src/native/main.cpp")
 bink_source = text("src/native/bink.cpp")
 require('SettingInt("unlock_menu_fps", 1)' in main_source and

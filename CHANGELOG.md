@@ -4,7 +4,7 @@
 
 - Leave the Android engine FPS limiter Off by default so FIFO presentation can use the display refresh; retain the selectable caps and one-frame DXVK D3D9 latency limit. No physical-device FPS or frame-time gain is claimed.
 - Preserve fullscreen aspect ratio for every selected render height: on the reported 2712×1220 display, 720p becomes 1600×720 instead of stretching a 1280×720 image across the panel.
-- Replaced the developer-menu option's full-image string scan with a guarded patch at the supported Steam engine's build-type RVA. Exact signature and padding checks refuse unknown engine data; the menu's on-device appearance remains unverified.
+- Fixed Developer menu settings so the app-specific `unlock_dev_menu` value overlays the selected shared/game INI and reaches the native startup hook. The patch now also requires the supported Steam PE image size plus the exact `RAD_FINAL` string and padding at its RVA; unknown builds are left unchanged. The supplied older-source logs do not verify the in-game menu, and device validation remains outstanding.
 - Slightly zoomed the square Prototype launcher artwork and regenerated the setup, legacy, and adaptive icon sizes from a checked-in master; kept adaptive artwork centered in its mask-safe area.
 - Set Android `versionName` to `0.16` and `versionCode` to `16`.
 

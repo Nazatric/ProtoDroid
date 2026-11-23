@@ -33,13 +33,15 @@ inline bool ModScaleShadowResolution(int selected, uint32_t width, uint32_t heig
     return true;
 }
 
-// The supported Steam engine stores RAD_FINAL at this RVA, followed by three NUL bytes. Check both the literal and
-// the extra padding before writing the longer RAD_RELEASE string; unfamiliar engine builds remain unchanged.
+// The supported Steam engine is a PE32 image with SizeOfImage 0x01424000. At this RVA it stores RAD_FINAL,
+// followed by three NUL bytes. Check both the image size and exact string/padding before writing RAD_RELEASE; unknown
+// engine builds remain unchanged even if the image happens to contain a similar string elsewhere.
+constexpr size_t kDeveloperMenuSupportedImageSize = 0x01424000;
 constexpr size_t kDeveloperMenuBuildTypeRva = 0x00e0f3ac;
 inline bool ModPatchDeveloperMenuBuildType(uint8_t* image, size_t image_size) {
     static constexpr char original[] = "RAD_FINAL";
     static constexpr char replacement[] = "RAD_RELEASE";
-    if (!image || kDeveloperMenuBuildTypeRva > image_size
+    if (!image || image_size != kDeveloperMenuSupportedImageSize || kDeveloperMenuBuildTypeRva > image_size
         || sizeof(replacement) > image_size - kDeveloperMenuBuildTypeRva) {
         return false;
     }

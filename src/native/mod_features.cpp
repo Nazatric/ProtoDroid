@@ -135,14 +135,22 @@ void ButtonDetour(Ctx* c) {
 }
 
 void UnlockDeveloperMenu() {
-    if (SettingInt("unlock_dev_menu", 0) == 0) return;
-    if (g_engine_hi <= g_engine_lo
-        || !ModPatchDeveloperMenuBuildType(Ptr<uint8_t>(g_engine_lo), g_engine_hi - g_engine_lo)) {
-        Log("mods: developer-menu patch refused; supported RAD_FINAL signature/padding not found at RVA %08x",
-            uint32_t(kDeveloperMenuBuildTypeRva));
+    const int enabled = SettingInt("unlock_dev_menu", 0);
+    if (enabled == 0) {
+        Log("mods: developer-menu patch disabled (unlock_dev_menu=%d)", enabled);
         return;
     }
-    Log("mods: developer-menu build type changed at %08x", g_engine_lo + uint32_t(kDeveloperMenuBuildTypeRva));
+    const bool valid_engine_range = g_engine_hi > g_engine_lo;
+    const uint32_t image_size = valid_engine_range ? g_engine_hi - g_engine_lo : 0;
+    if (!valid_engine_range
+        || !ModPatchDeveloperMenuBuildType(Ptr<uint8_t>(g_engine_lo), image_size)) {
+        Log("mods: developer-menu patch refused (unlock_dev_menu=%d, image_size=%08x; expected %08x and RAD_FINAL "
+            "signature/padding at RVA %08x)", enabled, image_size,
+            uint32_t(kDeveloperMenuSupportedImageSize), uint32_t(kDeveloperMenuBuildTypeRva));
+        return;
+    }
+    Log("mods: developer-menu build type changed RAD_FINAL -> RAD_RELEASE at %08x",
+        g_engine_lo + uint32_t(kDeveloperMenuBuildTypeRva));
 }
 
 }  // namespace

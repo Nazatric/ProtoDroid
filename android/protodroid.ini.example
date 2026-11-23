@@ -2,7 +2,8 @@
 # (Android: /sdcard/Android/data/com.protodroid/files/protodroid.ini or
 #  /storage/emulated/0/Prototype/protodroid.ini which works on Android 11+ without ADB;
 #  desktop: the working directory).
-# Any key can also be set as an environment variable PROTODROID_<KEY>, e.g. PROTODROID_RENDER_HEIGHT=540.
+# Launcher-managed engine choices are stored in app-specific external files and override matching keys here;
+# unrelated settings in this file remain active. Any key can also be set as PROTODROID_<KEY>, e.g. PROTODROID_RENDER_HEIGHT=540.
 # Supports both flat key = value and [section] headers ([graphics], [audio], etc.)
 
 # Render resolution height. Width follows the fullscreen window's aspect ratio to avoid stretching
