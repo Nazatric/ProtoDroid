@@ -2,7 +2,7 @@
 
 ## 0.16
 
-- Leave the Android engine FPS limiter Off by default so FIFO presentation can use the display refresh; retain the selectable caps and one-frame DXVK D3D9 latency limit. No physical-device FPS or frame-time gain is claimed.
+- Make 30 FPS the default Android engine-loop cap when no FPS limit is saved or configured, reducing unnecessary work on high-refresh displays and aiming to lower power use. Explicit Off/higher caps, FIFO presentation, and the one-frame DXVK D3D9 latency policy remain. ADPF follows a positive cap as its work-duration target; Off retains the existing 60 FPS target. No physical-device FPS, temperature, or battery gain is claimed.
 - Preserve fullscreen aspect ratio for every selected render height: on the reported 2712×1220 display, 720p becomes 1600×720 instead of stretching a 1280×720 image across the panel.
 - Fixed Developer menu settings so the app-specific `unlock_dev_menu` value overlays the selected shared/game INI and reaches the native startup hook. The patch now also requires the supported Steam PE image size plus the exact `RAD_FINAL` string and padding at its RVA; unknown builds are left unchanged. The supplied older-source logs do not verify the in-game menu, and device validation remains outstanding.
 - Slightly zoomed the square Prototype launcher artwork and regenerated the setup, legacy, and adaptive icon sizes from a checked-in master; kept adaptive artwork centered in its mask-safe area.

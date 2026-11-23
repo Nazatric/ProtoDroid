@@ -334,8 +334,10 @@ jobs:
             android/java/com/protodroid/LauncherMotion.java \
             android/java/com/protodroid/ModsView.java \
             android/java/com/protodroid/ModsActivity.java \
-            android/tests/com/protodroid/ModPlatformTest.java
+            android/tests/com/protodroid/ModPlatformTest.java \
+            android/tests/com/protodroid/GameSettingsFpsPolicyTest.java
           java -cp "/tmp/protodroid-mod-test:$ANDROID_JAR" com.protodroid.ModPlatformTest
+          java -cp "/tmp/protodroid-mod-test:$ANDROID_JAR" com.protodroid.GameSettingsFpsPolicyTest
 
       - name: Test native mod generated-source and default policies
         run: |

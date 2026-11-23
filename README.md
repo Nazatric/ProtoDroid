@@ -66,7 +66,7 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 | **Graphics** | The original renderer through D3D9 and DXVK, with resolution, texture, anisotropy, AA, shadow, and game-quality settings. Mali and Adreno receive device-specific compatibility handling without a shared visual downgrade. |
 | **Movies and audio** | Full-screen Bink videos, ambient menu movies, RCF-resident files, and XAudio2 through FAudio. **Unlock menu FPS** is on by default. |
 | **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, helicopter descend, a numbered 1–4 pad, a paged PC keyboard, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. The editor supports custom keyboard chords or left/right/middle mouse bindings, editable labels, and polygon snapping. |
-| **Performance** | ARM64 hot-path replacements, optimized DXT decoding, FIFO presentation at interval 1, ADPF hints, Android-controlled CPU scheduling, and persistent DXVK state caching. |
+| **Performance** | ARM64 hot-path replacements, optimized DXT decoding, a user-adjustable engine FPS cap that defaults to 30, FIFO presentation at interval 1, ADPF hints, Android-controlled CPU scheduling, and persistent DXVK state caching. |
 | **Saves** | Shared profiles and saves that you can back up, replace, or delete with a file manager. Existing saves migrate without being overwritten. |
 | **Mods** | An optional local library for overlays, large keyed texture packs, sandboxed Lua engine scripts, and independently rebuilt ARM64 plugins, with dependencies, author options, and next-Play activation. |
 
@@ -143,7 +143,7 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 | `decode_16bit` | On decoded DXT1 textures, `0` keeps full 32-bit color and `1` uses the lower-bandwidth 16-bit path. |
 | `max_anisotropy` | Texture anisotropy: 1, 2, 4, 8, or another supported value. |
 | `game_aa_level` | `-1` Game default, `0` Off, `1` 2x MSAA, `2` 4x MSAA, `3` FXAA. FXAA keeps GameDB/present MSAA at zero and applies on the next Play. |
-| `fps_limit` | Defaults to Off (`0` leaves the host loop uncapped); Android FIFO still paces presentation. The UI offers Off and 30–1000 caps, which do not promise that FPS. |
+| `fps_limit` | Defaults to 30 FPS for the engine loop when no limit is saved or configured. An explicit `0` leaves that loop uncapped; Android FIFO still paces presentation. The UI offers Off and 30–1000 caps, and saved user choices are preserved. |
 | `battery_saver` | Enables the battery-saving frame policy. |
 | `unlock_menu_fps` | `1` keeps menu movies responsive without blocking waits. Default: `1`. |
 | `audio_driver` | `aaudio` or `openslES`. |

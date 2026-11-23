@@ -73,7 +73,10 @@ assert "RenderDimensionsForHeight" in resolution_policy
 assert "RenderDimensionsForHeight(rh, window_w, window_h" in user32
 assert "RenderDimensionsForHeight(h, cw, ch" in d3d9
 assert "fullscreen display aspect ratio" in readme and "avoid stretching" in readme
-assert '"fps_limit"' not in settings.split("int defaultIndex()", 1)[1].split("static boolean isLiveEngineSetting", 1)[0]
+fps_default = settings.split("int defaultIndex()", 1)[1].split("static int effectiveFpsLimit", 1)[0]
+assert 'key.equals("fps_limit")' in fps_default and "values[i] == FPS_LIMIT_DEFAULT" in fps_default
+assert "static final int FPS_LIMIT_DEFAULT = 30;" in settings
+assert "GameSettings.effectiveFpsLimit(requested, batterySaver)" in touch
 assert "d3d9.maxFrameLatency = 1" in (ROOT / "src/native/dxvk_config.h").read_text(encoding="utf-8")
 
 # Static-texture scratch is released only after every consumer. Ordinary/dynamic shadows keep their reuse policy.

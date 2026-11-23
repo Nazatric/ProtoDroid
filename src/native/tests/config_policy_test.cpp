@@ -15,6 +15,20 @@ void Check(bool condition, const char* message) {
 }  // namespace
 
 int main() {
+    Check(native::kDefaultFpsLimit == 30, "the first-run engine FPS cap must default to 30");
+    Check(native::ApplyBatterySaverFpsLimit(native::kDefaultFpsLimit, false) == 30,
+          "the 30 FPS default changed without Battery saver");
+    Check(native::ApplyBatterySaverFpsLimit(0, false) == 0,
+          "an explicit Off selection was not preserved");
+    Check(native::ApplyBatterySaverFpsLimit(60, false) == 60,
+          "an explicit higher FPS cap was not preserved");
+    Check(native::ApplyBatterySaverFpsLimit(0, true) == 30,
+          "Battery saver did not cap an uncapped request at 30 FPS");
+    Check(native::ApplyBatterySaverFpsLimit(60, true) == 30,
+          "Battery saver did not cap a higher request at 30 FPS");
+    Check(native::ApplyBatterySaverFpsLimit(30, true) == 30,
+          "Battery saver changed an already-30-FPS setting");
+
     native::ConfigSettings effective;
     native::MergeConfigLayer(effective, {{"sync_futex", "0"}, {"unlock_dev_menu", "0"}, {"fps_limit", "60"}});
     native::MergeConfigLayer(effective, {{"unlock_dev_menu", "1"}});

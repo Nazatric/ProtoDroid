@@ -361,7 +361,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void applyLiveSettings() {
         int requested = settingsStore.valueOf("fps_limit");
         boolean batterySaver = settingsStore.valueOf("battery_saver") != 0;
-        int effective = batterySaver && (requested == 0 || requested > 30) ? 30 : requested;
+        int effective = GameSettings.effectiveFpsLimit(requested, batterySaver);
         nativeSetFpsLimit(effective);
         nativeSetMenuFpsUnlocked(settingsStore.valueOf("unlock_menu_fps") != 0);
     }

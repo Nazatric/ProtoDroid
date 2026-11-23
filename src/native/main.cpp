@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "aa_policy.h"
+#include "config_policy.h"
 #include "diagnostic_tour.h"
 #include "diagnostics.h"
 #include "dxvk_config.h"
@@ -366,7 +367,7 @@ extern SDL_Window* g_sdl_window;
 
 // ---- frame limiter and presented-frame counters (read by the on-screen overlay through JNI) ----
 namespace native {
-std::atomic<int> g_fps_limit{0};  // Android FIFO paces presentation; 0 leaves the engine loop uncapped
+std::atomic<int> g_fps_limit{kDefaultFpsLimit};  // Explicit settings can select another cap or Off (0).
 std::atomic<bool> g_unlock_menu_fps{true};
 
 bool MenuFpsUnlocked() { return g_unlock_menu_fps.load(std::memory_order_relaxed); }
@@ -840,8 +841,10 @@ int main(int argc, char** argv) {
     }
     static std::atomic<uint64_t> frames{0};
     StartWatchdog(&frames);
-    int fps_limit = SettingInt("fps_limit", 0);
-    if (SettingInt("battery_saver", 0) && (fps_limit == 0 || fps_limit > 30)) fps_limit = 30;
+    int fps_limit = SettingInt("fps_limit", kDefaultFpsLimit);
+    fps_limit = ApplyBatterySaverFpsLimit(fps_limit, SettingInt("battery_saver", 0) != 0);
+    Log("frame pacing: engine FPS cap %d%s", fps_limit,
+        fps_limit > 0 ? "" : " (Off; FIFO still paces presentation)");
     g_fps_limit.store(fps_limit);
     PerfHintStart(fps_limit);
     using Clock = std::chrono::steady_clock;

@@ -1,4 +1,5 @@
 #include "guest.h"
+#include "config_policy.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -63,6 +64,14 @@ int main() {
     native::g_data_dir = app_path.c_str();
     unsetenv("PROTODROID_UNLOCK_DEV_MENU");
     unsetenv("PROTODROID_PROTO_CONFIG_BASE_MARKER");
+    unsetenv("PROTODROID_FPS_LIMIT");
+
+    Check(native::SettingInt("fps_limit", native::kDefaultFpsLimit) == 30,
+          "a missing FPS setting did not use the 30 FPS default");
+    Check(setenv("PROTODROID_FPS_LIMIT", "0", 1) == 0, "could not set explicit FPS override");
+    Check(native::SettingInt("fps_limit", native::kDefaultFpsLimit) == 0,
+          "an explicit Off override was not preserved");
+    unsetenv("PROTODROID_FPS_LIMIT");
 
     Check(native::SettingInt("unlock_dev_menu", 0) == 1,
           "app-specific Developer menu On did not override the base INI");
