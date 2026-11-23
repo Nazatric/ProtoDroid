@@ -142,9 +142,15 @@ for forbidden in xcb_connect XOpenDisplay XCloseDisplay adrenotools_open_libvulk
 done
 NEEDED=$("$TC/llvm-readelf" -d "$INSTALLED" | grep -F '(NEEDED)' || true)
 printf '%s\n' "$NEEDED"
-for forbidden in libX11 libxcb libadrenotools libc++_shared; do
+if ! printf '%s\n' "$NEEDED" | grep -F 'Shared library: [libandroid.so]' >/dev/null; then
+    echo "wrapper does not link the public Android API library required for real AHardwareBuffer WSI" >&2
+    exit 1
+fi
+# Android's classloader namespace cannot resolve Mesa's private system libraries. The private cutils/hardware/sync
+# shims are linked statically; public Android WSI/logging must resolve through NDK libandroid/liblog instead.
+for forbidden in libX11 libxcb libadrenotools libc++_shared libcutils.so libhardware.so libnativewindow.so libsync.so libbacktrace.so; do
     if printf '%s\n' "$NEEDED" | grep -F "$forbidden" >/dev/null; then
-        echo "wrapper has an unpackaged/unsupported dependency: $forbidden" >&2
+        echo "wrapper has an app-unavailable or unpackaged dependency: $forbidden" >&2
         exit 1
     fi
 done

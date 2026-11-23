@@ -6,6 +6,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 driver = (ROOT / "src/native/vulkan_driver.cpp").read_text(encoding="utf-8")
 loader = (ROOT / "src/native/turnip_load.h").read_text(encoding="utf-8")
+build_script = (ROOT / "android/build-vulkan-wrapper.sh").read_text(encoding="utf-8")
+mesa_patch = (ROOT / "android/patches/mesa-protodroid-android-wrapper.patch").read_text(encoding="utf-8")
+
+# Android 11's app classloader cannot load Mesa's private libcutils/libhardware/libnativewindow/libsync sonames.
+# Statically link the no-op helpers and use the NDK's public AHardwareBuffer implementation.
+stub_patch = mesa_patch.split("diff --git a/src/android_stub/meson.build", 1)[1]
+assert "+  lib_names = ['cutils', 'hardware', 'sync']" in stub_patch
+assert "+    stub_libs += static_library(" in stub_patch
+assert "+    stub_libs += shared_library(" not in stub_patch
+assert "+      gnu_symbol_visibility : 'hidden'," in stub_patch and "+      pic : true," in stub_patch
+assert "cc.find_library('android', required : true)" in stub_patch
+assert "cc.find_library('log', required : true)" in stub_patch
+assert all(
+    f"lib{name}.so" in build_script
+    for name in ("cutils", "hardware", "nativewindow", "sync", "backtrace")
+)
+assert "Shared library: [libandroid.so]" in build_script, "wrapper must use real public AHardwareBuffer APIs"
 
 configure = driver.split("void ConfigureWrapperLogging(bool probe)", 1)[1].split("bool TryVulkanWrapper", 1)[0]
 assert 'setenv("WRAPPER_VK_VERSION", "1.3", 1);' in configure, (
