@@ -11,10 +11,13 @@ DXVK ?= $(HOME)/protodroid-data/deps/dxvk
 # CI supplies SOURCE_REVISION=${{ github.sha }}; local builds identify their checked-out commit when Git is available.
 # Keep this in the native binary as well as the APK metadata so a device log cannot be tied to the wrong source tree.
 SOURCE_REVISION ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unknown)
+# Keep the revision string only on translation units that log it. Putting this in shared flags invalidates every
+# generated/runtime object in a commit-keyed compiler cache even when its source and dependencies are unchanged.
+SOURCE_REVISION_FLAG := -DPROTODROID_SOURCE_REVISION=\"$(SOURCE_REVISION)\"
+CCACHE ?=
 # Guest memory: a 4 GiB window at 64 GiB (guest.h kGuestBase), clear of the low 4 GiB that Android's Java heap and
 # Qualcomm's GPU driver use.
-COMMON_FLAGS := -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -fsigned-char -I../recomp \
-                -DPROTODROID_SOURCE_REVISION=\"$(SOURCE_REVISION)\"
+COMMON_FLAGS := -DRECOMP_FLAT_MEMORY -DRECOMP_GUEST_BASE=0x1000000000ull -fsigned-char -I../recomp
 # Generated code: flat memory turns G() into plain pointers. -O1 on the desktop keeps rebuilds quick; Android gets
 # -O2, matching the upstream port and avoiding the code-size/register-pressure regression of globally optimizing the
 # recompiled engine at -O3. Keep the established TSO ordering flags unchanged.
@@ -31,8 +34,8 @@ NDK ?= $(HOME)/Android/Sdk/ndk/28.2.13676358
 DEPS ?= $(HOME)/protodroid-data/android-deps/$(ABI)
 TRIPLE := $(if $(filter x86_64,$(ABI)),x86_64,aarch64)-linux-android26
 TOOLCHAIN := $(NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin
-CXX := $(TOOLCHAIN)/$(TRIPLE)-clang++
-CC := $(TOOLCHAIN)/$(TRIPLE)-clang
+CXX := $(CCACHE) $(TOOLCHAIN)/$(TRIPLE)-clang++
+CC := $(CCACHE) $(TOOLCHAIN)/$(TRIPLE)-clang
 OUT ?= ../../build/android/$(ABI)
 # arm64: ARMv8.2 + RCpc (Cortex-A55/A76/X1 and newer, i.e. phones from 2019 on): LDAPR for the TSO acquire loads,
 # inline LSE atomics. ARM_ARCH=armv8-a builds for older cores (Cortex-A53/A73), with outline atomics.
@@ -110,6 +113,7 @@ $(OUT)/d3d9_dxt.o: CXXFLAGS += -O3
 $(OUT)/hot_audio.o $(OUT)/hot_skin.o: CXXFLAGS += -ffp-contract=off
 
 $(OUT)/perf_hint.o: perf_hint_session.h
+$(OUT)/main.o $(OUT)/diagnostic_tour.o: CXXFLAGS += $(SOURCE_REVISION_FLAG)
 $(OUT)/main.o $(OUT)/state_cache.o: state_cache.h
 $(OUT)/main.o: dxvk_config.h input.h
 $(OUT)/main.o $(OUT)/path.o $(OUT)/save_path.o: save_path.h

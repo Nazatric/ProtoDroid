@@ -13,8 +13,9 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.hardware.input.InputManager;
-import android.view.HapticFeedbackConstants;
 import android.os.Build;
+import android.os.FileObserver;
+import android.view.HapticFeedbackConstants;
 import android.text.InputType;
 import android.view.InputDevice;
 import android.view.KeyEvent;
@@ -54,6 +55,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
 
     private static final int MOUSE_LEFT = 1, MOUSE_RIGHT = 2, MOUSE_MIDDLE = 4;
     private static final int ACTION_TOGGLE_NUMBERS = -1, ACTION_SHOW_KEYBOARD = -2;
+    private static final String UI_SHOT_TRIGGER = "ui_shot_now";
     private static final int RED = 0xffe0261e, RED_DIM = 0xff7a1410, INK = 0xff0b0b0b;
 
     /**
@@ -198,6 +200,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private boolean vibrate, showFps, hideWithPad, autoRun, invertY, powerButtons;
     private float camGain;
     private InputManager inputManager;
+    private FileObserver uiShotObserver;
+    private File uiShotDirectory;
     private boolean padConnected;
     private boolean panelOpen = false;
     private final RectF panel = new RectF(), closeRect = new RectF(), layoutRect = new RectF();
@@ -356,6 +360,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         invertY = settingsStore.valueOf("ui_invert") != 0;
         powerButtons = settingsStore.valueOf("ui_power_buttons") != 0;
         layoutButtons(getWidth(), getHeight());
+        updateFpsRefresh();
     }
 
     private void applyLiveSettings() {
@@ -527,6 +532,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         layoutButtons(w, h);
         lastMouseX = w / 2f;
         lastMouseY = h / 2f;
+        if (uiShotDirectory != null) captureUiShot(uiShotDirectory);
     }
 
     private void layoutButtons(int w, int h) {
@@ -1677,34 +1683,62 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         }
     }
 
-    // Refresh the performance overlay twice a second. Attachment owns this callback so finishing an Activity cannot
-    // leave a Handler retaining the view, and standalone layout editing never starts a gameplay statistics loop.
+    // Refresh the performance overlay twice a second only while it is visible. Attachment owns the callback so
+    // finishing an Activity cannot leave a Handler retaining the view, and the disabled overlay adds no timer wakeups.
     private final Runnable fpsRefresh = new Runnable() {
         @Override public void run() {
-            if (showFps) invalidate();
+            if (!showFps || layoutOnly || !isAttachedToWindow()) return;
+            invalidate();
             postDelayed(this, 500);
         }
     };
 
-    // Screenshot of this layer for testing (the game's own shot_now trigger only has the game frame): a file named
-    // ui_shot_now in the app's files folder makes the controls draw themselves into ui_shot.png there.
-    private final Runnable uiShotPoll = new Runnable() {
-        @Override public void run() {
-            File dir = getContext().getExternalFilesDir(null);
-            File trigger = dir == null ? null : new File(dir, "ui_shot_now");
-            if (trigger != null && trigger.delete() && getWidth() > 0) {
-                Bitmap bmp = Bitmap.createBitmap(getWidth(), getHeight(), Bitmap.Config.ARGB_8888);
-                draw(new Canvas(bmp));
-                try (java.io.FileOutputStream out = new java.io.FileOutputStream(new File(dir, "ui_shot.png"))) {
-                    bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
-                } catch (java.io.IOException ignored) {
-                    // a test aid only
-                }
-                bmp.recycle();
+    private void updateFpsRefresh() {
+        removeCallbacks(fpsRefresh);
+        if (!layoutOnly && showFps && isAttachedToWindow()) postDelayed(fpsRefresh, 500);
+    }
+
+    // Screenshot of this layer for testing (the game's own shot_now trigger only has the game frame): observing the
+    // app-files directory keeps the existing ui_shot_now -> ui_shot.png diagnostic without a periodic file poll.
+    private void startUiShotObserver() {
+        stopUiShotObserver();
+        File dir = getContext().getExternalFilesDir(null);
+        if (dir == null) return;
+        if (!dir.isDirectory() && !dir.mkdirs()) return;
+        if (!dir.isDirectory()) return;
+        uiShotDirectory = dir;
+        uiShotObserver = new FileObserver(dir.getAbsolutePath(), FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO) {
+            @Override public void onEvent(int event, String path) {
+                if (path == null || !UI_SHOT_TRIGGER.equals(path)
+                        || (event & (FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO)) == 0) return;
+                post(() -> captureUiShot(dir));
             }
-            postDelayed(this, 1000);
+        };
+        uiShotObserver.startWatching();
+        captureUiShot(dir);  // Also honor a trigger created before this view attached.
+    }
+
+    private void captureUiShot(File dir) {
+        if (dir == null || !isAttachedToWindow() || getWidth() <= 0 || getHeight() <= 0) return;
+        File trigger = new File(dir, UI_SHOT_TRIGGER);
+        if (!trigger.isFile() || !trigger.delete()) return;
+        Bitmap bmp = Bitmap.createBitmap(getWidth(), getHeight(), Bitmap.Config.ARGB_8888);
+        draw(new Canvas(bmp));
+        try (java.io.FileOutputStream out = new java.io.FileOutputStream(new File(dir, "ui_shot.png"))) {
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
+        } catch (java.io.IOException ignored) {
+            // a test aid only
         }
-    };
+        bmp.recycle();
+    }
+
+    private void stopUiShotObserver() {
+        if (uiShotObserver != null) {
+            uiShotObserver.stopWatching();
+            uiShotObserver = null;
+        }
+        uiShotDirectory = null;
+    }
 
     @Override
     protected void onAttachedToWindow() {
@@ -1717,10 +1751,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             }
         }
         if (!layoutOnly) {
-            removeCallbacks(fpsRefresh);
-            removeCallbacks(uiShotPoll);
-            postDelayed(fpsRefresh, 500);
-            postDelayed(uiShotPoll, 1000);
+            updateFpsRefresh();
+            startUiShotObserver();
         }
     }
 
@@ -1734,7 +1766,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         clearSnap();
         keyboard.hide();
         removeCallbacks(fpsRefresh);
-        removeCallbacks(uiShotPoll);
+        stopUiShotObserver();
         super.onDetachedFromWindow();
     }
 

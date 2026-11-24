@@ -164,12 +164,37 @@ on_size = touch.split("protected void onSizeChanged", 1)[1].split("private void 
 on_attach = touch.split("protected void onAttachedToWindow", 1)[1].split("protected void onDetachedFromWindow", 1)[0]
 on_detach = touch.split("protected void onDetachedFromWindow", 1)[1].split("protected void onDraw", 1)[0]
 assert "releaseAll();" in on_size and "releaseAll();" in on_detach
-assert "if (!layoutOnly) {" in on_attach, "gameplay polling must not run in the standalone layout editor"
-assert on_attach.index("if (!layoutOnly) {") < on_attach.index("postDelayed(fpsRefresh, 500)")
-assert on_attach.index("if (!layoutOnly) {") < on_attach.index("postDelayed(uiShotPoll, 1000)")
-assert "removeCallbacks(fpsRefresh);" in on_detach and "removeCallbacks(uiShotPoll);" in on_detach, (
-    "detachment must cancel every repeating callback that retains the view"
+assert "if (!layoutOnly) {" in on_attach, "gameplay-only callbacks must not run in the standalone layout editor"
+assert on_attach.index("if (!layoutOnly) {") < on_attach.index("updateFpsRefresh();")
+assert on_attach.index("if (!layoutOnly) {") < on_attach.index("startUiShotObserver();")
+assert "removeCallbacks(fpsRefresh);" in on_detach and "stopUiShotObserver();" in on_detach, (
+    "detachment must cancel the overlay callback and stop the screenshot observer"
 )
+assert "if (uiShotDirectory != null) captureUiShot(uiShotDirectory);" in on_size, (
+    "a queued screenshot trigger must survive attachment before the view has dimensions"
+)
+fps_callback = touch.split("private final Runnable fpsRefresh", 1)[1].split("private void updateFpsRefresh()", 1)[0]
+assert "if (!showFps || layoutOnly || !isAttachedToWindow()) return;" in fps_callback
+assert "postDelayed(this, 500);" in fps_callback
+fps_schedule = touch.split("private void updateFpsRefresh()", 1)[1].split("private void startUiShotObserver()", 1)[0]
+assert "removeCallbacks(fpsRefresh);" in fps_schedule
+assert "if (!layoutOnly && showFps && isAttachedToWindow()) postDelayed(fpsRefresh, 500);" in fps_schedule
+assert "updateFpsRefresh();" in touch.split("private void applyUiSettings()", 1)[1].split("private void applyLiveSettings()", 1)[0]
+
+shot_observer = touch.split("private void startUiShotObserver()", 1)[1].split("private void captureUiShot(File dir)", 1)[0]
+assert "new FileObserver(dir.getAbsolutePath(), FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO)" in shot_observer
+assert "UI_SHOT_TRIGGER.equals(path)" in shot_observer
+assert "post(() -> captureUiShot(dir));" in shot_observer
+assert "captureUiShot(dir);  // Also honor a trigger created before this view attached." in shot_observer
+shot_capture = touch.split("private void captureUiShot(File dir)", 1)[1].split("private void stopUiShotObserver()", 1)[0]
+assert "!isAttachedToWindow() || getWidth() <= 0 || getHeight() <= 0" in shot_capture
+assert "trigger.isFile() || !trigger.delete()" in shot_capture
+assert 'new File(dir, "ui_shot.png")' in shot_capture and "Bitmap.CompressFormat.PNG" in shot_capture
+assert "uiShotPoll" not in touch and "postDelayed(this, 1000)" not in touch, (
+    "screenshot diagnostics must remain event-driven instead of waking to poll"
+)
+stop_observer = touch.split("private void stopUiShotObserver()", 1)[1].split("protected void onAttachedToWindow", 1)[0]
+assert "uiShotObserver.stopWatching();" in stop_observer and "uiShotDirectory = null;" in stop_observer
 constructor = touch.split("public TouchControls(Context context, boolean layoutOnly)", 1)[1].split(
     "// Glowing shapes are rendered once", 1)[0]
 assert "postDelayed" not in constructor, "repeating callbacks must be owned by attachment, not construction"
