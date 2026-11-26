@@ -37,6 +37,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Reject Android package-version downgrades against PR base
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "refs/heads/$BASE_REF"
+          git show FETCH_HEAD:android/AndroidManifest.xml > /tmp/protodroid-base-manifest.xml
+          python3 tools/check_android_version.py android/AndroidManifest.xml /tmp/protodroid-base-manifest.xml
+
       - name: Validate the original native launcher
         run: |
           python3 tools/test_native_launcher.py
@@ -263,8 +273,10 @@ jobs:
           export UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
           /tmp/aa_policy_test
 
-      - name: Test Android version increments
-        run: python3 tools/test_bump_version.py
+      - name: Test Android version policy
+        run: |
+          python3 tools/test_bump_version.py
+          python3 tools/test_android_version.py
 
       - name: Validate GitHub issue forms
         run: python3 tools/test_issue_templates.py
