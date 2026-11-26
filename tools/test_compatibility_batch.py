@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Source regressions for the 0.15 controls, texture-quality, and orientation batch."""
+"""Source regressions for Android resolution, controls, texture-quality, and orientation policies."""
 
 from pathlib import Path
 
@@ -12,6 +12,8 @@ manifest = (ROOT / "android/AndroidManifest.xml").read_text(encoding="utf-8")
 d3d9 = (ROOT / "src/native/d3d9.cpp").read_text(encoding="utf-8")
 main = (ROOT / "src/native/main.cpp").read_text(encoding="utf-8")
 readme = (ROOT / "README.md").read_text(encoding="utf-8")
+resolution_policy = (ROOT / "src/native/render_resolution.h").read_text(encoding="utf-8")
+user32 = (ROOT / "src/native/user32.cpp").read_text(encoding="utf-8")
 
 # Saved custom layouts are index-based: every new action must follow the existing last button.
 ordered = ['new Button("ALEX"', 'new Button("123"', 'new Button("ABC"', 'new Button("DESCEND"']
@@ -67,6 +69,15 @@ on_create = activity.split("protected void onCreate", 1)[1]
 assert "orientation == 0" not in on_create, "Auto must retain the manifest sensorLandscape behavior"
 assert 'android:screenOrientation="sensorLandscape"' in manifest
 assert "https://github.com/Nazatric/ProtoDroid/releases" in readme and "**VERSIONS**" in readme
+assert "RenderDimensionsForHeight" in resolution_policy
+assert "RenderDimensionsForHeight(rh, window_w, window_h" in user32
+assert "RenderDimensionsForHeight(h, cw, ch" in d3d9
+assert "fullscreen display aspect ratio" in readme and "avoid stretching" in readme
+fps_default = settings.split("int defaultIndex()", 1)[1].split("static int effectiveFpsLimit", 1)[0]
+assert 'key.equals("fps_limit")' in fps_default and "values[i] == FPS_LIMIT_DEFAULT" in fps_default
+assert "static final int FPS_LIMIT_DEFAULT = 30;" in settings
+assert "GameSettings.effectiveFpsLimit(requested, batterySaver)" in touch
+assert "d3d9.maxFrameLatency = 1" in (ROOT / "src/native/dxvk_config.h").read_text(encoding="utf-8")
 
 # Static-texture scratch is released only after every consumer. Ordinary/dynamic shadows keep their reuse policy.
 adapted_unlock = d3d9.split("bool AdaptedUnlock(void* tex", 1)[1].split("void ForgetResource", 1)[0]

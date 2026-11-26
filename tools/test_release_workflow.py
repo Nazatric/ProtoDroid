@@ -32,6 +32,11 @@ assert "allow_ephemeral_release" not in release_if, (
 )
 assert "publish_release == true" in release_if
 assert 'python3 tools/release_policy.py "$versionName" "$versionCode" "$certificateSha256"' in WORKFLOW
+version_guard = step("Reject Android package-version downgrades against PR base")
+assert "if: github.event_name == 'pull_request'" in version_guard
+assert 'git fetch --no-tags --depth=1 origin "refs/heads/$BASE_REF"' in version_guard
+assert 'python3 tools/check_android_version.py android/AndroidManifest.xml' in version_guard
+assert "python3 tools/test_android_version.py" in step("Test Android version policy")
 assert 'android/java/com/protodroid/ModConfig.java' in WORKFLOW
 assert 'android/java/com/protodroid/ImmersiveMode.java' in WORKFLOW
 assert 'tools/test_immersive_mode.py' in WORKFLOW
@@ -42,4 +47,4 @@ assert 'test "$apkSha256" = "$(sha256sum "$APK" | awk \'{print $1}\')"' in verif
 upload = step("Upload APK artifact")
 assert "build/apk/package.txt" in upload
 assert "if-no-files-found: error" in upload
-print("Workflow signing, release policy, and exact APK size/digest metadata checks passed")
+print("Workflow signing, Android version-floor, release policy, and exact APK metadata checks passed")

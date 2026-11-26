@@ -506,3 +506,43 @@ index 4905fdb..ac28f7a 100644
     struct AHardwareBuffer *ahardware_buffer;
     /* Command buffers, one per queue family, holding the queue-family ownership
      * release into VK_QUEUE_FAMILY_FOREIGN_EXT. Submitted before the image is
+diff --git a/src/android_stub/meson.build b/src/android_stub/meson.build
+index 6097ae8..0561d59 100644
+--- a/src/android_stub/meson.build
++++ b/src/android_stub/meson.build
+@@ -1,21 +1,30 @@
+ if with_android_stub
+   stub_libs = []
+-  lib_names = ['cutils', 'hardware', 'log', 'nativewindow', 'sync']
++  # Private Android helpers must not become DT_NEEDED libraries in an APK.
++  # The no-op nativewindow stub also shadows real AHardwareBuffer APIs, so use
++  # the NDK's public libandroid/liblog for actual Android WSI and logging.
++  lib_names = ['cutils', 'hardware', 'sync']
+-
++
+   if with_libbacktrace
+     lib_names += ['backtrace']
+   endif
+-
++
+   foreach lib : lib_names
+-    stub_libs += shared_library(
++    stub_libs += static_library(
+       lib,
+       files(lib + '_stub.cpp'),
+       include_directories : inc_include,
++      gnu_symbol_visibility : 'hidden',
++      pic : true,
+       install : false,
+     )
+   endforeach
+-
++
+   dep_android = declare_dependency(
+     link_with : stub_libs,
++    dependencies : [
++      cc.find_library('android', required : true),
++      cc.find_library('log', required : true),
++    ],
+   )
+ endif

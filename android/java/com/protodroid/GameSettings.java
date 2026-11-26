@@ -29,6 +29,8 @@ final class GameSettings {
     static final int CATEGORY_INTERFACE = 3;
     static final int CATEGORY_FIXES = 4;
     static final int CATEGORY_COUNT = 5;
+    static final int FPS_LIMIT_DEFAULT = 30;
+    static final int FPS_LIMIT_BATTERY_SAVER = 30;
 
     private static final String PRESET_KEY = "graphics_preset";
     private static final String AA_PRESET_CLEANUP_KEY = "aa_preset_independence_cleanup_v1";
@@ -69,14 +71,23 @@ final class GameSettings {
 
         int defaultIndex() {
             // Defaults live beside their setting, so adding an option cannot misalign a parallel defaults array.
+            if (key.equals("fps_limit")) {
+                for (int i = 0; i < values.length; i++) if (values[i] == FPS_LIMIT_DEFAULT) return i;
+                throw new IllegalStateException("FPS choices must include the 30 FPS default");
+            }
             if (key.equals("render_height") || key.equals("texture_skip_mips") || key.equals("decode_16bit")
-                    || key.equals("unlock_menu_fps") || key.equals("ui_scale") || key.equals("ui_vibrate")
-                    || key.equals("fix_button_tap_tick_rate")) {
+                    || key.equals("unlock_menu_fps") || key.equals("ui_scale")
+                    || key.equals("ui_vibrate") || key.equals("fix_button_tap_tick_rate")) {
                 return 1;
             }
             if (key.equals("ui_cam") || key.equals("ui_opacity") || key.equals("fov_offset")) return 2;
             return 0;
         }
+    }
+
+    static int effectiveFpsLimit(int requested, boolean batterySaver) {
+        return batterySaver && (requested == 0 || requested > FPS_LIMIT_BATTERY_SAVER)
+                ? FPS_LIMIT_BATTERY_SAVER : requested;
     }
 
     static boolean isLiveEngineSetting(Setting setting) {
@@ -92,11 +103,11 @@ final class GameSettings {
     /** Short, on-demand explanations; the settings page shows these only for the active row. */
     static String helpFor(Setting setting) {
         switch (setting.key) {
-            case "render_height": return "Internal render height. Applies the next time you play.";
+            case "render_height": return "Vertical render height; width follows the fullscreen aspect ratio to avoid stretching. Lower choices may improve performance.";
             case "texture_skip_mips": return "Full keeps every texture level. Lower choices save memory on the next Play.";
             case "decode_16bit": return "Decoded DXT1 color on GPUs without BC. 32-bit preserves more color; 16-bit saves memory and bandwidth. Applies on the next Play.";
             case "max_anisotropy": return "Texture sharpness at glancing angles. Applies on the next Play.";
-            case "fps_limit": return "Caps the engine loop. Your display and FIFO still pace presented frames.";
+            case "fps_limit": return "Defaults to 30 FPS. Off explicitly leaves the engine loop uncapped; Android FIFO still paces presentation. Choose another cap to override.";
             case "battery_saver": return "Limits the engine to 30 FPS when the selected cap is higher or unlimited.";
             case "unlock_menu_fps": return "Keeps silent menu movies responsive. Audio-backed movies retain their normal pacing.";
             case "vulkan_driver": return "Auto is recommended. Change drivers from the Drivers screen when recovery is needed.";
@@ -119,7 +130,7 @@ final class GameSettings {
             case "remove_tick_rate_limit": return "Removes the identified simulation wait for high-refresh play. Leave Off for ordinary behavior.";
             case "fix_button_tap_tick_rate": return "Adjusts button-tap timing only when Remove tick limit is enabled.";
             case "prefer_loose_files": return "Prefers eligible unpacked game data while keeping saves and write paths unchanged.";
-            case "unlock_dev_menu": return "Experimental developer-menu patch. Ambiguous engine data is refused and logged.";
+            case "unlock_dev_menu": return "Experimental patch for the supported Steam engine build; other builds are left unchanged. Applies on the next Play.";
             case "vram_report_mb": return "Changes the memory amount reported to the game; it does not add physical memory.";
             case "dump_textures": return "Writes original DDS textures and replacement keys for mod authors. Uses extra storage.";
             default: return "Changes save automatically. Engine options apply on the next Play.";
@@ -153,7 +164,7 @@ final class GameSettings {
                     new int[] {1, 2, 4, 8}, true),
             new Setting("FPS limit", "fps_limit",
                     new String[] {"Off", "30", "45", "60", "90", "120", "144", "240", "500", "1000"},
-                    new int[] {0, 30, 45, 60, 90, 120, 144, 240, 500, 1000}, true),
+                    new int[] {0, FPS_LIMIT_DEFAULT, 45, 60, 90, 120, 144, 240, 500, 1000}, true),
             new Setting("Battery saver", "battery_saver", new String[] {"Off", "On"}, new int[] {0, 1}, true),
             new Setting("Unlock menu FPS", "unlock_menu_fps", new String[] {"Off", "On"}, new int[] {0, 1}, true),
             new Setting("GPU driver", "vulkan_driver", new String[] {"Auto", "System", "Turnip", "Custom"},

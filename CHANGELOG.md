@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18
+
+- Make 30 FPS the default Android engine-loop cap when no FPS limit is saved or configured, reducing unnecessary work on high-refresh displays and aiming to lower power use. Explicit Off/higher caps, FIFO presentation, and the one-frame DXVK D3D9 latency policy remain. ADPF follows a positive cap as its work-duration target; Off retains the existing 60 FPS target. No physical-device FPS, temperature, or battery gain is claimed.
+- Keep the gameplay screenshot test trigger, but use a directory observer rather than a one-second file poll; schedule the 2 Hz FPS-overlay refresh only while that overlay is enabled. The diagnostic output is preserved, and no device-level power improvement is claimed.
+- Cache Android native compiler outputs in CI and limit the per-commit source-revision define to the two translation units that log it. This preserves exact build provenance while allowing unchanged objects to be reused; the CI time saved will be measured from cache statistics, not inferred in advance.
+- Preserve fullscreen aspect ratio for every selected render height: on the reported 2712×1220 display, 720p becomes 1600×720 instead of stretching a 1280×720 image across the panel.
+- Fixed Developer menu settings so the app-specific `unlock_dev_menu` value overlays the selected shared/game INI and reaches the native startup hook. The patch now also requires the supported Steam PE image size plus the exact `RAD_FINAL` string and padding at its RVA; unknown builds are left unchanged. The supplied older-source logs do not verify the in-game menu, and device validation remains outstanding.
+- Slightly zoomed the square Prototype launcher artwork and regenerated the setup, legacy, and adaptive icon sizes from a checked-in master; kept adaptive artwork centered in its mask-safe area.
+- Advance Android to `versionName` `0.18` and `versionCode` `26`, using the release/updater's existing major.minor format while staying above the target branch's `0.17.6` / `versionCode 25` manifest.
+
 ## 0.15
 
 - Restored the original pre-WebView native Android launcher and its `javac`/`d8`/`aapt2` packaging, removing the rejected Compose/Web presentation stack without changing game settings, drivers, mods, saves, touch editing, updates, or the diagnostic-tour gesture. A native **Diagnostics** screen retains read-only logs and factual About/device information.

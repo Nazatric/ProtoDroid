@@ -33,6 +33,7 @@
 #include "diagnostics.h"
 #include "mod_platform.h"
 #include "present_stats.h"
+#include "render_resolution.h"
 
 namespace native {
 
@@ -636,9 +637,9 @@ void AdaptDesc(const TexAdapt& a, UINT level, D3DSURFACE_DESC* d) {
 
 
 // ---- display modes ----
-// With override_modes (default on Android) the engine sees modes of the render resolution instead of the screen's:
-// the render size (render_height) first, then 540p/720p/900p/1080p at the screen's aspect ratio. Its default
-// fullscreen choice, the back buffer and the window client area then agree, and touch coordinates map 1:1.
+// With override_modes (default on Android) the engine sees modes of the render target instead of the physical screen:
+// the current client size first, then 540p/720p/900p/1080p heights using the fullscreen window's aspect ratio. The
+// back buffer therefore fills the display without stretching the scene on ultrawide devices.
 bool OverrideModes() {
 #ifdef __ANDROID__
     static const bool on = SettingInt("override_modes", 1) != 0;
@@ -654,9 +655,10 @@ std::vector<D3DDISPLAYMODE> Modes() {
         int cw, ch;
         ClientSize(&cw, &ch);
         modes.push_back({UINT(cw), UINT(ch), 60, D3DFMT_X8R8G8B8});
-        for (UINT h : {540u, 720u, 900u, 1080u}) {
-            UINT w = (UINT(uint64_t(h) * UINT(cw) / UINT(ch)) + 4) & ~7u;
-            if (h != UINT(ch)) modes.push_back({w, h, 60, D3DFMT_X8R8G8B8});
+        for (int h : {540, 720, 900, 1080}) {
+            int w = 0, exact_height = 0;
+            if (RenderDimensionsForHeight(h, cw, ch, &w, &exact_height) && exact_height != ch)
+                modes.push_back({UINT(w), UINT(exact_height), 60, D3DFMT_X8R8G8B8});
         }
     }
     return modes;

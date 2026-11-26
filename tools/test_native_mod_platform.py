@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Source/signature tests for the optional native mod platform; no device-validation claim."""
 from pathlib import Path
+import hashlib
 import importlib.util
+import struct
 import subprocess
 import tempfile
 
@@ -23,14 +25,12 @@ spec.loader.exec_module(module)
 part = ROOT / "build/recomp/native/part_0089.c"
 if part.is_file():
     patched = part.read_text()
-    require(patched.count(module.NEW) == 1 and module.OLD not in patched,
-            "generated tick gate is not patched exactly once")
-    require("0x3a98u" in patched and "7c897bf8: jb" in patched, "original tick compare/evidence comment was lost")
 else:
-    # Generated recomp sources are not tracked (they go stale against runtime.h); CI regenerates them in the APK job
-    # before running this patch. Exercise the same contract here on a fixture carrying the tool's own anchors.
+    # Generated recomp sources are not tracked on the current baseline; exercise the patch contract with its anchors.
     patched = f"void f_7c897bf0(Ctx* c) {{\n    /* 0x3a98u */\n{module.NEW}\n}}\n"
     print("generated sources absent; exercised the tick-gate patch on a fixture")
+require(patched.count(module.NEW) == 1 and module.OLD not in patched, "committed tick gate is not patched exactly once")
+require("0x3a98u" in patched and "7c897bf8: jb" in patched, "original tick compare/evidence comment was lost")
 
 with tempfile.TemporaryDirectory(prefix="protodroid-tick-test-") as directory:
     root = Path(directory)
@@ -64,6 +64,49 @@ for value in (512, 1024, 2048, 4096, 8192):
     require(f"value == {value}" in feature_policy, f"documented shadow override {value} is missing")
 require("ModScaleShadowResolution" in features and "4096.0" not in features,
         "shadow detour does not use the complete bounded scaling policy")
+require("ModPatchDeveloperMenuBuildType" in features
+        and "kDeveloperMenuBuildTypeRva" in feature_policy
+        and "0x00e0f3ac" in feature_policy
+        and "kDeveloperMenuSupportedImageSize" in feature_policy
+        and "RAD_RELEASE" in feature_policy,
+        "developer-menu option is not connected to the guarded supported-build patch")
+require("developer-menu patch disabled" in features and "developer-menu patch refused" in features
+        and "RAD_FINAL -> RAD_RELEASE" in features,
+        "developer-menu logs do not distinguish disabled, refused and applied states")
+config = text("src/native/config.cpp")
+require("MergeConfigLayer(effective, layer)" in config and "g_data_dir" in config
+        and "SameFile(primary_path, path)" in config,
+        "launcher engine settings are not layered over the selected base INI")
+require("The first readable file remains the base" in config
+        and "launcher choices win" in config,
+        "layered INI behavior is not documented")
+
+engine_path = ROOT / "prototypeenginef.dll"
+engine = engine_path.read_bytes()
+expected_engine_sha256 = "d331be205bdde99897952ee88261ab7e63c5c65e36a4660e2a367886a3537071"
+require(hashlib.sha256(engine).hexdigest() == expected_engine_sha256,
+        "checked-in supported Steam engine fingerprint changed")
+pe = struct.unpack_from("<I", engine, 0x3C)[0]
+require(engine[pe:pe + 4] == b"PE\0\0", "supported engine PE signature is missing")
+file_header = pe + 4
+machine, section_count = struct.unpack_from("<HH", engine, file_header)
+optional_size = struct.unpack_from("<H", engine, file_header + 16)[0]
+optional = file_header + 20
+magic = struct.unpack_from("<H", engine, optional)[0]
+image_size = struct.unpack_from("<I", engine, optional + 56)[0]
+require(machine == 0x14C and magic == 0x10B and image_size == 0x01424000,
+        "developer-menu patch image-size guard does not match the supported PE32 build")
+rva = 0x00E0F3AC
+section_table = optional + optional_size
+patch_offset = None
+for index in range(section_count):
+    section = section_table + index * 40
+    virtual_size, virtual_address, raw_size, raw_pointer = struct.unpack_from("<IIII", engine, section + 8)
+    if virtual_address <= rva < virtual_address + max(virtual_size, raw_size):
+        patch_offset = raw_pointer + rva - virtual_address
+        break
+require(patch_offset is not None and engine[patch_offset:patch_offset + 12] == b"RAD_FINAL\0\0\0",
+        "guarded developer-menu signature/padding does not match the supported engine at the target RVA")
 main_source = text("src/native/main.cpp")
 bink_source = text("src/native/bink.cpp")
 require('SettingInt("unlock_menu_fps", 1)' in main_source and
@@ -111,6 +154,9 @@ scripts = text("src/native/mod_scripts.cpp")
 for marker in ("lua_newstate", "kLuaMemoryLimit", "kInstructionLimit", "luaL_loadbufferx",
                "ModSymbolResolve", "GuestCallArray", "ModHookInstall", "ModScriptsEmit"):
     require(marker in scripts, f"sandboxed script runtime path missing: {marker}")
+script_frame = scripts.split("void ModScriptsFrame()", 1)[1].split("void ModScriptsShutdown()", 1)[0]
+require("g_states.empty() && g_events.empty()" in script_frame,
+        "empty script/event dispatch must stay off the per-frame path")
 require("mod_scripts.cpp" in text("src/native/Makefile") and "mod_symbols.inc" in text("src/native/Makefile"),
         "script runtime or generated symbols are absent from real native builds")
 textures = text("src/native/mod_textures.cpp")

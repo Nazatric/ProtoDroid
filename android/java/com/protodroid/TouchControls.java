@@ -13,8 +13,9 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.hardware.input.InputManager;
-import android.view.HapticFeedbackConstants;
 import android.os.Build;
+import android.os.FileObserver;
+import android.view.HapticFeedbackConstants;
 import android.text.InputType;
 import android.view.InputDevice;
 import android.view.KeyEvent;
@@ -54,6 +55,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
 
     private static final int MOUSE_LEFT = 1, MOUSE_RIGHT = 2, MOUSE_MIDDLE = 4;
     private static final int ACTION_TOGGLE_NUMBERS = -1, ACTION_SHOW_KEYBOARD = -2;
+    private static final String UI_SHOT_TRIGGER = "ui_shot_now";
     private static final int RED = 0xffe0261e, RED_DIM = 0xff7a1410, INK = 0xff0b0b0b;
 
     /**
@@ -84,6 +86,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         float fx, fy;
         float cx, cy, r;
         int pointer = -1;
+        String bindingCache;  // bindingText(), rebuilt when the binding changes (invalidated in finishBinding)
 
         Button(String label, int keycode, int mouseButton, boolean fromRight, float dx, boolean fromBottom, float dy,
                 float sizeDp, boolean gameOnly) {
@@ -197,12 +200,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private boolean vibrate, showFps, hideWithPad, autoRun, invertY, powerButtons;
     private float camGain;
     private InputManager inputManager;
+    private FileObserver uiShotObserver;
+    private File uiShotDirectory;
     private boolean padConnected;
     private boolean panelOpen = false;
-    // Pointer that opened the mod panel, so the UP of that same finger (which lands outside the panel) does not close it
-    // again. The v1.1 archive's TouchControls.java uses this field but no longer declares it, which made javac fail with
-    // "cannot find symbol: variable panelOpener" for the whole APK.
-    private int panelOpener = -1;
     private final RectF panel = new RectF(), closeRect = new RectF(), layoutRect = new RectF();
 
     // ---- layout editor ----
@@ -318,6 +319,10 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     // Glowing shapes are rendered once into bitmaps (blur needs the software pipeline) and then only blitted.
     private final Map<String, Bitmap> cache = new HashMap<>();
     private final Paint blit = new Paint(Paint.FILTER_BITMAP_FLAG);
+    // Last text drawn by drawPerf and the values behind it; rebuilt only when one of the numbers changes.
+    private String perfText;
+    private int perfFps = Integer.MIN_VALUE, perfAverage = Integer.MIN_VALUE;
+    private int perfPercentile = Integer.MIN_VALUE, perfMemory = Integer.MIN_VALUE;
 
     private interface Painter {
         void paint(Canvas c, float cx, float cy);
@@ -355,12 +360,13 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         invertY = settingsStore.valueOf("ui_invert") != 0;
         powerButtons = settingsStore.valueOf("ui_power_buttons") != 0;
         layoutButtons(getWidth(), getHeight());
+        updateFpsRefresh();
     }
 
     private void applyLiveSettings() {
         int requested = settingsStore.valueOf("fps_limit");
         boolean batterySaver = settingsStore.valueOf("battery_saver") != 0;
-        int effective = batterySaver && (requested == 0 || requested > 30) ? 30 : requested;
+        int effective = GameSettings.effectiveFpsLimit(requested, batterySaver);
         nativeSetFpsLimit(effective);
         nativeSetMenuFpsUnlocked(settingsStore.valueOf("unlock_menu_fps") != 0);
     }
@@ -526,6 +532,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         layoutButtons(w, h);
         lastMouseX = w / 2f;
         lastMouseY = h / 2f;
+        if (uiShotDirectory != null) captureUiShot(uiShotDirectory);
     }
 
     private void layoutButtons(int w, int h) {
@@ -555,11 +562,17 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         float modeW = 96 * density * modeSize, modeH = 38 * density * modeSize;
         float modeX = modeCustomX >= 0 ? modeCustomX * w : 14 * density;
         float modeY = modeCustomY >= 0 ? modeCustomY * h : 14 * density;
-        modeRect.set(modeX, modeY, modeX + modeW, modeY + modeH);
+        float modeCx = clampCenter(modeX + modeW / 2f, modeW / 2f, w);
+        float modeCy = clampCenter(modeY + modeH / 2f, modeH / 2f, h);
+        modeRect.set(modeCx - modeW / 2f, modeCy - modeH / 2f,
+                modeCx + modeW / 2f, modeCy + modeH / 2f);
         float gearUnit = 44 * density * gearSize;
         float gearX = gearCustomX >= 0 ? gearCustomX * w : w - 58 * density;
         float gearY = gearCustomY >= 0 ? gearCustomY * h : 12 * density;
-        gearRect.set(gearX, gearY, gearX + gearUnit, gearY + gearUnit);
+        float gearCenterX = clampCenter(gearX + gearUnit / 2f, gearUnit / 2f, w);
+        float gearCenterY = clampCenter(gearY + gearUnit / 2f, gearUnit / 2f, h);
+        gearRect.set(gearCenterX - gearUnit / 2f, gearCenterY - gearUnit / 2f,
+                gearCenterX + gearUnit / 2f, gearCenterY + gearUnit / 2f);
         float pw = Math.min(w * 0.92f, 860 * density), ph = Math.min(h * 0.94f, 500 * density);
         panel.set((w - pw) / 2, (h - ph) / 2, (w + pw) / 2, (h + ph) / 2);
         keyboard.layout(w, h);
@@ -818,6 +831,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             bindingTarget.keycode = first;
             bindingTarget.secondKeycode = second;
             bindingTarget.mouseButton = mouseButton;
+            bindingTarget.bindingCache = null;  // its label text is derived from the binding
             if (!bindingTarget.labelEdited) bindingTarget.label = ControlKeys.bindingLabel(first, second, mouseButton);
             selected = bindingTarget;
             selectedStick = false;
@@ -928,7 +942,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         switch (action) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
-                if (dragPointer >= 0) break;
+                if (dragPointer >= 0 || chromeDrag >= 0) break;
                 if (doneRect.contains(x, y)) {
                     finishEditing();
                     break;
@@ -1135,12 +1149,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             return true;
         }
         if (panelOpen) {
-            if (action == MotionEvent.ACTION_UP) {
-                if (id == panelOpener) panelOpener = -1;  // opening on DOWN means this UP lands outside the
-                else panelTap(x, y);                      // panel and would instantly close it again
-            } else if (action == MotionEvent.ACTION_CANCEL) {
-                panelOpener = -1;
-            }
+            if (action == MotionEvent.ACTION_UP) panelTap(x, y);
             invalidate();
             return true;
         }
@@ -1221,7 +1230,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
                     if (gearRect.contains(x, y)) {
                         releaseAll();
                         panelOpen = true;
-                        panelOpener = id;  // the finger that opened it: its UP must not close the panel again
                         buzz();
                     }
                 } else if (id == modePointer) {
@@ -1255,7 +1263,6 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
     private void panelTap(float x, float y) {
         if (closeRect.contains(x, y) || !panel.contains(x, y)) {
             panelOpen = false;
-            panelOpener = -1;
             return;
         }
         if (layoutRect.contains(x, y)) {
@@ -1311,7 +1318,11 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             c.drawLine(b.cx, b.cy, b.fx, b.fy, edge);
             c.drawCircle(b.fx, b.fy, 10 * density, edge);
         }
-        Bitmap bmp = cached(b.label + ":" + b.bindingText() + (editing ? ":E" : ":N")
+        // The cache key is built per button per frame; the binding text behind it is a formatted string that only
+        // changes when the button is rebound, so it is kept on the button instead of being rebuilt (and discarded)
+        // every frame.
+        if (b.bindingCache == null) b.bindingCache = b.bindingText();
+        Bitmap bmp = cached(b.label + ":" + b.bindingCache + (editing ? ":E" : ":N")
                         + (down ? ":1:" : ":0:") + (b.hidden ? ":H:" : ":V:") + b.r,
                 b.r + 12 * density, (cc, x, y) -> paintButton(cc, b, x, y, down));
         float savedOpacity = opacity;
@@ -1439,11 +1450,24 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         } catch (UnsatisfiedLinkError e) {
             return;
         }
-        String line = String.format("%.0f FPS  AVG %.1f  P99 %.1f MS  %d MB", fps, ms, p99, mem);
+        // The overlay is redrawn at least twice a second and the numbers only change at that rate, so the string is
+        // reused: formatting it per frame put an allocation and a locale-aware format in the draw pass for nothing.
+        final int rounded = Math.round(fps);
+        final int average = Math.round(ms * 10f);
+        final int percentile = Math.round(p99 * 10f);
+        if (perfText == null || perfFps != rounded || perfAverage != average || perfPercentile != percentile
+                || perfMemory != mem) {
+            perfFps = rounded;
+            perfAverage = average;
+            perfPercentile = percentile;
+            perfMemory = mem;
+            perfText = String.format("%d FPS  AVG %.1f  P99 %.1f MS  %d MB", rounded, average / 10f,
+                    percentile / 10f, mem);
+        }
         text.setTextSize(13 * density);
         text.setTextAlign(Paint.Align.LEFT);
         text.setColor(fps >= 50 ? 0xff7dff7a : fps >= 28 ? 0xffffd060 : 0xffff5a4a);
-        c.drawText(line, 16 * density, 74 * density, text);
+        c.drawText(perfText, 16 * density, 74 * density, text);
         text.setTextAlign(Paint.Align.CENTER);
     }
 
@@ -1659,34 +1683,62 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         }
     }
 
-    // Refresh the performance overlay twice a second. Attachment owns this callback so finishing an Activity cannot
-    // leave a Handler retaining the view, and standalone layout editing never starts a gameplay statistics loop.
+    // Refresh the performance overlay twice a second only while it is visible. Attachment owns the callback so
+    // finishing an Activity cannot leave a Handler retaining the view, and the disabled overlay adds no timer wakeups.
     private final Runnable fpsRefresh = new Runnable() {
         @Override public void run() {
-            if (showFps) invalidate();
+            if (!showFps || layoutOnly || !isAttachedToWindow()) return;
+            invalidate();
             postDelayed(this, 500);
         }
     };
 
-    // Screenshot of this layer for testing (the game's own shot_now trigger only has the game frame): a file named
-    // ui_shot_now in the app's files folder makes the controls draw themselves into ui_shot.png there.
-    private final Runnable uiShotPoll = new Runnable() {
-        @Override public void run() {
-            File dir = getContext().getExternalFilesDir(null);
-            File trigger = dir == null ? null : new File(dir, "ui_shot_now");
-            if (trigger != null && trigger.delete() && getWidth() > 0) {
-                Bitmap bmp = Bitmap.createBitmap(getWidth(), getHeight(), Bitmap.Config.ARGB_8888);
-                draw(new Canvas(bmp));
-                try (java.io.FileOutputStream out = new java.io.FileOutputStream(new File(dir, "ui_shot.png"))) {
-                    bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
-                } catch (java.io.IOException ignored) {
-                    // a test aid only
-                }
-                bmp.recycle();
+    private void updateFpsRefresh() {
+        removeCallbacks(fpsRefresh);
+        if (!layoutOnly && showFps && isAttachedToWindow()) postDelayed(fpsRefresh, 500);
+    }
+
+    // Screenshot of this layer for testing (the game's own shot_now trigger only has the game frame): observing the
+    // app-files directory keeps the existing ui_shot_now -> ui_shot.png diagnostic without a periodic file poll.
+    private void startUiShotObserver() {
+        stopUiShotObserver();
+        File dir = getContext().getExternalFilesDir(null);
+        if (dir == null) return;
+        if (!dir.isDirectory() && !dir.mkdirs()) return;
+        if (!dir.isDirectory()) return;
+        uiShotDirectory = dir;
+        uiShotObserver = new FileObserver(dir.getAbsolutePath(), FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO) {
+            @Override public void onEvent(int event, String path) {
+                if (path == null || !UI_SHOT_TRIGGER.equals(path)
+                        || (event & (FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO)) == 0) return;
+                post(() -> captureUiShot(dir));
             }
-            postDelayed(this, 1000);
+        };
+        uiShotObserver.startWatching();
+        captureUiShot(dir);  // Also honor a trigger created before this view attached.
+    }
+
+    private void captureUiShot(File dir) {
+        if (dir == null || !isAttachedToWindow() || getWidth() <= 0 || getHeight() <= 0) return;
+        File trigger = new File(dir, UI_SHOT_TRIGGER);
+        if (!trigger.isFile() || !trigger.delete()) return;
+        Bitmap bmp = Bitmap.createBitmap(getWidth(), getHeight(), Bitmap.Config.ARGB_8888);
+        draw(new Canvas(bmp));
+        try (java.io.FileOutputStream out = new java.io.FileOutputStream(new File(dir, "ui_shot.png"))) {
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
+        } catch (java.io.IOException ignored) {
+            // a test aid only
         }
-    };
+        bmp.recycle();
+    }
+
+    private void stopUiShotObserver() {
+        if (uiShotObserver != null) {
+            uiShotObserver.stopWatching();
+            uiShotObserver = null;
+        }
+        uiShotDirectory = null;
+    }
 
     @Override
     protected void onAttachedToWindow() {
@@ -1699,10 +1751,8 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
             }
         }
         if (!layoutOnly) {
-            removeCallbacks(fpsRefresh);
-            removeCallbacks(uiShotPoll);
-            postDelayed(fpsRefresh, 500);
-            postDelayed(uiShotPoll, 1000);
+            updateFpsRefresh();
+            startUiShotObserver();
         }
     }
 
@@ -1716,7 +1766,7 @@ public class TouchControls extends View implements InputManager.InputDeviceListe
         clearSnap();
         keyboard.hide();
         removeCallbacks(fpsRefresh);
-        removeCallbacks(uiShotPoll);
+        stopUiShotObserver();
         super.onDetachedFromWindow();
     }
 

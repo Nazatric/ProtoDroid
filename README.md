@@ -66,7 +66,7 @@ On Android 11 or above, copy to the app-specific `Android/data` folder from a PC
 | **Graphics** | The original renderer through D3D9 and DXVK, with resolution, texture, anisotropy, AA, shadow, and game-quality settings. Mali and Adreno receive device-specific compatibility handling without a shared visual downgrade. |
 | **Movies and audio** | Full-screen Bink videos, ambient menu movies, RCF-resident files, and XAudio2 through FAudio. **Unlock menu FPS** is on by default. |
 | **Controls** | Touch controls, absolute menu clicks, camera movement, action buttons, power wheels, helicopter descend, a numbered 1–4 pad, a paged PC keyboard, and gamepad support. Button size, opacity, layout, vibration, camera speed, and extra actions are adjustable. The editor supports custom keyboard chords or left/right/middle mouse bindings, editable labels, and polygon snapping. |
-| **Performance** | ARM64 hot-path replacements, optimized DXT decoding, FIFO presentation at interval 1, ADPF hints, Android-controlled CPU scheduling, and persistent DXVK state caching. |
+| **Performance** | ARM64 hot-path replacements, optimized DXT decoding, a user-adjustable engine FPS cap that defaults to 30, FIFO presentation at interval 1, ADPF hints, Android-controlled CPU scheduling, and persistent DXVK state caching. |
 | **Saves** | Shared profiles and saves that you can back up, replace, or delete with a file manager. Existing saves migrate without being overwritten. |
 | **Mods** | An optional local library for overlays, large keyed texture packs, sandboxed Lua engine scripts, and independently rebuilt ARM64 plugins, with dependencies, author options, and next-Play activation. |
 
@@ -76,7 +76,7 @@ The original native Android launcher’s **Settings** page keeps graphics, drive
 
 - **Graphics:** Resolution, Textures, DXT1 color, Anisotropy, FPS limit, Battery saver, Unlock menu FPS, and GPU driver.
 - **Game Video:** Anti-Alias Level, Shadow Detail, and Graphic Quality. **FXAA** filters the completed frame with built-in MSAA disabled to avoid Prototype’s missing-texture AA path; **2x/4x MSAA** retain the original behavior. **Game default** leaves the engine’s own device-dependent choice intact.
-- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, Extra buttons, and **Touch layout → EDIT**. **ABC** opens a smaller paged PC keyboard: **MAIN**, **MORE**, and **NUMPAD** retain all 104 keys with conventional labels. Edit layouts here without starting the game, or use the in-game gear: drag, resize, hide/show any control, edit button text or restore its default, and see each button’s binding in the editor. The editor’s own ADD/STICK/RESET/DONE bar sits at the bottom, so the whole top strip stays usable for the player’s controls, and the **MENU/GAME** pill and the settings **gear** are movable and resizable like any other control (tap empty space to drop the option panel). Add custom one- or two-key buttons or left/right/middle mouse buttons with rebind and confirmed delete actions. Center and hexagon-edge guides help align polygons; **ADD STICK** restores a hidden stick. Built-in special bindings stay fixed; custom buttons are rebindable. **123** toggles number keys and **DESCEND** sends `V`.
+- **Controls:** Button size, Vibration, Hide with gamepad, Stick edge sprint, Camera speed, Invert Y, Extra buttons, and **Touch layout → EDIT**. **ABC** opens a smaller paged PC keyboard: **MAIN**, **MORE**, and **NUMPAD** retain all 104 keys with conventional labels. Edit layouts here without starting the game, or use the in-game gear: drag, resize, hide/show any control, edit button text or restore its default, and see each button’s binding in the editor. Add custom one- or two-key buttons or left/right/middle mouse buttons with rebind and confirmed delete actions. Center and hexagon-edge guides help align polygons; **ADD STICK** restores a hidden stick. Built-in special bindings stay fixed; custom buttons are rebindable. **123** toggles number keys and **DESCEND** sends `V`.
 - **Interface:** Screen orientation, Opacity, and Show FPS. Fixed Landscape/Reverse is an optional recovery for devices that choose the wrong direction; Auto remains the default.
 - **Engine fixes:** Optional FOV, shadow-map, tick/QTE, loose-file, developer-menu, VRAM-report, and texture-dump policies. Safe defaults remain unchanged until you opt in.
 
@@ -137,13 +137,13 @@ Keys use `key = value` syntax. You can also set `PROTODROID_<KEY>` in uppercase 
 
 | Key | What it does |
 | --- | --- |
-| `render_height` | Internal render height. Android defaults to 720; width follows the display aspect ratio. |
+| `render_height` | Vertical render height; Android defaults to 720. Width follows the fullscreen display aspect ratio (for example, 1600×720 on a 2712×1220 screen) to avoid stretching. |
 | `texture_skip_mips` | `0` full textures, `1` half resolution, `2` quarter resolution. |
 | `texture_skip_min_size` | Minimum texture size eligible for mip reduction. |
 | `decode_16bit` | On decoded DXT1 textures, `0` keeps full 32-bit color and `1` uses the lower-bandwidth 16-bit path. |
 | `max_anisotropy` | Texture anisotropy: 1, 2, 4, 8, or another supported value. |
 | `game_aa_level` | `-1` Game default, `0` Off, `1` 2x MSAA, `2` 4x MSAA, `3` FXAA. FXAA keeps GameDB/present MSAA at zero and applies on the next Play. |
-| `fps_limit` | Host frame limit: `0` disables it; positive values use the existing limiter. The UI offers 30–1000, without promising the resulting frame rate. |
+| `fps_limit` | Defaults to 30 FPS for the engine loop when no limit is saved or configured. An explicit `0` leaves that loop uncapped; Android FIFO still paces presentation. The UI offers Off and 30–1000 caps, and saved user choices are preserved. |
 | `battery_saver` | Enables the battery-saving frame policy. |
 | `unlock_menu_fps` | `1` keeps menu movies responsive without blocking waits. Default: `1`. |
 | `audio_driver` | `aaudio` or `openslES`. |
@@ -297,7 +297,7 @@ The production Bink harness and minimal FFmpeg setup run in `.github/workflows/b
 
 Ordinary pushes do not publish releases. A release requires an exact-commit green run on `main` and an explicitly approved release dispatch. The workflow rejects dummy or prebuilt native fallbacks, mismatched source revisions, reused versions, and out-of-order `versionCode` values.
 
-`android/AndroidManifest.xml` is the version source of truth. Before an approved release cycle, run `python3 tools/bump_version.py` once and commit it with the matching `CHANGELOG.md` entry. The tool advances the visible version and integer `versionCode` together.
+`android/AndroidManifest.xml` is the version source of truth. Before an approved release cycle, run `python3 tools/bump_version.py` once and commit it with the matching `CHANGELOG.md` entry. The tool advances the visible version and integer `versionCode` together. Pull-request CI also checks against the target branch and rejects a lower `versionCode` or `versionName`, preventing a version rollback from blocking an in-place install.
 
 A green CI run is not a substitute for playing on a real device. Graphics, movies, controls, saves, and update behavior still need on-device validation.
 

@@ -107,19 +107,6 @@ assert "for (int i = 0; i < buttons.length; i++)" in touch, "built-in index pers
 assert "allButtons.addAll(customButtons);" in touch, "custom records reindexed the built-in array"
 assert "private final RectF editorBar" in touch and "selectionBar" in touch
 assert "editorBar.contains(x, y) || selectionBar.contains(x, y)" in touch
-# The editor chrome is at the bottom: a bar across the top owned every touch in that strip, which made the player's
-# own top-row controls (the power row, F1/F2, ENTER/ESC) impossible to drag.
-assert "editorBar.set(margin, barBottom - barHeight, getWidth() - margin, barBottom)" in touch
-assert "editorBar.set(margin, top, getWidth() - margin, top + 64 * density)" not in touch
-assert 'c.drawText("TOUCH LAYOUT"' not in touch
-# MENU/GAME and the gear are layout controls: draggable, resizable, persisted and reset with the layout.
-assert "modeRect.contains(x, y) || gearRect.contains(x, y)" in touch
-assert 'prefs.getFloat("mode_x", -1)' in touch and 'ed.putFloat("mode_x", modeRect.left / w)' in touch
-assert 'prefs.getFloat("gear_x", -1)' in touch and 'ed.putFloat("gear_x", gearRect.left / w)' in touch
-assert 'prefs.getFloat("mode_size", 1)' in touch and 'prefs.getFloat("gear_size", 1)' in touch
-assert "chromeDrag = id" in touch and "modeCustomX = left / viewW" in touch
-assert 'remove("mode_x").remove("mode_y").remove("mode_size")' in touch
-assert "chrome = 0;" in touch
 assert "if (editing && b != selected) opacity *= 0.52f;" in touch
 assert 'prefs.getString("label" + i, "")' in touch and 'putString("label" + i, b.label)' in touch
 assert 'remove("label" + i)' in touch and "defaultButtonText" in touch
@@ -131,6 +118,31 @@ assert "clampCenter" in touch and "snapTargetKey" in touch
 assert "mouseButton(b.mouseButton, true" in press and "mouseButton(b.mouseButton, false" in release
 assert "entry.mouseButton = mouseButton;" in touch and "entry.label = labelEdited ? label" in touch
 assert "b.bindingText()" in touch and "editing ? by - b.r * 0.20f" in touch
+
+# The MENU/GAME pill and gear are now editable like the other layout controls. Their normalized coordinates and sizes
+# persist through rotation/relaunch, reset with the rest of the layout, and stay within the current display bounds.
+for key in ("mode_x", "mode_y", "mode_size", "gear_x", "gear_y", "gear_size"):
+    assert f'prefs.getFloat("{key}"' in touch
+    assert f'"{key}"' in touch and f'.remove("{key}")' in touch
+assert 'ed.putFloat("mode_size", modeSize).putFloat("gear_size", gearSize)' in touch
+assert 'modeRect.left / w' in touch and 'gearRect.left / w' in touch
+assert 'modeRect.contains(x, y) || gearRect.contains(x, y)' in touch
+assert 'modeCustomX = left / viewW' in touch and 'gearCustomX = left / viewW' in touch
+assert 'chromeDrag >= 0' in touch and 'e.findPointerIndex(chromeDrag)' in touch
+assert 'clampCenter(modeX + modeW / 2f, modeW / 2f, w)' in touch
+assert 'clampCenter(gearX + gearUnit / 2f, gearUnit / 2f, w)' in touch
+assert 'drawPill(c, modeRect, gameMode ? "GAME" : "MENU", gameMode)' in touch and 'drawGear(c);' in touch
+assert 'chrome == 1 ? modeSize : chrome == 2 ? gearSize' in touch
+assert 'if (chrome != 0) {' in touch and 'hideRect.setEmpty();' in touch
+assert 'float barBottom = getHeight() - 8 * density;' in touch, "editor chrome must not own the top-row controls"
+
+# Cache formatted strings in the per-frame overlay/drawing path; invalidate button text only when bindings change.
+assert 'String bindingCache;' in touch and 'if (b.bindingCache == null) b.bindingCache = b.bindingText();' in touch
+assert 'bindingTarget.bindingCache = null;' in touch
+perf_draw = touch.split("private void drawPerf(Canvas c)", 1)[1].split("private void drawPanel(Canvas c)", 1)[0]
+assert 'if (perfText == null || perfFps != rounded' in perf_draw
+assert 'String.format("%d FPS  AVG %.1f  P99 %.1f MS  %d MB"' in perf_draw
+assert 'c.drawText(perfText' in perf_draw
 
 # Picker taps select only; normal taps inject. Modifiers latch for a sequential mobile chord and release after a key.
 down = keyboard.split("case MotionEvent.ACTION_POINTER_DOWN:", 1)[1].split("case MotionEvent.ACTION_UP:", 1)[0]
@@ -152,12 +164,37 @@ on_size = touch.split("protected void onSizeChanged", 1)[1].split("private void 
 on_attach = touch.split("protected void onAttachedToWindow", 1)[1].split("protected void onDetachedFromWindow", 1)[0]
 on_detach = touch.split("protected void onDetachedFromWindow", 1)[1].split("protected void onDraw", 1)[0]
 assert "releaseAll();" in on_size and "releaseAll();" in on_detach
-assert "if (!layoutOnly) {" in on_attach, "gameplay polling must not run in the standalone layout editor"
-assert on_attach.index("if (!layoutOnly) {") < on_attach.index("postDelayed(fpsRefresh, 500)")
-assert on_attach.index("if (!layoutOnly) {") < on_attach.index("postDelayed(uiShotPoll, 1000)")
-assert "removeCallbacks(fpsRefresh);" in on_detach and "removeCallbacks(uiShotPoll);" in on_detach, (
-    "detachment must cancel every repeating callback that retains the view"
+assert "if (!layoutOnly) {" in on_attach, "gameplay-only callbacks must not run in the standalone layout editor"
+assert on_attach.index("if (!layoutOnly) {") < on_attach.index("updateFpsRefresh();")
+assert on_attach.index("if (!layoutOnly) {") < on_attach.index("startUiShotObserver();")
+assert "removeCallbacks(fpsRefresh);" in on_detach and "stopUiShotObserver();" in on_detach, (
+    "detachment must cancel the overlay callback and stop the screenshot observer"
 )
+assert "if (uiShotDirectory != null) captureUiShot(uiShotDirectory);" in on_size, (
+    "a queued screenshot trigger must survive attachment before the view has dimensions"
+)
+fps_callback = touch.split("private final Runnable fpsRefresh", 1)[1].split("private void updateFpsRefresh()", 1)[0]
+assert "if (!showFps || layoutOnly || !isAttachedToWindow()) return;" in fps_callback
+assert "postDelayed(this, 500);" in fps_callback
+fps_schedule = touch.split("private void updateFpsRefresh()", 1)[1].split("private void startUiShotObserver()", 1)[0]
+assert "removeCallbacks(fpsRefresh);" in fps_schedule
+assert "if (!layoutOnly && showFps && isAttachedToWindow()) postDelayed(fpsRefresh, 500);" in fps_schedule
+assert "updateFpsRefresh();" in touch.split("private void applyUiSettings()", 1)[1].split("private void applyLiveSettings()", 1)[0]
+
+shot_observer = touch.split("private void startUiShotObserver()", 1)[1].split("private void captureUiShot(File dir)", 1)[0]
+assert "new FileObserver(dir.getAbsolutePath(), FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO)" in shot_observer
+assert "UI_SHOT_TRIGGER.equals(path)" in shot_observer
+assert "post(() -> captureUiShot(dir));" in shot_observer
+assert "captureUiShot(dir);  // Also honor a trigger created before this view attached." in shot_observer
+shot_capture = touch.split("private void captureUiShot(File dir)", 1)[1].split("private void stopUiShotObserver()", 1)[0]
+assert "!isAttachedToWindow() || getWidth() <= 0 || getHeight() <= 0" in shot_capture
+assert "trigger.isFile() || !trigger.delete()" in shot_capture
+assert 'new File(dir, "ui_shot.png")' in shot_capture and "Bitmap.CompressFormat.PNG" in shot_capture
+assert "uiShotPoll" not in touch and "postDelayed(this, 1000)" not in touch, (
+    "screenshot diagnostics must remain event-driven instead of waking to poll"
+)
+stop_observer = touch.split("private void stopUiShotObserver()", 1)[1].split("protected void onAttachedToWindow", 1)[0]
+assert "uiShotObserver.stopWatching();" in stop_observer and "uiShotDirectory = null;" in stop_observer
 constructor = touch.split("public TouchControls(Context context, boolean layoutOnly)", 1)[1].split(
     "// Glowing shapes are rendered once", 1)[0]
 assert "postDelayed" not in constructor, "repeating callbacks must be owned by attachment, not construction"

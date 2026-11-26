@@ -2,10 +2,12 @@
 # (Android: /sdcard/Android/data/com.protodroid/files/protodroid.ini or
 #  /storage/emulated/0/Prototype/protodroid.ini which works on Android 11+ without ADB;
 #  desktop: the working directory).
-# Any key can also be set as an environment variable PROTODROID_<KEY>, e.g. PROTODROID_RENDER_HEIGHT=540.
+# Launcher-managed engine choices are stored in app-specific external files and override matching keys here;
+# unrelated settings in this file remain active. Any key can also be set as PROTODROID_<KEY>, e.g. PROTODROID_RENDER_HEIGHT=540.
 # Supports both flat key = value and [section] headers ([graphics], [audio], etc.)
 
-# Render resolution height; the width follows the screen's aspect ratio and the frame is scaled to the screen.
+# Render resolution height. Width follows the fullscreen window's aspect ratio to avoid stretching
+# (on a 2712x1220 display, 720p uses 1600x720); DXVK scales the target to the fullscreen surface.
 # 0 = the full window size. Android default 720 (540 for weak GPUs, 900/1080 for flagships).
 render_height = 720
 
@@ -70,8 +72,10 @@ unlock_menu_fps = 1
 # 2 logs every five-second timing window, and 0 disables the diagnostics and their callback timers.
 #present_stats = 1
 #audio_stats = 2
+# The default engine-loop cap is 30 FPS; set 0 for an explicit uncapped loop (FIFO still paces presentation).
 #fps_limit = 30
 #battery_saver = 1
+# Android also forces d3d9.maxFrameLatency = 1 to cap D3D9 in-flight frames while retaining FIFO presentation.
 
 # Optional Android equivalents of Prototype Fix settings (also available under Settings > Engine fixes).
 # They are independent of imported mods and apply on the next Play. Defaults preserve the ordinary game paths.
@@ -88,11 +92,3 @@ unlock_menu_fps = 1
 #vram_report_mb = 2048
 # Dump original-format top-level DDS textures and textures.ini under Prototype/texture-dump (or app-specific storage).
 #dump_textures = 1
-
-# --- 0.16 performance settings ---
-# DXVK presenter queue depth for the single-main-thread engine. 1 (default) keeps the
-# Android FIFO swapchain from stuffing behind a slow frame; 0 restores DXVK defaults.
-#dxvk_max_frame_latency = 1
-# Pin engine threads to the fastest CPU cluster (found from cpufreq, never hardcoded).
-# Only engages on SoCs with a real big.LITTLE hierarchy; 0 restores v0.15 scheduling.
-#affinity_mode = 1

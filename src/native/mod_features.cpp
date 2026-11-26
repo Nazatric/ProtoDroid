@@ -135,26 +135,22 @@ void ButtonDetour(Ctx* c) {
 }
 
 void UnlockDeveloperMenu() {
-    if (SettingInt("unlock_dev_menu", 0) == 0) return;
-    constexpr char original[] = "RAD_FINAL";
-    constexpr char replacement[] = "RAD_RELEASE";
-    uint32_t found = 0;
-    unsigned count = 0;
-    if (g_engine_hi > g_engine_lo + 16) {
-        for (uint32_t address = g_engine_lo; address + 16 < g_engine_hi; ++address) {
-            if (R8(address) != 'R' || memcmp(Ptr<void>(address), original, sizeof(original)) != 0) continue;
-            // RAD_RELEASE is two bytes longer. Require two further zero bytes so no adjacent data is overwritten.
-            if (R8(address + 10) != 0 || R8(address + 11) != 0) continue;
-            found = address;
-            ++count;
-        }
-    }
-    if (count != 1) {
-        Log("mods: developer-menu patch refused; guarded RAD_FINAL candidates=%u", count);
+    const int enabled = SettingInt("unlock_dev_menu", 0);
+    if (enabled == 0) {
+        Log("mods: developer-menu patch disabled (unlock_dev_menu=%d)", enabled);
         return;
     }
-    memcpy(Ptr<void>(found), replacement, sizeof(replacement));
-    Log("mods: developer-menu build type changed at %08x", found);
+    const bool valid_engine_range = g_engine_hi > g_engine_lo;
+    const uint32_t image_size = valid_engine_range ? g_engine_hi - g_engine_lo : 0;
+    if (!valid_engine_range
+        || !ModPatchDeveloperMenuBuildType(Ptr<uint8_t>(g_engine_lo), image_size)) {
+        Log("mods: developer-menu patch refused (unlock_dev_menu=%d, image_size=%08x; expected %08x and RAD_FINAL "
+            "signature/padding at RVA %08x)", enabled, image_size,
+            uint32_t(kDeveloperMenuSupportedImageSize), uint32_t(kDeveloperMenuBuildTypeRva));
+        return;
+    }
+    Log("mods: developer-menu build type changed RAD_FINAL -> RAD_RELEASE at %08x",
+        g_engine_lo + uint32_t(kDeveloperMenuBuildTypeRva));
 }
 
 }  // namespace

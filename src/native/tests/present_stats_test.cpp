@@ -1,9 +1,11 @@
 #include "present_stats.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -113,6 +115,36 @@ void TestDetailedCumulativeTotals() {
           "phase-boundary reset retained old Present totals");
 }
 
+// The ordinary path must publish a bounded one-second summary, then rebase after diagnostics pause it. Exercise the
+// production clock so the test also covers the process-wide adapter used by the overlay.
+void TestLightWindowPublishesAndRebases() {
+    using namespace std::chrono;
+    native::SetPresentDetailedEnabled(false);
+    native::RecordPresent();
+    native::RecordPresent();
+
+    native::SetPresentDetailedEnabled(true);
+    native::RecordPresent();
+    std::this_thread::sleep_for(milliseconds(1100));  // no ordinary-window updates while detailed mode is active
+    native::SetPresentDetailedEnabled(false);
+    native::RecordPresent();
+    Check(native::GetPresentStats().frames == 0, "ordinary stats reused a stale window after diagnostics");
+
+    const auto begin = steady_clock::now();
+    int presented = 0;
+    while (steady_clock::now() - begin < milliseconds(1100)) {
+        ++presented;
+        native::RecordPresent();
+        std::this_thread::sleep_for(microseconds(1200));
+    }
+    const auto snapshot = native::GetPresentStats();
+    Check(presented > 100 && snapshot.frames > 100, "ordinary Present path did not publish a one-second window");
+    Check(snapshot.fps > 100.0 && snapshot.fps < 5000.0, "ordinary Present FPS is implausible");
+    Check(snapshot.average_ms > 0.0 && snapshot.average_ms < 100.0, "ordinary Present average is implausible");
+    Check(snapshot.max_ms >= snapshot.p99_ms, "ordinary Present p99 exceeded its maximum");
+    Check(snapshot.p99_ms >= snapshot.average_ms, "ordinary Present p99 fell below its average");
+}
+
 }  // namespace
 
 int main() {
@@ -123,6 +155,7 @@ int main() {
     TestCumulativePresentCount();
     TestDisabledDetailedCollection();
     TestDetailedCumulativeTotals();
-    std::puts("present-stats tests passed (baseline, ADPF count, FPS, percentiles, detailed totals)");
+    TestLightWindowPublishesAndRebases();
+    std::puts("present-stats tests passed (baseline, ADPF count, FPS, percentiles, detailed totals, light-window rebasing)");
     return 0;
 }
